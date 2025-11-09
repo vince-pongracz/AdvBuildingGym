@@ -1,0 +1,98 @@
+Evaluating algorithm: ppo
+>>> ppo | reward_mode=combined | obs=C01
+-> python run_evaluation.py --algorithms ppo --reward_mode combined --obs_variant C01 --outdoor_temperature_path data/LLEC_outdoor_temperature_5min_data.csv
+   elapsed: 00:00:54
+-> python run_evaluation.py --algorithms ppo --reward_mode combined --obs_variant C01 
+   elapsed: 00:00:52
+-> python run_evaluation.py --algorithms ppo --reward_mode combined --obs_variant C01 --prefer_best --outdoor_temperature_path data/LLEC_outdoor_temperature_5min_data.csv
+   elapsed: 00:00:53
+-> python run_evaluation.py --algorithms ppo --reward_mode combined --obs_variant C01 --prefer_best
+   elapsed: 00:00:53
+>>> ppo | reward_mode=combined | obs=C02
+-> python run_evaluation.py --algorithms ppo --reward_mode combined --obs_variant C02 --outdoor_temperature_path data/LLEC_outdoor_temperature_5min_data.csv
+   elapsed: 00:00:53
+-> python run_evaluation.py --algorithms ppo --reward_mode combined --obs_variant C02 
+   elapsed: 00:00:53
+-> python run_evaluation.py --algorithms ppo --reward_mode combined --obs_variant C02 --prefer_best --outdoor_temperature_path data/LLEC_outdoor_temperature_5min_data.csv
+   elapsed: 00:01:06
+-> python run_evaluation.py --algorithms ppo --reward_mode combined --obs_variant C02 --prefer_best
+   elapsed: 00:00:53
+>>> ppo | reward_mode=combined | obs=C03
+-> python run_evaluation.py --algorithms ppo --reward_mode combined --obs_variant C03 --outdoor_temperature_path data/LLEC_outdoor_temperature_5min_data.csv
+   elapsed: 00:00:53
+-> python run_evaluation.py --algorithms ppo --reward_mode combined --obs_variant C03 
+   elapsed: 00:00:52
+-> python run_evaluation.py --algorithms ppo --reward_mode combined --obs_variant C03 --prefer_best --outdoor_temperature_path data/LLEC_outdoor_temperature_5min_data.csv
+   elapsed: 00:00:53
+-> python run_evaluation.py --algorithms ppo --reward_mode combined --obs_variant C03 --prefer_best
+   elapsed: 00:00:52
+>>> ppo | reward_mode=combined | obs=C04
+-> python run_evaluation.py --algorithms ppo --reward_mode combined --obs_variant C04 --outdoor_temperature_path data/LLEC_outdoor_temperature_5min_data.csv
+   elapsed: 00:00:53
+-> python run_evaluation.py --algorithms ppo --reward_mode combined --obs_variant C04 
+   elapsed: 00:00:53
+-> python run_evaluation.py --algorithms ppo --reward_mode combined --obs_variant C04 --prefer_best --outdoor_temperature_path data/LLEC_outdoor_temperature_5min_data.csv
+   elapsed: 00:00:53
+-> python run_evaluation.py --algorithms ppo --reward_mode combined --obs_variant C04 --prefer_best
+   elapsed: 00:00:52
+>>> ppo | reward_mode=temperature | obs=T01
+-> python run_evaluation.py --algorithms ppo --reward_mode temperature --obs_variant T01 --outdoor_temperature_path data/LLEC_outdoor_temperature_5min_data.csv
+   elapsed: 00:00:08
+-> python run_evaluation.py --algorithms ppo --reward_mode temperature --obs_variant T01 
+   elapsed: 00:00:08
+-> python run_evaluation.py --algorithms ppo --reward_mode temperature --obs_variant T01 --prefer_best --outdoor_temperature_path data/LLEC_outdoor_temperature_5min_data.csv
+   elapsed: 00:00:08
+-> python run_evaluation.py --algorithms ppo --reward_mode temperature --obs_variant T01 --prefer_best
+   elapsed: 00:00:09
+>>> ppo | reward_mode=temperature | obs=T02
+-> python run_evaluation.py --algorithms ppo --reward_mode temperature --obs_variant T02 --outdoor_temperature_path data/LLEC_outdoor_temperature_5min_data.csv
+   elapsed: 00:00:08
+-> python run_evaluation.py --algorithms ppo --reward_mode temperature --obs_variant T02 
+   elapsed: 00:00:08
+-> python run_evaluation.py --algorithms ppo --reward_mode temperature --obs_variant T02 --prefer_best --outdoor_temperature_path data/LLEC_outdoor_temperature_5min_data.csv
+   elapsed: 00:00:08
+-> python run_evaluation.py --algorithms ppo --reward_mode temperature --obs_variant T02 --prefer_best
+   elapsed: 00:00:08
+>>> ppo | reward_mode=temperature | obs=T03
+-> python run_evaluation.py --algorithms ppo --reward_mode temperature --obs_variant T03 --outdoor_temperature_path data/LLEC_outdoor_temperature_5min_data.csv
+   elapsed: 00:00:08
+-> python run_evaluation.py --algorithms ppo --reward_mode temperature --obs_variant T03 
+   elapsed: 00:00:08
+-> python run_evaluation.py --algorithms ppo --reward_mode temperature --obs_variant T03 --prefer_best --outdoor_temperature_path data/LLEC_outdoor_temperature_5min_data.csv
+   elapsed: 00:00:09
+-> python run_evaluation.py --algorithms ppo --reward_mode temperature --obs_variant T03 --prefer_best
+   elapsed: 00:00:08
+>>> ppo | reward_mode=temperature | obs=T04
+-> python run_evaluation.py --algorithms ppo --reward_mode temperature --obs_variant T04 --outdoor_temperature_path data/LLEC_outdoor_temperature_5min_data.csv
+   elapsed: 00:00:08
+-> python run_evaluation.py --algorithms ppo --reward_mode temperature --obs_variant T04 
+   elapsed: 00:00:08
+-> python run_evaluation.py --algorithms ppo --reward_mode temperature --obs_variant T04 --prefer_best --outdoor_temperature_path data/LLEC_outdoor_temperature_5min_data.csv
+   elapsed: 00:00:08
+-> python run_evaluation.py --algorithms ppo --reward_mode temperature --obs_variant T04 --prefer_best
+   elapsed: 00:00:08
+
+Total wall-time : 00:16:28
+Sum of run times: 00:16:28
+Done.
+
+============================= JOB FEEDBACK =============================
+
+Job ID: 1522984
+Cluster: haic
+User/Group: ii6824/iai
+Account: iai
+State: COMPLETED (exit code 0)
+Partition: normal
+Nodes: 1
+Cores per node: 2
+Nodelist: haicn1702
+CPU Utilized: 00:16:01
+CPU Efficiency: 48.19% of 00:33:14 core-walltime
+Job Wall-clock time: 00:16:37
+Starttime: Mon Jun 16 11:39:58 2025
+Endtime: Mon Jun 16 11:56:35 2025
+Memory Utilized: 685.69 MB
+Memory Efficiency: 10.39% of 6.45 GB
+Energy Consumed: 560120 Joule / 155.588888888889 Watthours
+Average node power draw: 561.805416248746 Watt

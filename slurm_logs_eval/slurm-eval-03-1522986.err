@@ -1,0 +1,1440 @@
+2025-06-16 11:54:10,746 - INFO - [INFO] Evaluation Setup
+2025-06-16 11:54:10,746 - INFO - --------------------------------------------------------
+2025-06-16 11:54:10,746 - INFO - Algorithm        : ddpg
+2025-06-16 11:54:10,746 - INFO - Reward Mode      : combined
+2025-06-16 11:54:10,746 - INFO - Episodes         : 10
+2025-06-16 11:54:10,746 - INFO - Seed             : 58
+2025-06-16 11:54:10,746 - INFO - Observation      : C01
+2025-06-16 11:54:10,746 - INFO - Prediction Hzn   : 12
+2025-06-16 11:54:10,746 - INFO - Energy Price Data: data/price_data_2025.csv
+2025-06-16 11:54:10,746 - INFO - Temperature Data : data/LLEC_outdoor_temperature_5min_data.csv
+2025-06-16 11:54:10,746 - INFO - Prefer Best      : False
+2025-06-16 11:54:10,747 - INFO - Start Time       : 2025-06-16 11:54:10
+2025-06-16 11:54:10,747 - INFO - --------------------------------------------------------
+2025-06-16 11:54:10,747 - INFO - Starting evaluation for: ddpg (mode: combined)
+2025-06-16 11:54:10,772 - INFO - [EnvID: 22941955397040] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 6184)
+2025-06-16 11:54:10,811 - INFO - Using standard model for ddpg: models/combined/C01/ddpg_model_seed42.zip
+2025-06-16 11:54:12,230 - INFO - [Episode] 0
+2025-06-16 11:54:12,234 - INFO - [EnvID: 22941955397040] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 58)
+2025-06-16 11:54:16,617 - INFO - [Episode] 1
+2025-06-16 11:54:16,621 - INFO - [EnvID: 22941955397040] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 116)
+2025-06-16 11:54:20,930 - INFO - [Episode] 2
+2025-06-16 11:54:20,933 - INFO - [EnvID: 22941955397040] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 174)
+2025-06-16 11:54:25,246 - INFO - [Episode] 3
+2025-06-16 11:54:25,250 - INFO - [EnvID: 22941955397040] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 232)
+2025-06-16 11:54:29,560 - INFO - [Episode] 4
+2025-06-16 11:54:29,564 - INFO - [EnvID: 22941955397040] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 290)
+2025-06-16 11:54:33,838 - INFO - [Episode] 5
+2025-06-16 11:54:33,841 - INFO - [EnvID: 22941955397040] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 348)
+2025-06-16 11:54:38,139 - INFO - [Episode] 6
+2025-06-16 11:54:38,141 - INFO - [EnvID: 22941955397040] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 406)
+2025-06-16 11:54:42,429 - INFO - [Episode] 7
+2025-06-16 11:54:42,432 - INFO - [EnvID: 22941955397040] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 464)
+2025-06-16 11:54:46,705 - INFO - [Episode] 8
+2025-06-16 11:54:46,708 - INFO - [EnvID: 22941955397040] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 522)
+2025-06-16 11:54:50,987 - INFO - [Episode] 9
+2025-06-16 11:54:50,990 - INFO - [EnvID: 22941955397040] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 580)
+2025-06-16 11:54:55,258 - INFO - [RESULT] Avg. reward for ddpg (combined): 222.15 in 43.03s
+2025-06-16 11:54:55,259 - INFO - ============================================================
+2025-06-16 11:55:00,341 - INFO - End Time        : 2025-06-16 11:55:00
+2025-06-16 11:55:00,341 - INFO - Duration        : 49.60 seconds
+2025-06-16 11:55:00,341 - INFO - CSV file saved  : results/combined/outdoor_data/eval_C01_ddpg.csv
+2025-06-16 11:55:00,341 - INFO - Logger file     : results/combined/outdoor_data/eval_C01_ddpg_log.txt
+2025-06-16 11:55:00,341 - INFO - Evaluation successfully completed.
+2025-06-16 11:55:00,341 - INFO - ============================================================
+2025-06-16 11:55:00,343 - INFO - All evaluations done.
+2025-06-16 11:55:03,628 - INFO - [INFO] Evaluation Setup
+2025-06-16 11:55:03,628 - INFO - --------------------------------------------------------
+2025-06-16 11:55:03,628 - INFO - Algorithm        : ddpg
+2025-06-16 11:55:03,628 - INFO - Reward Mode      : combined
+2025-06-16 11:55:03,628 - INFO - Episodes         : 10
+2025-06-16 11:55:03,628 - INFO - Seed             : 58
+2025-06-16 11:55:03,628 - INFO - Observation      : C01
+2025-06-16 11:55:03,628 - INFO - Prediction Hzn   : 12
+2025-06-16 11:55:03,628 - INFO - Energy Price Data: data/price_data_2025.csv
+2025-06-16 11:55:03,628 - INFO - Temperature Data : None
+2025-06-16 11:55:03,628 - INFO - Prefer Best      : False
+2025-06-16 11:55:03,628 - INFO - Start Time       : 2025-06-16 11:55:03
+2025-06-16 11:55:03,628 - INFO - --------------------------------------------------------
+2025-06-16 11:55:03,628 - INFO - Starting evaluation for: ddpg (mode: combined)
+2025-06-16 11:55:03,652 - INFO - [EnvID:23209370646080] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=6184
+2025-06-16 11:55:03,688 - INFO - Using standard model for ddpg: models/combined/C01/ddpg_model_seed42.zip
+2025-06-16 11:55:05,078 - INFO - [Episode] 0
+2025-06-16 11:55:05,079 - INFO - [EnvID:23209370646080] schedule=synthetic-temp-class class=Normal | Tmin=8.7°C  Tmax=19.9°C  φ=0.061  seed=58
+2025-06-16 11:55:09,643 - INFO - [Episode] 1
+2025-06-16 11:55:09,644 - INFO - [EnvID:23209370646080] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=116
+2025-06-16 11:55:14,159 - INFO - [Episode] 2
+2025-06-16 11:55:14,160 - INFO - [EnvID:23209370646080] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=174
+2025-06-16 11:55:18,664 - INFO - [Episode] 3
+2025-06-16 11:55:18,664 - INFO - [EnvID:23209370646080] schedule=synthetic-temp-class class=Normal | Tmin=8.7°C  Tmax=19.9°C  φ=0.061  seed=232
+2025-06-16 11:55:23,169 - INFO - [Episode] 4
+2025-06-16 11:55:23,169 - INFO - [EnvID:23209370646080] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=290
+2025-06-16 11:55:27,664 - INFO - [Episode] 5
+2025-06-16 11:55:27,665 - INFO - [EnvID:23209370646080] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=348
+2025-06-16 11:55:32,146 - INFO - [Episode] 6
+2025-06-16 11:55:32,147 - INFO - [EnvID:23209370646080] schedule=synthetic-temp-class class=Hot | Tmin=19.5°C  Tmax=31.4°C  φ=-0.094  seed=406
+2025-06-16 11:55:36,634 - INFO - [Episode] 7
+2025-06-16 11:55:36,634 - INFO - [EnvID:23209370646080] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=464
+2025-06-16 11:55:41,121 - INFO - [Episode] 8
+2025-06-16 11:55:41,122 - INFO - [EnvID:23209370646080] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=522
+2025-06-16 11:55:45,625 - INFO - [Episode] 9
+2025-06-16 11:55:45,625 - INFO - [EnvID:23209370646080] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=580
+2025-06-16 11:55:50,120 - INFO - [RESULT] Avg. reward for ddpg (combined): 214.08 in 45.04s
+2025-06-16 11:55:50,120 - INFO - ============================================================
+2025-06-16 11:55:55,250 - INFO - End Time        : 2025-06-16 11:55:55
+2025-06-16 11:55:55,250 - INFO - Duration        : 51.62 seconds
+2025-06-16 11:55:55,250 - INFO - CSV file saved  : results/combined/eval_C01_ddpg.csv
+2025-06-16 11:55:55,250 - INFO - Logger file     : results/combined/eval_C01_ddpg_log.txt
+2025-06-16 11:55:55,250 - INFO - Evaluation successfully completed.
+2025-06-16 11:55:55,250 - INFO - ============================================================
+2025-06-16 11:55:55,250 - INFO - All evaluations done.
+2025-06-16 11:55:58,507 - INFO - [INFO] Evaluation Setup
+2025-06-16 11:55:58,507 - INFO - --------------------------------------------------------
+2025-06-16 11:55:58,507 - INFO - Algorithm        : ddpg
+2025-06-16 11:55:58,507 - INFO - Reward Mode      : combined
+2025-06-16 11:55:58,507 - INFO - Episodes         : 10
+2025-06-16 11:55:58,507 - INFO - Seed             : 58
+2025-06-16 11:55:58,507 - INFO - Observation      : C01
+2025-06-16 11:55:58,507 - INFO - Prediction Hzn   : 12
+2025-06-16 11:55:58,507 - INFO - Energy Price Data: data/price_data_2025.csv
+2025-06-16 11:55:58,507 - INFO - Temperature Data : data/LLEC_outdoor_temperature_5min_data.csv
+2025-06-16 11:55:58,508 - INFO - Prefer Best      : True
+2025-06-16 11:55:58,508 - INFO - Start Time       : 2025-06-16 11:55:58
+2025-06-16 11:55:58,508 - INFO - --------------------------------------------------------
+2025-06-16 11:55:58,508 - INFO - Starting evaluation for: ddpg (mode: combined)
+2025-06-16 11:55:58,533 - INFO - [EnvID: 23137523737936] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 6184)
+2025-06-16 11:55:58,577 - INFO - Found best model for ddpg: models/combined/C01/best_ddpg/best_model.zip
+2025-06-16 11:55:59,986 - INFO - [Episode] 0
+2025-06-16 11:55:59,989 - INFO - [EnvID: 23137523737936] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 58)
+2025-06-16 11:56:04,388 - INFO - [Episode] 1
+2025-06-16 11:56:04,392 - INFO - [EnvID: 23137523737936] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 116)
+2025-06-16 11:56:08,708 - INFO - [Episode] 2
+2025-06-16 11:56:08,712 - INFO - [EnvID: 23137523737936] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 174)
+2025-06-16 11:56:13,013 - INFO - [Episode] 3
+2025-06-16 11:56:13,016 - INFO - [EnvID: 23137523737936] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 232)
+2025-06-16 11:56:17,331 - INFO - [Episode] 4
+2025-06-16 11:56:17,334 - INFO - [EnvID: 23137523737936] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 290)
+2025-06-16 11:56:21,650 - INFO - [Episode] 5
+2025-06-16 11:56:21,654 - INFO - [EnvID: 23137523737936] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 348)
+2025-06-16 11:56:25,947 - INFO - [Episode] 6
+2025-06-16 11:56:25,950 - INFO - [EnvID: 23137523737936] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 406)
+2025-06-16 11:56:30,281 - INFO - [Episode] 7
+2025-06-16 11:56:30,285 - INFO - [EnvID: 23137523737936] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 464)
+2025-06-16 11:56:34,600 - INFO - [Episode] 8
+2025-06-16 11:56:34,603 - INFO - [EnvID: 23137523737936] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 522)
+2025-06-16 11:56:38,913 - INFO - [Episode] 9
+2025-06-16 11:56:38,917 - INFO - [EnvID: 23137523737936] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 580)
+2025-06-16 11:56:43,220 - INFO - [RESULT] Avg. reward for ddpg (combined): 230.64 in 43.23s
+2025-06-16 11:56:43,220 - INFO - ============================================================
+2025-06-16 11:56:48,521 - INFO - End Time        : 2025-06-16 11:56:48
+2025-06-16 11:56:48,521 - INFO - Duration        : 50.01 seconds
+2025-06-16 11:56:48,522 - INFO - CSV file saved  : results/combined/outdoor_data/eval_C01_ddpg_best.csv
+2025-06-16 11:56:48,522 - INFO - Logger file     : results/combined/outdoor_data/eval_C01_ddpg_best_log.txt
+2025-06-16 11:56:48,522 - INFO - Evaluation successfully completed.
+2025-06-16 11:56:48,522 - INFO - ============================================================
+2025-06-16 11:56:48,522 - INFO - All evaluations done.
+2025-06-16 11:56:51,740 - INFO - [INFO] Evaluation Setup
+2025-06-16 11:56:51,740 - INFO - --------------------------------------------------------
+2025-06-16 11:56:51,740 - INFO - Algorithm        : ddpg
+2025-06-16 11:56:51,740 - INFO - Reward Mode      : combined
+2025-06-16 11:56:51,740 - INFO - Episodes         : 10
+2025-06-16 11:56:51,740 - INFO - Seed             : 58
+2025-06-16 11:56:51,741 - INFO - Observation      : C01
+2025-06-16 11:56:51,741 - INFO - Prediction Hzn   : 12
+2025-06-16 11:56:51,741 - INFO - Energy Price Data: data/price_data_2025.csv
+2025-06-16 11:56:51,741 - INFO - Temperature Data : None
+2025-06-16 11:56:51,741 - INFO - Prefer Best      : True
+2025-06-16 11:56:51,741 - INFO - Start Time       : 2025-06-16 11:56:51
+2025-06-16 11:56:51,741 - INFO - --------------------------------------------------------
+2025-06-16 11:56:51,741 - INFO - Starting evaluation for: ddpg (mode: combined)
+2025-06-16 11:56:51,764 - INFO - [EnvID:22508609750400] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=6184
+2025-06-16 11:56:51,800 - INFO - Found best model for ddpg: models/combined/C01/best_ddpg/best_model.zip
+2025-06-16 11:56:53,193 - INFO - [Episode] 0
+2025-06-16 11:56:53,193 - INFO - [EnvID:22508609750400] schedule=synthetic-temp-class class=Normal | Tmin=8.7°C  Tmax=19.9°C  φ=0.061  seed=58
+2025-06-16 11:56:57,520 - INFO - [Episode] 1
+2025-06-16 11:56:57,521 - INFO - [EnvID:22508609750400] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=116
+2025-06-16 11:57:01,789 - INFO - [Episode] 2
+2025-06-16 11:57:01,789 - INFO - [EnvID:22508609750400] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=174
+2025-06-16 11:57:06,077 - INFO - [Episode] 3
+2025-06-16 11:57:06,078 - INFO - [EnvID:22508609750400] schedule=synthetic-temp-class class=Normal | Tmin=8.7°C  Tmax=19.9°C  φ=0.061  seed=232
+2025-06-16 11:57:10,338 - INFO - [Episode] 4
+2025-06-16 11:57:10,339 - INFO - [EnvID:22508609750400] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=290
+2025-06-16 11:57:14,558 - INFO - [Episode] 5
+2025-06-16 11:57:14,558 - INFO - [EnvID:22508609750400] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=348
+2025-06-16 11:57:18,810 - INFO - [Episode] 6
+2025-06-16 11:57:18,810 - INFO - [EnvID:22508609750400] schedule=synthetic-temp-class class=Hot | Tmin=19.5°C  Tmax=31.4°C  φ=-0.094  seed=406
+2025-06-16 11:57:23,064 - INFO - [Episode] 7
+2025-06-16 11:57:23,064 - INFO - [EnvID:22508609750400] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=464
+2025-06-16 11:57:27,284 - INFO - [Episode] 8
+2025-06-16 11:57:27,285 - INFO - [EnvID:22508609750400] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=522
+2025-06-16 11:57:31,513 - INFO - [Episode] 9
+2025-06-16 11:57:31,514 - INFO - [EnvID:22508609750400] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=580
+2025-06-16 11:57:35,746 - INFO - [RESULT] Avg. reward for ddpg (combined): 218.31 in 42.55s
+2025-06-16 11:57:35,746 - INFO - ============================================================
+2025-06-16 11:57:40,899 - INFO - End Time        : 2025-06-16 11:57:40
+2025-06-16 11:57:40,899 - INFO - Duration        : 49.16 seconds
+2025-06-16 11:57:40,899 - INFO - CSV file saved  : results/combined/eval_C01_ddpg_best.csv
+2025-06-16 11:57:40,899 - INFO - Logger file     : results/combined/eval_C01_ddpg_best_log.txt
+2025-06-16 11:57:40,899 - INFO - Evaluation successfully completed.
+2025-06-16 11:57:40,899 - INFO - ============================================================
+2025-06-16 11:57:40,899 - INFO - All evaluations done.
+2025-06-16 11:57:44,280 - INFO - [INFO] Evaluation Setup
+2025-06-16 11:57:44,280 - INFO - --------------------------------------------------------
+2025-06-16 11:57:44,280 - INFO - Algorithm        : ddpg
+2025-06-16 11:57:44,280 - INFO - Reward Mode      : combined
+2025-06-16 11:57:44,280 - INFO - Episodes         : 10
+2025-06-16 11:57:44,280 - INFO - Seed             : 58
+2025-06-16 11:57:44,280 - INFO - Observation      : C02
+2025-06-16 11:57:44,280 - INFO - Prediction Hzn   : 12
+2025-06-16 11:57:44,280 - INFO - Energy Price Data: data/price_data_2025.csv
+2025-06-16 11:57:44,281 - INFO - Temperature Data : data/LLEC_outdoor_temperature_5min_data.csv
+2025-06-16 11:57:44,281 - INFO - Prefer Best      : False
+2025-06-16 11:57:44,281 - INFO - Start Time       : 2025-06-16 11:57:44
+2025-06-16 11:57:44,281 - INFO - --------------------------------------------------------
+2025-06-16 11:57:44,281 - INFO - Starting evaluation for: ddpg (mode: combined)
+2025-06-16 11:57:44,306 - INFO - [EnvID: 23132631471536] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 6184)
+2025-06-16 11:57:44,346 - INFO - Using standard model for ddpg: models/combined/C02/ddpg_model_seed42.zip
+2025-06-16 11:57:45,794 - INFO - [Episode] 0
+2025-06-16 11:57:45,797 - INFO - [EnvID: 23132631471536] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 58)
+2025-06-16 11:57:50,229 - INFO - [Episode] 1
+2025-06-16 11:57:50,233 - INFO - [EnvID: 23132631471536] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 116)
+2025-06-16 11:57:54,569 - INFO - [Episode] 2
+2025-06-16 11:57:54,573 - INFO - [EnvID: 23132631471536] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 174)
+2025-06-16 11:57:58,933 - INFO - [Episode] 3
+2025-06-16 11:57:58,936 - INFO - [EnvID: 23132631471536] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 232)
+2025-06-16 11:58:03,252 - INFO - [Episode] 4
+2025-06-16 11:58:03,255 - INFO - [EnvID: 23132631471536] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 290)
+2025-06-16 11:58:07,555 - INFO - [Episode] 5
+2025-06-16 11:58:07,558 - INFO - [EnvID: 23132631471536] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 348)
+2025-06-16 11:58:11,870 - INFO - [Episode] 6
+2025-06-16 11:58:11,873 - INFO - [EnvID: 23132631471536] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 406)
+2025-06-16 11:58:16,198 - INFO - [Episode] 7
+2025-06-16 11:58:16,201 - INFO - [EnvID: 23132631471536] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 464)
+2025-06-16 11:58:20,528 - INFO - [Episode] 8
+2025-06-16 11:58:20,531 - INFO - [EnvID: 23132631471536] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 522)
+2025-06-16 11:58:24,857 - INFO - [Episode] 9
+2025-06-16 11:58:24,861 - INFO - [EnvID: 23132631471536] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 580)
+2025-06-16 11:58:29,188 - INFO - [RESULT] Avg. reward for ddpg (combined): 221.72 in 43.39s
+2025-06-16 11:58:29,188 - INFO - ============================================================
+2025-06-16 11:58:34,345 - INFO - End Time        : 2025-06-16 11:58:34
+2025-06-16 11:58:34,346 - INFO - Duration        : 50.07 seconds
+2025-06-16 11:58:34,346 - INFO - CSV file saved  : results/combined/outdoor_data/eval_C02_ddpg.csv
+2025-06-16 11:58:34,346 - INFO - Logger file     : results/combined/outdoor_data/eval_C02_ddpg_log.txt
+2025-06-16 11:58:34,346 - INFO - Evaluation successfully completed.
+2025-06-16 11:58:34,346 - INFO - ============================================================
+2025-06-16 11:58:34,346 - INFO - All evaluations done.
+2025-06-16 11:58:37,726 - INFO - [INFO] Evaluation Setup
+2025-06-16 11:58:37,726 - INFO - --------------------------------------------------------
+2025-06-16 11:58:37,726 - INFO - Algorithm        : ddpg
+2025-06-16 11:58:37,726 - INFO - Reward Mode      : combined
+2025-06-16 11:58:37,727 - INFO - Episodes         : 10
+2025-06-16 11:58:37,727 - INFO - Seed             : 58
+2025-06-16 11:58:37,727 - INFO - Observation      : C02
+2025-06-16 11:58:37,727 - INFO - Prediction Hzn   : 12
+2025-06-16 11:58:37,727 - INFO - Energy Price Data: data/price_data_2025.csv
+2025-06-16 11:58:37,727 - INFO - Temperature Data : None
+2025-06-16 11:58:37,727 - INFO - Prefer Best      : False
+2025-06-16 11:58:37,727 - INFO - Start Time       : 2025-06-16 11:58:37
+2025-06-16 11:58:37,727 - INFO - --------------------------------------------------------
+2025-06-16 11:58:37,727 - INFO - Starting evaluation for: ddpg (mode: combined)
+2025-06-16 11:58:37,750 - INFO - [EnvID:23250664719888] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=6184
+2025-06-16 11:58:37,786 - INFO - Using standard model for ddpg: models/combined/C02/ddpg_model_seed42.zip
+2025-06-16 11:58:39,243 - INFO - [Episode] 0
+2025-06-16 11:58:39,243 - INFO - [EnvID:23250664719888] schedule=synthetic-temp-class class=Normal | Tmin=8.7°C  Tmax=19.9°C  φ=0.061  seed=58
+2025-06-16 11:58:43,579 - INFO - [Episode] 1
+2025-06-16 11:58:43,580 - INFO - [EnvID:23250664719888] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=116
+2025-06-16 11:58:47,874 - INFO - [Episode] 2
+2025-06-16 11:58:47,874 - INFO - [EnvID:23250664719888] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=174
+2025-06-16 11:58:52,147 - INFO - [Episode] 3
+2025-06-16 11:58:52,147 - INFO - [EnvID:23250664719888] schedule=synthetic-temp-class class=Normal | Tmin=8.7°C  Tmax=19.9°C  φ=0.061  seed=232
+2025-06-16 11:58:56,426 - INFO - [Episode] 4
+2025-06-16 11:58:56,427 - INFO - [EnvID:23250664719888] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=290
+2025-06-16 11:59:00,729 - INFO - [Episode] 5
+2025-06-16 11:59:00,729 - INFO - [EnvID:23250664719888] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=348
+2025-06-16 11:59:04,984 - INFO - [Episode] 6
+2025-06-16 11:59:04,985 - INFO - [EnvID:23250664719888] schedule=synthetic-temp-class class=Hot | Tmin=19.5°C  Tmax=31.4°C  φ=-0.094  seed=406
+2025-06-16 11:59:09,228 - INFO - [Episode] 7
+2025-06-16 11:59:09,228 - INFO - [EnvID:23250664719888] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=464
+2025-06-16 11:59:13,478 - INFO - [Episode] 8
+2025-06-16 11:59:13,478 - INFO - [EnvID:23250664719888] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=522
+2025-06-16 11:59:17,740 - INFO - [Episode] 9
+2025-06-16 11:59:17,741 - INFO - [EnvID:23250664719888] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=580
+2025-06-16 11:59:22,049 - INFO - [RESULT] Avg. reward for ddpg (combined): 212.99 in 42.81s
+2025-06-16 11:59:22,049 - INFO - ============================================================
+2025-06-16 11:59:27,264 - INFO - End Time        : 2025-06-16 11:59:27
+2025-06-16 11:59:27,264 - INFO - Duration        : 49.54 seconds
+2025-06-16 11:59:27,264 - INFO - CSV file saved  : results/combined/eval_C02_ddpg.csv
+2025-06-16 11:59:27,264 - INFO - Logger file     : results/combined/eval_C02_ddpg_log.txt
+2025-06-16 11:59:27,264 - INFO - Evaluation successfully completed.
+2025-06-16 11:59:27,264 - INFO - ============================================================
+2025-06-16 11:59:27,264 - INFO - All evaluations done.
+2025-06-16 11:59:30,491 - INFO - [INFO] Evaluation Setup
+2025-06-16 11:59:30,491 - INFO - --------------------------------------------------------
+2025-06-16 11:59:30,492 - INFO - Algorithm        : ddpg
+2025-06-16 11:59:30,492 - INFO - Reward Mode      : combined
+2025-06-16 11:59:30,492 - INFO - Episodes         : 10
+2025-06-16 11:59:30,492 - INFO - Seed             : 58
+2025-06-16 11:59:30,492 - INFO - Observation      : C02
+2025-06-16 11:59:30,492 - INFO - Prediction Hzn   : 12
+2025-06-16 11:59:30,492 - INFO - Energy Price Data: data/price_data_2025.csv
+2025-06-16 11:59:30,492 - INFO - Temperature Data : data/LLEC_outdoor_temperature_5min_data.csv
+2025-06-16 11:59:30,492 - INFO - Prefer Best      : True
+2025-06-16 11:59:30,492 - INFO - Start Time       : 2025-06-16 11:59:30
+2025-06-16 11:59:30,492 - INFO - --------------------------------------------------------
+2025-06-16 11:59:30,492 - INFO - Starting evaluation for: ddpg (mode: combined)
+2025-06-16 11:59:30,518 - INFO - [EnvID: 22472500946352] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 6184)
+2025-06-16 11:59:30,561 - INFO - Found best model for ddpg: models/combined/C02/best_ddpg/best_model.zip
+2025-06-16 11:59:31,962 - INFO - [Episode] 0
+2025-06-16 11:59:31,966 - INFO - [EnvID: 22472500946352] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 58)
+2025-06-16 11:59:36,295 - INFO - [Episode] 1
+2025-06-16 11:59:36,298 - INFO - [EnvID: 22472500946352] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 116)
+2025-06-16 11:59:40,576 - INFO - [Episode] 2
+2025-06-16 11:59:40,579 - INFO - [EnvID: 22472500946352] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 174)
+2025-06-16 11:59:44,859 - INFO - [Episode] 3
+2025-06-16 11:59:44,862 - INFO - [EnvID: 22472500946352] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 232)
+2025-06-16 11:59:49,108 - INFO - [Episode] 4
+2025-06-16 11:59:49,112 - INFO - [EnvID: 22472500946352] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 290)
+2025-06-16 11:59:53,382 - INFO - [Episode] 5
+2025-06-16 11:59:53,385 - INFO - [EnvID: 22472500946352] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 348)
+2025-06-16 11:59:57,659 - INFO - [Episode] 6
+2025-06-16 11:59:57,662 - INFO - [EnvID: 22472500946352] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 406)
+2025-06-16 12:00:01,953 - INFO - [Episode] 7
+2025-06-16 12:00:01,956 - INFO - [EnvID: 22472500946352] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 464)
+2025-06-16 12:00:06,231 - INFO - [Episode] 8
+2025-06-16 12:00:06,234 - INFO - [EnvID: 22472500946352] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 522)
+2025-06-16 12:00:10,539 - INFO - [Episode] 9
+2025-06-16 12:00:10,542 - INFO - [EnvID: 22472500946352] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 580)
+2025-06-16 12:00:14,808 - INFO - [RESULT] Avg. reward for ddpg (combined): 240.50 in 42.85s
+2025-06-16 12:00:14,808 - INFO - ============================================================
+2025-06-16 12:00:19,951 - INFO - End Time        : 2025-06-16 12:00:19
+2025-06-16 12:00:19,951 - INFO - Duration        : 49.46 seconds
+2025-06-16 12:00:19,951 - INFO - CSV file saved  : results/combined/outdoor_data/eval_C02_ddpg_best.csv
+2025-06-16 12:00:19,951 - INFO - Logger file     : results/combined/outdoor_data/eval_C02_ddpg_best_log.txt
+2025-06-16 12:00:19,951 - INFO - Evaluation successfully completed.
+2025-06-16 12:00:19,951 - INFO - ============================================================
+2025-06-16 12:00:19,951 - INFO - All evaluations done.
+2025-06-16 12:00:23,123 - INFO - [INFO] Evaluation Setup
+2025-06-16 12:00:23,124 - INFO - --------------------------------------------------------
+2025-06-16 12:00:23,124 - INFO - Algorithm        : ddpg
+2025-06-16 12:00:23,124 - INFO - Reward Mode      : combined
+2025-06-16 12:00:23,124 - INFO - Episodes         : 10
+2025-06-16 12:00:23,124 - INFO - Seed             : 58
+2025-06-16 12:00:23,124 - INFO - Observation      : C02
+2025-06-16 12:00:23,124 - INFO - Prediction Hzn   : 12
+2025-06-16 12:00:23,124 - INFO - Energy Price Data: data/price_data_2025.csv
+2025-06-16 12:00:23,124 - INFO - Temperature Data : None
+2025-06-16 12:00:23,124 - INFO - Prefer Best      : True
+2025-06-16 12:00:23,124 - INFO - Start Time       : 2025-06-16 12:00:23
+2025-06-16 12:00:23,124 - INFO - --------------------------------------------------------
+2025-06-16 12:00:23,124 - INFO - Starting evaluation for: ddpg (mode: combined)
+2025-06-16 12:00:23,147 - INFO - [EnvID:22768806847824] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=6184
+2025-06-16 12:00:23,183 - INFO - Found best model for ddpg: models/combined/C02/best_ddpg/best_model.zip
+2025-06-16 12:00:24,580 - INFO - [Episode] 0
+2025-06-16 12:00:24,580 - INFO - [EnvID:22768806847824] schedule=synthetic-temp-class class=Normal | Tmin=8.7°C  Tmax=19.9°C  φ=0.061  seed=58
+2025-06-16 12:00:28,915 - INFO - [Episode] 1
+2025-06-16 12:00:28,916 - INFO - [EnvID:22768806847824] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=116
+2025-06-16 12:00:33,171 - INFO - [Episode] 2
+2025-06-16 12:00:33,172 - INFO - [EnvID:22768806847824] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=174
+2025-06-16 12:00:37,437 - INFO - [Episode] 3
+2025-06-16 12:00:37,437 - INFO - [EnvID:22768806847824] schedule=synthetic-temp-class class=Normal | Tmin=8.7°C  Tmax=19.9°C  φ=0.061  seed=232
+2025-06-16 12:00:41,691 - INFO - [Episode] 4
+2025-06-16 12:00:41,692 - INFO - [EnvID:22768806847824] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=290
+2025-06-16 12:00:45,963 - INFO - [Episode] 5
+2025-06-16 12:00:45,963 - INFO - [EnvID:22768806847824] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=348
+2025-06-16 12:00:50,208 - INFO - [Episode] 6
+2025-06-16 12:00:50,208 - INFO - [EnvID:22768806847824] schedule=synthetic-temp-class class=Hot | Tmin=19.5°C  Tmax=31.4°C  φ=-0.094  seed=406
+2025-06-16 12:00:54,431 - INFO - [Episode] 7
+2025-06-16 12:00:54,432 - INFO - [EnvID:22768806847824] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=464
+2025-06-16 12:00:58,681 - INFO - [Episode] 8
+2025-06-16 12:00:58,681 - INFO - [EnvID:22768806847824] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=522
+2025-06-16 12:01:02,941 - INFO - [Episode] 9
+2025-06-16 12:01:02,941 - INFO - [EnvID:22768806847824] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=580
+2025-06-16 12:01:07,166 - INFO - [RESULT] Avg. reward for ddpg (combined): 226.88 in 42.59s
+2025-06-16 12:01:07,166 - INFO - ============================================================
+2025-06-16 12:01:12,370 - INFO - End Time        : 2025-06-16 12:01:12
+2025-06-16 12:01:12,370 - INFO - Duration        : 49.25 seconds
+2025-06-16 12:01:12,370 - INFO - CSV file saved  : results/combined/eval_C02_ddpg_best.csv
+2025-06-16 12:01:12,370 - INFO - Logger file     : results/combined/eval_C02_ddpg_best_log.txt
+2025-06-16 12:01:12,370 - INFO - Evaluation successfully completed.
+2025-06-16 12:01:12,370 - INFO - ============================================================
+2025-06-16 12:01:12,370 - INFO - All evaluations done.
+2025-06-16 12:01:15,757 - INFO - [INFO] Evaluation Setup
+2025-06-16 12:01:15,757 - INFO - --------------------------------------------------------
+2025-06-16 12:01:15,758 - INFO - Algorithm        : ddpg
+2025-06-16 12:01:15,758 - INFO - Reward Mode      : combined
+2025-06-16 12:01:15,758 - INFO - Episodes         : 10
+2025-06-16 12:01:15,758 - INFO - Seed             : 58
+2025-06-16 12:01:15,758 - INFO - Observation      : C03
+2025-06-16 12:01:15,758 - INFO - Prediction Hzn   : 12
+2025-06-16 12:01:15,758 - INFO - Energy Price Data: data/price_data_2025.csv
+2025-06-16 12:01:15,758 - INFO - Temperature Data : data/LLEC_outdoor_temperature_5min_data.csv
+2025-06-16 12:01:15,758 - INFO - Prefer Best      : False
+2025-06-16 12:01:15,758 - INFO - Start Time       : 2025-06-16 12:01:15
+2025-06-16 12:01:15,758 - INFO - --------------------------------------------------------
+2025-06-16 12:01:15,758 - INFO - Starting evaluation for: ddpg (mode: combined)
+2025-06-16 12:01:15,783 - INFO - [EnvID: 22389874570720] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 6184)
+2025-06-16 12:01:15,823 - INFO - Using standard model for ddpg: models/combined/C03/ddpg_model_seed42.zip
+2025-06-16 12:01:17,274 - INFO - [Episode] 0
+2025-06-16 12:01:17,277 - INFO - [EnvID: 22389874570720] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 58)
+2025-06-16 12:01:21,609 - INFO - [Episode] 1
+2025-06-16 12:01:21,612 - INFO - [EnvID: 22389874570720] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 116)
+2025-06-16 12:01:25,857 - INFO - [Episode] 2
+2025-06-16 12:01:25,860 - INFO - [EnvID: 22389874570720] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 174)
+2025-06-16 12:01:30,113 - INFO - [Episode] 3
+2025-06-16 12:01:30,117 - INFO - [EnvID: 22389874570720] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 232)
+2025-06-16 12:01:34,394 - INFO - [Episode] 4
+2025-06-16 12:01:34,397 - INFO - [EnvID: 22389874570720] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 290)
+2025-06-16 12:01:38,691 - INFO - [Episode] 5
+2025-06-16 12:01:38,693 - INFO - [EnvID: 22389874570720] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 348)
+2025-06-16 12:01:42,954 - INFO - [Episode] 6
+2025-06-16 12:01:42,958 - INFO - [EnvID: 22389874570720] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 406)
+2025-06-16 12:01:47,223 - INFO - [Episode] 7
+2025-06-16 12:01:47,225 - INFO - [EnvID: 22389874570720] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 464)
+2025-06-16 12:01:51,495 - INFO - [Episode] 8
+2025-06-16 12:01:51,498 - INFO - [EnvID: 22389874570720] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 522)
+2025-06-16 12:01:55,764 - INFO - [Episode] 9
+2025-06-16 12:01:55,767 - INFO - [EnvID: 22389874570720] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 580)
+2025-06-16 12:02:00,014 - INFO - [RESULT] Avg. reward for ddpg (combined): 226.44 in 42.74s
+2025-06-16 12:02:00,014 - INFO - ============================================================
+2025-06-16 12:02:05,144 - INFO - End Time        : 2025-06-16 12:02:05
+2025-06-16 12:02:05,144 - INFO - Duration        : 49.39 seconds
+2025-06-16 12:02:05,144 - INFO - CSV file saved  : results/combined/outdoor_data/eval_C03_ddpg.csv
+2025-06-16 12:02:05,144 - INFO - Logger file     : results/combined/outdoor_data/eval_C03_ddpg_log.txt
+2025-06-16 12:02:05,144 - INFO - Evaluation successfully completed.
+2025-06-16 12:02:05,144 - INFO - ============================================================
+2025-06-16 12:02:05,144 - INFO - All evaluations done.
+2025-06-16 12:02:08,521 - INFO - [INFO] Evaluation Setup
+2025-06-16 12:02:08,522 - INFO - --------------------------------------------------------
+2025-06-16 12:02:08,522 - INFO - Algorithm        : ddpg
+2025-06-16 12:02:08,522 - INFO - Reward Mode      : combined
+2025-06-16 12:02:08,522 - INFO - Episodes         : 10
+2025-06-16 12:02:08,522 - INFO - Seed             : 58
+2025-06-16 12:02:08,522 - INFO - Observation      : C03
+2025-06-16 12:02:08,522 - INFO - Prediction Hzn   : 12
+2025-06-16 12:02:08,522 - INFO - Energy Price Data: data/price_data_2025.csv
+2025-06-16 12:02:08,522 - INFO - Temperature Data : None
+2025-06-16 12:02:08,522 - INFO - Prefer Best      : False
+2025-06-16 12:02:08,522 - INFO - Start Time       : 2025-06-16 12:02:08
+2025-06-16 12:02:08,522 - INFO - --------------------------------------------------------
+2025-06-16 12:02:08,522 - INFO - Starting evaluation for: ddpg (mode: combined)
+2025-06-16 12:02:08,545 - INFO - [EnvID:23072870647456] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=6184
+2025-06-16 12:02:08,581 - INFO - Using standard model for ddpg: models/combined/C03/ddpg_model_seed42.zip
+2025-06-16 12:02:10,036 - INFO - [Episode] 0
+2025-06-16 12:02:10,036 - INFO - [EnvID:23072870647456] schedule=synthetic-temp-class class=Normal | Tmin=8.7°C  Tmax=19.9°C  φ=0.061  seed=58
+2025-06-16 12:02:14,380 - INFO - [Episode] 1
+2025-06-16 12:02:14,380 - INFO - [EnvID:23072870647456] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=116
+2025-06-16 12:02:18,646 - INFO - [Episode] 2
+2025-06-16 12:02:18,646 - INFO - [EnvID:23072870647456] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=174
+2025-06-16 12:02:22,906 - INFO - [Episode] 3
+2025-06-16 12:02:22,906 - INFO - [EnvID:23072870647456] schedule=synthetic-temp-class class=Normal | Tmin=8.7°C  Tmax=19.9°C  φ=0.061  seed=232
+2025-06-16 12:02:27,153 - INFO - [Episode] 4
+2025-06-16 12:02:27,154 - INFO - [EnvID:23072870647456] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=290
+2025-06-16 12:02:31,425 - INFO - [Episode] 5
+2025-06-16 12:02:31,426 - INFO - [EnvID:23072870647456] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=348
+2025-06-16 12:02:35,668 - INFO - [Episode] 6
+2025-06-16 12:02:35,668 - INFO - [EnvID:23072870647456] schedule=synthetic-temp-class class=Hot | Tmin=19.5°C  Tmax=31.4°C  φ=-0.094  seed=406
+2025-06-16 12:02:39,920 - INFO - [Episode] 7
+2025-06-16 12:02:39,921 - INFO - [EnvID:23072870647456] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=464
+2025-06-16 12:02:44,156 - INFO - [Episode] 8
+2025-06-16 12:02:44,157 - INFO - [EnvID:23072870647456] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=522
+2025-06-16 12:02:48,427 - INFO - [Episode] 9
+2025-06-16 12:02:48,427 - INFO - [EnvID:23072870647456] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=580
+2025-06-16 12:02:52,673 - INFO - [RESULT] Avg. reward for ddpg (combined): 209.77 in 42.64s
+2025-06-16 12:02:52,673 - INFO - ============================================================
+2025-06-16 12:02:57,827 - INFO - End Time        : 2025-06-16 12:02:57
+2025-06-16 12:02:57,827 - INFO - Duration        : 49.31 seconds
+2025-06-16 12:02:57,827 - INFO - CSV file saved  : results/combined/eval_C03_ddpg.csv
+2025-06-16 12:02:57,827 - INFO - Logger file     : results/combined/eval_C03_ddpg_log.txt
+2025-06-16 12:02:57,827 - INFO - Evaluation successfully completed.
+2025-06-16 12:02:57,827 - INFO - ============================================================
+2025-06-16 12:02:57,827 - INFO - All evaluations done.
+2025-06-16 12:03:01,210 - INFO - [INFO] Evaluation Setup
+2025-06-16 12:03:01,210 - INFO - --------------------------------------------------------
+2025-06-16 12:03:01,210 - INFO - Algorithm        : ddpg
+2025-06-16 12:03:01,210 - INFO - Reward Mode      : combined
+2025-06-16 12:03:01,211 - INFO - Episodes         : 10
+2025-06-16 12:03:01,211 - INFO - Seed             : 58
+2025-06-16 12:03:01,211 - INFO - Observation      : C03
+2025-06-16 12:03:01,211 - INFO - Prediction Hzn   : 12
+2025-06-16 12:03:01,211 - INFO - Energy Price Data: data/price_data_2025.csv
+2025-06-16 12:03:01,211 - INFO - Temperature Data : data/LLEC_outdoor_temperature_5min_data.csv
+2025-06-16 12:03:01,211 - INFO - Prefer Best      : True
+2025-06-16 12:03:01,211 - INFO - Start Time       : 2025-06-16 12:03:01
+2025-06-16 12:03:01,211 - INFO - --------------------------------------------------------
+2025-06-16 12:03:01,211 - INFO - Starting evaluation for: ddpg (mode: combined)
+2025-06-16 12:03:01,236 - INFO - [EnvID: 22550536242560] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 6184)
+2025-06-16 12:03:01,280 - INFO - Found best model for ddpg: models/combined/C03/best_ddpg/best_model.zip
+2025-06-16 12:03:02,738 - INFO - [Episode] 0
+2025-06-16 12:03:02,741 - INFO - [EnvID: 22550536242560] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 58)
+2025-06-16 12:03:07,099 - INFO - [Episode] 1
+2025-06-16 12:03:07,103 - INFO - [EnvID: 22550536242560] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 116)
+2025-06-16 12:03:11,409 - INFO - [Episode] 2
+2025-06-16 12:03:11,412 - INFO - [EnvID: 22550536242560] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 174)
+2025-06-16 12:03:15,722 - INFO - [Episode] 3
+2025-06-16 12:03:15,725 - INFO - [EnvID: 22550536242560] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 232)
+2025-06-16 12:03:20,014 - INFO - [Episode] 4
+2025-06-16 12:03:20,016 - INFO - [EnvID: 22550536242560] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 290)
+2025-06-16 12:03:24,319 - INFO - [Episode] 5
+2025-06-16 12:03:24,323 - INFO - [EnvID: 22550536242560] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 348)
+2025-06-16 12:03:28,624 - INFO - [Episode] 6
+2025-06-16 12:03:28,626 - INFO - [EnvID: 22550536242560] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 406)
+2025-06-16 12:03:32,936 - INFO - [Episode] 7
+2025-06-16 12:03:32,939 - INFO - [EnvID: 22550536242560] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 464)
+2025-06-16 12:03:37,244 - INFO - [Episode] 8
+2025-06-16 12:03:37,247 - INFO - [EnvID: 22550536242560] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 522)
+2025-06-16 12:03:41,553 - INFO - [Episode] 9
+2025-06-16 12:03:41,556 - INFO - [EnvID: 22550536242560] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 580)
+2025-06-16 12:03:45,863 - INFO - [RESULT] Avg. reward for ddpg (combined): 234.57 in 43.13s
+2025-06-16 12:03:45,863 - INFO - ============================================================
+2025-06-16 12:03:51,017 - INFO - End Time        : 2025-06-16 12:03:51
+2025-06-16 12:03:51,018 - INFO - Duration        : 49.81 seconds
+2025-06-16 12:03:51,018 - INFO - CSV file saved  : results/combined/outdoor_data/eval_C03_ddpg_best.csv
+2025-06-16 12:03:51,018 - INFO - Logger file     : results/combined/outdoor_data/eval_C03_ddpg_best_log.txt
+2025-06-16 12:03:51,018 - INFO - Evaluation successfully completed.
+2025-06-16 12:03:51,018 - INFO - ============================================================
+2025-06-16 12:03:51,018 - INFO - All evaluations done.
+2025-06-16 12:03:54,399 - INFO - [INFO] Evaluation Setup
+2025-06-16 12:03:54,399 - INFO - --------------------------------------------------------
+2025-06-16 12:03:54,399 - INFO - Algorithm        : ddpg
+2025-06-16 12:03:54,399 - INFO - Reward Mode      : combined
+2025-06-16 12:03:54,399 - INFO - Episodes         : 10
+2025-06-16 12:03:54,399 - INFO - Seed             : 58
+2025-06-16 12:03:54,399 - INFO - Observation      : C03
+2025-06-16 12:03:54,399 - INFO - Prediction Hzn   : 12
+2025-06-16 12:03:54,399 - INFO - Energy Price Data: data/price_data_2025.csv
+2025-06-16 12:03:54,399 - INFO - Temperature Data : None
+2025-06-16 12:03:54,400 - INFO - Prefer Best      : True
+2025-06-16 12:03:54,400 - INFO - Start Time       : 2025-06-16 12:03:54
+2025-06-16 12:03:54,400 - INFO - --------------------------------------------------------
+2025-06-16 12:03:54,400 - INFO - Starting evaluation for: ddpg (mode: combined)
+2025-06-16 12:03:54,423 - INFO - [EnvID:22449848972816] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=6184
+2025-06-16 12:03:54,459 - INFO - Found best model for ddpg: models/combined/C03/best_ddpg/best_model.zip
+2025-06-16 12:03:55,894 - INFO - [Episode] 0
+2025-06-16 12:03:55,894 - INFO - [EnvID:22449848972816] schedule=synthetic-temp-class class=Normal | Tmin=8.7°C  Tmax=19.9°C  φ=0.061  seed=58
+2025-06-16 12:04:00,325 - INFO - [Episode] 1
+2025-06-16 12:04:00,326 - INFO - [EnvID:22449848972816] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=116
+2025-06-16 12:04:04,651 - INFO - [Episode] 2
+2025-06-16 12:04:04,651 - INFO - [EnvID:22449848972816] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=174
+2025-06-16 12:04:09,034 - INFO - [Episode] 3
+2025-06-16 12:04:09,035 - INFO - [EnvID:22449848972816] schedule=synthetic-temp-class class=Normal | Tmin=8.7°C  Tmax=19.9°C  φ=0.061  seed=232
+2025-06-16 12:04:13,366 - INFO - [Episode] 4
+2025-06-16 12:04:13,366 - INFO - [EnvID:22449848972816] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=290
+2025-06-16 12:04:17,699 - INFO - [Episode] 5
+2025-06-16 12:04:17,699 - INFO - [EnvID:22449848972816] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=348
+2025-06-16 12:04:22,040 - INFO - [Episode] 6
+2025-06-16 12:04:22,040 - INFO - [EnvID:22449848972816] schedule=synthetic-temp-class class=Hot | Tmin=19.5°C  Tmax=31.4°C  φ=-0.094  seed=406
+2025-06-16 12:04:26,348 - INFO - [Episode] 7
+2025-06-16 12:04:26,348 - INFO - [EnvID:22449848972816] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=464
+2025-06-16 12:04:30,653 - INFO - [Episode] 8
+2025-06-16 12:04:30,653 - INFO - [EnvID:22449848972816] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=522
+2025-06-16 12:04:34,963 - INFO - [Episode] 9
+2025-06-16 12:04:34,963 - INFO - [EnvID:22449848972816] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=580
+2025-06-16 12:04:39,292 - INFO - [RESULT] Avg. reward for ddpg (combined): 223.88 in 43.40s
+2025-06-16 12:04:39,292 - INFO - ============================================================
+2025-06-16 12:04:44,473 - INFO - End Time        : 2025-06-16 12:04:44
+2025-06-16 12:04:44,473 - INFO - Duration        : 50.07 seconds
+2025-06-16 12:04:44,473 - INFO - CSV file saved  : results/combined/eval_C03_ddpg_best.csv
+2025-06-16 12:04:44,473 - INFO - Logger file     : results/combined/eval_C03_ddpg_best_log.txt
+2025-06-16 12:04:44,473 - INFO - Evaluation successfully completed.
+2025-06-16 12:04:44,473 - INFO - ============================================================
+2025-06-16 12:04:44,473 - INFO - All evaluations done.
+2025-06-16 12:04:47,874 - INFO - [INFO] Evaluation Setup
+2025-06-16 12:04:47,874 - INFO - --------------------------------------------------------
+2025-06-16 12:04:47,874 - INFO - Algorithm        : ddpg
+2025-06-16 12:04:47,874 - INFO - Reward Mode      : combined
+2025-06-16 12:04:47,874 - INFO - Episodes         : 10
+2025-06-16 12:04:47,875 - INFO - Seed             : 58
+2025-06-16 12:04:47,875 - INFO - Observation      : C04
+2025-06-16 12:04:47,875 - INFO - Prediction Hzn   : 12
+2025-06-16 12:04:47,875 - INFO - Energy Price Data: data/price_data_2025.csv
+2025-06-16 12:04:47,875 - INFO - Temperature Data : data/LLEC_outdoor_temperature_5min_data.csv
+2025-06-16 12:04:47,875 - INFO - Prefer Best      : False
+2025-06-16 12:04:47,875 - INFO - Start Time       : 2025-06-16 12:04:47
+2025-06-16 12:04:47,875 - INFO - --------------------------------------------------------
+2025-06-16 12:04:47,875 - INFO - Starting evaluation for: ddpg (mode: combined)
+2025-06-16 12:04:47,900 - INFO - [EnvID: 22798052672752] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 6184)
+2025-06-16 12:04:47,940 - INFO - Using standard model for ddpg: models/combined/C04/ddpg_model_seed42.zip
+2025-06-16 12:04:49,407 - INFO - [Episode] 0
+2025-06-16 12:04:49,410 - INFO - [EnvID: 22798052672752] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 58)
+2025-06-16 12:04:53,784 - INFO - [Episode] 1
+2025-06-16 12:04:53,788 - INFO - [EnvID: 22798052672752] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 116)
+2025-06-16 12:04:58,109 - INFO - [Episode] 2
+2025-06-16 12:04:58,112 - INFO - [EnvID: 22798052672752] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 174)
+2025-06-16 12:05:02,389 - INFO - [Episode] 3
+2025-06-16 12:05:02,393 - INFO - [EnvID: 22798052672752] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 232)
+2025-06-16 12:05:06,707 - INFO - [Episode] 4
+2025-06-16 12:05:06,710 - INFO - [EnvID: 22798052672752] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 290)
+2025-06-16 12:05:11,013 - INFO - [Episode] 5
+2025-06-16 12:05:11,016 - INFO - [EnvID: 22798052672752] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 348)
+2025-06-16 12:05:15,321 - INFO - [Episode] 6
+2025-06-16 12:05:15,324 - INFO - [EnvID: 22798052672752] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 406)
+2025-06-16 12:05:19,628 - INFO - [Episode] 7
+2025-06-16 12:05:19,630 - INFO - [EnvID: 22798052672752] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 464)
+2025-06-16 12:05:23,932 - INFO - [Episode] 8
+2025-06-16 12:05:23,935 - INFO - [EnvID: 22798052672752] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 522)
+2025-06-16 12:05:28,239 - INFO - [Episode] 9
+2025-06-16 12:05:28,242 - INFO - [EnvID: 22798052672752] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 580)
+2025-06-16 12:05:32,519 - INFO - [RESULT] Avg. reward for ddpg (combined): 227.39 in 43.11s
+2025-06-16 12:05:32,519 - INFO - ============================================================
+2025-06-16 12:05:37,682 - INFO - End Time        : 2025-06-16 12:05:37
+2025-06-16 12:05:37,682 - INFO - Duration        : 49.81 seconds
+2025-06-16 12:05:37,682 - INFO - CSV file saved  : results/combined/outdoor_data/eval_C04_ddpg.csv
+2025-06-16 12:05:37,682 - INFO - Logger file     : results/combined/outdoor_data/eval_C04_ddpg_log.txt
+2025-06-16 12:05:37,682 - INFO - Evaluation successfully completed.
+2025-06-16 12:05:37,682 - INFO - ============================================================
+2025-06-16 12:05:37,682 - INFO - All evaluations done.
+2025-06-16 12:05:40,902 - INFO - [INFO] Evaluation Setup
+2025-06-16 12:05:40,902 - INFO - --------------------------------------------------------
+2025-06-16 12:05:40,902 - INFO - Algorithm        : ddpg
+2025-06-16 12:05:40,902 - INFO - Reward Mode      : combined
+2025-06-16 12:05:40,902 - INFO - Episodes         : 10
+2025-06-16 12:05:40,902 - INFO - Seed             : 58
+2025-06-16 12:05:40,902 - INFO - Observation      : C04
+2025-06-16 12:05:40,902 - INFO - Prediction Hzn   : 12
+2025-06-16 12:05:40,902 - INFO - Energy Price Data: data/price_data_2025.csv
+2025-06-16 12:05:40,902 - INFO - Temperature Data : None
+2025-06-16 12:05:40,902 - INFO - Prefer Best      : False
+2025-06-16 12:05:40,902 - INFO - Start Time       : 2025-06-16 12:05:40
+2025-06-16 12:05:40,902 - INFO - --------------------------------------------------------
+2025-06-16 12:05:40,902 - INFO - Starting evaluation for: ddpg (mode: combined)
+2025-06-16 12:05:40,926 - INFO - [EnvID:22781201057392] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=6184
+2025-06-16 12:05:40,962 - INFO - Using standard model for ddpg: models/combined/C04/ddpg_model_seed42.zip
+2025-06-16 12:05:42,355 - INFO - [Episode] 0
+2025-06-16 12:05:42,355 - INFO - [EnvID:22781201057392] schedule=synthetic-temp-class class=Normal | Tmin=8.7°C  Tmax=19.9°C  φ=0.061  seed=58
+2025-06-16 12:05:46,744 - INFO - [Episode] 1
+2025-06-16 12:05:46,745 - INFO - [EnvID:22781201057392] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=116
+2025-06-16 12:05:51,082 - INFO - [Episode] 2
+2025-06-16 12:05:51,083 - INFO - [EnvID:22781201057392] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=174
+2025-06-16 12:05:55,403 - INFO - [Episode] 3
+2025-06-16 12:05:55,403 - INFO - [EnvID:22781201057392] schedule=synthetic-temp-class class=Normal | Tmin=8.7°C  Tmax=19.9°C  φ=0.061  seed=232
+2025-06-16 12:05:59,750 - INFO - [Episode] 4
+2025-06-16 12:05:59,750 - INFO - [EnvID:22781201057392] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=290
+2025-06-16 12:06:04,101 - INFO - [Episode] 5
+2025-06-16 12:06:04,101 - INFO - [EnvID:22781201057392] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=348
+2025-06-16 12:06:08,405 - INFO - [Episode] 6
+2025-06-16 12:06:08,406 - INFO - [EnvID:22781201057392] schedule=synthetic-temp-class class=Hot | Tmin=19.5°C  Tmax=31.4°C  φ=-0.094  seed=406
+2025-06-16 12:06:12,696 - INFO - [Episode] 7
+2025-06-16 12:06:12,697 - INFO - [EnvID:22781201057392] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=464
+2025-06-16 12:06:17,013 - INFO - [Episode] 8
+2025-06-16 12:06:17,014 - INFO - [EnvID:22781201057392] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=522
+2025-06-16 12:06:21,339 - INFO - [Episode] 9
+2025-06-16 12:06:21,340 - INFO - [EnvID:22781201057392] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=580
+2025-06-16 12:06:25,688 - INFO - [RESULT] Avg. reward for ddpg (combined): 215.75 in 43.33s
+2025-06-16 12:06:25,688 - INFO - ============================================================
+2025-06-16 12:06:30,909 - INFO - End Time        : 2025-06-16 12:06:30
+2025-06-16 12:06:30,909 - INFO - Duration        : 50.01 seconds
+2025-06-16 12:06:30,909 - INFO - CSV file saved  : results/combined/eval_C04_ddpg.csv
+2025-06-16 12:06:30,909 - INFO - Logger file     : results/combined/eval_C04_ddpg_log.txt
+2025-06-16 12:06:30,909 - INFO - Evaluation successfully completed.
+2025-06-16 12:06:30,909 - INFO - ============================================================
+2025-06-16 12:06:30,909 - INFO - All evaluations done.
+2025-06-16 12:06:34,284 - INFO - [INFO] Evaluation Setup
+2025-06-16 12:06:34,285 - INFO - --------------------------------------------------------
+2025-06-16 12:06:34,285 - INFO - Algorithm        : ddpg
+2025-06-16 12:06:34,285 - INFO - Reward Mode      : combined
+2025-06-16 12:06:34,285 - INFO - Episodes         : 10
+2025-06-16 12:06:34,285 - INFO - Seed             : 58
+2025-06-16 12:06:34,285 - INFO - Observation      : C04
+2025-06-16 12:06:34,286 - INFO - Prediction Hzn   : 12
+2025-06-16 12:06:34,286 - INFO - Energy Price Data: data/price_data_2025.csv
+2025-06-16 12:06:34,286 - INFO - Temperature Data : data/LLEC_outdoor_temperature_5min_data.csv
+2025-06-16 12:06:34,286 - INFO - Prefer Best      : True
+2025-06-16 12:06:34,286 - INFO - Start Time       : 2025-06-16 12:06:34
+2025-06-16 12:06:34,286 - INFO - --------------------------------------------------------
+2025-06-16 12:06:34,286 - INFO - Starting evaluation for: ddpg (mode: combined)
+2025-06-16 12:06:34,311 - INFO - [EnvID: 22598705157408] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 6184)
+2025-06-16 12:06:34,432 - INFO - Found best model for ddpg: models/combined/C04/best_ddpg/best_model.zip
+2025-06-16 12:06:35,888 - INFO - [Episode] 0
+2025-06-16 12:06:35,891 - INFO - [EnvID: 22598705157408] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 58)
+2025-06-16 12:06:40,312 - INFO - [Episode] 1
+2025-06-16 12:06:40,315 - INFO - [EnvID: 22598705157408] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 116)
+2025-06-16 12:06:44,631 - INFO - [Episode] 2
+2025-06-16 12:06:44,634 - INFO - [EnvID: 22598705157408] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 174)
+2025-06-16 12:06:48,954 - INFO - [Episode] 3
+2025-06-16 12:06:48,957 - INFO - [EnvID: 22598705157408] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 232)
+2025-06-16 12:06:53,281 - INFO - [Episode] 4
+2025-06-16 12:06:53,284 - INFO - [EnvID: 22598705157408] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 290)
+2025-06-16 12:06:57,578 - INFO - [Episode] 5
+2025-06-16 12:06:57,582 - INFO - [EnvID: 22598705157408] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 348)
+2025-06-16 12:07:01,893 - INFO - [Episode] 6
+2025-06-16 12:07:01,896 - INFO - [EnvID: 22598705157408] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 406)
+2025-06-16 12:07:06,191 - INFO - [Episode] 7
+2025-06-16 12:07:06,194 - INFO - [EnvID: 22598705157408] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 464)
+2025-06-16 12:07:10,497 - INFO - [Episode] 8
+2025-06-16 12:07:10,500 - INFO - [EnvID: 22598705157408] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 522)
+2025-06-16 12:07:14,802 - INFO - [Episode] 9
+2025-06-16 12:07:14,805 - INFO - [EnvID: 22598705157408] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 580)
+2025-06-16 12:07:19,105 - INFO - [RESULT] Avg. reward for ddpg (combined): 186.41 in 43.22s
+2025-06-16 12:07:19,105 - INFO - ============================================================
+2025-06-16 12:07:24,280 - INFO - End Time        : 2025-06-16 12:07:24
+2025-06-16 12:07:24,280 - INFO - Duration        : 50.00 seconds
+2025-06-16 12:07:24,280 - INFO - CSV file saved  : results/combined/outdoor_data/eval_C04_ddpg_best.csv
+2025-06-16 12:07:24,280 - INFO - Logger file     : results/combined/outdoor_data/eval_C04_ddpg_best_log.txt
+2025-06-16 12:07:24,280 - INFO - Evaluation successfully completed.
+2025-06-16 12:07:24,280 - INFO - ============================================================
+2025-06-16 12:07:24,280 - INFO - All evaluations done.
+2025-06-16 12:07:27,667 - INFO - [INFO] Evaluation Setup
+2025-06-16 12:07:27,667 - INFO - --------------------------------------------------------
+2025-06-16 12:07:27,667 - INFO - Algorithm        : ddpg
+2025-06-16 12:07:27,667 - INFO - Reward Mode      : combined
+2025-06-16 12:07:27,667 - INFO - Episodes         : 10
+2025-06-16 12:07:27,667 - INFO - Seed             : 58
+2025-06-16 12:07:27,667 - INFO - Observation      : C04
+2025-06-16 12:07:27,667 - INFO - Prediction Hzn   : 12
+2025-06-16 12:07:27,667 - INFO - Energy Price Data: data/price_data_2025.csv
+2025-06-16 12:07:27,667 - INFO - Temperature Data : None
+2025-06-16 12:07:27,668 - INFO - Prefer Best      : True
+2025-06-16 12:07:27,668 - INFO - Start Time       : 2025-06-16 12:07:27
+2025-06-16 12:07:27,668 - INFO - --------------------------------------------------------
+2025-06-16 12:07:27,668 - INFO - Starting evaluation for: ddpg (mode: combined)
+2025-06-16 12:07:27,691 - INFO - [EnvID:22797837092176] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=6184
+2025-06-16 12:07:27,727 - INFO - Found best model for ddpg: models/combined/C04/best_ddpg/best_model.zip
+2025-06-16 12:07:29,184 - INFO - [Episode] 0
+2025-06-16 12:07:29,184 - INFO - [EnvID:22797837092176] schedule=synthetic-temp-class class=Normal | Tmin=8.7°C  Tmax=19.9°C  φ=0.061  seed=58
+2025-06-16 12:07:33,460 - INFO - [Episode] 1
+2025-06-16 12:07:33,461 - INFO - [EnvID:22797837092176] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=116
+2025-06-16 12:07:37,676 - INFO - [Episode] 2
+2025-06-16 12:07:37,676 - INFO - [EnvID:22797837092176] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=174
+2025-06-16 12:07:41,899 - INFO - [Episode] 3
+2025-06-16 12:07:41,900 - INFO - [EnvID:22797837092176] schedule=synthetic-temp-class class=Normal | Tmin=8.7°C  Tmax=19.9°C  φ=0.061  seed=232
+2025-06-16 12:07:46,114 - INFO - [Episode] 4
+2025-06-16 12:07:46,114 - INFO - [EnvID:22797837092176] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=290
+2025-06-16 12:07:50,314 - INFO - [Episode] 5
+2025-06-16 12:07:50,314 - INFO - [EnvID:22797837092176] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=348
+2025-06-16 12:07:54,543 - INFO - [Episode] 6
+2025-06-16 12:07:54,544 - INFO - [EnvID:22797837092176] schedule=synthetic-temp-class class=Hot | Tmin=19.5°C  Tmax=31.4°C  φ=-0.094  seed=406
+2025-06-16 12:07:58,772 - INFO - [Episode] 7
+2025-06-16 12:07:58,773 - INFO - [EnvID:22797837092176] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=464
+2025-06-16 12:08:02,972 - INFO - [Episode] 8
+2025-06-16 12:08:02,972 - INFO - [EnvID:22797837092176] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=522
+2025-06-16 12:08:07,163 - INFO - [Episode] 9
+2025-06-16 12:08:07,163 - INFO - [EnvID:22797837092176] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=580
+2025-06-16 12:08:11,375 - INFO - [RESULT] Avg. reward for ddpg (combined): 176.88 in 42.19s
+2025-06-16 12:08:11,375 - INFO - ============================================================
+2025-06-16 12:08:16,551 - INFO - End Time        : 2025-06-16 12:08:16
+2025-06-16 12:08:16,552 - INFO - Duration        : 48.88 seconds
+2025-06-16 12:08:16,552 - INFO - CSV file saved  : results/combined/eval_C04_ddpg_best.csv
+2025-06-16 12:08:16,552 - INFO - Logger file     : results/combined/eval_C04_ddpg_best_log.txt
+2025-06-16 12:08:16,552 - INFO - Evaluation successfully completed.
+2025-06-16 12:08:16,552 - INFO - ============================================================
+2025-06-16 12:08:16,552 - INFO - All evaluations done.
+2025-06-16 12:08:19,772 - INFO - [INFO] Evaluation Setup
+2025-06-16 12:08:19,772 - INFO - --------------------------------------------------------
+2025-06-16 12:08:19,772 - INFO - Algorithm        : ddpg
+2025-06-16 12:08:19,772 - INFO - Reward Mode      : temperature
+2025-06-16 12:08:19,772 - INFO - Episodes         : 10
+2025-06-16 12:08:19,772 - INFO - Seed             : 58
+2025-06-16 12:08:19,772 - INFO - Observation      : T01
+2025-06-16 12:08:19,772 - INFO - Prediction Hzn   : 12
+2025-06-16 12:08:19,772 - INFO - Energy Price Data: data/price_data_2025.csv
+2025-06-16 12:08:19,772 - INFO - Temperature Data : data/LLEC_outdoor_temperature_5min_data.csv
+2025-06-16 12:08:19,772 - INFO - Prefer Best      : False
+2025-06-16 12:08:19,772 - INFO - Start Time       : 2025-06-16 12:08:19
+2025-06-16 12:08:19,772 - INFO - --------------------------------------------------------
+2025-06-16 12:08:19,772 - INFO - Starting evaluation for: ddpg (mode: temperature)
+2025-06-16 12:08:19,798 - INFO - [EnvID: 22448258221488] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 6184)
+2025-06-16 12:08:19,823 - INFO - Using standard model for ddpg: models/temperature/T01/ddpg_model_seed42.zip
+2025-06-16 12:08:21,228 - INFO - [Episode] 0
+2025-06-16 12:08:21,231 - INFO - [EnvID: 22448258221488] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 58)
+2025-06-16 12:08:21,497 - INFO - [Episode] 1
+2025-06-16 12:08:21,499 - INFO - [EnvID: 22448258221488] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 116)
+2025-06-16 12:08:21,688 - INFO - [Episode] 2
+2025-06-16 12:08:21,690 - INFO - [EnvID: 22448258221488] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 174)
+2025-06-16 12:08:21,880 - INFO - [Episode] 3
+2025-06-16 12:08:21,883 - INFO - [EnvID: 22448258221488] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 232)
+2025-06-16 12:08:22,069 - INFO - [Episode] 4
+2025-06-16 12:08:22,071 - INFO - [EnvID: 22448258221488] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 290)
+2025-06-16 12:08:22,253 - INFO - [Episode] 5
+2025-06-16 12:08:22,256 - INFO - [EnvID: 22448258221488] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 348)
+2025-06-16 12:08:22,437 - INFO - [Episode] 6
+2025-06-16 12:08:22,445 - INFO - [EnvID: 22448258221488] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 406)
+2025-06-16 12:08:22,627 - INFO - [Episode] 7
+2025-06-16 12:08:22,630 - INFO - [EnvID: 22448258221488] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 464)
+2025-06-16 12:08:22,815 - INFO - [Episode] 8
+2025-06-16 12:08:22,817 - INFO - [EnvID: 22448258221488] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 522)
+2025-06-16 12:08:23,003 - INFO - [Episode] 9
+2025-06-16 12:08:23,005 - INFO - [EnvID: 22448258221488] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 580)
+2025-06-16 12:08:23,189 - INFO - [RESULT] Avg. reward for ddpg (temperature): 242.12 in 1.96s
+2025-06-16 12:08:23,189 - INFO - ============================================================
+2025-06-16 12:08:24,482 - INFO - End Time        : 2025-06-16 12:08:24
+2025-06-16 12:08:24,482 - INFO - Duration        : 4.71 seconds
+2025-06-16 12:08:24,482 - INFO - CSV file saved  : results/temperature/outdoor_data/eval_T01_ddpg.csv
+2025-06-16 12:08:24,482 - INFO - Logger file     : results/temperature/outdoor_data/eval_T01_ddpg_log.txt
+2025-06-16 12:08:24,482 - INFO - Evaluation successfully completed.
+2025-06-16 12:08:24,482 - INFO - ============================================================
+2025-06-16 12:08:24,482 - INFO - All evaluations done.
+2025-06-16 12:08:27,885 - INFO - [INFO] Evaluation Setup
+2025-06-16 12:08:27,885 - INFO - --------------------------------------------------------
+2025-06-16 12:08:27,885 - INFO - Algorithm        : ddpg
+2025-06-16 12:08:27,886 - INFO - Reward Mode      : temperature
+2025-06-16 12:08:27,886 - INFO - Episodes         : 10
+2025-06-16 12:08:27,886 - INFO - Seed             : 58
+2025-06-16 12:08:27,886 - INFO - Observation      : T01
+2025-06-16 12:08:27,886 - INFO - Prediction Hzn   : 12
+2025-06-16 12:08:27,886 - INFO - Energy Price Data: data/price_data_2025.csv
+2025-06-16 12:08:27,886 - INFO - Temperature Data : None
+2025-06-16 12:08:27,886 - INFO - Prefer Best      : False
+2025-06-16 12:08:27,886 - INFO - Start Time       : 2025-06-16 12:08:27
+2025-06-16 12:08:27,886 - INFO - --------------------------------------------------------
+2025-06-16 12:08:27,886 - INFO - Starting evaluation for: ddpg (mode: temperature)
+2025-06-16 12:08:27,909 - INFO - [EnvID:22523573417392] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=6184
+2025-06-16 12:08:27,931 - INFO - Using standard model for ddpg: models/temperature/T01/ddpg_model_seed42.zip
+2025-06-16 12:08:29,378 - INFO - [Episode] 0
+2025-06-16 12:08:29,378 - INFO - [EnvID:22523573417392] schedule=synthetic-temp-class class=Normal | Tmin=8.7°C  Tmax=19.9°C  φ=0.061  seed=58
+2025-06-16 12:08:29,638 - INFO - [Episode] 1
+2025-06-16 12:08:29,638 - INFO - [EnvID:22523573417392] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=116
+2025-06-16 12:08:29,824 - INFO - [Episode] 2
+2025-06-16 12:08:29,824 - INFO - [EnvID:22523573417392] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=174
+2025-06-16 12:08:30,008 - INFO - [Episode] 3
+2025-06-16 12:08:30,008 - INFO - [EnvID:22523573417392] schedule=synthetic-temp-class class=Normal | Tmin=8.7°C  Tmax=19.9°C  φ=0.061  seed=232
+2025-06-16 12:08:30,189 - INFO - [Episode] 4
+2025-06-16 12:08:30,190 - INFO - [EnvID:22523573417392] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=290
+2025-06-16 12:08:30,369 - INFO - [Episode] 5
+2025-06-16 12:08:30,369 - INFO - [EnvID:22523573417392] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=348
+2025-06-16 12:08:30,547 - INFO - [Episode] 6
+2025-06-16 12:08:30,548 - INFO - [EnvID:22523573417392] schedule=synthetic-temp-class class=Hot | Tmin=19.5°C  Tmax=31.4°C  φ=-0.094  seed=406
+2025-06-16 12:08:30,729 - INFO - [Episode] 7
+2025-06-16 12:08:30,730 - INFO - [EnvID:22523573417392] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=464
+2025-06-16 12:08:30,910 - INFO - [Episode] 8
+2025-06-16 12:08:30,910 - INFO - [EnvID:22523573417392] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=522
+2025-06-16 12:08:31,088 - INFO - [Episode] 9
+2025-06-16 12:08:31,088 - INFO - [EnvID:22523573417392] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=580
+2025-06-16 12:08:31,271 - INFO - [RESULT] Avg. reward for ddpg (temperature): 230.45 in 1.89s
+2025-06-16 12:08:31,271 - INFO - ============================================================
+2025-06-16 12:08:32,566 - INFO - End Time        : 2025-06-16 12:08:32
+2025-06-16 12:08:32,567 - INFO - Duration        : 4.68 seconds
+2025-06-16 12:08:32,567 - INFO - CSV file saved  : results/temperature/eval_T01_ddpg.csv
+2025-06-16 12:08:32,567 - INFO - Logger file     : results/temperature/eval_T01_ddpg_log.txt
+2025-06-16 12:08:32,567 - INFO - Evaluation successfully completed.
+2025-06-16 12:08:32,567 - INFO - ============================================================
+2025-06-16 12:08:32,567 - INFO - All evaluations done.
+2025-06-16 12:08:35,950 - INFO - [INFO] Evaluation Setup
+2025-06-16 12:08:35,950 - INFO - --------------------------------------------------------
+2025-06-16 12:08:35,950 - INFO - Algorithm        : ddpg
+2025-06-16 12:08:35,950 - INFO - Reward Mode      : temperature
+2025-06-16 12:08:35,950 - INFO - Episodes         : 10
+2025-06-16 12:08:35,950 - INFO - Seed             : 58
+2025-06-16 12:08:35,950 - INFO - Observation      : T01
+2025-06-16 12:08:35,950 - INFO - Prediction Hzn   : 12
+2025-06-16 12:08:35,950 - INFO - Energy Price Data: data/price_data_2025.csv
+2025-06-16 12:08:35,950 - INFO - Temperature Data : data/LLEC_outdoor_temperature_5min_data.csv
+2025-06-16 12:08:35,950 - INFO - Prefer Best      : True
+2025-06-16 12:08:35,950 - INFO - Start Time       : 2025-06-16 12:08:35
+2025-06-16 12:08:35,950 - INFO - --------------------------------------------------------
+2025-06-16 12:08:35,950 - INFO - Starting evaluation for: ddpg (mode: temperature)
+2025-06-16 12:08:35,976 - INFO - [EnvID: 22933393450464] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 6184)
+2025-06-16 12:08:36,046 - INFO - Found best model for ddpg: models/temperature/T01/best_ddpg/best_model.zip
+2025-06-16 12:08:37,520 - INFO - [Episode] 0
+2025-06-16 12:08:37,523 - INFO - [EnvID: 22933393450464] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 58)
+2025-06-16 12:08:37,786 - INFO - [Episode] 1
+2025-06-16 12:08:37,789 - INFO - [EnvID: 22933393450464] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 116)
+2025-06-16 12:08:37,982 - INFO - [Episode] 2
+2025-06-16 12:08:37,985 - INFO - [EnvID: 22933393450464] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 174)
+2025-06-16 12:08:38,169 - INFO - [Episode] 3
+2025-06-16 12:08:38,171 - INFO - [EnvID: 22933393450464] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 232)
+2025-06-16 12:08:38,354 - INFO - [Episode] 4
+2025-06-16 12:08:38,356 - INFO - [EnvID: 22933393450464] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 290)
+2025-06-16 12:08:38,536 - INFO - [Episode] 5
+2025-06-16 12:08:38,539 - INFO - [EnvID: 22933393450464] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 348)
+2025-06-16 12:08:38,719 - INFO - [Episode] 6
+2025-06-16 12:08:38,725 - INFO - [EnvID: 22933393450464] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 406)
+2025-06-16 12:08:38,908 - INFO - [Episode] 7
+2025-06-16 12:08:38,911 - INFO - [EnvID: 22933393450464] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 464)
+2025-06-16 12:08:39,093 - INFO - [Episode] 8
+2025-06-16 12:08:39,095 - INFO - [EnvID: 22933393450464] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 522)
+2025-06-16 12:08:39,275 - INFO - [Episode] 9
+2025-06-16 12:08:39,277 - INFO - [EnvID: 22933393450464] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 580)
+2025-06-16 12:08:39,458 - INFO - [RESULT] Avg. reward for ddpg (temperature): 250.36 in 1.94s
+2025-06-16 12:08:39,458 - INFO - ============================================================
+2025-06-16 12:08:40,755 - INFO - End Time        : 2025-06-16 12:08:40
+2025-06-16 12:08:40,755 - INFO - Duration        : 4.81 seconds
+2025-06-16 12:08:40,755 - INFO - CSV file saved  : results/temperature/outdoor_data/eval_T01_ddpg_best.csv
+2025-06-16 12:08:40,755 - INFO - Logger file     : results/temperature/outdoor_data/eval_T01_ddpg_best_log.txt
+2025-06-16 12:08:40,755 - INFO - Evaluation successfully completed.
+2025-06-16 12:08:40,755 - INFO - ============================================================
+2025-06-16 12:08:40,755 - INFO - All evaluations done.
+2025-06-16 12:08:43,978 - INFO - [INFO] Evaluation Setup
+2025-06-16 12:08:43,979 - INFO - --------------------------------------------------------
+2025-06-16 12:08:43,979 - INFO - Algorithm        : ddpg
+2025-06-16 12:08:43,979 - INFO - Reward Mode      : temperature
+2025-06-16 12:08:43,979 - INFO - Episodes         : 10
+2025-06-16 12:08:43,979 - INFO - Seed             : 58
+2025-06-16 12:08:43,979 - INFO - Observation      : T01
+2025-06-16 12:08:43,979 - INFO - Prediction Hzn   : 12
+2025-06-16 12:08:43,979 - INFO - Energy Price Data: data/price_data_2025.csv
+2025-06-16 12:08:43,979 - INFO - Temperature Data : None
+2025-06-16 12:08:43,979 - INFO - Prefer Best      : True
+2025-06-16 12:08:43,979 - INFO - Start Time       : 2025-06-16 12:08:43
+2025-06-16 12:08:43,979 - INFO - --------------------------------------------------------
+2025-06-16 12:08:43,979 - INFO - Starting evaluation for: ddpg (mode: temperature)
+2025-06-16 12:08:44,003 - INFO - [EnvID:22756328080816] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=6184
+2025-06-16 12:08:44,024 - INFO - Found best model for ddpg: models/temperature/T01/best_ddpg/best_model.zip
+2025-06-16 12:08:45,418 - INFO - [Episode] 0
+2025-06-16 12:08:45,418 - INFO - [EnvID:22756328080816] schedule=synthetic-temp-class class=Normal | Tmin=8.7°C  Tmax=19.9°C  φ=0.061  seed=58
+2025-06-16 12:08:45,680 - INFO - [Episode] 1
+2025-06-16 12:08:45,680 - INFO - [EnvID:22756328080816] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=116
+2025-06-16 12:08:45,866 - INFO - [Episode] 2
+2025-06-16 12:08:45,866 - INFO - [EnvID:22756328080816] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=174
+2025-06-16 12:08:46,052 - INFO - [Episode] 3
+2025-06-16 12:08:46,053 - INFO - [EnvID:22756328080816] schedule=synthetic-temp-class class=Normal | Tmin=8.7°C  Tmax=19.9°C  φ=0.061  seed=232
+2025-06-16 12:08:46,236 - INFO - [Episode] 4
+2025-06-16 12:08:46,236 - INFO - [EnvID:22756328080816] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=290
+2025-06-16 12:08:46,415 - INFO - [Episode] 5
+2025-06-16 12:08:46,416 - INFO - [EnvID:22756328080816] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=348
+2025-06-16 12:08:46,595 - INFO - [Episode] 6
+2025-06-16 12:08:46,595 - INFO - [EnvID:22756328080816] schedule=synthetic-temp-class class=Hot | Tmin=19.5°C  Tmax=31.4°C  φ=-0.094  seed=406
+2025-06-16 12:08:46,780 - INFO - [Episode] 7
+2025-06-16 12:08:46,780 - INFO - [EnvID:22756328080816] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=464
+2025-06-16 12:08:46,961 - INFO - [Episode] 8
+2025-06-16 12:08:46,961 - INFO - [EnvID:22756328080816] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=522
+2025-06-16 12:08:47,140 - INFO - [Episode] 9
+2025-06-16 12:08:47,140 - INFO - [EnvID:22756328080816] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=580
+2025-06-16 12:08:47,318 - INFO - [RESULT] Avg. reward for ddpg (temperature): 232.54 in 1.90s
+2025-06-16 12:08:47,318 - INFO - ============================================================
+2025-06-16 12:08:48,638 - INFO - End Time        : 2025-06-16 12:08:48
+2025-06-16 12:08:48,638 - INFO - Duration        : 4.66 seconds
+2025-06-16 12:08:48,638 - INFO - CSV file saved  : results/temperature/eval_T01_ddpg_best.csv
+2025-06-16 12:08:48,638 - INFO - Logger file     : results/temperature/eval_T01_ddpg_best_log.txt
+2025-06-16 12:08:48,638 - INFO - Evaluation successfully completed.
+2025-06-16 12:08:48,638 - INFO - ============================================================
+2025-06-16 12:08:48,638 - INFO - All evaluations done.
+2025-06-16 12:08:51,886 - INFO - [INFO] Evaluation Setup
+2025-06-16 12:08:51,886 - INFO - --------------------------------------------------------
+2025-06-16 12:08:51,886 - INFO - Algorithm        : ddpg
+2025-06-16 12:08:51,886 - INFO - Reward Mode      : temperature
+2025-06-16 12:08:51,886 - INFO - Episodes         : 10
+2025-06-16 12:08:51,886 - INFO - Seed             : 58
+2025-06-16 12:08:51,886 - INFO - Observation      : T02
+2025-06-16 12:08:51,886 - INFO - Prediction Hzn   : 12
+2025-06-16 12:08:51,886 - INFO - Energy Price Data: data/price_data_2025.csv
+2025-06-16 12:08:51,886 - INFO - Temperature Data : data/LLEC_outdoor_temperature_5min_data.csv
+2025-06-16 12:08:51,886 - INFO - Prefer Best      : False
+2025-06-16 12:08:51,886 - INFO - Start Time       : 2025-06-16 12:08:51
+2025-06-16 12:08:51,886 - INFO - --------------------------------------------------------
+2025-06-16 12:08:51,886 - INFO - Starting evaluation for: ddpg (mode: temperature)
+2025-06-16 12:08:51,912 - INFO - [EnvID: 23264447382960] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 6184)
+2025-06-16 12:08:51,937 - INFO - Using standard model for ddpg: models/temperature/T02/ddpg_model_seed42.zip
+2025-06-16 12:08:53,340 - INFO - [Episode] 0
+2025-06-16 12:08:53,343 - INFO - [EnvID: 23264447382960] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 58)
+2025-06-16 12:08:53,605 - INFO - [Episode] 1
+2025-06-16 12:08:53,608 - INFO - [EnvID: 23264447382960] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 116)
+2025-06-16 12:08:53,795 - INFO - [Episode] 2
+2025-06-16 12:08:53,797 - INFO - [EnvID: 23264447382960] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 174)
+2025-06-16 12:08:53,985 - INFO - [Episode] 3
+2025-06-16 12:08:53,988 - INFO - [EnvID: 23264447382960] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 232)
+2025-06-16 12:08:54,171 - INFO - [Episode] 4
+2025-06-16 12:08:54,173 - INFO - [EnvID: 23264447382960] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 290)
+2025-06-16 12:08:54,355 - INFO - [Episode] 5
+2025-06-16 12:08:54,358 - INFO - [EnvID: 23264447382960] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 348)
+2025-06-16 12:08:54,538 - INFO - [Episode] 6
+2025-06-16 12:08:54,545 - INFO - [EnvID: 23264447382960] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 406)
+2025-06-16 12:08:54,725 - INFO - [Episode] 7
+2025-06-16 12:08:54,727 - INFO - [EnvID: 23264447382960] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 464)
+2025-06-16 12:08:54,909 - INFO - [Episode] 8
+2025-06-16 12:08:54,911 - INFO - [EnvID: 23264447382960] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 522)
+2025-06-16 12:08:55,092 - INFO - [Episode] 9
+2025-06-16 12:08:55,094 - INFO - [EnvID: 23264447382960] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 580)
+2025-06-16 12:08:55,274 - INFO - [RESULT] Avg. reward for ddpg (temperature): 198.63 in 1.93s
+2025-06-16 12:08:55,274 - INFO - ============================================================
+2025-06-16 12:08:56,563 - INFO - End Time        : 2025-06-16 12:08:56
+2025-06-16 12:08:56,563 - INFO - Duration        : 4.68 seconds
+2025-06-16 12:08:56,563 - INFO - CSV file saved  : results/temperature/outdoor_data/eval_T02_ddpg.csv
+2025-06-16 12:08:56,563 - INFO - Logger file     : results/temperature/outdoor_data/eval_T02_ddpg_log.txt
+2025-06-16 12:08:56,563 - INFO - Evaluation successfully completed.
+2025-06-16 12:08:56,563 - INFO - ============================================================
+2025-06-16 12:08:56,563 - INFO - All evaluations done.
+2025-06-16 12:08:59,812 - INFO - [INFO] Evaluation Setup
+2025-06-16 12:08:59,812 - INFO - --------------------------------------------------------
+2025-06-16 12:08:59,812 - INFO - Algorithm        : ddpg
+2025-06-16 12:08:59,812 - INFO - Reward Mode      : temperature
+2025-06-16 12:08:59,812 - INFO - Episodes         : 10
+2025-06-16 12:08:59,812 - INFO - Seed             : 58
+2025-06-16 12:08:59,812 - INFO - Observation      : T02
+2025-06-16 12:08:59,812 - INFO - Prediction Hzn   : 12
+2025-06-16 12:08:59,812 - INFO - Energy Price Data: data/price_data_2025.csv
+2025-06-16 12:08:59,812 - INFO - Temperature Data : None
+2025-06-16 12:08:59,812 - INFO - Prefer Best      : False
+2025-06-16 12:08:59,812 - INFO - Start Time       : 2025-06-16 12:08:59
+2025-06-16 12:08:59,812 - INFO - --------------------------------------------------------
+2025-06-16 12:08:59,812 - INFO - Starting evaluation for: ddpg (mode: temperature)
+2025-06-16 12:08:59,836 - INFO - [EnvID:23240793056784] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=6184
+2025-06-16 12:08:59,857 - INFO - Using standard model for ddpg: models/temperature/T02/ddpg_model_seed42.zip
+2025-06-16 12:09:01,249 - INFO - [Episode] 0
+2025-06-16 12:09:01,249 - INFO - [EnvID:23240793056784] schedule=synthetic-temp-class class=Normal | Tmin=8.7°C  Tmax=19.9°C  φ=0.061  seed=58
+2025-06-16 12:09:01,510 - INFO - [Episode] 1
+2025-06-16 12:09:01,511 - INFO - [EnvID:23240793056784] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=116
+2025-06-16 12:09:01,695 - INFO - [Episode] 2
+2025-06-16 12:09:01,696 - INFO - [EnvID:23240793056784] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=174
+2025-06-16 12:09:01,882 - INFO - [Episode] 3
+2025-06-16 12:09:01,882 - INFO - [EnvID:23240793056784] schedule=synthetic-temp-class class=Normal | Tmin=8.7°C  Tmax=19.9°C  φ=0.061  seed=232
+2025-06-16 12:09:02,065 - INFO - [Episode] 4
+2025-06-16 12:09:02,065 - INFO - [EnvID:23240793056784] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=290
+2025-06-16 12:09:02,246 - INFO - [Episode] 5
+2025-06-16 12:09:02,246 - INFO - [EnvID:23240793056784] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=348
+2025-06-16 12:09:02,425 - INFO - [Episode] 6
+2025-06-16 12:09:02,425 - INFO - [EnvID:23240793056784] schedule=synthetic-temp-class class=Hot | Tmin=19.5°C  Tmax=31.4°C  φ=-0.094  seed=406
+2025-06-16 12:09:02,610 - INFO - [Episode] 7
+2025-06-16 12:09:02,610 - INFO - [EnvID:23240793056784] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=464
+2025-06-16 12:09:02,790 - INFO - [Episode] 8
+2025-06-16 12:09:02,791 - INFO - [EnvID:23240793056784] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=522
+2025-06-16 12:09:02,970 - INFO - [Episode] 9
+2025-06-16 12:09:02,970 - INFO - [EnvID:23240793056784] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=580
+2025-06-16 12:09:03,148 - INFO - [RESULT] Avg. reward for ddpg (temperature): 225.20 in 1.90s
+2025-06-16 12:09:03,149 - INFO - ============================================================
+2025-06-16 12:09:04,473 - INFO - End Time        : 2025-06-16 12:09:04
+2025-06-16 12:09:04,473 - INFO - Duration        : 4.66 seconds
+2025-06-16 12:09:04,473 - INFO - CSV file saved  : results/temperature/eval_T02_ddpg.csv
+2025-06-16 12:09:04,473 - INFO - Logger file     : results/temperature/eval_T02_ddpg_log.txt
+2025-06-16 12:09:04,473 - INFO - Evaluation successfully completed.
+2025-06-16 12:09:04,473 - INFO - ============================================================
+2025-06-16 12:09:04,473 - INFO - All evaluations done.
+2025-06-16 12:09:07,887 - INFO - [INFO] Evaluation Setup
+2025-06-16 12:09:07,887 - INFO - --------------------------------------------------------
+2025-06-16 12:09:07,887 - INFO - Algorithm        : ddpg
+2025-06-16 12:09:07,887 - INFO - Reward Mode      : temperature
+2025-06-16 12:09:07,887 - INFO - Episodes         : 10
+2025-06-16 12:09:07,887 - INFO - Seed             : 58
+2025-06-16 12:09:07,887 - INFO - Observation      : T02
+2025-06-16 12:09:07,887 - INFO - Prediction Hzn   : 12
+2025-06-16 12:09:07,887 - INFO - Energy Price Data: data/price_data_2025.csv
+2025-06-16 12:09:07,887 - INFO - Temperature Data : data/LLEC_outdoor_temperature_5min_data.csv
+2025-06-16 12:09:07,887 - INFO - Prefer Best      : True
+2025-06-16 12:09:07,887 - INFO - Start Time       : 2025-06-16 12:09:07
+2025-06-16 12:09:07,887 - INFO - --------------------------------------------------------
+2025-06-16 12:09:07,888 - INFO - Starting evaluation for: ddpg (mode: temperature)
+2025-06-16 12:09:07,913 - INFO - [EnvID: 22358879847808] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 6184)
+2025-06-16 12:09:07,940 - INFO - Found best model for ddpg: models/temperature/T02/best_ddpg/best_model.zip
+2025-06-16 12:09:09,390 - INFO - [Episode] 0
+2025-06-16 12:09:09,393 - INFO - [EnvID: 22358879847808] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 58)
+2025-06-16 12:09:09,653 - INFO - [Episode] 1
+2025-06-16 12:09:09,656 - INFO - [EnvID: 22358879847808] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 116)
+2025-06-16 12:09:09,842 - INFO - [Episode] 2
+2025-06-16 12:09:09,845 - INFO - [EnvID: 22358879847808] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 174)
+2025-06-16 12:09:10,029 - INFO - [Episode] 3
+2025-06-16 12:09:10,032 - INFO - [EnvID: 22358879847808] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 232)
+2025-06-16 12:09:10,215 - INFO - [Episode] 4
+2025-06-16 12:09:10,217 - INFO - [EnvID: 22358879847808] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 290)
+2025-06-16 12:09:10,397 - INFO - [Episode] 5
+2025-06-16 12:09:10,399 - INFO - [EnvID: 22358879847808] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 348)
+2025-06-16 12:09:10,579 - INFO - [Episode] 6
+2025-06-16 12:09:10,584 - INFO - [EnvID: 22358879847808] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 406)
+2025-06-16 12:09:10,764 - INFO - [Episode] 7
+2025-06-16 12:09:10,766 - INFO - [EnvID: 22358879847808] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 464)
+2025-06-16 12:09:10,946 - INFO - [Episode] 8
+2025-06-16 12:09:10,948 - INFO - [EnvID: 22358879847808] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 522)
+2025-06-16 12:09:11,131 - INFO - [Episode] 9
+2025-06-16 12:09:11,134 - INFO - [EnvID: 22358879847808] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 580)
+2025-06-16 12:09:11,314 - INFO - [RESULT] Avg. reward for ddpg (temperature): 238.09 in 1.92s
+2025-06-16 12:09:11,314 - INFO - ============================================================
+2025-06-16 12:09:12,610 - INFO - End Time        : 2025-06-16 12:09:12
+2025-06-16 12:09:12,610 - INFO - Duration        : 4.72 seconds
+2025-06-16 12:09:12,610 - INFO - CSV file saved  : results/temperature/outdoor_data/eval_T02_ddpg_best.csv
+2025-06-16 12:09:12,610 - INFO - Logger file     : results/temperature/outdoor_data/eval_T02_ddpg_best_log.txt
+2025-06-16 12:09:12,610 - INFO - Evaluation successfully completed.
+2025-06-16 12:09:12,610 - INFO - ============================================================
+2025-06-16 12:09:12,610 - INFO - All evaluations done.
+2025-06-16 12:09:15,827 - INFO - [INFO] Evaluation Setup
+2025-06-16 12:09:15,828 - INFO - --------------------------------------------------------
+2025-06-16 12:09:15,828 - INFO - Algorithm        : ddpg
+2025-06-16 12:09:15,828 - INFO - Reward Mode      : temperature
+2025-06-16 12:09:15,828 - INFO - Episodes         : 10
+2025-06-16 12:09:15,828 - INFO - Seed             : 58
+2025-06-16 12:09:15,828 - INFO - Observation      : T02
+2025-06-16 12:09:15,828 - INFO - Prediction Hzn   : 12
+2025-06-16 12:09:15,828 - INFO - Energy Price Data: data/price_data_2025.csv
+2025-06-16 12:09:15,828 - INFO - Temperature Data : None
+2025-06-16 12:09:15,828 - INFO - Prefer Best      : True
+2025-06-16 12:09:15,828 - INFO - Start Time       : 2025-06-16 12:09:15
+2025-06-16 12:09:15,828 - INFO - --------------------------------------------------------
+2025-06-16 12:09:15,828 - INFO - Starting evaluation for: ddpg (mode: temperature)
+2025-06-16 12:09:15,851 - INFO - [EnvID:23191778657760] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=6184
+2025-06-16 12:09:15,873 - INFO - Found best model for ddpg: models/temperature/T02/best_ddpg/best_model.zip
+2025-06-16 12:09:17,259 - INFO - [Episode] 0
+2025-06-16 12:09:17,260 - INFO - [EnvID:23191778657760] schedule=synthetic-temp-class class=Normal | Tmin=8.7°C  Tmax=19.9°C  φ=0.061  seed=58
+2025-06-16 12:09:17,517 - INFO - [Episode] 1
+2025-06-16 12:09:17,518 - INFO - [EnvID:23191778657760] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=116
+2025-06-16 12:09:17,700 - INFO - [Episode] 2
+2025-06-16 12:09:17,701 - INFO - [EnvID:23191778657760] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=174
+2025-06-16 12:09:17,888 - INFO - [Episode] 3
+2025-06-16 12:09:17,888 - INFO - [EnvID:23191778657760] schedule=synthetic-temp-class class=Normal | Tmin=8.7°C  Tmax=19.9°C  φ=0.061  seed=232
+2025-06-16 12:09:18,076 - INFO - [Episode] 4
+2025-06-16 12:09:18,076 - INFO - [EnvID:23191778657760] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=290
+2025-06-16 12:09:18,254 - INFO - [Episode] 5
+2025-06-16 12:09:18,254 - INFO - [EnvID:23191778657760] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=348
+2025-06-16 12:09:18,432 - INFO - [Episode] 6
+2025-06-16 12:09:18,432 - INFO - [EnvID:23191778657760] schedule=synthetic-temp-class class=Hot | Tmin=19.5°C  Tmax=31.4°C  φ=-0.094  seed=406
+2025-06-16 12:09:18,615 - INFO - [Episode] 7
+2025-06-16 12:09:18,616 - INFO - [EnvID:23191778657760] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=464
+2025-06-16 12:09:18,794 - INFO - [Episode] 8
+2025-06-16 12:09:18,794 - INFO - [EnvID:23191778657760] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=522
+2025-06-16 12:09:18,972 - INFO - [Episode] 9
+2025-06-16 12:09:18,972 - INFO - [EnvID:23191778657760] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=580
+2025-06-16 12:09:19,150 - INFO - [RESULT] Avg. reward for ddpg (temperature): 242.80 in 1.89s
+2025-06-16 12:09:19,150 - INFO - ============================================================
+2025-06-16 12:09:20,480 - INFO - End Time        : 2025-06-16 12:09:20
+2025-06-16 12:09:20,480 - INFO - Duration        : 4.65 seconds
+2025-06-16 12:09:20,480 - INFO - CSV file saved  : results/temperature/eval_T02_ddpg_best.csv
+2025-06-16 12:09:20,480 - INFO - Logger file     : results/temperature/eval_T02_ddpg_best_log.txt
+2025-06-16 12:09:20,480 - INFO - Evaluation successfully completed.
+2025-06-16 12:09:20,480 - INFO - ============================================================
+2025-06-16 12:09:20,480 - INFO - All evaluations done.
+2025-06-16 12:09:23,890 - INFO - [INFO] Evaluation Setup
+2025-06-16 12:09:23,890 - INFO - --------------------------------------------------------
+2025-06-16 12:09:23,891 - INFO - Algorithm        : ddpg
+2025-06-16 12:09:23,891 - INFO - Reward Mode      : temperature
+2025-06-16 12:09:23,891 - INFO - Episodes         : 10
+2025-06-16 12:09:23,891 - INFO - Seed             : 58
+2025-06-16 12:09:23,891 - INFO - Observation      : T03
+2025-06-16 12:09:23,891 - INFO - Prediction Hzn   : 12
+2025-06-16 12:09:23,891 - INFO - Energy Price Data: data/price_data_2025.csv
+2025-06-16 12:09:23,891 - INFO - Temperature Data : data/LLEC_outdoor_temperature_5min_data.csv
+2025-06-16 12:09:23,891 - INFO - Prefer Best      : False
+2025-06-16 12:09:23,891 - INFO - Start Time       : 2025-06-16 12:09:23
+2025-06-16 12:09:23,891 - INFO - --------------------------------------------------------
+2025-06-16 12:09:23,891 - INFO - Starting evaluation for: ddpg (mode: temperature)
+2025-06-16 12:09:23,917 - INFO - [EnvID: 22458218350048] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 6184)
+2025-06-16 12:09:23,942 - INFO - Using standard model for ddpg: models/temperature/T03/ddpg_model_seed42.zip
+2025-06-16 12:09:25,384 - INFO - [Episode] 0
+2025-06-16 12:09:25,387 - INFO - [EnvID: 22458218350048] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 58)
+2025-06-16 12:09:25,647 - INFO - [Episode] 1
+2025-06-16 12:09:25,649 - INFO - [EnvID: 22458218350048] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 116)
+2025-06-16 12:09:25,835 - INFO - [Episode] 2
+2025-06-16 12:09:25,837 - INFO - [EnvID: 22458218350048] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 174)
+2025-06-16 12:09:26,021 - INFO - [Episode] 3
+2025-06-16 12:09:26,023 - INFO - [EnvID: 22458218350048] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 232)
+2025-06-16 12:09:26,205 - INFO - [Episode] 4
+2025-06-16 12:09:26,207 - INFO - [EnvID: 22458218350048] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 290)
+2025-06-16 12:09:26,386 - INFO - [Episode] 5
+2025-06-16 12:09:26,388 - INFO - [EnvID: 22458218350048] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 348)
+2025-06-16 12:09:26,567 - INFO - [Episode] 6
+2025-06-16 12:09:26,572 - INFO - [EnvID: 22458218350048] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 406)
+2025-06-16 12:09:26,752 - INFO - [Episode] 7
+2025-06-16 12:09:26,754 - INFO - [EnvID: 22458218350048] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 464)
+2025-06-16 12:09:26,932 - INFO - [Episode] 8
+2025-06-16 12:09:26,935 - INFO - [EnvID: 22458218350048] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 522)
+2025-06-16 12:09:27,117 - INFO - [Episode] 9
+2025-06-16 12:09:27,120 - INFO - [EnvID: 22458218350048] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 580)
+2025-06-16 12:09:27,301 - INFO - [RESULT] Avg. reward for ddpg (temperature): 153.95 in 1.92s
+2025-06-16 12:09:27,301 - INFO - ============================================================
+2025-06-16 12:09:28,561 - INFO - End Time        : 2025-06-16 12:09:28
+2025-06-16 12:09:28,561 - INFO - Duration        : 4.67 seconds
+2025-06-16 12:09:28,561 - INFO - CSV file saved  : results/temperature/outdoor_data/eval_T03_ddpg.csv
+2025-06-16 12:09:28,561 - INFO - Logger file     : results/temperature/outdoor_data/eval_T03_ddpg_log.txt
+2025-06-16 12:09:28,561 - INFO - Evaluation successfully completed.
+2025-06-16 12:09:28,561 - INFO - ============================================================
+2025-06-16 12:09:28,561 - INFO - All evaluations done.
+2025-06-16 12:09:31,954 - INFO - [INFO] Evaluation Setup
+2025-06-16 12:09:31,954 - INFO - --------------------------------------------------------
+2025-06-16 12:09:31,954 - INFO - Algorithm        : ddpg
+2025-06-16 12:09:31,954 - INFO - Reward Mode      : temperature
+2025-06-16 12:09:31,954 - INFO - Episodes         : 10
+2025-06-16 12:09:31,954 - INFO - Seed             : 58
+2025-06-16 12:09:31,954 - INFO - Observation      : T03
+2025-06-16 12:09:31,954 - INFO - Prediction Hzn   : 12
+2025-06-16 12:09:31,954 - INFO - Energy Price Data: data/price_data_2025.csv
+2025-06-16 12:09:31,954 - INFO - Temperature Data : None
+2025-06-16 12:09:31,954 - INFO - Prefer Best      : False
+2025-06-16 12:09:31,954 - INFO - Start Time       : 2025-06-16 12:09:31
+2025-06-16 12:09:31,954 - INFO - --------------------------------------------------------
+2025-06-16 12:09:31,954 - INFO - Starting evaluation for: ddpg (mode: temperature)
+2025-06-16 12:09:31,978 - INFO - [EnvID:23279981745824] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=6184
+2025-06-16 12:09:31,999 - INFO - Using standard model for ddpg: models/temperature/T03/ddpg_model_seed42.zip
+2025-06-16 12:09:33,442 - INFO - [Episode] 0
+2025-06-16 12:09:33,442 - INFO - [EnvID:23279981745824] schedule=synthetic-temp-class class=Normal | Tmin=8.7°C  Tmax=19.9°C  φ=0.061  seed=58
+2025-06-16 12:09:33,703 - INFO - [Episode] 1
+2025-06-16 12:09:33,703 - INFO - [EnvID:23279981745824] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=116
+2025-06-16 12:09:33,888 - INFO - [Episode] 2
+2025-06-16 12:09:33,888 - INFO - [EnvID:23279981745824] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=174
+2025-06-16 12:09:34,071 - INFO - [Episode] 3
+2025-06-16 12:09:34,071 - INFO - [EnvID:23279981745824] schedule=synthetic-temp-class class=Normal | Tmin=8.7°C  Tmax=19.9°C  φ=0.061  seed=232
+2025-06-16 12:09:34,251 - INFO - [Episode] 4
+2025-06-16 12:09:34,252 - INFO - [EnvID:23279981745824] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=290
+2025-06-16 12:09:34,432 - INFO - [Episode] 5
+2025-06-16 12:09:34,432 - INFO - [EnvID:23279981745824] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=348
+2025-06-16 12:09:34,610 - INFO - [Episode] 6
+2025-06-16 12:09:34,610 - INFO - [EnvID:23279981745824] schedule=synthetic-temp-class class=Hot | Tmin=19.5°C  Tmax=31.4°C  φ=-0.094  seed=406
+2025-06-16 12:09:34,791 - INFO - [Episode] 7
+2025-06-16 12:09:34,791 - INFO - [EnvID:23279981745824] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=464
+2025-06-16 12:09:34,970 - INFO - [Episode] 8
+2025-06-16 12:09:34,971 - INFO - [EnvID:23279981745824] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=522
+2025-06-16 12:09:35,148 - INFO - [Episode] 9
+2025-06-16 12:09:35,149 - INFO - [EnvID:23279981745824] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=580
+2025-06-16 12:09:35,332 - INFO - [RESULT] Avg. reward for ddpg (temperature): 183.96 in 1.89s
+2025-06-16 12:09:35,333 - INFO - ============================================================
+2025-06-16 12:09:36,634 - INFO - End Time        : 2025-06-16 12:09:36
+2025-06-16 12:09:36,634 - INFO - Duration        : 4.68 seconds
+2025-06-16 12:09:36,634 - INFO - CSV file saved  : results/temperature/eval_T03_ddpg.csv
+2025-06-16 12:09:36,634 - INFO - Logger file     : results/temperature/eval_T03_ddpg_log.txt
+2025-06-16 12:09:36,634 - INFO - Evaluation successfully completed.
+2025-06-16 12:09:36,634 - INFO - ============================================================
+2025-06-16 12:09:36,634 - INFO - All evaluations done.
+2025-06-16 12:09:39,858 - INFO - [INFO] Evaluation Setup
+2025-06-16 12:09:39,858 - INFO - --------------------------------------------------------
+2025-06-16 12:09:39,858 - INFO - Algorithm        : ddpg
+2025-06-16 12:09:39,858 - INFO - Reward Mode      : temperature
+2025-06-16 12:09:39,858 - INFO - Episodes         : 10
+2025-06-16 12:09:39,858 - INFO - Seed             : 58
+2025-06-16 12:09:39,858 - INFO - Observation      : T03
+2025-06-16 12:09:39,858 - INFO - Prediction Hzn   : 12
+2025-06-16 12:09:39,859 - INFO - Energy Price Data: data/price_data_2025.csv
+2025-06-16 12:09:39,859 - INFO - Temperature Data : data/LLEC_outdoor_temperature_5min_data.csv
+2025-06-16 12:09:39,859 - INFO - Prefer Best      : True
+2025-06-16 12:09:39,859 - INFO - Start Time       : 2025-06-16 12:09:39
+2025-06-16 12:09:39,859 - INFO - --------------------------------------------------------
+2025-06-16 12:09:39,859 - INFO - Starting evaluation for: ddpg (mode: temperature)
+2025-06-16 12:09:39,884 - INFO - [EnvID: 22815697221088] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 6184)
+2025-06-16 12:09:39,914 - INFO - Found best model for ddpg: models/temperature/T03/best_ddpg/best_model.zip
+2025-06-16 12:09:41,313 - INFO - [Episode] 0
+2025-06-16 12:09:41,316 - INFO - [EnvID: 22815697221088] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 58)
+2025-06-16 12:09:41,577 - INFO - [Episode] 1
+2025-06-16 12:09:41,580 - INFO - [EnvID: 22815697221088] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 116)
+2025-06-16 12:09:41,766 - INFO - [Episode] 2
+2025-06-16 12:09:41,768 - INFO - [EnvID: 22815697221088] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 174)
+2025-06-16 12:09:41,956 - INFO - [Episode] 3
+2025-06-16 12:09:41,958 - INFO - [EnvID: 22815697221088] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 232)
+2025-06-16 12:09:42,142 - INFO - [Episode] 4
+2025-06-16 12:09:42,145 - INFO - [EnvID: 22815697221088] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 290)
+2025-06-16 12:09:42,325 - INFO - [Episode] 5
+2025-06-16 12:09:42,327 - INFO - [EnvID: 22815697221088] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 348)
+2025-06-16 12:09:42,507 - INFO - [Episode] 6
+2025-06-16 12:09:42,515 - INFO - [EnvID: 22815697221088] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 406)
+2025-06-16 12:09:42,695 - INFO - [Episode] 7
+2025-06-16 12:09:42,698 - INFO - [EnvID: 22815697221088] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 464)
+2025-06-16 12:09:42,879 - INFO - [Episode] 8
+2025-06-16 12:09:42,881 - INFO - [EnvID: 22815697221088] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 522)
+2025-06-16 12:09:43,062 - INFO - [Episode] 9
+2025-06-16 12:09:43,064 - INFO - [EnvID: 22815697221088] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 580)
+2025-06-16 12:09:43,244 - INFO - [RESULT] Avg. reward for ddpg (temperature): 228.83 in 1.93s
+2025-06-16 12:09:43,244 - INFO - ============================================================
+2025-06-16 12:09:44,556 - INFO - End Time        : 2025-06-16 12:09:44
+2025-06-16 12:09:44,556 - INFO - Duration        : 4.70 seconds
+2025-06-16 12:09:44,556 - INFO - CSV file saved  : results/temperature/outdoor_data/eval_T03_ddpg_best.csv
+2025-06-16 12:09:44,556 - INFO - Logger file     : results/temperature/outdoor_data/eval_T03_ddpg_best_log.txt
+2025-06-16 12:09:44,556 - INFO - Evaluation successfully completed.
+2025-06-16 12:09:44,556 - INFO - ============================================================
+2025-06-16 12:09:44,556 - INFO - All evaluations done.
+2025-06-16 12:09:47,796 - INFO - [INFO] Evaluation Setup
+2025-06-16 12:09:47,797 - INFO - --------------------------------------------------------
+2025-06-16 12:09:47,797 - INFO - Algorithm        : ddpg
+2025-06-16 12:09:47,797 - INFO - Reward Mode      : temperature
+2025-06-16 12:09:47,797 - INFO - Episodes         : 10
+2025-06-16 12:09:47,797 - INFO - Seed             : 58
+2025-06-16 12:09:47,797 - INFO - Observation      : T03
+2025-06-16 12:09:47,797 - INFO - Prediction Hzn   : 12
+2025-06-16 12:09:47,797 - INFO - Energy Price Data: data/price_data_2025.csv
+2025-06-16 12:09:47,797 - INFO - Temperature Data : None
+2025-06-16 12:09:47,797 - INFO - Prefer Best      : True
+2025-06-16 12:09:47,797 - INFO - Start Time       : 2025-06-16 12:09:47
+2025-06-16 12:09:47,797 - INFO - --------------------------------------------------------
+2025-06-16 12:09:47,797 - INFO - Starting evaluation for: ddpg (mode: temperature)
+2025-06-16 12:09:47,820 - INFO - [EnvID:22652549698800] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=6184
+2025-06-16 12:09:47,844 - INFO - Found best model for ddpg: models/temperature/T03/best_ddpg/best_model.zip
+2025-06-16 12:09:49,247 - INFO - [Episode] 0
+2025-06-16 12:09:49,247 - INFO - [EnvID:22652549698800] schedule=synthetic-temp-class class=Normal | Tmin=8.7°C  Tmax=19.9°C  φ=0.061  seed=58
+2025-06-16 12:09:49,505 - INFO - [Episode] 1
+2025-06-16 12:09:49,506 - INFO - [EnvID:22652549698800] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=116
+2025-06-16 12:09:49,689 - INFO - [Episode] 2
+2025-06-16 12:09:49,689 - INFO - [EnvID:22652549698800] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=174
+2025-06-16 12:09:49,874 - INFO - [Episode] 3
+2025-06-16 12:09:49,875 - INFO - [EnvID:22652549698800] schedule=synthetic-temp-class class=Normal | Tmin=8.7°C  Tmax=19.9°C  φ=0.061  seed=232
+2025-06-16 12:09:50,055 - INFO - [Episode] 4
+2025-06-16 12:09:50,055 - INFO - [EnvID:22652549698800] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=290
+2025-06-16 12:09:50,234 - INFO - [Episode] 5
+2025-06-16 12:09:50,234 - INFO - [EnvID:22652549698800] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=348
+2025-06-16 12:09:50,412 - INFO - [Episode] 6
+2025-06-16 12:09:50,412 - INFO - [EnvID:22652549698800] schedule=synthetic-temp-class class=Hot | Tmin=19.5°C  Tmax=31.4°C  φ=-0.094  seed=406
+2025-06-16 12:09:50,593 - INFO - [Episode] 7
+2025-06-16 12:09:50,593 - INFO - [EnvID:22652549698800] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=464
+2025-06-16 12:09:50,772 - INFO - [Episode] 8
+2025-06-16 12:09:50,772 - INFO - [EnvID:22652549698800] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=522
+2025-06-16 12:09:50,950 - INFO - [Episode] 9
+2025-06-16 12:09:50,951 - INFO - [EnvID:22652549698800] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=580
+2025-06-16 12:09:51,127 - INFO - [RESULT] Avg. reward for ddpg (temperature): 207.35 in 1.88s
+2025-06-16 12:09:51,127 - INFO - ============================================================
+2025-06-16 12:09:52,432 - INFO - End Time        : 2025-06-16 12:09:52
+2025-06-16 12:09:52,432 - INFO - Duration        : 4.64 seconds
+2025-06-16 12:09:52,432 - INFO - CSV file saved  : results/temperature/eval_T03_ddpg_best.csv
+2025-06-16 12:09:52,432 - INFO - Logger file     : results/temperature/eval_T03_ddpg_best_log.txt
+2025-06-16 12:09:52,432 - INFO - Evaluation successfully completed.
+2025-06-16 12:09:52,432 - INFO - ============================================================
+2025-06-16 12:09:52,432 - INFO - All evaluations done.
+2025-06-16 12:09:55,676 - INFO - [INFO] Evaluation Setup
+2025-06-16 12:09:55,676 - INFO - --------------------------------------------------------
+2025-06-16 12:09:55,676 - INFO - Algorithm        : ddpg
+2025-06-16 12:09:55,676 - INFO - Reward Mode      : temperature
+2025-06-16 12:09:55,677 - INFO - Episodes         : 10
+2025-06-16 12:09:55,677 - INFO - Seed             : 58
+2025-06-16 12:09:55,677 - INFO - Observation      : T04
+2025-06-16 12:09:55,677 - INFO - Prediction Hzn   : 12
+2025-06-16 12:09:55,677 - INFO - Energy Price Data: data/price_data_2025.csv
+2025-06-16 12:09:55,677 - INFO - Temperature Data : data/LLEC_outdoor_temperature_5min_data.csv
+2025-06-16 12:09:55,677 - INFO - Prefer Best      : False
+2025-06-16 12:09:55,677 - INFO - Start Time       : 2025-06-16 12:09:55
+2025-06-16 12:09:55,677 - INFO - --------------------------------------------------------
+2025-06-16 12:09:55,677 - INFO - Starting evaluation for: ddpg (mode: temperature)
+2025-06-16 12:09:55,703 - INFO - [EnvID: 23040344602032] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 6184)
+2025-06-16 12:09:55,727 - INFO - Using standard model for ddpg: models/temperature/T04/ddpg_model_seed42.zip
+2025-06-16 12:09:57,127 - INFO - [Episode] 0
+2025-06-16 12:09:57,130 - INFO - [EnvID: 23040344602032] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 58)
+2025-06-16 12:09:57,390 - INFO - [Episode] 1
+2025-06-16 12:09:57,393 - INFO - [EnvID: 23040344602032] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 116)
+2025-06-16 12:09:57,579 - INFO - [Episode] 2
+2025-06-16 12:09:57,582 - INFO - [EnvID: 23040344602032] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 174)
+2025-06-16 12:09:57,770 - INFO - [Episode] 3
+2025-06-16 12:09:57,773 - INFO - [EnvID: 23040344602032] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 232)
+2025-06-16 12:09:57,959 - INFO - [Episode] 4
+2025-06-16 12:09:57,962 - INFO - [EnvID: 23040344602032] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 290)
+2025-06-16 12:09:58,143 - INFO - [Episode] 5
+2025-06-16 12:09:58,145 - INFO - [EnvID: 23040344602032] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 348)
+2025-06-16 12:09:58,325 - INFO - [Episode] 6
+2025-06-16 12:09:58,332 - INFO - [EnvID: 23040344602032] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 406)
+2025-06-16 12:09:58,512 - INFO - [Episode] 7
+2025-06-16 12:09:58,514 - INFO - [EnvID: 23040344602032] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 464)
+2025-06-16 12:09:58,694 - INFO - [Episode] 8
+2025-06-16 12:09:58,696 - INFO - [EnvID: 23040344602032] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 522)
+2025-06-16 12:09:58,876 - INFO - [Episode] 9
+2025-06-16 12:09:58,878 - INFO - [EnvID: 23040344602032] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 580)
+2025-06-16 12:09:59,057 - INFO - [RESULT] Avg. reward for ddpg (temperature): 201.95 in 1.93s
+2025-06-16 12:09:59,057 - INFO - ============================================================
+2025-06-16 12:10:00,389 - INFO - End Time        : 2025-06-16 12:10:00
+2025-06-16 12:10:00,389 - INFO - Duration        : 4.71 seconds
+2025-06-16 12:10:00,389 - INFO - CSV file saved  : results/temperature/outdoor_data/eval_T04_ddpg.csv
+2025-06-16 12:10:00,389 - INFO - Logger file     : results/temperature/outdoor_data/eval_T04_ddpg_log.txt
+2025-06-16 12:10:00,389 - INFO - Evaluation successfully completed.
+2025-06-16 12:10:00,389 - INFO - ============================================================
+2025-06-16 12:10:00,389 - INFO - All evaluations done.
+2025-06-16 12:10:03,793 - INFO - [INFO] Evaluation Setup
+2025-06-16 12:10:03,794 - INFO - --------------------------------------------------------
+2025-06-16 12:10:03,794 - INFO - Algorithm        : ddpg
+2025-06-16 12:10:03,794 - INFO - Reward Mode      : temperature
+2025-06-16 12:10:03,794 - INFO - Episodes         : 10
+2025-06-16 12:10:03,794 - INFO - Seed             : 58
+2025-06-16 12:10:03,794 - INFO - Observation      : T04
+2025-06-16 12:10:03,794 - INFO - Prediction Hzn   : 12
+2025-06-16 12:10:03,794 - INFO - Energy Price Data: data/price_data_2025.csv
+2025-06-16 12:10:03,794 - INFO - Temperature Data : None
+2025-06-16 12:10:03,794 - INFO - Prefer Best      : False
+2025-06-16 12:10:03,794 - INFO - Start Time       : 2025-06-16 12:10:03
+2025-06-16 12:10:03,794 - INFO - --------------------------------------------------------
+2025-06-16 12:10:03,794 - INFO - Starting evaluation for: ddpg (mode: temperature)
+2025-06-16 12:10:03,817 - INFO - [EnvID:22403677083248] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=6184
+2025-06-16 12:10:03,839 - INFO - Using standard model for ddpg: models/temperature/T04/ddpg_model_seed42.zip
+2025-06-16 12:10:05,275 - INFO - [Episode] 0
+2025-06-16 12:10:05,275 - INFO - [EnvID:22403677083248] schedule=synthetic-temp-class class=Normal | Tmin=8.7°C  Tmax=19.9°C  φ=0.061  seed=58
+2025-06-16 12:10:05,535 - INFO - [Episode] 1
+2025-06-16 12:10:05,536 - INFO - [EnvID:22403677083248] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=116
+2025-06-16 12:10:05,720 - INFO - [Episode] 2
+2025-06-16 12:10:05,720 - INFO - [EnvID:22403677083248] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=174
+2025-06-16 12:10:05,902 - INFO - [Episode] 3
+2025-06-16 12:10:05,902 - INFO - [EnvID:22403677083248] schedule=synthetic-temp-class class=Normal | Tmin=8.7°C  Tmax=19.9°C  φ=0.061  seed=232
+2025-06-16 12:10:06,084 - INFO - [Episode] 4
+2025-06-16 12:10:06,084 - INFO - [EnvID:22403677083248] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=290
+2025-06-16 12:10:06,263 - INFO - [Episode] 5
+2025-06-16 12:10:06,264 - INFO - [EnvID:22403677083248] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=348
+2025-06-16 12:10:06,441 - INFO - [Episode] 6
+2025-06-16 12:10:06,442 - INFO - [EnvID:22403677083248] schedule=synthetic-temp-class class=Hot | Tmin=19.5°C  Tmax=31.4°C  φ=-0.094  seed=406
+2025-06-16 12:10:06,623 - INFO - [Episode] 7
+2025-06-16 12:10:06,623 - INFO - [EnvID:22403677083248] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=464
+2025-06-16 12:10:06,803 - INFO - [Episode] 8
+2025-06-16 12:10:06,803 - INFO - [EnvID:22403677083248] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=522
+2025-06-16 12:10:06,981 - INFO - [Episode] 9
+2025-06-16 12:10:06,982 - INFO - [EnvID:22403677083248] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=580
+2025-06-16 12:10:07,163 - INFO - [RESULT] Avg. reward for ddpg (temperature): 223.58 in 1.89s
+2025-06-16 12:10:07,163 - INFO - ============================================================
+2025-06-16 12:10:08,514 - INFO - End Time        : 2025-06-16 12:10:08
+2025-06-16 12:10:08,514 - INFO - Duration        : 4.72 seconds
+2025-06-16 12:10:08,514 - INFO - CSV file saved  : results/temperature/eval_T04_ddpg.csv
+2025-06-16 12:10:08,514 - INFO - Logger file     : results/temperature/eval_T04_ddpg_log.txt
+2025-06-16 12:10:08,515 - INFO - Evaluation successfully completed.
+2025-06-16 12:10:08,515 - INFO - ============================================================
+2025-06-16 12:10:08,515 - INFO - All evaluations done.
+2025-06-16 12:10:11,730 - INFO - [INFO] Evaluation Setup
+2025-06-16 12:10:11,730 - INFO - --------------------------------------------------------
+2025-06-16 12:10:11,730 - INFO - Algorithm        : ddpg
+2025-06-16 12:10:11,730 - INFO - Reward Mode      : temperature
+2025-06-16 12:10:11,730 - INFO - Episodes         : 10
+2025-06-16 12:10:11,730 - INFO - Seed             : 58
+2025-06-16 12:10:11,730 - INFO - Observation      : T04
+2025-06-16 12:10:11,730 - INFO - Prediction Hzn   : 12
+2025-06-16 12:10:11,730 - INFO - Energy Price Data: data/price_data_2025.csv
+2025-06-16 12:10:11,730 - INFO - Temperature Data : data/LLEC_outdoor_temperature_5min_data.csv
+2025-06-16 12:10:11,730 - INFO - Prefer Best      : True
+2025-06-16 12:10:11,730 - INFO - Start Time       : 2025-06-16 12:10:11
+2025-06-16 12:10:11,730 - INFO - --------------------------------------------------------
+2025-06-16 12:10:11,731 - INFO - Starting evaluation for: ddpg (mode: temperature)
+2025-06-16 12:10:11,756 - INFO - [EnvID: 22522140169648] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 6184)
+2025-06-16 12:10:11,782 - INFO - Found best model for ddpg: models/temperature/T04/best_ddpg/best_model.zip
+2025-06-16 12:10:13,177 - INFO - [Episode] 0
+2025-06-16 12:10:13,180 - INFO - [EnvID: 22522140169648] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 58)
+2025-06-16 12:10:13,440 - INFO - [Episode] 1
+2025-06-16 12:10:13,442 - INFO - [EnvID: 22522140169648] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 116)
+2025-06-16 12:10:13,628 - INFO - [Episode] 2
+2025-06-16 12:10:13,630 - INFO - [EnvID: 22522140169648] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 174)
+2025-06-16 12:10:13,818 - INFO - [Episode] 3
+2025-06-16 12:10:13,820 - INFO - [EnvID: 22522140169648] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 232)
+2025-06-16 12:10:14,005 - INFO - [Episode] 4
+2025-06-16 12:10:14,007 - INFO - [EnvID: 22522140169648] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 290)
+2025-06-16 12:10:14,186 - INFO - [Episode] 5
+2025-06-16 12:10:14,188 - INFO - [EnvID: 22522140169648] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 348)
+2025-06-16 12:10:14,367 - INFO - [Episode] 6
+2025-06-16 12:10:14,374 - INFO - [EnvID: 22522140169648] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 406)
+2025-06-16 12:10:14,554 - INFO - [Episode] 7
+2025-06-16 12:10:14,557 - INFO - [EnvID: 22522140169648] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 464)
+2025-06-16 12:10:14,738 - INFO - [Episode] 8
+2025-06-16 12:10:14,740 - INFO - [EnvID: 22522140169648] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 522)
+2025-06-16 12:10:14,921 - INFO - [Episode] 9
+2025-06-16 12:10:14,923 - INFO - [EnvID: 22522140169648] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 580)
+2025-06-16 12:10:15,102 - INFO - [RESULT] Avg. reward for ddpg (temperature): 250.81 in 1.93s
+2025-06-16 12:10:15,103 - INFO - ============================================================
+2025-06-16 12:10:16,425 - INFO - End Time        : 2025-06-16 12:10:16
+2025-06-16 12:10:16,425 - INFO - Duration        : 4.69 seconds
+2025-06-16 12:10:16,425 - INFO - CSV file saved  : results/temperature/outdoor_data/eval_T04_ddpg_best.csv
+2025-06-16 12:10:16,425 - INFO - Logger file     : results/temperature/outdoor_data/eval_T04_ddpg_best_log.txt
+2025-06-16 12:10:16,425 - INFO - Evaluation successfully completed.
+2025-06-16 12:10:16,425 - INFO - ============================================================
+2025-06-16 12:10:16,425 - INFO - All evaluations done.
+2025-06-16 12:10:19,828 - INFO - [INFO] Evaluation Setup
+2025-06-16 12:10:19,828 - INFO - --------------------------------------------------------
+2025-06-16 12:10:19,828 - INFO - Algorithm        : ddpg
+2025-06-16 12:10:19,828 - INFO - Reward Mode      : temperature
+2025-06-16 12:10:19,828 - INFO - Episodes         : 10
+2025-06-16 12:10:19,828 - INFO - Seed             : 58
+2025-06-16 12:10:19,828 - INFO - Observation      : T04
+2025-06-16 12:10:19,828 - INFO - Prediction Hzn   : 12
+2025-06-16 12:10:19,828 - INFO - Energy Price Data: data/price_data_2025.csv
+2025-06-16 12:10:19,828 - INFO - Temperature Data : None
+2025-06-16 12:10:19,828 - INFO - Prefer Best      : True
+2025-06-16 12:10:19,828 - INFO - Start Time       : 2025-06-16 12:10:19
+2025-06-16 12:10:19,828 - INFO - --------------------------------------------------------
+2025-06-16 12:10:19,828 - INFO - Starting evaluation for: ddpg (mode: temperature)
+2025-06-16 12:10:19,852 - INFO - [EnvID:22935197066624] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=6184
+2025-06-16 12:10:19,874 - INFO - Found best model for ddpg: models/temperature/T04/best_ddpg/best_model.zip
+2025-06-16 12:10:21,336 - INFO - [Episode] 0
+2025-06-16 12:10:21,337 - INFO - [EnvID:22935197066624] schedule=synthetic-temp-class class=Normal | Tmin=8.7°C  Tmax=19.9°C  φ=0.061  seed=58
+2025-06-16 12:10:21,596 - INFO - [Episode] 1
+2025-06-16 12:10:21,596 - INFO - [EnvID:22935197066624] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=116
+2025-06-16 12:10:21,782 - INFO - [Episode] 2
+2025-06-16 12:10:21,782 - INFO - [EnvID:22935197066624] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=174
+2025-06-16 12:10:21,964 - INFO - [Episode] 3
+2025-06-16 12:10:21,964 - INFO - [EnvID:22935197066624] schedule=synthetic-temp-class class=Normal | Tmin=8.7°C  Tmax=19.9°C  φ=0.061  seed=232
+2025-06-16 12:10:22,144 - INFO - [Episode] 4
+2025-06-16 12:10:22,144 - INFO - [EnvID:22935197066624] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=290
+2025-06-16 12:10:22,323 - INFO - [Episode] 5
+2025-06-16 12:10:22,324 - INFO - [EnvID:22935197066624] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=348
+2025-06-16 12:10:22,500 - INFO - [Episode] 6
+2025-06-16 12:10:22,501 - INFO - [EnvID:22935197066624] schedule=synthetic-temp-class class=Hot | Tmin=19.5°C  Tmax=31.4°C  φ=-0.094  seed=406
+2025-06-16 12:10:22,683 - INFO - [Episode] 7
+2025-06-16 12:10:22,683 - INFO - [EnvID:22935197066624] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=464
+2025-06-16 12:10:22,868 - INFO - [Episode] 8
+2025-06-16 12:10:22,868 - INFO - [EnvID:22935197066624] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=522
+2025-06-16 12:10:23,050 - INFO - [Episode] 9
+2025-06-16 12:10:23,050 - INFO - [EnvID:22935197066624] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=580
+2025-06-16 12:10:23,229 - INFO - [RESULT] Avg. reward for ddpg (temperature): 249.68 in 1.89s
+2025-06-16 12:10:23,229 - INFO - ============================================================
+2025-06-16 12:10:24,583 - INFO - End Time        : 2025-06-16 12:10:24
+2025-06-16 12:10:24,583 - INFO - Duration        : 4.76 seconds
+2025-06-16 12:10:24,583 - INFO - CSV file saved  : results/temperature/eval_T04_ddpg_best.csv
+2025-06-16 12:10:24,584 - INFO - Logger file     : results/temperature/eval_T04_ddpg_best_log.txt
+2025-06-16 12:10:24,584 - INFO - Evaluation successfully completed.
+2025-06-16 12:10:24,584 - INFO - ============================================================
+2025-06-16 12:10:24,584 - INFO - All evaluations done.

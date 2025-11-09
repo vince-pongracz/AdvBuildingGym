@@ -1,0 +1,41 @@
+.ipynb_checkpoints/
+# Bytecode and cache
+__pycache__/
+*.py[cod]
+*.so
+
+# Build metadata
+*.egg-info/
+*.eggs/
+build/
+dist/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Archived notebooks (custom)
+notebooks_archive/
+
+# Ignore imitation learning folder (top level)
+imitation_learning/
+
+# Ignore specific subfolder in models
+models/il_agent/
+
+# VSCode / PyCharm project files (optional)
+.vscode/
+.idea/
+
+# SLURM output logs (optional, for HPC clusters)
+slurm/*.out
+slurm/*.err
+
+# Environment and runtime
+.env
+.venv
+*.log
+.DS_Store
+slurm/*
+*.pyc
+__pycache__/
+results/

@@ -1,0 +1,40 @@
+>>> PI Control | temperature | T01
+[CMD] python run_evaluation.py --algorithms "PI Control" --reward_mode temperature --obs_variant T01 --episodes 10 --seed 58 --outdoor_temperature_path "data/LLEC_outdoor_temperature_5min_data.csv"
+Done: PI Control | temperature | T01
+>>> PID Control | temperature | T01
+[CMD] python run_evaluation.py --algorithms "PID Control" --reward_mode temperature --obs_variant T01 --episodes 10 --seed 58 --outdoor_temperature_path "data/LLEC_outdoor_temperature_5min_data.csv"
+Done: PID Control | temperature | T01
+>>> Fuzzy Control | temperature | T01
+[CMD] python run_evaluation.py --algorithms "Fuzzy Control" --reward_mode temperature --obs_variant T01 --episodes 10 --seed 58 --outdoor_temperature_path "data/LLEC_outdoor_temperature_5min_data.csv"
+Done: Fuzzy Control | temperature | T01
+>>> PI Control | combined | C01
+[CMD] python run_evaluation.py --algorithms "PI Control" --reward_mode combined --obs_variant C01 --episodes 10 --seed 58 --outdoor_temperature_path "data/LLEC_outdoor_temperature_5min_data.csv"
+Done: PI Control | combined | C01
+>>> PID Control | combined | C01
+[CMD] python run_evaluation.py --algorithms "PID Control" --reward_mode combined --obs_variant C01 --episodes 10 --seed 58 --outdoor_temperature_path "data/LLEC_outdoor_temperature_5min_data.csv"
+Done: PID Control | combined | C01
+>>> Fuzzy Control | combined | C01
+[CMD] python run_evaluation.py --algorithms "Fuzzy Control" --reward_mode combined --obs_variant C01 --episodes 10 --seed 58 --outdoor_temperature_path "data/LLEC_outdoor_temperature_5min_data.csv"
+Done: Fuzzy Control | combined | C01
+PI, PID, Fuzzy evaluations completed.
+
+============================= JOB FEEDBACK =============================
+
+Job ID: 1523005
+Cluster: haic
+User/Group: ii6824/iai
+Account: iai
+State: COMPLETED (exit code 0)
+Partition: normal
+Nodes: 1
+Cores per node: 2
+Nodelist: haicn1705
+CPU Utilized: 00:02:43
+CPU Efficiency: 46.84% of 00:05:48 core-walltime
+Job Wall-clock time: 00:02:54
+Starttime: Mon Jun 16 12:35:59 2025
+Endtime: Mon Jun 16 12:38:53 2025
+Memory Utilized: 358.83 MB
+Memory Efficiency: 5.44% of 6.45 GB
+Energy Consumed: 221540 Joule / 61.5388888888889 Watthours
+Average node power draw: 1273.2183908046 Watt

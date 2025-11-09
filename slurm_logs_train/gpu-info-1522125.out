@@ -1,0 +1,60 @@
+=== GPU Hardware Info (nvidia-smi) ===
+Mon Jun  9 20:42:30 2025       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 570.133.20             Driver Version: 570.133.20     CUDA Version: 12.8     |
+|-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA A100-SXM4-40GB          On  |   00000000:31:00.0 Off |                   On |
+| N/A   43C    P0             45W /  400W |     249MiB /  40960MiB |     N/A      Default |
+|                                         |                        |              Enabled |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| MIG devices:                                                                            |
++------------------+----------------------------------+-----------+-----------------------+
+| GPU  GI  CI  MIG |                     Memory-Usage |        Vol|        Shared         |
+|      ID  ID  Dev |                       BAR1-Usage | SM     Unc| CE ENC  DEC  OFA  JPG |
+|                  |                                  |        ECC|                       |
+|==================+==================================+===========+=======================|
+|  0    1   0   0  |             142MiB / 20096MiB    | 56      0 |  4   0    2    0    0 |
+|                  |                 0MiB / 32767MiB  |           |                       |
++------------------+----------------------------------+-----------+-----------------------+
+                                                                                         
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+
+=== PyTorch CUDA Info ===
+CUDA available        : True
+Device count          : 1
+Device name (ID 0)    : NVIDIA A100-SXM4-40GB MIG 4g.20gb
+CUDA version (torch)  : 12.4
+CUDNN version         : 90501
+
+============================= JOB FEEDBACK =============================
+
+Job ID: 1522125
+Cluster: haic
+User/Group: ii6824/iai
+Account: iai
+State: COMPLETED (exit code 0)
+Partition: normal
+Nodes: 1
+Cores per node: 2
+Nodelist: haicn1702
+CPU Utilized: 00:00:02
+CPU Efficiency: 7.69% of 00:00:26 core-walltime
+Job Wall-clock time: 00:00:13
+Starttime: Mon Jun  9 20:42:21 2025
+Endtime: Mon Jun  9 20:42:34 2025
+Memory Utilized: 22.86 MB
+Memory Efficiency: 0.35% of 6.45 GB
+Energy Consumed: 2659 Joule / 0.738611111111111 Watthours
+Average node power draw: 204.538461538462 Watt

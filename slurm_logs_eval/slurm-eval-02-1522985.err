@@ -1,0 +1,1440 @@
+2025-06-16 11:54:10,828 - INFO - [INFO] Evaluation Setup
+2025-06-16 11:54:10,833 - INFO - --------------------------------------------------------
+2025-06-16 11:54:10,833 - INFO - Algorithm        : sac
+2025-06-16 11:54:10,833 - INFO - Reward Mode      : combined
+2025-06-16 11:54:10,833 - INFO - Episodes         : 10
+2025-06-16 11:54:10,833 - INFO - Seed             : 58
+2025-06-16 11:54:10,833 - INFO - Observation      : C01
+2025-06-16 11:54:10,833 - INFO - Prediction Hzn   : 12
+2025-06-16 11:54:10,833 - INFO - Energy Price Data: data/price_data_2025.csv
+2025-06-16 11:54:10,833 - INFO - Temperature Data : data/LLEC_outdoor_temperature_5min_data.csv
+2025-06-16 11:54:10,833 - INFO - Prefer Best      : False
+2025-06-16 11:54:10,833 - INFO - Start Time       : 2025-06-16 11:54:10
+2025-06-16 11:54:10,833 - INFO - --------------------------------------------------------
+2025-06-16 11:54:10,833 - INFO - Starting evaluation for: sac (mode: combined)
+2025-06-16 11:54:10,859 - INFO - [EnvID: 23104843711776] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 6184)
+2025-06-16 11:54:10,899 - INFO - Using standard model for sac: models/combined/C01/sac_model_seed42.zip
+2025-06-16 11:54:12,922 - INFO - [Episode] 0
+2025-06-16 11:54:12,926 - INFO - [EnvID: 23104843711776] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 58)
+2025-06-16 11:54:17,503 - INFO - [Episode] 1
+2025-06-16 11:54:17,507 - INFO - [EnvID: 23104843711776] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 116)
+2025-06-16 11:54:21,870 - INFO - [Episode] 2
+2025-06-16 11:54:21,873 - INFO - [EnvID: 23104843711776] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 174)
+2025-06-16 11:54:26,245 - INFO - [Episode] 3
+2025-06-16 11:54:26,248 - INFO - [EnvID: 23104843711776] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 232)
+2025-06-16 11:54:30,610 - INFO - [Episode] 4
+2025-06-16 11:54:30,613 - INFO - [EnvID: 23104843711776] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 290)
+2025-06-16 11:54:34,975 - INFO - [Episode] 5
+2025-06-16 11:54:34,979 - INFO - [EnvID: 23104843711776] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 348)
+2025-06-16 11:54:39,362 - INFO - [Episode] 6
+2025-06-16 11:54:39,366 - INFO - [EnvID: 23104843711776] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 406)
+2025-06-16 11:54:43,744 - INFO - [Episode] 7
+2025-06-16 11:54:43,748 - INFO - [EnvID: 23104843711776] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 464)
+2025-06-16 11:54:48,135 - INFO - [Episode] 8
+2025-06-16 11:54:48,138 - INFO - [EnvID: 23104843711776] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 522)
+2025-06-16 11:54:52,494 - INFO - [Episode] 9
+2025-06-16 11:54:52,497 - INFO - [EnvID: 23104843711776] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 580)
+2025-06-16 11:54:56,876 - INFO - [RESULT] Avg. reward for sac (combined): 213.87 in 43.95s
+2025-06-16 11:54:56,876 - INFO - ============================================================
+2025-06-16 11:55:02,159 - INFO - End Time        : 2025-06-16 11:55:02
+2025-06-16 11:55:02,159 - INFO - Duration        : 51.33 seconds
+2025-06-16 11:55:02,161 - INFO - CSV file saved  : results/combined/outdoor_data/eval_C01_sac.csv
+2025-06-16 11:55:02,161 - INFO - Logger file     : results/combined/outdoor_data/eval_C01_sac_log.txt
+2025-06-16 11:55:02,161 - INFO - Evaluation successfully completed.
+2025-06-16 11:55:02,162 - INFO - ============================================================
+2025-06-16 11:55:02,164 - INFO - All evaluations done.
+2025-06-16 11:55:06,777 - INFO - [INFO] Evaluation Setup
+2025-06-16 11:55:06,781 - INFO - --------------------------------------------------------
+2025-06-16 11:55:06,781 - INFO - Algorithm        : sac
+2025-06-16 11:55:06,781 - INFO - Reward Mode      : combined
+2025-06-16 11:55:06,782 - INFO - Episodes         : 10
+2025-06-16 11:55:06,782 - INFO - Seed             : 58
+2025-06-16 11:55:06,782 - INFO - Observation      : C01
+2025-06-16 11:55:06,782 - INFO - Prediction Hzn   : 12
+2025-06-16 11:55:06,782 - INFO - Energy Price Data: data/price_data_2025.csv
+2025-06-16 11:55:06,782 - INFO - Temperature Data : None
+2025-06-16 11:55:06,782 - INFO - Prefer Best      : False
+2025-06-16 11:55:06,782 - INFO - Start Time       : 2025-06-16 11:55:06
+2025-06-16 11:55:06,782 - INFO - --------------------------------------------------------
+2025-06-16 11:55:06,782 - INFO - Starting evaluation for: sac (mode: combined)
+2025-06-16 11:55:06,805 - INFO - [EnvID:23029237290368] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=6184
+2025-06-16 11:55:06,842 - INFO - Using standard model for sac: models/combined/C01/sac_model_seed42.zip
+2025-06-16 11:55:08,432 - INFO - [Episode] 0
+2025-06-16 11:55:08,432 - INFO - [EnvID:23029237290368] schedule=synthetic-temp-class class=Normal | Tmin=8.7°C  Tmax=19.9°C  φ=0.061  seed=58
+2025-06-16 11:55:12,915 - INFO - [Episode] 1
+2025-06-16 11:55:12,916 - INFO - [EnvID:23029237290368] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=116
+2025-06-16 11:55:17,332 - INFO - [Episode] 2
+2025-06-16 11:55:17,332 - INFO - [EnvID:23029237290368] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=174
+2025-06-16 11:55:21,730 - INFO - [Episode] 3
+2025-06-16 11:55:21,731 - INFO - [EnvID:23029237290368] schedule=synthetic-temp-class class=Normal | Tmin=8.7°C  Tmax=19.9°C  φ=0.061  seed=232
+2025-06-16 11:55:26,136 - INFO - [Episode] 4
+2025-06-16 11:55:26,137 - INFO - [EnvID:23029237290368] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=290
+2025-06-16 11:55:30,564 - INFO - [Episode] 5
+2025-06-16 11:55:30,564 - INFO - [EnvID:23029237290368] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=348
+2025-06-16 11:55:34,979 - INFO - [Episode] 6
+2025-06-16 11:55:34,980 - INFO - [EnvID:23029237290368] schedule=synthetic-temp-class class=Hot | Tmin=19.5°C  Tmax=31.4°C  φ=-0.094  seed=406
+2025-06-16 11:55:39,369 - INFO - [Episode] 7
+2025-06-16 11:55:39,370 - INFO - [EnvID:23029237290368] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=464
+2025-06-16 11:55:43,763 - INFO - [Episode] 8
+2025-06-16 11:55:43,763 - INFO - [EnvID:23029237290368] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=522
+2025-06-16 11:55:48,152 - INFO - [Episode] 9
+2025-06-16 11:55:48,152 - INFO - [EnvID:23029237290368] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=580
+2025-06-16 11:55:52,528 - INFO - [RESULT] Avg. reward for sac (combined): 190.99 in 44.10s
+2025-06-16 11:55:52,528 - INFO - ============================================================
+2025-06-16 11:55:57,806 - INFO - End Time        : 2025-06-16 11:55:57
+2025-06-16 11:55:57,806 - INFO - Duration        : 51.03 seconds
+2025-06-16 11:55:57,807 - INFO - CSV file saved  : results/combined/eval_C01_sac.csv
+2025-06-16 11:55:57,808 - INFO - Logger file     : results/combined/eval_C01_sac_log.txt
+2025-06-16 11:55:57,808 - INFO - Evaluation successfully completed.
+2025-06-16 11:55:57,808 - INFO - ============================================================
+2025-06-16 11:55:57,809 - INFO - All evaluations done.
+2025-06-16 11:56:02,989 - INFO - [INFO] Evaluation Setup
+2025-06-16 11:56:02,992 - INFO - --------------------------------------------------------
+2025-06-16 11:56:02,992 - INFO - Algorithm        : sac
+2025-06-16 11:56:02,992 - INFO - Reward Mode      : combined
+2025-06-16 11:56:02,992 - INFO - Episodes         : 10
+2025-06-16 11:56:02,992 - INFO - Seed             : 58
+2025-06-16 11:56:02,993 - INFO - Observation      : C01
+2025-06-16 11:56:02,993 - INFO - Prediction Hzn   : 12
+2025-06-16 11:56:02,993 - INFO - Energy Price Data: data/price_data_2025.csv
+2025-06-16 11:56:02,993 - INFO - Temperature Data : data/LLEC_outdoor_temperature_5min_data.csv
+2025-06-16 11:56:02,993 - INFO - Prefer Best      : True
+2025-06-16 11:56:02,993 - INFO - Start Time       : 2025-06-16 11:56:02
+2025-06-16 11:56:02,993 - INFO - --------------------------------------------------------
+2025-06-16 11:56:02,993 - INFO - Starting evaluation for: sac (mode: combined)
+2025-06-16 11:56:03,018 - INFO - [EnvID: 22755046802768] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 6184)
+2025-06-16 11:56:03,060 - INFO - Found best model for sac: models/combined/C01/best_sac/best_model.zip
+2025-06-16 11:56:04,565 - INFO - [Episode] 0
+2025-06-16 11:56:04,569 - INFO - [EnvID: 22755046802768] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 58)
+2025-06-16 11:56:09,054 - INFO - [Episode] 1
+2025-06-16 11:56:09,058 - INFO - [EnvID: 22755046802768] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 116)
+2025-06-16 11:56:13,446 - INFO - [Episode] 2
+2025-06-16 11:56:13,449 - INFO - [EnvID: 22755046802768] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 174)
+2025-06-16 11:56:17,852 - INFO - [Episode] 3
+2025-06-16 11:56:17,855 - INFO - [EnvID: 22755046802768] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 232)
+2025-06-16 11:56:22,237 - INFO - [Episode] 4
+2025-06-16 11:56:22,240 - INFO - [EnvID: 22755046802768] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 290)
+2025-06-16 11:56:26,623 - INFO - [Episode] 5
+2025-06-16 11:56:26,626 - INFO - [EnvID: 22755046802768] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 348)
+2025-06-16 11:56:31,019 - INFO - [Episode] 6
+2025-06-16 11:56:31,022 - INFO - [EnvID: 22755046802768] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 406)
+2025-06-16 11:56:35,398 - INFO - [Episode] 7
+2025-06-16 11:56:35,401 - INFO - [EnvID: 22755046802768] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 464)
+2025-06-16 11:56:39,799 - INFO - [Episode] 8
+2025-06-16 11:56:39,803 - INFO - [EnvID: 22755046802768] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 522)
+2025-06-16 11:56:44,162 - INFO - [Episode] 9
+2025-06-16 11:56:44,166 - INFO - [EnvID: 22755046802768] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 580)
+2025-06-16 11:56:48,567 - INFO - [RESULT] Avg. reward for sac (combined): 232.16 in 44.00s
+2025-06-16 11:56:48,567 - INFO - ============================================================
+2025-06-16 11:56:53,739 - INFO - End Time        : 2025-06-16 11:56:53
+2025-06-16 11:56:53,739 - INFO - Duration        : 50.75 seconds
+2025-06-16 11:56:53,741 - INFO - CSV file saved  : results/combined/outdoor_data/eval_C01_sac_best.csv
+2025-06-16 11:56:53,741 - INFO - Logger file     : results/combined/outdoor_data/eval_C01_sac_best_log.txt
+2025-06-16 11:56:53,741 - INFO - Evaluation successfully completed.
+2025-06-16 11:56:53,741 - INFO - ============================================================
+2025-06-16 11:56:53,742 - INFO - All evaluations done.
+2025-06-16 11:56:57,002 - INFO - [INFO] Evaluation Setup
+2025-06-16 11:56:57,007 - INFO - --------------------------------------------------------
+2025-06-16 11:56:57,007 - INFO - Algorithm        : sac
+2025-06-16 11:56:57,007 - INFO - Reward Mode      : combined
+2025-06-16 11:56:57,007 - INFO - Episodes         : 10
+2025-06-16 11:56:57,007 - INFO - Seed             : 58
+2025-06-16 11:56:57,007 - INFO - Observation      : C01
+2025-06-16 11:56:57,007 - INFO - Prediction Hzn   : 12
+2025-06-16 11:56:57,007 - INFO - Energy Price Data: data/price_data_2025.csv
+2025-06-16 11:56:57,007 - INFO - Temperature Data : None
+2025-06-16 11:56:57,007 - INFO - Prefer Best      : True
+2025-06-16 11:56:57,007 - INFO - Start Time       : 2025-06-16 11:56:57
+2025-06-16 11:56:57,007 - INFO - --------------------------------------------------------
+2025-06-16 11:56:57,007 - INFO - Starting evaluation for: sac (mode: combined)
+2025-06-16 11:56:57,030 - INFO - [EnvID:22928188294576] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=6184
+2025-06-16 11:56:57,066 - INFO - Found best model for sac: models/combined/C01/best_sac/best_model.zip
+2025-06-16 11:56:58,550 - INFO - [Episode] 0
+2025-06-16 11:56:58,551 - INFO - [EnvID:22928188294576] schedule=synthetic-temp-class class=Normal | Tmin=8.7°C  Tmax=19.9°C  φ=0.061  seed=58
+2025-06-16 11:57:02,983 - INFO - [Episode] 1
+2025-06-16 11:57:02,984 - INFO - [EnvID:22928188294576] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=116
+2025-06-16 11:57:07,330 - INFO - [Episode] 2
+2025-06-16 11:57:07,330 - INFO - [EnvID:22928188294576] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=174
+2025-06-16 11:57:11,675 - INFO - [Episode] 3
+2025-06-16 11:57:11,676 - INFO - [EnvID:22928188294576] schedule=synthetic-temp-class class=Normal | Tmin=8.7°C  Tmax=19.9°C  φ=0.061  seed=232
+2025-06-16 11:57:16,031 - INFO - [Episode] 4
+2025-06-16 11:57:16,032 - INFO - [EnvID:22928188294576] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=290
+2025-06-16 11:57:20,399 - INFO - [Episode] 5
+2025-06-16 11:57:20,400 - INFO - [EnvID:22928188294576] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=348
+2025-06-16 11:57:24,774 - INFO - [Episode] 6
+2025-06-16 11:57:24,775 - INFO - [EnvID:22928188294576] schedule=synthetic-temp-class class=Hot | Tmin=19.5°C  Tmax=31.4°C  φ=-0.094  seed=406
+2025-06-16 11:57:29,131 - INFO - [Episode] 7
+2025-06-16 11:57:29,132 - INFO - [EnvID:22928188294576] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=464
+2025-06-16 11:57:33,481 - INFO - [Episode] 8
+2025-06-16 11:57:33,481 - INFO - [EnvID:22928188294576] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=522
+2025-06-16 11:57:37,820 - INFO - [Episode] 9
+2025-06-16 11:57:37,821 - INFO - [EnvID:22928188294576] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=580
+2025-06-16 11:57:42,167 - INFO - [RESULT] Avg. reward for sac (combined): 208.07 in 43.62s
+2025-06-16 11:57:42,167 - INFO - ============================================================
+2025-06-16 11:57:47,365 - INFO - End Time        : 2025-06-16 11:57:47
+2025-06-16 11:57:47,366 - INFO - Duration        : 50.36 seconds
+2025-06-16 11:57:47,366 - INFO - CSV file saved  : results/combined/eval_C01_sac_best.csv
+2025-06-16 11:57:47,367 - INFO - Logger file     : results/combined/eval_C01_sac_best_log.txt
+2025-06-16 11:57:47,367 - INFO - Evaluation successfully completed.
+2025-06-16 11:57:47,367 - INFO - ============================================================
+2025-06-16 11:57:47,368 - INFO - All evaluations done.
+2025-06-16 11:57:50,590 - INFO - [INFO] Evaluation Setup
+2025-06-16 11:57:50,595 - INFO - --------------------------------------------------------
+2025-06-16 11:57:50,595 - INFO - Algorithm        : sac
+2025-06-16 11:57:50,595 - INFO - Reward Mode      : combined
+2025-06-16 11:57:50,595 - INFO - Episodes         : 10
+2025-06-16 11:57:50,595 - INFO - Seed             : 58
+2025-06-16 11:57:50,595 - INFO - Observation      : C02
+2025-06-16 11:57:50,595 - INFO - Prediction Hzn   : 12
+2025-06-16 11:57:50,595 - INFO - Energy Price Data: data/price_data_2025.csv
+2025-06-16 11:57:50,595 - INFO - Temperature Data : data/LLEC_outdoor_temperature_5min_data.csv
+2025-06-16 11:57:50,595 - INFO - Prefer Best      : False
+2025-06-16 11:57:50,595 - INFO - Start Time       : 2025-06-16 11:57:50
+2025-06-16 11:57:50,595 - INFO - --------------------------------------------------------
+2025-06-16 11:57:50,595 - INFO - Starting evaluation for: sac (mode: combined)
+2025-06-16 11:57:50,621 - INFO - [EnvID: 23392486577584] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 6184)
+2025-06-16 11:57:50,661 - INFO - Using standard model for sac: models/combined/C02/sac_model_seed42.zip
+2025-06-16 11:57:52,125 - INFO - [Episode] 0
+2025-06-16 11:57:52,129 - INFO - [EnvID: 23392486577584] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 58)
+2025-06-16 11:57:56,532 - INFO - [Episode] 1
+2025-06-16 11:57:56,536 - INFO - [EnvID: 23392486577584] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 116)
+2025-06-16 11:58:00,849 - INFO - [Episode] 2
+2025-06-16 11:58:00,853 - INFO - [EnvID: 23392486577584] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 174)
+2025-06-16 11:58:05,162 - INFO - [Episode] 3
+2025-06-16 11:58:05,165 - INFO - [EnvID: 23392486577584] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 232)
+2025-06-16 11:58:09,474 - INFO - [Episode] 4
+2025-06-16 11:58:09,478 - INFO - [EnvID: 23392486577584] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 290)
+2025-06-16 11:58:13,768 - INFO - [Episode] 5
+2025-06-16 11:58:13,772 - INFO - [EnvID: 23392486577584] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 348)
+2025-06-16 11:58:18,069 - INFO - [Episode] 6
+2025-06-16 11:58:18,072 - INFO - [EnvID: 23392486577584] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 406)
+2025-06-16 11:58:22,362 - INFO - [Episode] 7
+2025-06-16 11:58:22,365 - INFO - [EnvID: 23392486577584] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 464)
+2025-06-16 11:58:26,658 - INFO - [Episode] 8
+2025-06-16 11:58:26,660 - INFO - [EnvID: 23392486577584] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 522)
+2025-06-16 11:58:30,964 - INFO - [Episode] 9
+2025-06-16 11:58:30,967 - INFO - [EnvID: 23392486577584] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 580)
+2025-06-16 11:58:35,258 - INFO - [RESULT] Avg. reward for sac (combined): 227.62 in 43.13s
+2025-06-16 11:58:35,258 - INFO - ============================================================
+2025-06-16 11:58:40,439 - INFO - End Time        : 2025-06-16 11:58:40
+2025-06-16 11:58:40,439 - INFO - Duration        : 49.85 seconds
+2025-06-16 11:58:40,441 - INFO - CSV file saved  : results/combined/outdoor_data/eval_C02_sac.csv
+2025-06-16 11:58:40,441 - INFO - Logger file     : results/combined/outdoor_data/eval_C02_sac_log.txt
+2025-06-16 11:58:40,441 - INFO - Evaluation successfully completed.
+2025-06-16 11:58:40,441 - INFO - ============================================================
+2025-06-16 11:58:40,441 - INFO - All evaluations done.
+2025-06-16 11:58:43,687 - INFO - [INFO] Evaluation Setup
+2025-06-16 11:58:43,692 - INFO - --------------------------------------------------------
+2025-06-16 11:58:43,692 - INFO - Algorithm        : sac
+2025-06-16 11:58:43,692 - INFO - Reward Mode      : combined
+2025-06-16 11:58:43,692 - INFO - Episodes         : 10
+2025-06-16 11:58:43,692 - INFO - Seed             : 58
+2025-06-16 11:58:43,692 - INFO - Observation      : C02
+2025-06-16 11:58:43,692 - INFO - Prediction Hzn   : 12
+2025-06-16 11:58:43,692 - INFO - Energy Price Data: data/price_data_2025.csv
+2025-06-16 11:58:43,692 - INFO - Temperature Data : None
+2025-06-16 11:58:43,692 - INFO - Prefer Best      : False
+2025-06-16 11:58:43,692 - INFO - Start Time       : 2025-06-16 11:58:43
+2025-06-16 11:58:43,692 - INFO - --------------------------------------------------------
+2025-06-16 11:58:43,692 - INFO - Starting evaluation for: sac (mode: combined)
+2025-06-16 11:58:43,715 - INFO - [EnvID:22607861782032] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=6184
+2025-06-16 11:58:43,751 - INFO - Using standard model for sac: models/combined/C02/sac_model_seed42.zip
+2025-06-16 11:58:45,220 - INFO - [Episode] 0
+2025-06-16 11:58:45,220 - INFO - [EnvID:22607861782032] schedule=synthetic-temp-class class=Normal | Tmin=8.7°C  Tmax=19.9°C  φ=0.061  seed=58
+2025-06-16 11:58:49,592 - INFO - [Episode] 1
+2025-06-16 11:58:49,593 - INFO - [EnvID:22607861782032] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=116
+2025-06-16 11:58:53,860 - INFO - [Episode] 2
+2025-06-16 11:58:53,860 - INFO - [EnvID:22607861782032] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=174
+2025-06-16 11:58:58,136 - INFO - [Episode] 3
+2025-06-16 11:58:58,136 - INFO - [EnvID:22607861782032] schedule=synthetic-temp-class class=Normal | Tmin=8.7°C  Tmax=19.9°C  φ=0.061  seed=232
+2025-06-16 11:59:02,417 - INFO - [Episode] 4
+2025-06-16 11:59:02,417 - INFO - [EnvID:22607861782032] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=290
+2025-06-16 11:59:06,692 - INFO - [Episode] 5
+2025-06-16 11:59:06,692 - INFO - [EnvID:22607861782032] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=348
+2025-06-16 11:59:10,982 - INFO - [Episode] 6
+2025-06-16 11:59:10,982 - INFO - [EnvID:22607861782032] schedule=synthetic-temp-class class=Hot | Tmin=19.5°C  Tmax=31.4°C  φ=-0.094  seed=406
+2025-06-16 11:59:15,253 - INFO - [Episode] 7
+2025-06-16 11:59:15,254 - INFO - [EnvID:22607861782032] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=464
+2025-06-16 11:59:19,528 - INFO - [Episode] 8
+2025-06-16 11:59:19,528 - INFO - [EnvID:22607861782032] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=522
+2025-06-16 11:59:23,800 - INFO - [Episode] 9
+2025-06-16 11:59:23,801 - INFO - [EnvID:22607861782032] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=580
+2025-06-16 11:59:28,064 - INFO - [RESULT] Avg. reward for sac (combined): 198.88 in 42.84s
+2025-06-16 11:59:28,064 - INFO - ============================================================
+2025-06-16 11:59:33,208 - INFO - End Time        : 2025-06-16 11:59:33
+2025-06-16 11:59:33,209 - INFO - Duration        : 49.52 seconds
+2025-06-16 11:59:33,209 - INFO - CSV file saved  : results/combined/eval_C02_sac.csv
+2025-06-16 11:59:33,217 - INFO - Logger file     : results/combined/eval_C02_sac_log.txt
+2025-06-16 11:59:33,217 - INFO - Evaluation successfully completed.
+2025-06-16 11:59:33,217 - INFO - ============================================================
+2025-06-16 11:59:33,218 - INFO - All evaluations done.
+2025-06-16 11:59:36,460 - INFO - [INFO] Evaluation Setup
+2025-06-16 11:59:36,465 - INFO - --------------------------------------------------------
+2025-06-16 11:59:36,465 - INFO - Algorithm        : sac
+2025-06-16 11:59:36,465 - INFO - Reward Mode      : combined
+2025-06-16 11:59:36,465 - INFO - Episodes         : 10
+2025-06-16 11:59:36,465 - INFO - Seed             : 58
+2025-06-16 11:59:36,465 - INFO - Observation      : C02
+2025-06-16 11:59:36,465 - INFO - Prediction Hzn   : 12
+2025-06-16 11:59:36,465 - INFO - Energy Price Data: data/price_data_2025.csv
+2025-06-16 11:59:36,465 - INFO - Temperature Data : data/LLEC_outdoor_temperature_5min_data.csv
+2025-06-16 11:59:36,465 - INFO - Prefer Best      : True
+2025-06-16 11:59:36,465 - INFO - Start Time       : 2025-06-16 11:59:36
+2025-06-16 11:59:36,465 - INFO - --------------------------------------------------------
+2025-06-16 11:59:36,465 - INFO - Starting evaluation for: sac (mode: combined)
+2025-06-16 11:59:36,491 - INFO - [EnvID: 23315195520288] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 6184)
+2025-06-16 11:59:36,532 - INFO - Found best model for sac: models/combined/C02/best_sac/best_model.zip
+2025-06-16 11:59:37,998 - INFO - [Episode] 0
+2025-06-16 11:59:38,003 - INFO - [EnvID: 23315195520288] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 58)
+2025-06-16 11:59:42,414 - INFO - [Episode] 1
+2025-06-16 11:59:42,417 - INFO - [EnvID: 23315195520288] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 116)
+2025-06-16 11:59:46,750 - INFO - [Episode] 2
+2025-06-16 11:59:46,753 - INFO - [EnvID: 23315195520288] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 174)
+2025-06-16 11:59:51,071 - INFO - [Episode] 3
+2025-06-16 11:59:51,074 - INFO - [EnvID: 23315195520288] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 232)
+2025-06-16 11:59:55,388 - INFO - [Episode] 4
+2025-06-16 11:59:55,391 - INFO - [EnvID: 23315195520288] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 290)
+2025-06-16 11:59:59,717 - INFO - [Episode] 5
+2025-06-16 11:59:59,720 - INFO - [EnvID: 23315195520288] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 348)
+2025-06-16 12:00:04,045 - INFO - [Episode] 6
+2025-06-16 12:00:04,049 - INFO - [EnvID: 23315195520288] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 406)
+2025-06-16 12:00:08,375 - INFO - [Episode] 7
+2025-06-16 12:00:08,378 - INFO - [EnvID: 23315195520288] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 464)
+2025-06-16 12:00:12,709 - INFO - [Episode] 8
+2025-06-16 12:00:12,712 - INFO - [EnvID: 23315195520288] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 522)
+2025-06-16 12:00:17,049 - INFO - [Episode] 9
+2025-06-16 12:00:17,052 - INFO - [EnvID: 23315195520288] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 580)
+2025-06-16 12:00:21,389 - INFO - [RESULT] Avg. reward for sac (combined): 230.87 in 43.39s
+2025-06-16 12:00:21,389 - INFO - ============================================================
+2025-06-16 12:00:26,542 - INFO - End Time        : 2025-06-16 12:00:26
+2025-06-16 12:00:26,542 - INFO - Duration        : 50.08 seconds
+2025-06-16 12:00:26,544 - INFO - CSV file saved  : results/combined/outdoor_data/eval_C02_sac_best.csv
+2025-06-16 12:00:26,544 - INFO - Logger file     : results/combined/outdoor_data/eval_C02_sac_best_log.txt
+2025-06-16 12:00:26,544 - INFO - Evaluation successfully completed.
+2025-06-16 12:00:26,544 - INFO - ============================================================
+2025-06-16 12:00:26,544 - INFO - All evaluations done.
+2025-06-16 12:00:29,811 - INFO - [INFO] Evaluation Setup
+2025-06-16 12:00:29,815 - INFO - --------------------------------------------------------
+2025-06-16 12:00:29,815 - INFO - Algorithm        : sac
+2025-06-16 12:00:29,815 - INFO - Reward Mode      : combined
+2025-06-16 12:00:29,815 - INFO - Episodes         : 10
+2025-06-16 12:00:29,815 - INFO - Seed             : 58
+2025-06-16 12:00:29,815 - INFO - Observation      : C02
+2025-06-16 12:00:29,815 - INFO - Prediction Hzn   : 12
+2025-06-16 12:00:29,815 - INFO - Energy Price Data: data/price_data_2025.csv
+2025-06-16 12:00:29,815 - INFO - Temperature Data : None
+2025-06-16 12:00:29,815 - INFO - Prefer Best      : True
+2025-06-16 12:00:29,815 - INFO - Start Time       : 2025-06-16 12:00:29
+2025-06-16 12:00:29,815 - INFO - --------------------------------------------------------
+2025-06-16 12:00:29,816 - INFO - Starting evaluation for: sac (mode: combined)
+2025-06-16 12:00:29,839 - INFO - [EnvID:22425251485008] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=6184
+2025-06-16 12:00:29,875 - INFO - Found best model for sac: models/combined/C02/best_sac/best_model.zip
+2025-06-16 12:00:31,353 - INFO - [Episode] 0
+2025-06-16 12:00:31,353 - INFO - [EnvID:22425251485008] schedule=synthetic-temp-class class=Normal | Tmin=8.7°C  Tmax=19.9°C  φ=0.061  seed=58
+2025-06-16 12:00:35,703 - INFO - [Episode] 1
+2025-06-16 12:00:35,704 - INFO - [EnvID:22425251485008] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=116
+2025-06-16 12:00:39,972 - INFO - [Episode] 2
+2025-06-16 12:00:39,973 - INFO - [EnvID:22425251485008] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=174
+2025-06-16 12:00:44,239 - INFO - [Episode] 3
+2025-06-16 12:00:44,240 - INFO - [EnvID:22425251485008] schedule=synthetic-temp-class class=Normal | Tmin=8.7°C  Tmax=19.9°C  φ=0.061  seed=232
+2025-06-16 12:00:48,527 - INFO - [Episode] 4
+2025-06-16 12:00:48,527 - INFO - [EnvID:22425251485008] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=290
+2025-06-16 12:00:52,801 - INFO - [Episode] 5
+2025-06-16 12:00:52,802 - INFO - [EnvID:22425251485008] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=348
+2025-06-16 12:00:57,093 - INFO - [Episode] 6
+2025-06-16 12:00:57,093 - INFO - [EnvID:22425251485008] schedule=synthetic-temp-class class=Hot | Tmin=19.5°C  Tmax=31.4°C  φ=-0.094  seed=406
+2025-06-16 12:01:01,370 - INFO - [Episode] 7
+2025-06-16 12:01:01,371 - INFO - [EnvID:22425251485008] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=464
+2025-06-16 12:01:05,624 - INFO - [Episode] 8
+2025-06-16 12:01:05,624 - INFO - [EnvID:22425251485008] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=522
+2025-06-16 12:01:09,895 - INFO - [Episode] 9
+2025-06-16 12:01:09,896 - INFO - [EnvID:22425251485008] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=580
+2025-06-16 12:01:14,159 - INFO - [RESULT] Avg. reward for sac (combined): 206.40 in 42.81s
+2025-06-16 12:01:14,159 - INFO - ============================================================
+2025-06-16 12:01:19,339 - INFO - End Time        : 2025-06-16 12:01:19
+2025-06-16 12:01:19,339 - INFO - Duration        : 49.53 seconds
+2025-06-16 12:01:19,339 - INFO - CSV file saved  : results/combined/eval_C02_sac_best.csv
+2025-06-16 12:01:19,341 - INFO - Logger file     : results/combined/eval_C02_sac_best_log.txt
+2025-06-16 12:01:19,341 - INFO - Evaluation successfully completed.
+2025-06-16 12:01:19,341 - INFO - ============================================================
+2025-06-16 12:01:19,342 - INFO - All evaluations done.
+2025-06-16 12:01:22,559 - INFO - [INFO] Evaluation Setup
+2025-06-16 12:01:22,563 - INFO - --------------------------------------------------------
+2025-06-16 12:01:22,563 - INFO - Algorithm        : sac
+2025-06-16 12:01:22,564 - INFO - Reward Mode      : combined
+2025-06-16 12:01:22,564 - INFO - Episodes         : 10
+2025-06-16 12:01:22,564 - INFO - Seed             : 58
+2025-06-16 12:01:22,564 - INFO - Observation      : C03
+2025-06-16 12:01:22,564 - INFO - Prediction Hzn   : 12
+2025-06-16 12:01:22,564 - INFO - Energy Price Data: data/price_data_2025.csv
+2025-06-16 12:01:22,564 - INFO - Temperature Data : data/LLEC_outdoor_temperature_5min_data.csv
+2025-06-16 12:01:22,564 - INFO - Prefer Best      : False
+2025-06-16 12:01:22,564 - INFO - Start Time       : 2025-06-16 12:01:22
+2025-06-16 12:01:22,564 - INFO - --------------------------------------------------------
+2025-06-16 12:01:22,564 - INFO - Starting evaluation for: sac (mode: combined)
+2025-06-16 12:01:22,589 - INFO - [EnvID: 22991074276688] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 6184)
+2025-06-16 12:01:22,630 - INFO - Using standard model for sac: models/combined/C03/sac_model_seed42.zip
+2025-06-16 12:01:24,084 - INFO - [Episode] 0
+2025-06-16 12:01:24,088 - INFO - [EnvID: 22991074276688] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 58)
+2025-06-16 12:01:28,531 - INFO - [Episode] 1
+2025-06-16 12:01:28,534 - INFO - [EnvID: 22991074276688] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 116)
+2025-06-16 12:01:32,862 - INFO - [Episode] 2
+2025-06-16 12:01:32,865 - INFO - [EnvID: 22991074276688] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 174)
+2025-06-16 12:01:37,227 - INFO - [Episode] 3
+2025-06-16 12:01:37,231 - INFO - [EnvID: 22991074276688] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 232)
+2025-06-16 12:01:41,571 - INFO - [Episode] 4
+2025-06-16 12:01:41,575 - INFO - [EnvID: 22991074276688] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 290)
+2025-06-16 12:01:45,924 - INFO - [Episode] 5
+2025-06-16 12:01:45,928 - INFO - [EnvID: 22991074276688] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 348)
+2025-06-16 12:01:50,294 - INFO - [Episode] 6
+2025-06-16 12:01:50,297 - INFO - [EnvID: 22991074276688] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 406)
+2025-06-16 12:01:54,645 - INFO - [Episode] 7
+2025-06-16 12:01:54,648 - INFO - [EnvID: 22991074276688] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 464)
+2025-06-16 12:01:59,004 - INFO - [Episode] 8
+2025-06-16 12:01:59,007 - INFO - [EnvID: 22991074276688] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 522)
+2025-06-16 12:02:03,343 - INFO - [Episode] 9
+2025-06-16 12:02:03,346 - INFO - [EnvID: 22991074276688] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 580)
+2025-06-16 12:02:07,697 - INFO - [RESULT] Avg. reward for sac (combined): 215.26 in 43.61s
+2025-06-16 12:02:07,697 - INFO - ============================================================
+2025-06-16 12:02:12,842 - INFO - End Time        : 2025-06-16 12:02:12
+2025-06-16 12:02:12,843 - INFO - Duration        : 50.28 seconds
+2025-06-16 12:02:12,845 - INFO - CSV file saved  : results/combined/outdoor_data/eval_C03_sac.csv
+2025-06-16 12:02:12,845 - INFO - Logger file     : results/combined/outdoor_data/eval_C03_sac_log.txt
+2025-06-16 12:02:12,845 - INFO - Evaluation successfully completed.
+2025-06-16 12:02:12,845 - INFO - ============================================================
+2025-06-16 12:02:12,846 - INFO - All evaluations done.
+2025-06-16 12:02:18,002 - INFO - [INFO] Evaluation Setup
+2025-06-16 12:02:18,007 - INFO - --------------------------------------------------------
+2025-06-16 12:02:18,007 - INFO - Algorithm        : sac
+2025-06-16 12:02:18,007 - INFO - Reward Mode      : combined
+2025-06-16 12:02:18,007 - INFO - Episodes         : 10
+2025-06-16 12:02:18,007 - INFO - Seed             : 58
+2025-06-16 12:02:18,007 - INFO - Observation      : C03
+2025-06-16 12:02:18,007 - INFO - Prediction Hzn   : 12
+2025-06-16 12:02:18,007 - INFO - Energy Price Data: data/price_data_2025.csv
+2025-06-16 12:02:18,007 - INFO - Temperature Data : None
+2025-06-16 12:02:18,007 - INFO - Prefer Best      : False
+2025-06-16 12:02:18,007 - INFO - Start Time       : 2025-06-16 12:02:18
+2025-06-16 12:02:18,007 - INFO - --------------------------------------------------------
+2025-06-16 12:02:18,007 - INFO - Starting evaluation for: sac (mode: combined)
+2025-06-16 12:02:18,030 - INFO - [EnvID:23321768793616] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=6184
+2025-06-16 12:02:18,066 - INFO - Using standard model for sac: models/combined/C03/sac_model_seed42.zip
+2025-06-16 12:02:19,665 - INFO - [Episode] 0
+2025-06-16 12:02:19,665 - INFO - [EnvID:23321768793616] schedule=synthetic-temp-class class=Normal | Tmin=8.7°C  Tmax=19.9°C  φ=0.061  seed=58
+2025-06-16 12:02:24,077 - INFO - [Episode] 1
+2025-06-16 12:02:24,077 - INFO - [EnvID:23321768793616] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=116
+2025-06-16 12:02:28,400 - INFO - [Episode] 2
+2025-06-16 12:02:28,401 - INFO - [EnvID:23321768793616] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=174
+2025-06-16 12:02:32,717 - INFO - [Episode] 3
+2025-06-16 12:02:32,717 - INFO - [EnvID:23321768793616] schedule=synthetic-temp-class class=Normal | Tmin=8.7°C  Tmax=19.9°C  φ=0.061  seed=232
+2025-06-16 12:02:37,040 - INFO - [Episode] 4
+2025-06-16 12:02:37,040 - INFO - [EnvID:23321768793616] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=290
+2025-06-16 12:02:41,391 - INFO - [Episode] 5
+2025-06-16 12:02:41,392 - INFO - [EnvID:23321768793616] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=348
+2025-06-16 12:02:45,732 - INFO - [Episode] 6
+2025-06-16 12:02:45,732 - INFO - [EnvID:23321768793616] schedule=synthetic-temp-class class=Hot | Tmin=19.5°C  Tmax=31.4°C  φ=-0.094  seed=406
+2025-06-16 12:02:50,056 - INFO - [Episode] 7
+2025-06-16 12:02:50,057 - INFO - [EnvID:23321768793616] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=464
+2025-06-16 12:02:54,369 - INFO - [Episode] 8
+2025-06-16 12:02:54,370 - INFO - [EnvID:23321768793616] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=522
+2025-06-16 12:02:58,695 - INFO - [Episode] 9
+2025-06-16 12:02:58,695 - INFO - [EnvID:23321768793616] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=580
+2025-06-16 12:03:03,007 - INFO - [RESULT] Avg. reward for sac (combined): 193.83 in 43.34s
+2025-06-16 12:03:03,008 - INFO - ============================================================
+2025-06-16 12:03:08,251 - INFO - End Time        : 2025-06-16 12:03:08
+2025-06-16 12:03:08,251 - INFO - Duration        : 50.25 seconds
+2025-06-16 12:03:08,251 - INFO - CSV file saved  : results/combined/eval_C03_sac.csv
+2025-06-16 12:03:08,253 - INFO - Logger file     : results/combined/eval_C03_sac_log.txt
+2025-06-16 12:03:08,253 - INFO - Evaluation successfully completed.
+2025-06-16 12:03:08,253 - INFO - ============================================================
+2025-06-16 12:03:08,253 - INFO - All evaluations done.
+2025-06-16 12:03:11,488 - INFO - [INFO] Evaluation Setup
+2025-06-16 12:03:11,492 - INFO - --------------------------------------------------------
+2025-06-16 12:03:11,492 - INFO - Algorithm        : sac
+2025-06-16 12:03:11,492 - INFO - Reward Mode      : combined
+2025-06-16 12:03:11,492 - INFO - Episodes         : 10
+2025-06-16 12:03:11,492 - INFO - Seed             : 58
+2025-06-16 12:03:11,492 - INFO - Observation      : C03
+2025-06-16 12:03:11,492 - INFO - Prediction Hzn   : 12
+2025-06-16 12:03:11,492 - INFO - Energy Price Data: data/price_data_2025.csv
+2025-06-16 12:03:11,492 - INFO - Temperature Data : data/LLEC_outdoor_temperature_5min_data.csv
+2025-06-16 12:03:11,492 - INFO - Prefer Best      : True
+2025-06-16 12:03:11,492 - INFO - Start Time       : 2025-06-16 12:03:11
+2025-06-16 12:03:11,492 - INFO - --------------------------------------------------------
+2025-06-16 12:03:11,493 - INFO - Starting evaluation for: sac (mode: combined)
+2025-06-16 12:03:11,518 - INFO - [EnvID: 23333393831200] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 6184)
+2025-06-16 12:03:11,559 - INFO - Found best model for sac: models/combined/C03/best_sac/best_model.zip
+2025-06-16 12:03:13,043 - INFO - [Episode] 0
+2025-06-16 12:03:13,047 - INFO - [EnvID: 23333393831200] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 58)
+2025-06-16 12:03:17,460 - INFO - [Episode] 1
+2025-06-16 12:03:17,464 - INFO - [EnvID: 23333393831200] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 116)
+2025-06-16 12:03:21,793 - INFO - [Episode] 2
+2025-06-16 12:03:21,796 - INFO - [EnvID: 23333393831200] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 174)
+2025-06-16 12:03:26,116 - INFO - [Episode] 3
+2025-06-16 12:03:26,119 - INFO - [EnvID: 23333393831200] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 232)
+2025-06-16 12:03:30,427 - INFO - [Episode] 4
+2025-06-16 12:03:30,431 - INFO - [EnvID: 23333393831200] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 290)
+2025-06-16 12:03:34,769 - INFO - [Episode] 5
+2025-06-16 12:03:34,773 - INFO - [EnvID: 23333393831200] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 348)
+2025-06-16 12:03:39,118 - INFO - [Episode] 6
+2025-06-16 12:03:39,121 - INFO - [EnvID: 23333393831200] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 406)
+2025-06-16 12:03:43,440 - INFO - [Episode] 7
+2025-06-16 12:03:43,443 - INFO - [EnvID: 23333393831200] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 464)
+2025-06-16 12:03:47,783 - INFO - [Episode] 8
+2025-06-16 12:03:47,786 - INFO - [EnvID: 23333393831200] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 522)
+2025-06-16 12:03:52,131 - INFO - [Episode] 9
+2025-06-16 12:03:52,135 - INFO - [EnvID: 23333393831200] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 580)
+2025-06-16 12:03:56,463 - INFO - [RESULT] Avg. reward for sac (combined): 238.85 in 43.42s
+2025-06-16 12:03:56,463 - INFO - ============================================================
+2025-06-16 12:04:01,647 - INFO - End Time        : 2025-06-16 12:04:01
+2025-06-16 12:04:01,647 - INFO - Duration        : 50.16 seconds
+2025-06-16 12:04:01,649 - INFO - CSV file saved  : results/combined/outdoor_data/eval_C03_sac_best.csv
+2025-06-16 12:04:01,649 - INFO - Logger file     : results/combined/outdoor_data/eval_C03_sac_best_log.txt
+2025-06-16 12:04:01,649 - INFO - Evaluation successfully completed.
+2025-06-16 12:04:01,649 - INFO - ============================================================
+2025-06-16 12:04:01,649 - INFO - All evaluations done.
+2025-06-16 12:04:04,887 - INFO - [INFO] Evaluation Setup
+2025-06-16 12:04:04,890 - INFO - --------------------------------------------------------
+2025-06-16 12:04:04,890 - INFO - Algorithm        : sac
+2025-06-16 12:04:04,890 - INFO - Reward Mode      : combined
+2025-06-16 12:04:04,890 - INFO - Episodes         : 10
+2025-06-16 12:04:04,890 - INFO - Seed             : 58
+2025-06-16 12:04:04,890 - INFO - Observation      : C03
+2025-06-16 12:04:04,890 - INFO - Prediction Hzn   : 12
+2025-06-16 12:04:04,890 - INFO - Energy Price Data: data/price_data_2025.csv
+2025-06-16 12:04:04,890 - INFO - Temperature Data : None
+2025-06-16 12:04:04,890 - INFO - Prefer Best      : True
+2025-06-16 12:04:04,890 - INFO - Start Time       : 2025-06-16 12:04:04
+2025-06-16 12:04:04,890 - INFO - --------------------------------------------------------
+2025-06-16 12:04:04,890 - INFO - Starting evaluation for: sac (mode: combined)
+2025-06-16 12:04:04,914 - INFO - [EnvID:22486829667568] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=6184
+2025-06-16 12:04:04,950 - INFO - Found best model for sac: models/combined/C03/best_sac/best_model.zip
+2025-06-16 12:04:06,403 - INFO - [Episode] 0
+2025-06-16 12:04:06,403 - INFO - [EnvID:22486829667568] schedule=synthetic-temp-class class=Normal | Tmin=8.7°C  Tmax=19.9°C  φ=0.061  seed=58
+2025-06-16 12:04:10,767 - INFO - [Episode] 1
+2025-06-16 12:04:10,768 - INFO - [EnvID:22486829667568] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=116
+2025-06-16 12:04:15,052 - INFO - [Episode] 2
+2025-06-16 12:04:15,052 - INFO - [EnvID:22486829667568] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=174
+2025-06-16 12:04:19,368 - INFO - [Episode] 3
+2025-06-16 12:04:19,369 - INFO - [EnvID:22486829667568] schedule=synthetic-temp-class class=Normal | Tmin=8.7°C  Tmax=19.9°C  φ=0.061  seed=232
+2025-06-16 12:04:23,654 - INFO - [Episode] 4
+2025-06-16 12:04:23,655 - INFO - [EnvID:22486829667568] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=290
+2025-06-16 12:04:27,951 - INFO - [Episode] 5
+2025-06-16 12:04:27,952 - INFO - [EnvID:22486829667568] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=348
+2025-06-16 12:04:32,266 - INFO - [Episode] 6
+2025-06-16 12:04:32,266 - INFO - [EnvID:22486829667568] schedule=synthetic-temp-class class=Hot | Tmin=19.5°C  Tmax=31.4°C  φ=-0.094  seed=406
+2025-06-16 12:04:36,531 - INFO - [Episode] 7
+2025-06-16 12:04:36,532 - INFO - [EnvID:22486829667568] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=464
+2025-06-16 12:04:40,800 - INFO - [Episode] 8
+2025-06-16 12:04:40,800 - INFO - [EnvID:22486829667568] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=522
+2025-06-16 12:04:45,057 - INFO - [Episode] 9
+2025-06-16 12:04:45,057 - INFO - [EnvID:22486829667568] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=580
+2025-06-16 12:04:49,329 - INFO - [RESULT] Avg. reward for sac (combined): 207.15 in 42.93s
+2025-06-16 12:04:49,329 - INFO - ============================================================
+2025-06-16 12:04:54,514 - INFO - End Time        : 2025-06-16 12:04:54
+2025-06-16 12:04:54,515 - INFO - Duration        : 49.63 seconds
+2025-06-16 12:04:54,515 - INFO - CSV file saved  : results/combined/eval_C03_sac_best.csv
+2025-06-16 12:04:54,516 - INFO - Logger file     : results/combined/eval_C03_sac_best_log.txt
+2025-06-16 12:04:54,516 - INFO - Evaluation successfully completed.
+2025-06-16 12:04:54,517 - INFO - ============================================================
+2025-06-16 12:04:54,517 - INFO - All evaluations done.
+2025-06-16 12:04:57,744 - INFO - [INFO] Evaluation Setup
+2025-06-16 12:04:57,747 - INFO - --------------------------------------------------------
+2025-06-16 12:04:57,747 - INFO - Algorithm        : sac
+2025-06-16 12:04:57,747 - INFO - Reward Mode      : combined
+2025-06-16 12:04:57,747 - INFO - Episodes         : 10
+2025-06-16 12:04:57,747 - INFO - Seed             : 58
+2025-06-16 12:04:57,747 - INFO - Observation      : C04
+2025-06-16 12:04:57,747 - INFO - Prediction Hzn   : 12
+2025-06-16 12:04:57,747 - INFO - Energy Price Data: data/price_data_2025.csv
+2025-06-16 12:04:57,747 - INFO - Temperature Data : data/LLEC_outdoor_temperature_5min_data.csv
+2025-06-16 12:04:57,747 - INFO - Prefer Best      : False
+2025-06-16 12:04:57,747 - INFO - Start Time       : 2025-06-16 12:04:57
+2025-06-16 12:04:57,748 - INFO - --------------------------------------------------------
+2025-06-16 12:04:57,748 - INFO - Starting evaluation for: sac (mode: combined)
+2025-06-16 12:04:57,773 - INFO - [EnvID: 23070237574384] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 6184)
+2025-06-16 12:04:57,813 - INFO - Using standard model for sac: models/combined/C04/sac_model_seed42.zip
+2025-06-16 12:04:59,275 - INFO - [Episode] 0
+2025-06-16 12:04:59,278 - INFO - [EnvID: 23070237574384] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 58)
+2025-06-16 12:05:03,660 - INFO - [Episode] 1
+2025-06-16 12:05:03,663 - INFO - [EnvID: 23070237574384] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 116)
+2025-06-16 12:05:07,936 - INFO - [Episode] 2
+2025-06-16 12:05:07,939 - INFO - [EnvID: 23070237574384] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 174)
+2025-06-16 12:05:12,251 - INFO - [Episode] 3
+2025-06-16 12:05:12,255 - INFO - [EnvID: 23070237574384] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 232)
+2025-06-16 12:05:16,539 - INFO - [Episode] 4
+2025-06-16 12:05:16,543 - INFO - [EnvID: 23070237574384] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 290)
+2025-06-16 12:05:20,852 - INFO - [Episode] 5
+2025-06-16 12:05:20,856 - INFO - [EnvID: 23070237574384] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 348)
+2025-06-16 12:05:25,167 - INFO - [Episode] 6
+2025-06-16 12:05:25,171 - INFO - [EnvID: 23070237574384] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 406)
+2025-06-16 12:05:29,471 - INFO - [Episode] 7
+2025-06-16 12:05:29,474 - INFO - [EnvID: 23070237574384] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 464)
+2025-06-16 12:05:33,739 - INFO - [Episode] 8
+2025-06-16 12:05:33,742 - INFO - [EnvID: 23070237574384] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 522)
+2025-06-16 12:05:38,045 - INFO - [Episode] 9
+2025-06-16 12:05:38,048 - INFO - [EnvID: 23070237574384] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 580)
+2025-06-16 12:05:42,353 - INFO - [RESULT] Avg. reward for sac (combined): 219.48 in 43.08s
+2025-06-16 12:05:42,353 - INFO - ============================================================
+2025-06-16 12:05:47,542 - INFO - End Time        : 2025-06-16 12:05:47
+2025-06-16 12:05:47,542 - INFO - Duration        : 49.80 seconds
+2025-06-16 12:05:47,544 - INFO - CSV file saved  : results/combined/outdoor_data/eval_C04_sac.csv
+2025-06-16 12:05:47,544 - INFO - Logger file     : results/combined/outdoor_data/eval_C04_sac_log.txt
+2025-06-16 12:05:47,544 - INFO - Evaluation successfully completed.
+2025-06-16 12:05:47,544 - INFO - ============================================================
+2025-06-16 12:05:47,545 - INFO - All evaluations done.
+2025-06-16 12:05:50,785 - INFO - [INFO] Evaluation Setup
+2025-06-16 12:05:50,789 - INFO - --------------------------------------------------------
+2025-06-16 12:05:50,789 - INFO - Algorithm        : sac
+2025-06-16 12:05:50,789 - INFO - Reward Mode      : combined
+2025-06-16 12:05:50,789 - INFO - Episodes         : 10
+2025-06-16 12:05:50,789 - INFO - Seed             : 58
+2025-06-16 12:05:50,789 - INFO - Observation      : C04
+2025-06-16 12:05:50,789 - INFO - Prediction Hzn   : 12
+2025-06-16 12:05:50,789 - INFO - Energy Price Data: data/price_data_2025.csv
+2025-06-16 12:05:50,789 - INFO - Temperature Data : None
+2025-06-16 12:05:50,789 - INFO - Prefer Best      : False
+2025-06-16 12:05:50,789 - INFO - Start Time       : 2025-06-16 12:05:50
+2025-06-16 12:05:50,789 - INFO - --------------------------------------------------------
+2025-06-16 12:05:50,789 - INFO - Starting evaluation for: sac (mode: combined)
+2025-06-16 12:05:50,813 - INFO - [EnvID:22901243962848] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=6184
+2025-06-16 12:05:50,848 - INFO - Using standard model for sac: models/combined/C04/sac_model_seed42.zip
+2025-06-16 12:05:52,304 - INFO - [Episode] 0
+2025-06-16 12:05:52,304 - INFO - [EnvID:22901243962848] schedule=synthetic-temp-class class=Normal | Tmin=8.7°C  Tmax=19.9°C  φ=0.061  seed=58
+2025-06-16 12:05:56,675 - INFO - [Episode] 1
+2025-06-16 12:05:56,675 - INFO - [EnvID:22901243962848] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=116
+2025-06-16 12:06:00,961 - INFO - [Episode] 2
+2025-06-16 12:06:00,962 - INFO - [EnvID:22901243962848] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=174
+2025-06-16 12:06:05,244 - INFO - [Episode] 3
+2025-06-16 12:06:05,244 - INFO - [EnvID:22901243962848] schedule=synthetic-temp-class class=Normal | Tmin=8.7°C  Tmax=19.9°C  φ=0.061  seed=232
+2025-06-16 12:06:09,558 - INFO - [Episode] 4
+2025-06-16 12:06:09,559 - INFO - [EnvID:22901243962848] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=290
+2025-06-16 12:06:13,874 - INFO - [Episode] 5
+2025-06-16 12:06:13,875 - INFO - [EnvID:22901243962848] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=348
+2025-06-16 12:06:18,193 - INFO - [Episode] 6
+2025-06-16 12:06:18,194 - INFO - [EnvID:22901243962848] schedule=synthetic-temp-class class=Hot | Tmin=19.5°C  Tmax=31.4°C  φ=-0.094  seed=406
+2025-06-16 12:06:22,487 - INFO - [Episode] 7
+2025-06-16 12:06:22,487 - INFO - [EnvID:22901243962848] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=464
+2025-06-16 12:06:26,781 - INFO - [Episode] 8
+2025-06-16 12:06:26,782 - INFO - [EnvID:22901243962848] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=522
+2025-06-16 12:06:31,093 - INFO - [Episode] 9
+2025-06-16 12:06:31,093 - INFO - [EnvID:22901243962848] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=580
+2025-06-16 12:06:35,387 - INFO - [RESULT] Avg. reward for sac (combined): 196.91 in 43.08s
+2025-06-16 12:06:35,387 - INFO - ============================================================
+2025-06-16 12:06:40,604 - INFO - End Time        : 2025-06-16 12:06:40
+2025-06-16 12:06:40,604 - INFO - Duration        : 49.82 seconds
+2025-06-16 12:06:40,604 - INFO - CSV file saved  : results/combined/eval_C04_sac.csv
+2025-06-16 12:06:40,606 - INFO - Logger file     : results/combined/eval_C04_sac_log.txt
+2025-06-16 12:06:40,606 - INFO - Evaluation successfully completed.
+2025-06-16 12:06:40,606 - INFO - ============================================================
+2025-06-16 12:06:40,606 - INFO - All evaluations done.
+2025-06-16 12:06:43,785 - INFO - [INFO] Evaluation Setup
+2025-06-16 12:06:43,789 - INFO - --------------------------------------------------------
+2025-06-16 12:06:43,789 - INFO - Algorithm        : sac
+2025-06-16 12:06:43,789 - INFO - Reward Mode      : combined
+2025-06-16 12:06:43,789 - INFO - Episodes         : 10
+2025-06-16 12:06:43,789 - INFO - Seed             : 58
+2025-06-16 12:06:43,789 - INFO - Observation      : C04
+2025-06-16 12:06:43,789 - INFO - Prediction Hzn   : 12
+2025-06-16 12:06:43,789 - INFO - Energy Price Data: data/price_data_2025.csv
+2025-06-16 12:06:43,789 - INFO - Temperature Data : data/LLEC_outdoor_temperature_5min_data.csv
+2025-06-16 12:06:43,789 - INFO - Prefer Best      : True
+2025-06-16 12:06:43,789 - INFO - Start Time       : 2025-06-16 12:06:43
+2025-06-16 12:06:43,789 - INFO - --------------------------------------------------------
+2025-06-16 12:06:43,789 - INFO - Starting evaluation for: sac (mode: combined)
+2025-06-16 12:06:43,815 - INFO - [EnvID: 22663485932880] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 6184)
+2025-06-16 12:06:43,858 - INFO - Found best model for sac: models/combined/C04/best_sac/best_model.zip
+2025-06-16 12:06:45,308 - INFO - [Episode] 0
+2025-06-16 12:06:45,312 - INFO - [EnvID: 22663485932880] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 58)
+2025-06-16 12:06:49,805 - INFO - [Episode] 1
+2025-06-16 12:06:49,809 - INFO - [EnvID: 22663485932880] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 116)
+2025-06-16 12:06:54,203 - INFO - [Episode] 2
+2025-06-16 12:06:54,207 - INFO - [EnvID: 22663485932880] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 174)
+2025-06-16 12:06:58,611 - INFO - [Episode] 3
+2025-06-16 12:06:58,615 - INFO - [EnvID: 22663485932880] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 232)
+2025-06-16 12:07:03,000 - INFO - [Episode] 4
+2025-06-16 12:07:03,004 - INFO - [EnvID: 22663485932880] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 290)
+2025-06-16 12:07:07,405 - INFO - [Episode] 5
+2025-06-16 12:07:07,408 - INFO - [EnvID: 22663485932880] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 348)
+2025-06-16 12:07:11,826 - INFO - [Episode] 6
+2025-06-16 12:07:11,829 - INFO - [EnvID: 22663485932880] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 406)
+2025-06-16 12:07:16,233 - INFO - [Episode] 7
+2025-06-16 12:07:16,236 - INFO - [EnvID: 22663485932880] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 464)
+2025-06-16 12:07:20,652 - INFO - [Episode] 8
+2025-06-16 12:07:20,656 - INFO - [EnvID: 22663485932880] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 522)
+2025-06-16 12:07:25,049 - INFO - [Episode] 9
+2025-06-16 12:07:25,052 - INFO - [EnvID: 22663485932880] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 580)
+2025-06-16 12:07:29,431 - INFO - [RESULT] Avg. reward for sac (combined): 221.93 in 44.12s
+2025-06-16 12:07:29,431 - INFO - ============================================================
+2025-06-16 12:07:34,609 - INFO - End Time        : 2025-06-16 12:07:34
+2025-06-16 12:07:34,609 - INFO - Duration        : 50.82 seconds
+2025-06-16 12:07:34,611 - INFO - CSV file saved  : results/combined/outdoor_data/eval_C04_sac_best.csv
+2025-06-16 12:07:34,611 - INFO - Logger file     : results/combined/outdoor_data/eval_C04_sac_best_log.txt
+2025-06-16 12:07:34,611 - INFO - Evaluation successfully completed.
+2025-06-16 12:07:34,611 - INFO - ============================================================
+2025-06-16 12:07:34,611 - INFO - All evaluations done.
+2025-06-16 12:07:37,845 - INFO - [INFO] Evaluation Setup
+2025-06-16 12:07:37,848 - INFO - --------------------------------------------------------
+2025-06-16 12:07:37,849 - INFO - Algorithm        : sac
+2025-06-16 12:07:37,849 - INFO - Reward Mode      : combined
+2025-06-16 12:07:37,849 - INFO - Episodes         : 10
+2025-06-16 12:07:37,849 - INFO - Seed             : 58
+2025-06-16 12:07:37,849 - INFO - Observation      : C04
+2025-06-16 12:07:37,849 - INFO - Prediction Hzn   : 12
+2025-06-16 12:07:37,849 - INFO - Energy Price Data: data/price_data_2025.csv
+2025-06-16 12:07:37,849 - INFO - Temperature Data : None
+2025-06-16 12:07:37,849 - INFO - Prefer Best      : True
+2025-06-16 12:07:37,849 - INFO - Start Time       : 2025-06-16 12:07:37
+2025-06-16 12:07:37,849 - INFO - --------------------------------------------------------
+2025-06-16 12:07:37,849 - INFO - Starting evaluation for: sac (mode: combined)
+2025-06-16 12:07:37,873 - INFO - [EnvID:23397411042640] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=6184
+2025-06-16 12:07:37,908 - INFO - Found best model for sac: models/combined/C04/best_sac/best_model.zip
+2025-06-16 12:07:39,367 - INFO - [Episode] 0
+2025-06-16 12:07:39,367 - INFO - [EnvID:23397411042640] schedule=synthetic-temp-class class=Normal | Tmin=8.7°C  Tmax=19.9°C  φ=0.061  seed=58
+2025-06-16 12:07:43,727 - INFO - [Episode] 1
+2025-06-16 12:07:43,727 - INFO - [EnvID:23397411042640] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=116
+2025-06-16 12:07:48,005 - INFO - [Episode] 2
+2025-06-16 12:07:48,006 - INFO - [EnvID:23397411042640] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=174
+2025-06-16 12:07:52,277 - INFO - [Episode] 3
+2025-06-16 12:07:52,277 - INFO - [EnvID:23397411042640] schedule=synthetic-temp-class class=Normal | Tmin=8.7°C  Tmax=19.9°C  φ=0.061  seed=232
+2025-06-16 12:07:56,565 - INFO - [Episode] 4
+2025-06-16 12:07:56,566 - INFO - [EnvID:23397411042640] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=290
+2025-06-16 12:08:00,853 - INFO - [Episode] 5
+2025-06-16 12:08:00,854 - INFO - [EnvID:23397411042640] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=348
+2025-06-16 12:08:05,140 - INFO - [Episode] 6
+2025-06-16 12:08:05,140 - INFO - [EnvID:23397411042640] schedule=synthetic-temp-class class=Hot | Tmin=19.5°C  Tmax=31.4°C  φ=-0.094  seed=406
+2025-06-16 12:08:09,412 - INFO - [Episode] 7
+2025-06-16 12:08:09,413 - INFO - [EnvID:23397411042640] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=464
+2025-06-16 12:08:13,669 - INFO - [Episode] 8
+2025-06-16 12:08:13,669 - INFO - [EnvID:23397411042640] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=522
+2025-06-16 12:08:17,926 - INFO - [Episode] 9
+2025-06-16 12:08:17,926 - INFO - [EnvID:23397411042640] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=580
+2025-06-16 12:08:22,206 - INFO - [RESULT] Avg. reward for sac (combined): 197.36 in 42.84s
+2025-06-16 12:08:22,206 - INFO - ============================================================
+2025-06-16 12:08:27,496 - INFO - End Time        : 2025-06-16 12:08:27
+2025-06-16 12:08:27,496 - INFO - Duration        : 49.65 seconds
+2025-06-16 12:08:27,496 - INFO - CSV file saved  : results/combined/eval_C04_sac_best.csv
+2025-06-16 12:08:27,497 - INFO - Logger file     : results/combined/eval_C04_sac_best_log.txt
+2025-06-16 12:08:27,498 - INFO - Evaluation successfully completed.
+2025-06-16 12:08:27,498 - INFO - ============================================================
+2025-06-16 12:08:27,498 - INFO - All evaluations done.
+2025-06-16 12:08:30,689 - INFO - [INFO] Evaluation Setup
+2025-06-16 12:08:30,694 - INFO - --------------------------------------------------------
+2025-06-16 12:08:30,694 - INFO - Algorithm        : sac
+2025-06-16 12:08:30,694 - INFO - Reward Mode      : temperature
+2025-06-16 12:08:30,694 - INFO - Episodes         : 10
+2025-06-16 12:08:30,695 - INFO - Seed             : 58
+2025-06-16 12:08:30,695 - INFO - Observation      : T01
+2025-06-16 12:08:30,695 - INFO - Prediction Hzn   : 12
+2025-06-16 12:08:30,695 - INFO - Energy Price Data: data/price_data_2025.csv
+2025-06-16 12:08:30,695 - INFO - Temperature Data : data/LLEC_outdoor_temperature_5min_data.csv
+2025-06-16 12:08:30,695 - INFO - Prefer Best      : False
+2025-06-16 12:08:30,695 - INFO - Start Time       : 2025-06-16 12:08:30
+2025-06-16 12:08:30,695 - INFO - --------------------------------------------------------
+2025-06-16 12:08:30,695 - INFO - Starting evaluation for: sac (mode: temperature)
+2025-06-16 12:08:30,721 - INFO - [EnvID: 22598156100896] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 6184)
+2025-06-16 12:08:30,745 - INFO - Using standard model for sac: models/temperature/T01/sac_model_seed42.zip
+2025-06-16 12:08:32,137 - INFO - [Episode] 0
+2025-06-16 12:08:32,141 - INFO - [EnvID: 22598156100896] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 58)
+2025-06-16 12:08:32,483 - INFO - [Episode] 1
+2025-06-16 12:08:32,486 - INFO - [EnvID: 22598156100896] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 116)
+2025-06-16 12:08:32,747 - INFO - [Episode] 2
+2025-06-16 12:08:32,750 - INFO - [EnvID: 22598156100896] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 174)
+2025-06-16 12:08:33,007 - INFO - [Episode] 3
+2025-06-16 12:08:33,009 - INFO - [EnvID: 22598156100896] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 232)
+2025-06-16 12:08:33,262 - INFO - [Episode] 4
+2025-06-16 12:08:33,264 - INFO - [EnvID: 22598156100896] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 290)
+2025-06-16 12:08:33,514 - INFO - [Episode] 5
+2025-06-16 12:08:33,516 - INFO - [EnvID: 22598156100896] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 348)
+2025-06-16 12:08:33,773 - INFO - [Episode] 6
+2025-06-16 12:08:33,775 - INFO - [EnvID: 22598156100896] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 406)
+2025-06-16 12:08:34,027 - INFO - [Episode] 7
+2025-06-16 12:08:34,029 - INFO - [EnvID: 22598156100896] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 464)
+2025-06-16 12:08:34,279 - INFO - [Episode] 8
+2025-06-16 12:08:34,281 - INFO - [EnvID: 22598156100896] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 522)
+2025-06-16 12:08:34,534 - INFO - [Episode] 9
+2025-06-16 12:08:34,537 - INFO - [EnvID: 22598156100896] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 580)
+2025-06-16 12:08:34,788 - INFO - [RESULT] Avg. reward for sac (temperature): 266.95 in 2.65s
+2025-06-16 12:08:34,788 - INFO - ============================================================
+2025-06-16 12:08:36,103 - INFO - End Time        : 2025-06-16 12:08:36
+2025-06-16 12:08:36,105 - INFO - Duration        : 5.41 seconds
+2025-06-16 12:08:36,105 - INFO - CSV file saved  : results/temperature/outdoor_data/eval_T01_sac.csv
+2025-06-16 12:08:36,105 - INFO - Logger file     : results/temperature/outdoor_data/eval_T01_sac_log.txt
+2025-06-16 12:08:36,105 - INFO - Evaluation successfully completed.
+2025-06-16 12:08:36,105 - INFO - ============================================================
+2025-06-16 12:08:36,105 - INFO - All evaluations done.
+2025-06-16 12:08:39,367 - INFO - [INFO] Evaluation Setup
+2025-06-16 12:08:39,372 - INFO - --------------------------------------------------------
+2025-06-16 12:08:39,373 - INFO - Algorithm        : sac
+2025-06-16 12:08:39,373 - INFO - Reward Mode      : temperature
+2025-06-16 12:08:39,373 - INFO - Episodes         : 10
+2025-06-16 12:08:39,373 - INFO - Seed             : 58
+2025-06-16 12:08:39,373 - INFO - Observation      : T01
+2025-06-16 12:08:39,373 - INFO - Prediction Hzn   : 12
+2025-06-16 12:08:39,373 - INFO - Energy Price Data: data/price_data_2025.csv
+2025-06-16 12:08:39,373 - INFO - Temperature Data : None
+2025-06-16 12:08:39,373 - INFO - Prefer Best      : False
+2025-06-16 12:08:39,373 - INFO - Start Time       : 2025-06-16 12:08:39
+2025-06-16 12:08:39,373 - INFO - --------------------------------------------------------
+2025-06-16 12:08:39,373 - INFO - Starting evaluation for: sac (mode: temperature)
+2025-06-16 12:08:39,396 - INFO - [EnvID:23094043379168] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=6184
+2025-06-16 12:08:39,417 - INFO - Using standard model for sac: models/temperature/T01/sac_model_seed42.zip
+2025-06-16 12:08:40,934 - INFO - [Episode] 0
+2025-06-16 12:08:40,934 - INFO - [EnvID:23094043379168] schedule=synthetic-temp-class class=Normal | Tmin=8.7°C  Tmax=19.9°C  φ=0.061  seed=58
+2025-06-16 12:08:41,277 - INFO - [Episode] 1
+2025-06-16 12:08:41,278 - INFO - [EnvID:23094043379168] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=116
+2025-06-16 12:08:41,537 - INFO - [Episode] 2
+2025-06-16 12:08:41,537 - INFO - [EnvID:23094043379168] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=174
+2025-06-16 12:08:41,792 - INFO - [Episode] 3
+2025-06-16 12:08:41,792 - INFO - [EnvID:23094043379168] schedule=synthetic-temp-class class=Normal | Tmin=8.7°C  Tmax=19.9°C  φ=0.061  seed=232
+2025-06-16 12:08:42,045 - INFO - [Episode] 4
+2025-06-16 12:08:42,045 - INFO - [EnvID:23094043379168] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=290
+2025-06-16 12:08:42,292 - INFO - [Episode] 5
+2025-06-16 12:08:42,293 - INFO - [EnvID:23094043379168] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=348
+2025-06-16 12:08:42,547 - INFO - [Episode] 6
+2025-06-16 12:08:42,547 - INFO - [EnvID:23094043379168] schedule=synthetic-temp-class class=Hot | Tmin=19.5°C  Tmax=31.4°C  φ=-0.094  seed=406
+2025-06-16 12:08:42,797 - INFO - [Episode] 7
+2025-06-16 12:08:42,797 - INFO - [EnvID:23094043379168] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=464
+2025-06-16 12:08:43,045 - INFO - [Episode] 8
+2025-06-16 12:08:43,045 - INFO - [EnvID:23094043379168] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=522
+2025-06-16 12:08:43,294 - INFO - [Episode] 9
+2025-06-16 12:08:43,294 - INFO - [EnvID:23094043379168] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=580
+2025-06-16 12:08:43,542 - INFO - [RESULT] Avg. reward for sac (temperature): 250.30 in 2.61s
+2025-06-16 12:08:43,542 - INFO - ============================================================
+2025-06-16 12:08:44,870 - INFO - End Time        : 2025-06-16 12:08:44
+2025-06-16 12:08:44,870 - INFO - Duration        : 5.50 seconds
+2025-06-16 12:08:44,871 - INFO - CSV file saved  : results/temperature/eval_T01_sac.csv
+2025-06-16 12:08:44,872 - INFO - Logger file     : results/temperature/eval_T01_sac_log.txt
+2025-06-16 12:08:44,872 - INFO - Evaluation successfully completed.
+2025-06-16 12:08:44,872 - INFO - ============================================================
+2025-06-16 12:08:44,873 - INFO - All evaluations done.
+2025-06-16 12:08:48,169 - INFO - [INFO] Evaluation Setup
+2025-06-16 12:08:48,174 - INFO - --------------------------------------------------------
+2025-06-16 12:08:48,174 - INFO - Algorithm        : sac
+2025-06-16 12:08:48,174 - INFO - Reward Mode      : temperature
+2025-06-16 12:08:48,174 - INFO - Episodes         : 10
+2025-06-16 12:08:48,174 - INFO - Seed             : 58
+2025-06-16 12:08:48,174 - INFO - Observation      : T01
+2025-06-16 12:08:48,174 - INFO - Prediction Hzn   : 12
+2025-06-16 12:08:48,174 - INFO - Energy Price Data: data/price_data_2025.csv
+2025-06-16 12:08:48,174 - INFO - Temperature Data : data/LLEC_outdoor_temperature_5min_data.csv
+2025-06-16 12:08:48,174 - INFO - Prefer Best      : True
+2025-06-16 12:08:48,174 - INFO - Start Time       : 2025-06-16 12:08:48
+2025-06-16 12:08:48,174 - INFO - --------------------------------------------------------
+2025-06-16 12:08:48,174 - INFO - Starting evaluation for: sac (mode: temperature)
+2025-06-16 12:08:48,200 - INFO - [EnvID: 23096309134672] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 6184)
+2025-06-16 12:08:48,251 - INFO - Found best model for sac: models/temperature/T01/best_sac/best_model.zip
+2025-06-16 12:08:49,745 - INFO - [Episode] 0
+2025-06-16 12:08:49,748 - INFO - [EnvID: 23096309134672] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 58)
+2025-06-16 12:08:50,092 - INFO - [Episode] 1
+2025-06-16 12:08:50,095 - INFO - [EnvID: 23096309134672] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 116)
+2025-06-16 12:08:50,355 - INFO - [Episode] 2
+2025-06-16 12:08:50,358 - INFO - [EnvID: 23096309134672] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 174)
+2025-06-16 12:08:50,615 - INFO - [Episode] 3
+2025-06-16 12:08:50,617 - INFO - [EnvID: 23096309134672] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 232)
+2025-06-16 12:08:50,868 - INFO - [Episode] 4
+2025-06-16 12:08:50,870 - INFO - [EnvID: 23096309134672] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 290)
+2025-06-16 12:08:51,120 - INFO - [Episode] 5
+2025-06-16 12:08:51,122 - INFO - [EnvID: 23096309134672] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 348)
+2025-06-16 12:08:51,376 - INFO - [Episode] 6
+2025-06-16 12:08:51,379 - INFO - [EnvID: 23096309134672] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 406)
+2025-06-16 12:08:51,629 - INFO - [Episode] 7
+2025-06-16 12:08:51,632 - INFO - [EnvID: 23096309134672] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 464)
+2025-06-16 12:08:51,882 - INFO - [Episode] 8
+2025-06-16 12:08:51,884 - INFO - [EnvID: 23096309134672] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 522)
+2025-06-16 12:08:52,136 - INFO - [Episode] 9
+2025-06-16 12:08:52,139 - INFO - [EnvID: 23096309134672] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 580)
+2025-06-16 12:08:52,389 - INFO - [RESULT] Avg. reward for sac (temperature): 262.32 in 2.64s
+2025-06-16 12:08:52,389 - INFO - ============================================================
+2025-06-16 12:08:53,691 - INFO - End Time        : 2025-06-16 12:08:53
+2025-06-16 12:08:53,693 - INFO - Duration        : 5.52 seconds
+2025-06-16 12:08:53,693 - INFO - CSV file saved  : results/temperature/outdoor_data/eval_T01_sac_best.csv
+2025-06-16 12:08:53,693 - INFO - Logger file     : results/temperature/outdoor_data/eval_T01_sac_best_log.txt
+2025-06-16 12:08:53,693 - INFO - Evaluation successfully completed.
+2025-06-16 12:08:53,693 - INFO - ============================================================
+2025-06-16 12:08:53,694 - INFO - All evaluations done.
+2025-06-16 12:08:56,917 - INFO - [INFO] Evaluation Setup
+2025-06-16 12:08:56,922 - INFO - --------------------------------------------------------
+2025-06-16 12:08:56,922 - INFO - Algorithm        : sac
+2025-06-16 12:08:56,922 - INFO - Reward Mode      : temperature
+2025-06-16 12:08:56,922 - INFO - Episodes         : 10
+2025-06-16 12:08:56,922 - INFO - Seed             : 58
+2025-06-16 12:08:56,922 - INFO - Observation      : T01
+2025-06-16 12:08:56,922 - INFO - Prediction Hzn   : 12
+2025-06-16 12:08:56,922 - INFO - Energy Price Data: data/price_data_2025.csv
+2025-06-16 12:08:56,922 - INFO - Temperature Data : None
+2025-06-16 12:08:56,922 - INFO - Prefer Best      : True
+2025-06-16 12:08:56,922 - INFO - Start Time       : 2025-06-16 12:08:56
+2025-06-16 12:08:56,922 - INFO - --------------------------------------------------------
+2025-06-16 12:08:56,922 - INFO - Starting evaluation for: sac (mode: temperature)
+2025-06-16 12:08:56,945 - INFO - [EnvID:22512503002448] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=6184
+2025-06-16 12:08:56,967 - INFO - Found best model for sac: models/temperature/T01/best_sac/best_model.zip
+2025-06-16 12:08:58,456 - INFO - [Episode] 0
+2025-06-16 12:08:58,457 - INFO - [EnvID:22512503002448] schedule=synthetic-temp-class class=Normal | Tmin=8.7°C  Tmax=19.9°C  φ=0.061  seed=58
+2025-06-16 12:08:58,797 - INFO - [Episode] 1
+2025-06-16 12:08:58,798 - INFO - [EnvID:22512503002448] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=116
+2025-06-16 12:08:59,057 - INFO - [Episode] 2
+2025-06-16 12:08:59,057 - INFO - [EnvID:22512503002448] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=174
+2025-06-16 12:08:59,312 - INFO - [Episode] 3
+2025-06-16 12:08:59,312 - INFO - [EnvID:22512503002448] schedule=synthetic-temp-class class=Normal | Tmin=8.7°C  Tmax=19.9°C  φ=0.061  seed=232
+2025-06-16 12:08:59,563 - INFO - [Episode] 4
+2025-06-16 12:08:59,563 - INFO - [EnvID:22512503002448] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=290
+2025-06-16 12:08:59,811 - INFO - [Episode] 5
+2025-06-16 12:08:59,811 - INFO - [EnvID:22512503002448] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=348
+2025-06-16 12:09:00,065 - INFO - [Episode] 6
+2025-06-16 12:09:00,066 - INFO - [EnvID:22512503002448] schedule=synthetic-temp-class class=Hot | Tmin=19.5°C  Tmax=31.4°C  φ=-0.094  seed=406
+2025-06-16 12:09:00,312 - INFO - [Episode] 7
+2025-06-16 12:09:00,312 - INFO - [EnvID:22512503002448] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=464
+2025-06-16 12:09:00,560 - INFO - [Episode] 8
+2025-06-16 12:09:00,561 - INFO - [EnvID:22512503002448] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=522
+2025-06-16 12:09:00,810 - INFO - [Episode] 9
+2025-06-16 12:09:00,810 - INFO - [EnvID:22512503002448] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=580
+2025-06-16 12:09:01,059 - INFO - [RESULT] Avg. reward for sac (temperature): 255.73 in 2.60s
+2025-06-16 12:09:01,059 - INFO - ============================================================
+2025-06-16 12:09:02,373 - INFO - End Time        : 2025-06-16 12:09:02
+2025-06-16 12:09:02,373 - INFO - Duration        : 5.46 seconds
+2025-06-16 12:09:02,374 - INFO - CSV file saved  : results/temperature/eval_T01_sac_best.csv
+2025-06-16 12:09:02,375 - INFO - Logger file     : results/temperature/eval_T01_sac_best_log.txt
+2025-06-16 12:09:02,376 - INFO - Evaluation successfully completed.
+2025-06-16 12:09:02,376 - INFO - ============================================================
+2025-06-16 12:09:02,376 - INFO - All evaluations done.
+2025-06-16 12:09:05,601 - INFO - [INFO] Evaluation Setup
+2025-06-16 12:09:05,606 - INFO - --------------------------------------------------------
+2025-06-16 12:09:05,606 - INFO - Algorithm        : sac
+2025-06-16 12:09:05,606 - INFO - Reward Mode      : temperature
+2025-06-16 12:09:05,606 - INFO - Episodes         : 10
+2025-06-16 12:09:05,606 - INFO - Seed             : 58
+2025-06-16 12:09:05,606 - INFO - Observation      : T02
+2025-06-16 12:09:05,606 - INFO - Prediction Hzn   : 12
+2025-06-16 12:09:05,606 - INFO - Energy Price Data: data/price_data_2025.csv
+2025-06-16 12:09:05,606 - INFO - Temperature Data : data/LLEC_outdoor_temperature_5min_data.csv
+2025-06-16 12:09:05,606 - INFO - Prefer Best      : False
+2025-06-16 12:09:05,606 - INFO - Start Time       : 2025-06-16 12:09:05
+2025-06-16 12:09:05,606 - INFO - --------------------------------------------------------
+2025-06-16 12:09:05,606 - INFO - Starting evaluation for: sac (mode: temperature)
+2025-06-16 12:09:05,632 - INFO - [EnvID: 22706165200256] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 6184)
+2025-06-16 12:09:05,657 - INFO - Using standard model for sac: models/temperature/T02/sac_model_seed42.zip
+2025-06-16 12:09:07,117 - INFO - [Episode] 0
+2025-06-16 12:09:07,121 - INFO - [EnvID: 22706165200256] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 58)
+2025-06-16 12:09:07,460 - INFO - [Episode] 1
+2025-06-16 12:09:07,463 - INFO - [EnvID: 22706165200256] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 116)
+2025-06-16 12:09:07,723 - INFO - [Episode] 2
+2025-06-16 12:09:07,726 - INFO - [EnvID: 22706165200256] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 174)
+2025-06-16 12:09:07,987 - INFO - [Episode] 3
+2025-06-16 12:09:07,989 - INFO - [EnvID: 22706165200256] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 232)
+2025-06-16 12:09:08,242 - INFO - [Episode] 4
+2025-06-16 12:09:08,244 - INFO - [EnvID: 22706165200256] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 290)
+2025-06-16 12:09:08,494 - INFO - [Episode] 5
+2025-06-16 12:09:08,496 - INFO - [EnvID: 22706165200256] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 348)
+2025-06-16 12:09:08,752 - INFO - [Episode] 6
+2025-06-16 12:09:08,754 - INFO - [EnvID: 22706165200256] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 406)
+2025-06-16 12:09:09,004 - INFO - [Episode] 7
+2025-06-16 12:09:09,006 - INFO - [EnvID: 22706165200256] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 464)
+2025-06-16 12:09:09,256 - INFO - [Episode] 8
+2025-06-16 12:09:09,258 - INFO - [EnvID: 22706165200256] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 522)
+2025-06-16 12:09:09,510 - INFO - [Episode] 9
+2025-06-16 12:09:09,513 - INFO - [EnvID: 22706165200256] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 580)
+2025-06-16 12:09:09,764 - INFO - [RESULT] Avg. reward for sac (temperature): 255.35 in 2.65s
+2025-06-16 12:09:09,764 - INFO - ============================================================
+2025-06-16 12:09:11,125 - INFO - End Time        : 2025-06-16 12:09:11
+2025-06-16 12:09:11,126 - INFO - Duration        : 5.52 seconds
+2025-06-16 12:09:11,127 - INFO - CSV file saved  : results/temperature/outdoor_data/eval_T02_sac.csv
+2025-06-16 12:09:11,127 - INFO - Logger file     : results/temperature/outdoor_data/eval_T02_sac_log.txt
+2025-06-16 12:09:11,127 - INFO - Evaluation successfully completed.
+2025-06-16 12:09:11,127 - INFO - ============================================================
+2025-06-16 12:09:11,127 - INFO - All evaluations done.
+2025-06-16 12:09:14,346 - INFO - [INFO] Evaluation Setup
+2025-06-16 12:09:14,351 - INFO - --------------------------------------------------------
+2025-06-16 12:09:14,352 - INFO - Algorithm        : sac
+2025-06-16 12:09:14,352 - INFO - Reward Mode      : temperature
+2025-06-16 12:09:14,352 - INFO - Episodes         : 10
+2025-06-16 12:09:14,352 - INFO - Seed             : 58
+2025-06-16 12:09:14,352 - INFO - Observation      : T02
+2025-06-16 12:09:14,352 - INFO - Prediction Hzn   : 12
+2025-06-16 12:09:14,352 - INFO - Energy Price Data: data/price_data_2025.csv
+2025-06-16 12:09:14,352 - INFO - Temperature Data : None
+2025-06-16 12:09:14,352 - INFO - Prefer Best      : False
+2025-06-16 12:09:14,352 - INFO - Start Time       : 2025-06-16 12:09:14
+2025-06-16 12:09:14,352 - INFO - --------------------------------------------------------
+2025-06-16 12:09:14,352 - INFO - Starting evaluation for: sac (mode: temperature)
+2025-06-16 12:09:14,375 - INFO - [EnvID:22882631992896] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=6184
+2025-06-16 12:09:14,397 - INFO - Using standard model for sac: models/temperature/T02/sac_model_seed42.zip
+2025-06-16 12:09:15,855 - INFO - [Episode] 0
+2025-06-16 12:09:15,856 - INFO - [EnvID:22882631992896] schedule=synthetic-temp-class class=Normal | Tmin=8.7°C  Tmax=19.9°C  φ=0.061  seed=58
+2025-06-16 12:09:16,195 - INFO - [Episode] 1
+2025-06-16 12:09:16,196 - INFO - [EnvID:22882631992896] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=116
+2025-06-16 12:09:16,454 - INFO - [Episode] 2
+2025-06-16 12:09:16,454 - INFO - [EnvID:22882631992896] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=174
+2025-06-16 12:09:16,707 - INFO - [Episode] 3
+2025-06-16 12:09:16,707 - INFO - [EnvID:22882631992896] schedule=synthetic-temp-class class=Normal | Tmin=8.7°C  Tmax=19.9°C  φ=0.061  seed=232
+2025-06-16 12:09:16,956 - INFO - [Episode] 4
+2025-06-16 12:09:16,956 - INFO - [EnvID:22882631992896] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=290
+2025-06-16 12:09:17,203 - INFO - [Episode] 5
+2025-06-16 12:09:17,204 - INFO - [EnvID:22882631992896] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=348
+2025-06-16 12:09:17,454 - INFO - [Episode] 6
+2025-06-16 12:09:17,455 - INFO - [EnvID:22882631992896] schedule=synthetic-temp-class class=Hot | Tmin=19.5°C  Tmax=31.4°C  φ=-0.094  seed=406
+2025-06-16 12:09:17,700 - INFO - [Episode] 7
+2025-06-16 12:09:17,700 - INFO - [EnvID:22882631992896] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=464
+2025-06-16 12:09:17,947 - INFO - [Episode] 8
+2025-06-16 12:09:17,947 - INFO - [EnvID:22882631992896] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=522
+2025-06-16 12:09:18,204 - INFO - [Episode] 9
+2025-06-16 12:09:18,205 - INFO - [EnvID:22882631992896] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=580
+2025-06-16 12:09:18,451 - INFO - [RESULT] Avg. reward for sac (temperature): 245.61 in 2.60s
+2025-06-16 12:09:18,451 - INFO - ============================================================
+2025-06-16 12:09:19,796 - INFO - End Time        : 2025-06-16 12:09:19
+2025-06-16 12:09:19,797 - INFO - Duration        : 5.45 seconds
+2025-06-16 12:09:19,797 - INFO - CSV file saved  : results/temperature/eval_T02_sac.csv
+2025-06-16 12:09:19,798 - INFO - Logger file     : results/temperature/eval_T02_sac_log.txt
+2025-06-16 12:09:19,798 - INFO - Evaluation successfully completed.
+2025-06-16 12:09:19,798 - INFO - ============================================================
+2025-06-16 12:09:19,799 - INFO - All evaluations done.
+2025-06-16 12:09:23,023 - INFO - [INFO] Evaluation Setup
+2025-06-16 12:09:23,027 - INFO - --------------------------------------------------------
+2025-06-16 12:09:23,028 - INFO - Algorithm        : sac
+2025-06-16 12:09:23,028 - INFO - Reward Mode      : temperature
+2025-06-16 12:09:23,028 - INFO - Episodes         : 10
+2025-06-16 12:09:23,028 - INFO - Seed             : 58
+2025-06-16 12:09:23,028 - INFO - Observation      : T02
+2025-06-16 12:09:23,028 - INFO - Prediction Hzn   : 12
+2025-06-16 12:09:23,028 - INFO - Energy Price Data: data/price_data_2025.csv
+2025-06-16 12:09:23,028 - INFO - Temperature Data : data/LLEC_outdoor_temperature_5min_data.csv
+2025-06-16 12:09:23,028 - INFO - Prefer Best      : True
+2025-06-16 12:09:23,028 - INFO - Start Time       : 2025-06-16 12:09:23
+2025-06-16 12:09:23,028 - INFO - --------------------------------------------------------
+2025-06-16 12:09:23,028 - INFO - Starting evaluation for: sac (mode: temperature)
+2025-06-16 12:09:23,054 - INFO - [EnvID: 22836340237696] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 6184)
+2025-06-16 12:09:23,081 - INFO - Found best model for sac: models/temperature/T02/best_sac/best_model.zip
+2025-06-16 12:09:24,537 - INFO - [Episode] 0
+2025-06-16 12:09:24,541 - INFO - [EnvID: 22836340237696] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 58)
+2025-06-16 12:09:24,882 - INFO - [Episode] 1
+2025-06-16 12:09:24,885 - INFO - [EnvID: 22836340237696] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 116)
+2025-06-16 12:09:25,147 - INFO - [Episode] 2
+2025-06-16 12:09:25,149 - INFO - [EnvID: 22836340237696] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 174)
+2025-06-16 12:09:25,405 - INFO - [Episode] 3
+2025-06-16 12:09:25,408 - INFO - [EnvID: 22836340237696] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 232)
+2025-06-16 12:09:25,659 - INFO - [Episode] 4
+2025-06-16 12:09:25,661 - INFO - [EnvID: 22836340237696] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 290)
+2025-06-16 12:09:25,911 - INFO - [Episode] 5
+2025-06-16 12:09:25,914 - INFO - [EnvID: 22836340237696] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 348)
+2025-06-16 12:09:26,168 - INFO - [Episode] 6
+2025-06-16 12:09:26,170 - INFO - [EnvID: 22836340237696] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 406)
+2025-06-16 12:09:26,420 - INFO - [Episode] 7
+2025-06-16 12:09:26,422 - INFO - [EnvID: 22836340237696] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 464)
+2025-06-16 12:09:26,672 - INFO - [Episode] 8
+2025-06-16 12:09:26,674 - INFO - [EnvID: 22836340237696] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 522)
+2025-06-16 12:09:26,926 - INFO - [Episode] 9
+2025-06-16 12:09:26,929 - INFO - [EnvID: 22836340237696] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 580)
+2025-06-16 12:09:27,180 - INFO - [RESULT] Avg. reward for sac (temperature): 259.44 in 2.64s
+2025-06-16 12:09:27,180 - INFO - ============================================================
+2025-06-16 12:09:28,534 - INFO - End Time        : 2025-06-16 12:09:28
+2025-06-16 12:09:28,536 - INFO - Duration        : 5.51 seconds
+2025-06-16 12:09:28,536 - INFO - CSV file saved  : results/temperature/outdoor_data/eval_T02_sac_best.csv
+2025-06-16 12:09:28,536 - INFO - Logger file     : results/temperature/outdoor_data/eval_T02_sac_best_log.txt
+2025-06-16 12:09:28,536 - INFO - Evaluation successfully completed.
+2025-06-16 12:09:28,536 - INFO - ============================================================
+2025-06-16 12:09:28,537 - INFO - All evaluations done.
+2025-06-16 12:09:31,795 - INFO - [INFO] Evaluation Setup
+2025-06-16 12:09:31,800 - INFO - --------------------------------------------------------
+2025-06-16 12:09:31,800 - INFO - Algorithm        : sac
+2025-06-16 12:09:31,800 - INFO - Reward Mode      : temperature
+2025-06-16 12:09:31,800 - INFO - Episodes         : 10
+2025-06-16 12:09:31,800 - INFO - Seed             : 58
+2025-06-16 12:09:31,800 - INFO - Observation      : T02
+2025-06-16 12:09:31,800 - INFO - Prediction Hzn   : 12
+2025-06-16 12:09:31,800 - INFO - Energy Price Data: data/price_data_2025.csv
+2025-06-16 12:09:31,800 - INFO - Temperature Data : None
+2025-06-16 12:09:31,800 - INFO - Prefer Best      : True
+2025-06-16 12:09:31,800 - INFO - Start Time       : 2025-06-16 12:09:31
+2025-06-16 12:09:31,800 - INFO - --------------------------------------------------------
+2025-06-16 12:09:31,801 - INFO - Starting evaluation for: sac (mode: temperature)
+2025-06-16 12:09:31,824 - INFO - [EnvID:22513920906480] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=6184
+2025-06-16 12:09:31,845 - INFO - Found best model for sac: models/temperature/T02/best_sac/best_model.zip
+2025-06-16 12:09:33,347 - INFO - [Episode] 0
+2025-06-16 12:09:33,348 - INFO - [EnvID:22513920906480] schedule=synthetic-temp-class class=Normal | Tmin=8.7°C  Tmax=19.9°C  φ=0.061  seed=58
+2025-06-16 12:09:33,688 - INFO - [Episode] 1
+2025-06-16 12:09:33,688 - INFO - [EnvID:22513920906480] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=116
+2025-06-16 12:09:33,946 - INFO - [Episode] 2
+2025-06-16 12:09:33,946 - INFO - [EnvID:22513920906480] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=174
+2025-06-16 12:09:34,199 - INFO - [Episode] 3
+2025-06-16 12:09:34,199 - INFO - [EnvID:22513920906480] schedule=synthetic-temp-class class=Normal | Tmin=8.7°C  Tmax=19.9°C  φ=0.061  seed=232
+2025-06-16 12:09:34,449 - INFO - [Episode] 4
+2025-06-16 12:09:34,449 - INFO - [EnvID:22513920906480] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=290
+2025-06-16 12:09:34,696 - INFO - [Episode] 5
+2025-06-16 12:09:34,696 - INFO - [EnvID:22513920906480] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=348
+2025-06-16 12:09:34,949 - INFO - [Episode] 6
+2025-06-16 12:09:34,949 - INFO - [EnvID:22513920906480] schedule=synthetic-temp-class class=Hot | Tmin=19.5°C  Tmax=31.4°C  φ=-0.094  seed=406
+2025-06-16 12:09:35,195 - INFO - [Episode] 7
+2025-06-16 12:09:35,195 - INFO - [EnvID:22513920906480] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=464
+2025-06-16 12:09:35,442 - INFO - [Episode] 8
+2025-06-16 12:09:35,442 - INFO - [EnvID:22513920906480] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=522
+2025-06-16 12:09:35,691 - INFO - [Episode] 9
+2025-06-16 12:09:35,691 - INFO - [EnvID:22513920906480] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=580
+2025-06-16 12:09:35,938 - INFO - [RESULT] Avg. reward for sac (temperature): 249.17 in 2.59s
+2025-06-16 12:09:35,938 - INFO - ============================================================
+2025-06-16 12:09:37,289 - INFO - End Time        : 2025-06-16 12:09:37
+2025-06-16 12:09:37,289 - INFO - Duration        : 5.49 seconds
+2025-06-16 12:09:37,289 - INFO - CSV file saved  : results/temperature/eval_T02_sac_best.csv
+2025-06-16 12:09:37,291 - INFO - Logger file     : results/temperature/eval_T02_sac_best_log.txt
+2025-06-16 12:09:37,291 - INFO - Evaluation successfully completed.
+2025-06-16 12:09:37,291 - INFO - ============================================================
+2025-06-16 12:09:37,292 - INFO - All evaluations done.
+2025-06-16 12:09:40,594 - INFO - [INFO] Evaluation Setup
+2025-06-16 12:09:40,599 - INFO - --------------------------------------------------------
+2025-06-16 12:09:40,599 - INFO - Algorithm        : sac
+2025-06-16 12:09:40,599 - INFO - Reward Mode      : temperature
+2025-06-16 12:09:40,599 - INFO - Episodes         : 10
+2025-06-16 12:09:40,599 - INFO - Seed             : 58
+2025-06-16 12:09:40,599 - INFO - Observation      : T03
+2025-06-16 12:09:40,599 - INFO - Prediction Hzn   : 12
+2025-06-16 12:09:40,599 - INFO - Energy Price Data: data/price_data_2025.csv
+2025-06-16 12:09:40,599 - INFO - Temperature Data : data/LLEC_outdoor_temperature_5min_data.csv
+2025-06-16 12:09:40,599 - INFO - Prefer Best      : False
+2025-06-16 12:09:40,599 - INFO - Start Time       : 2025-06-16 12:09:40
+2025-06-16 12:09:40,599 - INFO - --------------------------------------------------------
+2025-06-16 12:09:40,599 - INFO - Starting evaluation for: sac (mode: temperature)
+2025-06-16 12:09:40,625 - INFO - [EnvID: 23421255595344] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 6184)
+2025-06-16 12:09:40,650 - INFO - Using standard model for sac: models/temperature/T03/sac_model_seed42.zip
+2025-06-16 12:09:42,153 - INFO - [Episode] 0
+2025-06-16 12:09:42,157 - INFO - [EnvID: 23421255595344] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 58)
+2025-06-16 12:09:42,494 - INFO - [Episode] 1
+2025-06-16 12:09:42,497 - INFO - [EnvID: 23421255595344] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 116)
+2025-06-16 12:09:42,757 - INFO - [Episode] 2
+2025-06-16 12:09:42,760 - INFO - [EnvID: 23421255595344] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 174)
+2025-06-16 12:09:43,015 - INFO - [Episode] 3
+2025-06-16 12:09:43,017 - INFO - [EnvID: 23421255595344] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 232)
+2025-06-16 12:09:43,268 - INFO - [Episode] 4
+2025-06-16 12:09:43,270 - INFO - [EnvID: 23421255595344] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 290)
+2025-06-16 12:09:43,520 - INFO - [Episode] 5
+2025-06-16 12:09:43,522 - INFO - [EnvID: 23421255595344] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 348)
+2025-06-16 12:09:43,775 - INFO - [Episode] 6
+2025-06-16 12:09:43,777 - INFO - [EnvID: 23421255595344] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 406)
+2025-06-16 12:09:44,025 - INFO - [Episode] 7
+2025-06-16 12:09:44,027 - INFO - [EnvID: 23421255595344] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 464)
+2025-06-16 12:09:44,275 - INFO - [Episode] 8
+2025-06-16 12:09:44,277 - INFO - [EnvID: 23421255595344] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 522)
+2025-06-16 12:09:44,527 - INFO - [Episode] 9
+2025-06-16 12:09:44,530 - INFO - [EnvID: 23421255595344] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 580)
+2025-06-16 12:09:44,780 - INFO - [RESULT] Avg. reward for sac (temperature): 253.58 in 2.63s
+2025-06-16 12:09:44,780 - INFO - ============================================================
+2025-06-16 12:09:46,095 - INFO - End Time        : 2025-06-16 12:09:46
+2025-06-16 12:09:46,097 - INFO - Duration        : 5.50 seconds
+2025-06-16 12:09:46,097 - INFO - CSV file saved  : results/temperature/outdoor_data/eval_T03_sac.csv
+2025-06-16 12:09:46,097 - INFO - Logger file     : results/temperature/outdoor_data/eval_T03_sac_log.txt
+2025-06-16 12:09:46,097 - INFO - Evaluation successfully completed.
+2025-06-16 12:09:46,097 - INFO - ============================================================
+2025-06-16 12:09:46,098 - INFO - All evaluations done.
+2025-06-16 12:09:49,354 - INFO - [INFO] Evaluation Setup
+2025-06-16 12:09:49,359 - INFO - --------------------------------------------------------
+2025-06-16 12:09:49,359 - INFO - Algorithm        : sac
+2025-06-16 12:09:49,359 - INFO - Reward Mode      : temperature
+2025-06-16 12:09:49,359 - INFO - Episodes         : 10
+2025-06-16 12:09:49,359 - INFO - Seed             : 58
+2025-06-16 12:09:49,359 - INFO - Observation      : T03
+2025-06-16 12:09:49,359 - INFO - Prediction Hzn   : 12
+2025-06-16 12:09:49,359 - INFO - Energy Price Data: data/price_data_2025.csv
+2025-06-16 12:09:49,359 - INFO - Temperature Data : None
+2025-06-16 12:09:49,359 - INFO - Prefer Best      : False
+2025-06-16 12:09:49,359 - INFO - Start Time       : 2025-06-16 12:09:49
+2025-06-16 12:09:49,359 - INFO - --------------------------------------------------------
+2025-06-16 12:09:49,359 - INFO - Starting evaluation for: sac (mode: temperature)
+2025-06-16 12:09:49,382 - INFO - [EnvID:22904231859680] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=6184
+2025-06-16 12:09:49,404 - INFO - Using standard model for sac: models/temperature/T03/sac_model_seed42.zip
+2025-06-16 12:09:50,886 - INFO - [Episode] 0
+2025-06-16 12:09:50,886 - INFO - [EnvID:22904231859680] schedule=synthetic-temp-class class=Normal | Tmin=8.7°C  Tmax=19.9°C  φ=0.061  seed=58
+2025-06-16 12:09:51,226 - INFO - [Episode] 1
+2025-06-16 12:09:51,227 - INFO - [EnvID:22904231859680] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=116
+2025-06-16 12:09:51,484 - INFO - [Episode] 2
+2025-06-16 12:09:51,484 - INFO - [EnvID:22904231859680] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=174
+2025-06-16 12:09:51,737 - INFO - [Episode] 3
+2025-06-16 12:09:51,737 - INFO - [EnvID:22904231859680] schedule=synthetic-temp-class class=Normal | Tmin=8.7°C  Tmax=19.9°C  φ=0.061  seed=232
+2025-06-16 12:09:51,986 - INFO - [Episode] 4
+2025-06-16 12:09:51,987 - INFO - [EnvID:22904231859680] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=290
+2025-06-16 12:09:52,234 - INFO - [Episode] 5
+2025-06-16 12:09:52,235 - INFO - [EnvID:22904231859680] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=348
+2025-06-16 12:09:52,486 - INFO - [Episode] 6
+2025-06-16 12:09:52,487 - INFO - [EnvID:22904231859680] schedule=synthetic-temp-class class=Hot | Tmin=19.5°C  Tmax=31.4°C  φ=-0.094  seed=406
+2025-06-16 12:09:52,733 - INFO - [Episode] 7
+2025-06-16 12:09:52,734 - INFO - [EnvID:22904231859680] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=464
+2025-06-16 12:09:52,980 - INFO - [Episode] 8
+2025-06-16 12:09:52,980 - INFO - [EnvID:22904231859680] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=522
+2025-06-16 12:09:53,229 - INFO - [Episode] 9
+2025-06-16 12:09:53,230 - INFO - [EnvID:22904231859680] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=580
+2025-06-16 12:09:53,476 - INFO - [RESULT] Avg. reward for sac (temperature): 244.73 in 2.59s
+2025-06-16 12:09:53,476 - INFO - ============================================================
+2025-06-16 12:09:54,791 - INFO - End Time        : 2025-06-16 12:09:54
+2025-06-16 12:09:54,792 - INFO - Duration        : 5.44 seconds
+2025-06-16 12:09:54,792 - INFO - CSV file saved  : results/temperature/eval_T03_sac.csv
+2025-06-16 12:09:54,793 - INFO - Logger file     : results/temperature/eval_T03_sac_log.txt
+2025-06-16 12:09:54,794 - INFO - Evaluation successfully completed.
+2025-06-16 12:09:54,794 - INFO - ============================================================
+2025-06-16 12:09:54,794 - INFO - All evaluations done.
+2025-06-16 12:09:57,997 - INFO - [INFO] Evaluation Setup
+2025-06-16 12:09:58,001 - INFO - --------------------------------------------------------
+2025-06-16 12:09:58,001 - INFO - Algorithm        : sac
+2025-06-16 12:09:58,002 - INFO - Reward Mode      : temperature
+2025-06-16 12:09:58,002 - INFO - Episodes         : 10
+2025-06-16 12:09:58,002 - INFO - Seed             : 58
+2025-06-16 12:09:58,002 - INFO - Observation      : T03
+2025-06-16 12:09:58,002 - INFO - Prediction Hzn   : 12
+2025-06-16 12:09:58,002 - INFO - Energy Price Data: data/price_data_2025.csv
+2025-06-16 12:09:58,002 - INFO - Temperature Data : data/LLEC_outdoor_temperature_5min_data.csv
+2025-06-16 12:09:58,002 - INFO - Prefer Best      : True
+2025-06-16 12:09:58,002 - INFO - Start Time       : 2025-06-16 12:09:57
+2025-06-16 12:09:58,002 - INFO - --------------------------------------------------------
+2025-06-16 12:09:58,002 - INFO - Starting evaluation for: sac (mode: temperature)
+2025-06-16 12:09:58,028 - INFO - [EnvID: 23392453903648] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 6184)
+2025-06-16 12:09:58,054 - INFO - Found best model for sac: models/temperature/T03/best_sac/best_model.zip
+2025-06-16 12:09:59,512 - INFO - [Episode] 0
+2025-06-16 12:09:59,516 - INFO - [EnvID: 23392453903648] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 58)
+2025-06-16 12:09:59,855 - INFO - [Episode] 1
+2025-06-16 12:09:59,858 - INFO - [EnvID: 23392453903648] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 116)
+2025-06-16 12:10:00,117 - INFO - [Episode] 2
+2025-06-16 12:10:00,120 - INFO - [EnvID: 23392453903648] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 174)
+2025-06-16 12:10:00,373 - INFO - [Episode] 3
+2025-06-16 12:10:00,375 - INFO - [EnvID: 23392453903648] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 232)
+2025-06-16 12:10:00,624 - INFO - [Episode] 4
+2025-06-16 12:10:00,626 - INFO - [EnvID: 23392453903648] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 290)
+2025-06-16 12:10:00,874 - INFO - [Episode] 5
+2025-06-16 12:10:00,876 - INFO - [EnvID: 23392453903648] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 348)
+2025-06-16 12:10:01,128 - INFO - [Episode] 6
+2025-06-16 12:10:01,131 - INFO - [EnvID: 23392453903648] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 406)
+2025-06-16 12:10:01,377 - INFO - [Episode] 7
+2025-06-16 12:10:01,379 - INFO - [EnvID: 23392453903648] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 464)
+2025-06-16 12:10:01,625 - INFO - [Episode] 8
+2025-06-16 12:10:01,627 - INFO - [EnvID: 23392453903648] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 522)
+2025-06-16 12:10:01,877 - INFO - [Episode] 9
+2025-06-16 12:10:01,880 - INFO - [EnvID: 23392453903648] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 580)
+2025-06-16 12:10:02,128 - INFO - [RESULT] Avg. reward for sac (temperature): 269.85 in 2.62s
+2025-06-16 12:10:02,128 - INFO - ============================================================
+2025-06-16 12:10:03,495 - INFO - End Time        : 2025-06-16 12:10:03
+2025-06-16 12:10:03,497 - INFO - Duration        : 5.50 seconds
+2025-06-16 12:10:03,497 - INFO - CSV file saved  : results/temperature/outdoor_data/eval_T03_sac_best.csv
+2025-06-16 12:10:03,497 - INFO - Logger file     : results/temperature/outdoor_data/eval_T03_sac_best_log.txt
+2025-06-16 12:10:03,498 - INFO - Evaluation successfully completed.
+2025-06-16 12:10:03,498 - INFO - ============================================================
+2025-06-16 12:10:03,498 - INFO - All evaluations done.
+2025-06-16 12:10:06,748 - INFO - [INFO] Evaluation Setup
+2025-06-16 12:10:06,752 - INFO - --------------------------------------------------------
+2025-06-16 12:10:06,752 - INFO - Algorithm        : sac
+2025-06-16 12:10:06,752 - INFO - Reward Mode      : temperature
+2025-06-16 12:10:06,752 - INFO - Episodes         : 10
+2025-06-16 12:10:06,752 - INFO - Seed             : 58
+2025-06-16 12:10:06,752 - INFO - Observation      : T03
+2025-06-16 12:10:06,752 - INFO - Prediction Hzn   : 12
+2025-06-16 12:10:06,752 - INFO - Energy Price Data: data/price_data_2025.csv
+2025-06-16 12:10:06,752 - INFO - Temperature Data : None
+2025-06-16 12:10:06,752 - INFO - Prefer Best      : True
+2025-06-16 12:10:06,752 - INFO - Start Time       : 2025-06-16 12:10:06
+2025-06-16 12:10:06,753 - INFO - --------------------------------------------------------
+2025-06-16 12:10:06,753 - INFO - Starting evaluation for: sac (mode: temperature)
+2025-06-16 12:10:06,776 - INFO - [EnvID:22784676443424] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=6184
+2025-06-16 12:10:06,797 - INFO - Found best model for sac: models/temperature/T03/best_sac/best_model.zip
+2025-06-16 12:10:08,282 - INFO - [Episode] 0
+2025-06-16 12:10:08,282 - INFO - [EnvID:22784676443424] schedule=synthetic-temp-class class=Normal | Tmin=8.7°C  Tmax=19.9°C  φ=0.061  seed=58
+2025-06-16 12:10:08,619 - INFO - [Episode] 1
+2025-06-16 12:10:08,619 - INFO - [EnvID:22784676443424] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=116
+2025-06-16 12:10:08,876 - INFO - [Episode] 2
+2025-06-16 12:10:08,876 - INFO - [EnvID:22784676443424] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=174
+2025-06-16 12:10:09,129 - INFO - [Episode] 3
+2025-06-16 12:10:09,129 - INFO - [EnvID:22784676443424] schedule=synthetic-temp-class class=Normal | Tmin=8.7°C  Tmax=19.9°C  φ=0.061  seed=232
+2025-06-16 12:10:09,378 - INFO - [Episode] 4
+2025-06-16 12:10:09,378 - INFO - [EnvID:22784676443424] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=290
+2025-06-16 12:10:09,625 - INFO - [Episode] 5
+2025-06-16 12:10:09,625 - INFO - [EnvID:22784676443424] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=348
+2025-06-16 12:10:09,877 - INFO - [Episode] 6
+2025-06-16 12:10:09,877 - INFO - [EnvID:22784676443424] schedule=synthetic-temp-class class=Hot | Tmin=19.5°C  Tmax=31.4°C  φ=-0.094  seed=406
+2025-06-16 12:10:10,122 - INFO - [Episode] 7
+2025-06-16 12:10:10,122 - INFO - [EnvID:22784676443424] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=464
+2025-06-16 12:10:10,366 - INFO - [Episode] 8
+2025-06-16 12:10:10,367 - INFO - [EnvID:22784676443424] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=522
+2025-06-16 12:10:10,615 - INFO - [Episode] 9
+2025-06-16 12:10:10,615 - INFO - [EnvID:22784676443424] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=580
+2025-06-16 12:10:10,862 - INFO - [RESULT] Avg. reward for sac (temperature): 265.36 in 2.58s
+2025-06-16 12:10:10,862 - INFO - ============================================================
+2025-06-16 12:10:12,205 - INFO - End Time        : 2025-06-16 12:10:12
+2025-06-16 12:10:12,205 - INFO - Duration        : 5.46 seconds
+2025-06-16 12:10:12,205 - INFO - CSV file saved  : results/temperature/eval_T03_sac_best.csv
+2025-06-16 12:10:12,206 - INFO - Logger file     : results/temperature/eval_T03_sac_best_log.txt
+2025-06-16 12:10:12,206 - INFO - Evaluation successfully completed.
+2025-06-16 12:10:12,206 - INFO - ============================================================
+2025-06-16 12:10:12,207 - INFO - All evaluations done.
+2025-06-16 12:10:15,422 - INFO - [INFO] Evaluation Setup
+2025-06-16 12:10:15,426 - INFO - --------------------------------------------------------
+2025-06-16 12:10:15,426 - INFO - Algorithm        : sac
+2025-06-16 12:10:15,426 - INFO - Reward Mode      : temperature
+2025-06-16 12:10:15,426 - INFO - Episodes         : 10
+2025-06-16 12:10:15,426 - INFO - Seed             : 58
+2025-06-16 12:10:15,426 - INFO - Observation      : T04
+2025-06-16 12:10:15,426 - INFO - Prediction Hzn   : 12
+2025-06-16 12:10:15,426 - INFO - Energy Price Data: data/price_data_2025.csv
+2025-06-16 12:10:15,426 - INFO - Temperature Data : data/LLEC_outdoor_temperature_5min_data.csv
+2025-06-16 12:10:15,426 - INFO - Prefer Best      : False
+2025-06-16 12:10:15,426 - INFO - Start Time       : 2025-06-16 12:10:15
+2025-06-16 12:10:15,426 - INFO - --------------------------------------------------------
+2025-06-16 12:10:15,426 - INFO - Starting evaluation for: sac (mode: temperature)
+2025-06-16 12:10:15,451 - INFO - [EnvID: 23229999351168] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 6184)
+2025-06-16 12:10:15,477 - INFO - Using standard model for sac: models/temperature/T04/sac_model_seed42.zip
+2025-06-16 12:10:16,938 - INFO - [Episode] 0
+2025-06-16 12:10:16,942 - INFO - [EnvID: 23229999351168] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 58)
+2025-06-16 12:10:17,280 - INFO - [Episode] 1
+2025-06-16 12:10:17,282 - INFO - [EnvID: 23229999351168] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 116)
+2025-06-16 12:10:17,542 - INFO - [Episode] 2
+2025-06-16 12:10:17,545 - INFO - [EnvID: 23229999351168] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 174)
+2025-06-16 12:10:17,799 - INFO - [Episode] 3
+2025-06-16 12:10:17,801 - INFO - [EnvID: 23229999351168] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 232)
+2025-06-16 12:10:18,058 - INFO - [Episode] 4
+2025-06-16 12:10:18,060 - INFO - [EnvID: 23229999351168] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 290)
+2025-06-16 12:10:18,308 - INFO - [Episode] 5
+2025-06-16 12:10:18,310 - INFO - [EnvID: 23229999351168] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 348)
+2025-06-16 12:10:18,565 - INFO - [Episode] 6
+2025-06-16 12:10:18,567 - INFO - [EnvID: 23229999351168] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 406)
+2025-06-16 12:10:18,814 - INFO - [Episode] 7
+2025-06-16 12:10:18,816 - INFO - [EnvID: 23229999351168] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 464)
+2025-06-16 12:10:19,064 - INFO - [Episode] 8
+2025-06-16 12:10:19,066 - INFO - [EnvID: 23229999351168] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 522)
+2025-06-16 12:10:19,314 - INFO - [Episode] 9
+2025-06-16 12:10:19,317 - INFO - [EnvID: 23229999351168] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 580)
+2025-06-16 12:10:19,564 - INFO - [RESULT] Avg. reward for sac (temperature): 265.20 in 2.63s
+2025-06-16 12:10:19,565 - INFO - ============================================================
+2025-06-16 12:10:21,020 - INFO - End Time        : 2025-06-16 12:10:21
+2025-06-16 12:10:21,022 - INFO - Duration        : 5.60 seconds
+2025-06-16 12:10:21,022 - INFO - CSV file saved  : results/temperature/outdoor_data/eval_T04_sac.csv
+2025-06-16 12:10:21,022 - INFO - Logger file     : results/temperature/outdoor_data/eval_T04_sac_log.txt
+2025-06-16 12:10:21,022 - INFO - Evaluation successfully completed.
+2025-06-16 12:10:21,022 - INFO - ============================================================
+2025-06-16 12:10:21,022 - INFO - All evaluations done.
+2025-06-16 12:10:24,256 - INFO - [INFO] Evaluation Setup
+2025-06-16 12:10:24,261 - INFO - --------------------------------------------------------
+2025-06-16 12:10:24,261 - INFO - Algorithm        : sac
+2025-06-16 12:10:24,261 - INFO - Reward Mode      : temperature
+2025-06-16 12:10:24,261 - INFO - Episodes         : 10
+2025-06-16 12:10:24,261 - INFO - Seed             : 58
+2025-06-16 12:10:24,261 - INFO - Observation      : T04
+2025-06-16 12:10:24,261 - INFO - Prediction Hzn   : 12
+2025-06-16 12:10:24,261 - INFO - Energy Price Data: data/price_data_2025.csv
+2025-06-16 12:10:24,261 - INFO - Temperature Data : None
+2025-06-16 12:10:24,261 - INFO - Prefer Best      : False
+2025-06-16 12:10:24,261 - INFO - Start Time       : 2025-06-16 12:10:24
+2025-06-16 12:10:24,261 - INFO - --------------------------------------------------------
+2025-06-16 12:10:24,261 - INFO - Starting evaluation for: sac (mode: temperature)
+2025-06-16 12:10:24,284 - INFO - [EnvID:23126474688016] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=6184
+2025-06-16 12:10:24,306 - INFO - Using standard model for sac: models/temperature/T04/sac_model_seed42.zip
+2025-06-16 12:10:25,761 - INFO - [Episode] 0
+2025-06-16 12:10:25,761 - INFO - [EnvID:23126474688016] schedule=synthetic-temp-class class=Normal | Tmin=8.7°C  Tmax=19.9°C  φ=0.061  seed=58
+2025-06-16 12:10:26,096 - INFO - [Episode] 1
+2025-06-16 12:10:26,096 - INFO - [EnvID:23126474688016] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=116
+2025-06-16 12:10:26,353 - INFO - [Episode] 2
+2025-06-16 12:10:26,353 - INFO - [EnvID:23126474688016] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=174
+2025-06-16 12:10:26,604 - INFO - [Episode] 3
+2025-06-16 12:10:26,604 - INFO - [EnvID:23126474688016] schedule=synthetic-temp-class class=Normal | Tmin=8.7°C  Tmax=19.9°C  φ=0.061  seed=232
+2025-06-16 12:10:26,853 - INFO - [Episode] 4
+2025-06-16 12:10:26,854 - INFO - [EnvID:23126474688016] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=290
+2025-06-16 12:10:27,099 - INFO - [Episode] 5
+2025-06-16 12:10:27,099 - INFO - [EnvID:23126474688016] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=348
+2025-06-16 12:10:27,352 - INFO - [Episode] 6
+2025-06-16 12:10:27,352 - INFO - [EnvID:23126474688016] schedule=synthetic-temp-class class=Hot | Tmin=19.5°C  Tmax=31.4°C  φ=-0.094  seed=406
+2025-06-16 12:10:27,597 - INFO - [Episode] 7
+2025-06-16 12:10:27,597 - INFO - [EnvID:23126474688016] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=464
+2025-06-16 12:10:27,843 - INFO - [Episode] 8
+2025-06-16 12:10:27,843 - INFO - [EnvID:23126474688016] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=522
+2025-06-16 12:10:28,096 - INFO - [Episode] 9
+2025-06-16 12:10:28,096 - INFO - [EnvID:23126474688016] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=580
+2025-06-16 12:10:28,342 - INFO - [RESULT] Avg. reward for sac (temperature): 263.69 in 2.58s
+2025-06-16 12:10:28,342 - INFO - ============================================================
+2025-06-16 12:10:29,712 - INFO - End Time        : 2025-06-16 12:10:29
+2025-06-16 12:10:29,712 - INFO - Duration        : 5.46 seconds
+2025-06-16 12:10:29,712 - INFO - CSV file saved  : results/temperature/eval_T04_sac.csv
+2025-06-16 12:10:29,714 - INFO - Logger file     : results/temperature/eval_T04_sac_log.txt
+2025-06-16 12:10:29,714 - INFO - Evaluation successfully completed.
+2025-06-16 12:10:29,714 - INFO - ============================================================
+2025-06-16 12:10:29,715 - INFO - All evaluations done.
+2025-06-16 12:10:32,932 - INFO - [INFO] Evaluation Setup
+2025-06-16 12:10:32,937 - INFO - --------------------------------------------------------
+2025-06-16 12:10:32,937 - INFO - Algorithm        : sac
+2025-06-16 12:10:32,937 - INFO - Reward Mode      : temperature
+2025-06-16 12:10:32,938 - INFO - Episodes         : 10
+2025-06-16 12:10:32,938 - INFO - Seed             : 58
+2025-06-16 12:10:32,938 - INFO - Observation      : T04
+2025-06-16 12:10:32,938 - INFO - Prediction Hzn   : 12
+2025-06-16 12:10:32,938 - INFO - Energy Price Data: data/price_data_2025.csv
+2025-06-16 12:10:32,938 - INFO - Temperature Data : data/LLEC_outdoor_temperature_5min_data.csv
+2025-06-16 12:10:32,938 - INFO - Prefer Best      : True
+2025-06-16 12:10:32,938 - INFO - Start Time       : 2025-06-16 12:10:32
+2025-06-16 12:10:32,938 - INFO - --------------------------------------------------------
+2025-06-16 12:10:32,938 - INFO - Starting evaluation for: sac (mode: temperature)
+2025-06-16 12:10:32,964 - INFO - [EnvID: 23312345904464] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 6184)
+2025-06-16 12:10:32,990 - INFO - Found best model for sac: models/temperature/T04/best_sac/best_model.zip
+2025-06-16 12:10:34,443 - INFO - [Episode] 0
+2025-06-16 12:10:34,447 - INFO - [EnvID: 23312345904464] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 58)
+2025-06-16 12:10:34,785 - INFO - [Episode] 1
+2025-06-16 12:10:34,788 - INFO - [EnvID: 23312345904464] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 116)
+2025-06-16 12:10:35,048 - INFO - [Episode] 2
+2025-06-16 12:10:35,051 - INFO - [EnvID: 23312345904464] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 174)
+2025-06-16 12:10:35,306 - INFO - [Episode] 3
+2025-06-16 12:10:35,308 - INFO - [EnvID: 23312345904464] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 232)
+2025-06-16 12:10:35,560 - INFO - [Episode] 4
+2025-06-16 12:10:35,563 - INFO - [EnvID: 23312345904464] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 290)
+2025-06-16 12:10:35,810 - INFO - [Episode] 5
+2025-06-16 12:10:35,812 - INFO - [EnvID: 23312345904464] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 348)
+2025-06-16 12:10:36,067 - INFO - [Episode] 6
+2025-06-16 12:10:36,069 - INFO - [EnvID: 23312345904464] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 406)
+2025-06-16 12:10:36,319 - INFO - [Episode] 7
+2025-06-16 12:10:36,321 - INFO - [EnvID: 23312345904464] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 464)
+2025-06-16 12:10:36,568 - INFO - [Episode] 8
+2025-06-16 12:10:36,570 - INFO - [EnvID: 23312345904464] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 522)
+2025-06-16 12:10:36,818 - INFO - [Episode] 9
+2025-06-16 12:10:36,821 - INFO - [EnvID: 23312345904464] Loading outdoor temperature profile from CSV file: 'data/LLEC_outdoor_temperature_5min_data.csv' (Seed: 580)
+2025-06-16 12:10:37,069 - INFO - [RESULT] Avg. reward for sac (temperature): 268.71 in 2.63s
+2025-06-16 12:10:37,069 - INFO - ============================================================
+2025-06-16 12:10:38,464 - INFO - End Time        : 2025-06-16 12:10:38
+2025-06-16 12:10:38,466 - INFO - Duration        : 5.53 seconds
+2025-06-16 12:10:38,466 - INFO - CSV file saved  : results/temperature/outdoor_data/eval_T04_sac_best.csv
+2025-06-16 12:10:38,466 - INFO - Logger file     : results/temperature/outdoor_data/eval_T04_sac_best_log.txt
+2025-06-16 12:10:38,466 - INFO - Evaluation successfully completed.
+2025-06-16 12:10:38,466 - INFO - ============================================================
+2025-06-16 12:10:38,466 - INFO - All evaluations done.
+2025-06-16 12:10:41,689 - INFO - [INFO] Evaluation Setup
+2025-06-16 12:10:41,695 - INFO - --------------------------------------------------------
+2025-06-16 12:10:41,695 - INFO - Algorithm        : sac
+2025-06-16 12:10:41,695 - INFO - Reward Mode      : temperature
+2025-06-16 12:10:41,696 - INFO - Episodes         : 10
+2025-06-16 12:10:41,696 - INFO - Seed             : 58
+2025-06-16 12:10:41,696 - INFO - Observation      : T04
+2025-06-16 12:10:41,696 - INFO - Prediction Hzn   : 12
+2025-06-16 12:10:41,696 - INFO - Energy Price Data: data/price_data_2025.csv
+2025-06-16 12:10:41,696 - INFO - Temperature Data : None
+2025-06-16 12:10:41,696 - INFO - Prefer Best      : True
+2025-06-16 12:10:41,696 - INFO - Start Time       : 2025-06-16 12:10:41
+2025-06-16 12:10:41,696 - INFO - --------------------------------------------------------
+2025-06-16 12:10:41,696 - INFO - Starting evaluation for: sac (mode: temperature)
+2025-06-16 12:10:41,720 - INFO - [EnvID:23389117093200] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=6184
+2025-06-16 12:10:41,741 - INFO - Found best model for sac: models/temperature/T04/best_sac/best_model.zip
+2025-06-16 12:10:43,210 - INFO - [Episode] 0
+2025-06-16 12:10:43,210 - INFO - [EnvID:23389117093200] schedule=synthetic-temp-class class=Normal | Tmin=8.7°C  Tmax=19.9°C  φ=0.061  seed=58
+2025-06-16 12:10:43,547 - INFO - [Episode] 1
+2025-06-16 12:10:43,548 - INFO - [EnvID:23389117093200] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=116
+2025-06-16 12:10:43,805 - INFO - [Episode] 2
+2025-06-16 12:10:43,805 - INFO - [EnvID:23389117093200] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=174
+2025-06-16 12:10:44,058 - INFO - [Episode] 3
+2025-06-16 12:10:44,058 - INFO - [EnvID:23389117093200] schedule=synthetic-temp-class class=Normal | Tmin=8.7°C  Tmax=19.9°C  φ=0.061  seed=232
+2025-06-16 12:10:44,307 - INFO - [Episode] 4
+2025-06-16 12:10:44,308 - INFO - [EnvID:23389117093200] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=290
+2025-06-16 12:10:44,554 - INFO - [Episode] 5
+2025-06-16 12:10:44,554 - INFO - [EnvID:23389117093200] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=348
+2025-06-16 12:10:44,806 - INFO - [Episode] 6
+2025-06-16 12:10:44,806 - INFO - [EnvID:23389117093200] schedule=synthetic-temp-class class=Hot | Tmin=19.5°C  Tmax=31.4°C  φ=-0.094  seed=406
+2025-06-16 12:10:45,052 - INFO - [Episode] 7
+2025-06-16 12:10:45,052 - INFO - [EnvID:23389117093200] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=464
+2025-06-16 12:10:45,297 - INFO - [Episode] 8
+2025-06-16 12:10:45,297 - INFO - [EnvID:23389117093200] schedule=synthetic-temp-class class=Cold | Tmin=-1.3°C  Tmax=9.0°C  φ=0.137  seed=522
+2025-06-16 12:10:45,544 - INFO - [Episode] 9
+2025-06-16 12:10:45,545 - INFO - [EnvID:23389117093200] schedule=synthetic-temp-class class=Very cold | Tmin=-6.0°C  Tmax=3.9°C  φ=0.184  seed=580
+2025-06-16 12:10:45,792 - INFO - [RESULT] Avg. reward for sac (temperature): 265.02 in 2.58s
+2025-06-16 12:10:45,792 - INFO - ============================================================
+2025-06-16 12:10:47,146 - INFO - End Time        : 2025-06-16 12:10:47
+2025-06-16 12:10:47,146 - INFO - Duration        : 5.46 seconds
+2025-06-16 12:10:47,146 - INFO - CSV file saved  : results/temperature/eval_T04_sac_best.csv
+2025-06-16 12:10:47,148 - INFO - Logger file     : results/temperature/eval_T04_sac_best_log.txt
+2025-06-16 12:10:47,148 - INFO - Evaluation successfully completed.
+2025-06-16 12:10:47,148 - INFO - ============================================================
+2025-06-16 12:10:47,148 - INFO - All evaluations done.
