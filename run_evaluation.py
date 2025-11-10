@@ -29,7 +29,11 @@ logger.debug(f"sys.argv: {sys.argv}")
 
 
 def get_model_path(
-    algorithm: str, reward_mode: str, subfolder: str = None, prefer_best: bool = True
+    algorithm: str,
+    reward_mode: str,
+    subfolder: str = None,
+    prefer_best: bool = True,
+    model_seed: int = 42,
 ) -> str:
     """
     Returns the path to the saved model file for the specified algorithm.
@@ -39,6 +43,7 @@ def get_model_path(
         reward_mode (str): Subdirectory based on reward mode (e.g., "default", "multi").
         subfolder (str, optional): Optional subfolder within the reward mode directory (e.g., "S01").
         prefer_best (bool): If True, prefer loading the best_model.zip if available.
+        model_seed (int): Seed number used for identifying the correct model file (e.g., 42, 18).
 
     Returns:
         str: Path to the model file without the .zip extension.
@@ -49,8 +54,8 @@ def get_model_path(
     base_path = os.path.join("models", reward_mode)
     if subfolder:
         base_path = os.path.join(base_path, subfolder)
-
-    standard_path = os.path.join(base_path, f"{algorithm}_model_seed42.zip")
+    # Select model seed
+    standard_path = os.path.join(base_path, f"{algorithm}_model_seed{model_seed}.zip")
     best_path = os.path.join(base_path, f"best_{algorithm}", "best_model.zip")
 
     if prefer_best and os.path.exists(best_path):
@@ -60,9 +65,11 @@ def get_model_path(
         logger.info(f"Using standard model for {algorithm}: {standard_path}")
         return standard_path.replace(".zip", "")
     else:
-        logger.error(f"No model found for {algorithm} in {base_path}")
+        logger.error(
+            f"No model found for {algorithm} (seed {model_seed}) in {base_path}"
+        )
         raise FileNotFoundError(
-            f"[ERROR] No model found for {algorithm} in {base_path}"
+            f"[ERROR] No model found for {algorithm} (seed {model_seed}) in {base_path}"
         )
 
 
@@ -76,6 +83,7 @@ def evaluate_model(
     outdoor_temperature_path=None,
     obs_variant=None,
     prefer_best=True,
+    model_seed=42,
 ):
     """
     Evaluate a reinforcement learning model or a custom controller
@@ -111,16 +119,20 @@ def evaluate_model(
         energy_price_path=energy_price_path,
         outdoor_temperature_path=outdoor_temperature_path,
         obs_variant=obs_variant,
-        cop_heat=1.0,  # 3.0–3.5 typical for HPs
-        cop_cool=1.0,  # 2.3–3.5 typical for HPs
+        cop_heat=1.0,  # 3.0–3.5 typical heating
+        cop_cool=1.0,  # 2.3–3.5 typical cooling
     )
 
     # Load pre-trained models or initialize rule-based controllers
-    model_path = f"./models/{reward_mode}/{algorithm}_model_seed42"
+    model_path = f"./models/{reward_mode}/{algorithm}_model_seed{model_seed}"
     logger.debug(f"model_path: {model_path}")
     if algorithm in ["ppo", "sac", "ddpg", "td3", "a2c"]:
         model_path = get_model_path(
-            algorithm, reward_mode, subfolder=obs_variant, prefer_best=prefer_best
+            algorithm=algorithm,
+            reward_mode=reward_mode,
+            subfolder=obs_variant,
+            prefer_best=prefer_best,
+            model_seed=model_seed,
         )
         if algorithm == "ppo":
             model = PPO.load(model_path)
@@ -139,10 +151,10 @@ def evaluate_model(
     elif algorithm == "Fuzzy Control":
         model = FuzzyController(
             debug=False, use_gaussian=True, sigma=1.0, fine_tuning=True
-        )  # gaussian membership 1: 270.11 in 0.31s
-        # model = FuzzyController(debug=False, use_gaussian=False, sigma=1.0, fine_tuning=False)# triangle membership 2: 238.25 in 0.33s
-        # model = FuzzyController(debug=False, use_gaussian=True,  sigma=1.0, fine_tuning=False)# gaussian membership 3: 238.09 in 0.23s
-        # model = FuzzyController(debug=False, use_gaussian=False, sigma=1.0, fine_tuning=True) # triangle membership 4: 214.65 in 0.32s
+        )  # gaussian membership 1: 225.69 in 0.96s
+        # model = FuzzyController(debug=False, use_gaussian=False, sigma=1.0, fine_tuning=False)# triangle membership 2: 152.54 in 1.00s
+        # model = FuzzyController(debug=False, use_gaussian=True,  sigma=1.0, fine_tuning=False)# gaussian membership 3: 147.83 in 0.95s
+        # model = FuzzyController(debug=False, use_gaussian=False, sigma=1.0, fine_tuning=True) # triangle membership 4: 51.47 in 1.06s
     elif algorithm in ["MPC Control", "Perfect MPC Control"]:
         if pred_horizon is None:
             raise ValueError(
@@ -330,6 +342,12 @@ def main():
     )
     parser.add_argument("--seed", type=int, default=58, help="Random seed.")
     parser.add_argument(
+        "--model_seed",
+        type=int,
+        default=42,
+        help="Seed number used during training for selecting the correct model file.",
+    )
+    parser.add_argument(
         "--mpc_horizon",
         type=int,
         default=12,
@@ -407,6 +425,7 @@ def main():
         logger.info(f"Reward Mode      : {args.reward_mode}")
         logger.info(f"Episodes         : {args.episodes}")
         logger.info(f"Seed             : {args.seed}")
+        logger.info(f"Model Seed       : {args.model_seed}")
         logger.info(f"Observation      : {args.obs_variant}")
         logger.info(f"Prediction Hzn   : {args.mpc_horizon}")
         logger.info(f"Energy Price Data: {args.energy_price_path}")
@@ -426,6 +445,7 @@ def main():
             outdoor_temperature_path=args.outdoor_temperature_path,
             obs_variant=args.obs_variant,
             prefer_best=args.prefer_best,
+            model_seed=args.model_seed,
         )
         df.to_csv(csv_path, index=False)
         end = datetime.now()

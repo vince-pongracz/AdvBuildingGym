@@ -244,3 +244,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+# python run_train_rl.py --algorithm ppo --reward_mode temperature --obs_variant T01 --training --seed 18 --timesteps 1e6

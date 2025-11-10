@@ -567,7 +567,7 @@ class BaseBuildingGym(gym.Env):
         """
         super(BaseBuildingGym, self).__init__()
 
-        self.EPS = 1e-9 # small positive epsilon to avoid division-by-zero
+        self.EPS = 1e-9  # small positive epsilon to avoid division-by-zero
         # Coefficients of Performance (COP)
         # Setting default_cop=1.0 preserves the original baseline behavior (thermal ~= electric).
         # Typical air-source HPs (mild European climate): COP_HEAT≈3.0, COP_COOL≈2.5.
@@ -639,10 +639,10 @@ class BaseBuildingGym(gym.Env):
                 - info (dict): Diagnostic information, such as the random seed.
         """
         if seed is None:
-            seed = np.random.randint(0, 10000) # global RNG
+            seed = np.random.randint(0, 10000)  # global RNG
         super().reset(seed=seed, options=options)
         # Randomize initial indoor temperature
-        initial_Tin = np.random.randint(low=20, high=40) # global RNG
+        initial_Tin = np.random.randint(low=20, high=40)  # global RNG
         self.building.reset(T_in=initial_Tin, seed=seed)
         self.current_step = 0
         self.prev_action = 0
