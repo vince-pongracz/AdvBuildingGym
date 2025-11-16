@@ -69,9 +69,7 @@ def get_model_path(
         logger.error(
             f"No model found for {algorithm} (seed {model_seed}) in {base_path}"
         )
-        logger.error(
-            f"standard_path: {standard_path}"
-        )
+        logger.error(f"standard_path: {standard_path}")
         raise FileNotFoundError(
             f"[ERROR] No model found for {algorithm} (seed {model_seed}) in {base_path}"
         )
@@ -367,10 +365,10 @@ def main():
         help="Select reward mode: 'temperature' (single-objective), or 'combined' (multi-objective).",
     )
     parser.add_argument(
-    "--model_folder_path",
-    type=str,
-    default="models",
-    help='Optional custom path to trained RL models. Defaults to \'./models\'.',
+        "--model_folder_path",
+        type=str,
+        default="models",
+        help="Optional custom path to trained RL models. Defaults to './models'.",
     )
     parser.add_argument(
         "--energy_price_path",
