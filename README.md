@@ -102,7 +102,7 @@ Clone the repository:
 ```bash
 git clone https://github.com/KIT-IAI/LLECBuildingGym
 ```
-Create and activate a Python 3.9 virtual environment OUTSIDE the repo:
+Create and activate a Python 3.9 virtual environment outside the repository (recommended for SLURM jobs):
 ```bash
 python3.9 -m venv llec_env
 source llec_env/bin/activate
@@ -115,6 +115,12 @@ pip install --upgrade pip
 pip install -r requirements.txt
 pip install -e .
 ```
+The virtual environment and project directory should be organized as shown below:
+```bash
+llec_env/                # Python virtual environment
+LLECBuildingGym/         # Root directory of the project
+```
+
 
 ### 2.2 Reinstallation (after code changes):
 
