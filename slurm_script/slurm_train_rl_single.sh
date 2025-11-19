@@ -16,8 +16,15 @@
 # Required Arguments:
 #   <ALGORITHM>     - One of: ppo, sac, td3, a2c
 #   <NUM_ENVS>      - Number of parallel environments (e.g. 4)
-#   <REWARD_MODE>   - Reward mode (default | combined)
-#   <OBS_VARIANT>   - Observation variant (e.g. S01–S04 or C01–C04)
+#   <REWARD_MODE>   - Reward mode (temperature | combined)
+#   <OBS_VARIANT>   - Observation variant (e.g. T01–T04 or C01–C04)
+# Additional Arguments:
+# Only 2 parameters significantly accelerate RL training:
+#
+# #SBATCH --cpus-per-task=152
+#   More CPUs => more parallel VecEnv workers (NUM_ENVS) => faster sampling => significantly faster RL training.
+# #SBATCH --gres=gpu:4g.20gb:1
+#   SB3 uses only one GPU => requesting more GPUs in the SB3 library does NOT improve training speed.
 # -----------------------------------------------------------------------------
 
 #SBATCH --nodes=1
@@ -27,6 +34,7 @@
 #SBATCH --output=slurm_logs_train/slurm-train-%j.out
 #SBATCH --error=slurm_logs_train/slurm-train-%j.err
 #SBATCH --job-name=rl-train-%j
+#SBATCH --cpus-per-task=38
 
 set -euo pipefail
 
@@ -37,8 +45,8 @@ source "${PYTHON_ENV}/bin/activate"
 # Parse input arguments
 ALGORITHM=${1:?Missing algorithm (ppo|sac|td3|a2c)}
 NUM_ENVS=${2:?Missing number of parallel environments}
-REWARD_MODE=${3:?Missing reward mode (default|combined)}
-OBS_VARIANT=${4:?Missing observation variant (S01–S04 or C01–C04)}
+REWARD_MODE=${3:?Missing reward mode (temperature|combined)}
+OBS_VARIANT=${4:?Missing observation variant (T01–T04 or C01–C04)}
 SEED=42
 TIMESTEPS=1000000  # 1M timesteps
 
@@ -50,6 +58,11 @@ echo "  Reward mode     : $REWARD_MODE"
 echo "  Observation     : $OBS_VARIANT"
 echo "  Seed            : $SEED"
 echo "  Timesteps       : $TIMESTEPS"
+
+# Log SLURM resource allocation
+echo "=== SLURM Resource Info ==="
+echo "SLURM_CPUS_PER_TASK : $SLURM_CPUS_PER_TASK"
+echo "CPU affinity        : $(taskset -pc $$ | awk -F: '{print $2}')"
 
 # Log system and GPU info (for reproducibility in publications)
 echo ""
@@ -95,12 +108,12 @@ echo "Training completed successfully."
 # - Required arguments:
 #     <algorithm>     : One of ppo, sac, td3, a2c
 #     <num_envs>      : Number of parallel environments (e.g., 4 or 1)
-#     <reward_mode>   : Reward mode ("default" or "combined")
-#     <obs_variant>   : Observation variant (e.g., S01–S04 or C01–C04)
+#     <reward_mode>   : Reward mode ("temperature" or "combined")
+#     <obs_variant>   : Observation variant (e.g., T01–T04 or C01–C04)
 #
 # - Example submissions:
 #     sbatch slurm_script/slurm_train_rl_single.sh a2c 4 combined C03
-#     sbatch slurm_script/slurm_train_rl_single.sh ppo 4 default S01
+#     sbatch slurm_script/slurm_train_rl_single.sh ppo 4 temperature T03
 #
 # - Output and error logs:
 #     slurm_logs_train/slurm-train-<jobid>.out

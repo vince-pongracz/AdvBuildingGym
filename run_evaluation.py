@@ -380,7 +380,7 @@ def main():
         "--outdoor_temperature_path",
         type=str,
         default=None,
-        help='Optional path to outdoor temperature CSV file (e.g., "data/LLEC_outdoor_temperature_5min_data.csv"). If not provided, no temperature data will be used.',
+        help='Optional path to outdoor temperature CSV file (e.g., "data/LLEC_outdoor_temperature_5min_data.csv"). If not provided, a synthetic temperature profile is used.',
     )
     parser.add_argument(
         "--obs_variant",

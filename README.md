@@ -103,10 +103,11 @@ git clone https://github.com/KIT-IAI/LLECBuildingGym
 ```
 
 ```bash
+cd LLECBuildingGym
+
 python3.9 -m venv llec_env
 source llec_env/bin/activate
 
-cd LLECBuildingGym
 pip install --upgrade pip
 pip install -r requirements.txt
 pip install -e .
@@ -128,10 +129,14 @@ python check_envs_registration.ipynb
 ### 2.4 For using Jupyter notebooks (Optional):
 
 ```bash
+source llec_env/bin/activate
 pip install ipykernel
 python -m ipykernel install --user --name=llec_env --display-name "Python (llec_env)"
 jupyter kernelspec list
 ```
+
+Always activate the virtual environment (`source llec_env/bin/activate`) before starting Jupyter to ensure correct dependencies.
+After registering the kernel, restart Jupyter so the `Python (llec_env)` kernel becomes available.
 
 </details>
 
