@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Author: G. Demirel (demirelg), KIT
 # Maintainer: gokhan.demirel@kit.edu
-# Created: 2025-11-20 | Version: 1.1
+# Created: 2025-06-17 | Version: 1.0
 # Description: Submits SLURM jobs for controller evaluation (RBC, MPC, RL Batch)
 
 set -euo pipefail
