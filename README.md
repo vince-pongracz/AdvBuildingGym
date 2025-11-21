@@ -118,6 +118,8 @@ LLECBuildingGym/ # Root directory of the project
 
 ### 2.1b Local (Windows):
 
+Install Python 3.9.18 from https://www.python.org/downloads/release/python-3918 (newer Python versions may work but are not tested).
+
 ```bash
 git clone https://github.com/KIT-IAI/LLECBuildingGym
 py -3.9 -m venv llec_env
@@ -129,7 +131,6 @@ pip install -r requirements_windows.txt
 pip install -e .
 ```
 
-Install Python 3.9.18 from https://www.python.org/downloads/release/python-3918
 
 ### 2.2 Reinstallation (after code changes):
 
@@ -144,7 +145,7 @@ pip install -e .
 python check_envs_registration.ipynb
 ```
 
-### 2.4 For using Jupyter notebooks (Optional):
+### 2.4 For using Jupyter notebooks:
 
 ```bash
 source llec_env/bin/activate
@@ -184,7 +185,7 @@ Two reward modes and multiple observation variants are supported for flexible ev
 | `--num-envs`          | int   | `4`                          | >= 1                                            | Number of parallel environments (for vectorized training).   |
 | `--seed`              | int   | `42`                         | Any integer                                     | Random seed for reproducibility.                             |
 | `--eval-freq`         | int   | `5000`                       | >= 1                                            | Evaluation frequency (in timesteps).                         |
-| `--reward_mode`       | str   | `"temperature"`              | `temperature`, `combined`                       | Reward mode: temperature-only or combined (multi-objective). |
+| `--reward_mode`       | str   | `"temperature"`              | `temperature`, `combined`                       | Reward mode: temperature (single-reward) or combined (multi-reward). |
 | `--energy-price-path` | str   | `"data/price_data_2025.csv"` | Valid CSV path                                  | Path to normalized energy price CSV file.                    |
 | `--training`          | flag  | `False`                      | `False`, `True`                                 | Use training data for energy prices (default: `TOU Prices`). |
 | `--obs_variant`       | str   | `T01`                        | `T01`,`T02`.`T03`,`T04`,`C01`,`C02`.`C03`,`C04` | Select observation variant (see detailed list below).        |
@@ -225,9 +226,12 @@ These include:
 | --------------- | ---- | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `--algorithms`  | list | `["ppo", "sac", "ddpg", "td3", "a2c", "PI Control", "PID Control", "Fuzzy Control", "MPC Control"]` | Any combination of supported controllers and RL models | List of algorithms or controllers to evaluate.                                                                                                                                                    |
 | `--episodes`    | int  | `10`                                                                                                | >= 1                                                   | Number of evaluation episodes per algorithm.                                                                                                                                                      |
-| `--seed`        | int  | `42`                                                                                                | Any integer                                            | Random seed for reproducibility.                                                                                                                                                                  |
-| `--mpc_horizon` | int  | `72`                                                                                                | >= 1 (typically multiples of 12)                       | Prediction horizon for MPC (in 5-minute steps, e.g., 72 = 6 hours).                                                                                                                               |
-| `--reward_mode` | str  | `"temperature"`                                                                                     | `temperature`, `combined`                              | Reward mode: temperature-only or combined (multi-objective).                                                                                                                                      |
+| `--seed`        | int  | `58`                                                                                                | Any integer                                            | Random seed for reproducibility.                                                                                                                                                                  |
+| `--model_seed`  | int  | `42`                                                                                                | Any integer                                            | Seed number used during training for selecting the correct model file.                                                                                                                                                                  |
+| `--mpc_horizon` | int  | `72`                                                                                                | >= 1 (typically multiples of 12)                       | Prediction horizon for MPC (in 5-minute steps, e.g., 12 = 1 hour).                                                                                                                               |
+| `--reward_mode` | str  | `"temperature"`                                                                                     | `temperature`, `combined`                              | Reward mode: temperature or combined (multi-objective).                                                                                                                                      |
+| `--energy_price_path` | str  | `"data/price_data_2025.csv"`                                                                  | `data/price_data_2025.csv`                             | Path to normalized energy price CSV.                                                                                                                                      |
+| `--outdoor_temperature_path` | str  | `"data/LLEC_outdoor_temperature_5min_data.csv"`                                        | `data/LLEC_outdoor_temperature_5min_data.csv`          | If not provided, a synthetic temperature profile is used.                                                                                                                                      |
 | `--obs_variant` | str  | `T01`                                                                                               | `T01`,`T02`.`T03`,`T04`,`C01`,`C02`.`C03`,`C04`        | Select observation variant (see detailed list below).                                                                                                                                             |
 | `--prefer_best` | flag | `False`                                                                                             | `False`,`True`                                         | If set, prefers loading `best_model.zip` instead of `<algorithm>_model_seed<seed>.zip` (e.g., `ppo_model_seed42.zip`) during evaluation. Supported algorithms: `ppo`, `sac`, `ddpg`,`td3`, `a2c`. |
 
@@ -258,7 +262,7 @@ If you use this framework in your research, please consider citing our paper &#1
       title={Advanced Deep Reinforcement Learning for Heat Pump Control in Residential Buildings},
       author={Gökhan Demirel and Ömer Ekin and Jianlei Liu and Luigi Spatafora and Kevin Förderer and Veit Hagenmeyer},
       year={2025},
-      booktitle={Proceedings of the IEEE ISGT Europe 2025 (in review)},
+      booktitle={Proceedings of the IEEE ISGT Europe 2025 (accepted)},
       address = {Malta},
       url = {https://github.com/KIT-IAI/LLECBuildingGym},
       pages={1--5}
