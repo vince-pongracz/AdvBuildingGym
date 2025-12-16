@@ -354,7 +354,7 @@ def main():
         "--mpc_horizon",
         type=int,
         default=12,
-        help="prediction horizon (number of 5-minute intervals, e.g., 12 = 1 hours)",
+        help="prediction horizon (number of 5-minute intervals, e.g., 12 = 1 hour)",
     )
     parser.add_argument(
         "--reward_mode",
@@ -407,7 +407,9 @@ def main():
 
     results_dir = os.path.join("results", args.reward_mode)
     if args.outdoor_temperature_path is not None:
-        results_dir = os.path.join(results_dir, "outdoor_data")
+        results_dir = os.path.join(results_dir, "real_temp_data")
+    else:
+        results_dir = os.path.join(results_dir, "synthetic_temp_data")
     os.makedirs(results_dir, exist_ok=True)
 
     for algo in args.algorithms:

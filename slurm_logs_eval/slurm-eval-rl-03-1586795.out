@@ -1,0 +1,98 @@
+Evaluating algorithm: ddpg
+>>> ddpg | reward_mode=combined | obs=C01
+-> python run_evaluation.py --algorithms ddpg --reward_mode combined --obs_variant C01 --outdoor_temperature_path data/LLEC_outdoor_temperature_5min_data.csv
+   elapsed: 00:01:02
+-> python run_evaluation.py --algorithms ddpg --reward_mode combined --obs_variant C01 
+   elapsed: 00:00:55
+-> python run_evaluation.py --algorithms ddpg --reward_mode combined --obs_variant C01 --prefer_best --outdoor_temperature_path data/LLEC_outdoor_temperature_5min_data.csv
+   elapsed: 00:00:55
+-> python run_evaluation.py --algorithms ddpg --reward_mode combined --obs_variant C01 --prefer_best
+   elapsed: 00:00:55
+>>> ddpg | reward_mode=combined | obs=C02
+-> python run_evaluation.py --algorithms ddpg --reward_mode combined --obs_variant C02 --outdoor_temperature_path data/LLEC_outdoor_temperature_5min_data.csv
+   elapsed: 00:00:55
+-> python run_evaluation.py --algorithms ddpg --reward_mode combined --obs_variant C02 
+   elapsed: 00:00:55
+-> python run_evaluation.py --algorithms ddpg --reward_mode combined --obs_variant C02 --prefer_best --outdoor_temperature_path data/LLEC_outdoor_temperature_5min_data.csv
+   elapsed: 00:00:55
+-> python run_evaluation.py --algorithms ddpg --reward_mode combined --obs_variant C02 --prefer_best
+   elapsed: 00:00:56
+>>> ddpg | reward_mode=combined | obs=C03
+-> python run_evaluation.py --algorithms ddpg --reward_mode combined --obs_variant C03 --outdoor_temperature_path data/LLEC_outdoor_temperature_5min_data.csv
+   elapsed: 00:00:56
+-> python run_evaluation.py --algorithms ddpg --reward_mode combined --obs_variant C03 
+   elapsed: 00:00:55
+-> python run_evaluation.py --algorithms ddpg --reward_mode combined --obs_variant C03 --prefer_best --outdoor_temperature_path data/LLEC_outdoor_temperature_5min_data.csv
+   elapsed: 00:00:56
+-> python run_evaluation.py --algorithms ddpg --reward_mode combined --obs_variant C03 --prefer_best
+   elapsed: 00:00:56
+>>> ddpg | reward_mode=combined | obs=C04
+-> python run_evaluation.py --algorithms ddpg --reward_mode combined --obs_variant C04 --outdoor_temperature_path data/LLEC_outdoor_temperature_5min_data.csv
+   elapsed: 00:00:56
+-> python run_evaluation.py --algorithms ddpg --reward_mode combined --obs_variant C04 
+   elapsed: 00:00:57
+-> python run_evaluation.py --algorithms ddpg --reward_mode combined --obs_variant C04 --prefer_best --outdoor_temperature_path data/LLEC_outdoor_temperature_5min_data.csv
+   elapsed: 00:00:58
+-> python run_evaluation.py --algorithms ddpg --reward_mode combined --obs_variant C04 --prefer_best
+   elapsed: 00:00:56
+>>> ddpg | reward_mode=temperature | obs=T01
+-> python run_evaluation.py --algorithms ddpg --reward_mode temperature --obs_variant T01 --outdoor_temperature_path data/LLEC_outdoor_temperature_5min_data.csv
+   elapsed: 00:00:10
+-> python run_evaluation.py --algorithms ddpg --reward_mode temperature --obs_variant T01 
+   elapsed: 00:00:09
+-> python run_evaluation.py --algorithms ddpg --reward_mode temperature --obs_variant T01 --prefer_best --outdoor_temperature_path data/LLEC_outdoor_temperature_5min_data.csv
+   elapsed: 00:00:09
+-> python run_evaluation.py --algorithms ddpg --reward_mode temperature --obs_variant T01 --prefer_best
+   elapsed: 00:00:09
+>>> ddpg | reward_mode=temperature | obs=T02
+-> python run_evaluation.py --algorithms ddpg --reward_mode temperature --obs_variant T02 --outdoor_temperature_path data/LLEC_outdoor_temperature_5min_data.csv
+   elapsed: 00:00:10
+-> python run_evaluation.py --algorithms ddpg --reward_mode temperature --obs_variant T02 
+   elapsed: 00:00:10
+-> python run_evaluation.py --algorithms ddpg --reward_mode temperature --obs_variant T02 --prefer_best --outdoor_temperature_path data/LLEC_outdoor_temperature_5min_data.csv
+   elapsed: 00:00:09
+-> python run_evaluation.py --algorithms ddpg --reward_mode temperature --obs_variant T02 --prefer_best
+   elapsed: 00:00:09
+>>> ddpg | reward_mode=temperature | obs=T03
+-> python run_evaluation.py --algorithms ddpg --reward_mode temperature --obs_variant T03 --outdoor_temperature_path data/LLEC_outdoor_temperature_5min_data.csv
+   elapsed: 00:00:10
+-> python run_evaluation.py --algorithms ddpg --reward_mode temperature --obs_variant T03 
+   elapsed: 00:00:09
+-> python run_evaluation.py --algorithms ddpg --reward_mode temperature --obs_variant T03 --prefer_best --outdoor_temperature_path data/LLEC_outdoor_temperature_5min_data.csv
+   elapsed: 00:00:09
+-> python run_evaluation.py --algorithms ddpg --reward_mode temperature --obs_variant T03 --prefer_best
+   elapsed: 00:00:10
+>>> ddpg | reward_mode=temperature | obs=T04
+-> python run_evaluation.py --algorithms ddpg --reward_mode temperature --obs_variant T04 --outdoor_temperature_path data/LLEC_outdoor_temperature_5min_data.csv
+   elapsed: 00:00:09
+-> python run_evaluation.py --algorithms ddpg --reward_mode temperature --obs_variant T04 
+   elapsed: 00:00:10
+-> python run_evaluation.py --algorithms ddpg --reward_mode temperature --obs_variant T04 --prefer_best --outdoor_temperature_path data/LLEC_outdoor_temperature_5min_data.csv
+   elapsed: 00:00:09
+-> python run_evaluation.py --algorithms ddpg --reward_mode temperature --obs_variant T04 --prefer_best
+   elapsed: 00:00:09
+
+Total wall-time : 00:17:29
+Sum of run times: 00:17:28
+Done.
+
+============================= JOB FEEDBACK =============================
+
+Job ID: 1586795
+Cluster: haic
+User/Group: ii6824/iai
+Account: iai
+State: COMPLETED (exit code 0)
+Partition: normal
+Nodes: 1
+Cores per node: 2
+Nodelist: haicn1703
+CPU Utilized: 00:16:53
+CPU Efficiency: 47.92% of 00:35:14 core-walltime
+Job Wall-clock time: 00:17:37
+Starttime: Thu Nov 20 19:44:42 2025
+Endtime: Thu Nov 20 20:02:19 2025
+Memory Utilized: 696.51 MB
+Memory Efficiency: 10.55% of 6.45 GB (3.22 GB/core)
+Energy Consumed: 843545 Joule / 234.318055555556 Watthours
+Average node power draw: 798.055818353832 Watt
