@@ -1,10 +1,12 @@
-# llec_building_gym/__init__.py
+
 
 # Gymnasium registration for custom environments
 import gymnasium as gym
 from gymnasium.envs.registration import register
-from .envs import BaseBuildingGym, Building
+
+from .envs import BaseBuildingGym, Building, AdvBuildingGym
 from .controllers import FuzzyController, MPCController, PIController, PIDController
+from .env_config import config
 
 # Register environment with temperature reward mode
 register(
@@ -32,10 +34,26 @@ register(
     },
 )
 
+# Register advanced environment -- for stable baselines (SB)
+register(
+    id="AdvBuilding",
+    entry_point="llec_building_gym.envs:AdvBuildingGym",
+    max_episode_steps=288,
+    kwargs={
+        "infras": config.infras,
+        "datasources": config.datasources,
+        "rewards": config.rewards,
+        "building_props": config.building_props,
+        "render_mode": None,
+    },
+)
+
 # Exported components of the llec_building_gym package
 __all__ = [
     "BaseBuildingGym",
     "Building",
+    "AdvBuildingGym",
+    "config",
     "FuzzyController",
     "MPCController",
     "PIController",

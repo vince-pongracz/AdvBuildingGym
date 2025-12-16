@@ -261,9 +261,7 @@ class Building:
             np.random.default_rng(seed) if seed is not None else np.random.default_rng()
         )
 
-        noise_increments = noise_std * rng.normal(
-            0, np.sqrt(self.timestep), size=t.shape
-        )
+        noise_increments = noise_std * rng.normal(0, np.sqrt(self.timestep), size=t.shape)
         wiener_noise = np.zeros_like(t, dtype=float)
 
         for i in range(1, len(t)):
@@ -752,9 +750,7 @@ class BaseBuildingGym(gym.Env):
         Updates the building's current setpoint T_set from the profile.
         """
         idx = self.building.iteration
-        if hasattr(self.building, "T_set_profile") and idx < len(
-            self.building.T_set_profile
-        ):
+        if hasattr(self.building, "T_set_profile") and idx < len(self.building.T_set_profile):
             self.building.T_set = self.building.T_set_profile[idx]
 
     def _get_future_energy_prices(self):

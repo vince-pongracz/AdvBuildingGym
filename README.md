@@ -101,7 +101,7 @@ LLECBuildingGym/                              # Root directory of the project
 Clone the repository:
 ```bash
 git clone https://github.com/KIT-IAI/LLECBuildingGym
-python3.9 -m venv llec_env
+python3.12 -m venv llec_env
 source llec_env/bin/activate
 cd LLECBuildingGym
 
@@ -120,7 +120,7 @@ LLECBuildingGym/         # Root directory of the project
 
 ```bash
 git clone https://github.com/KIT-IAI/LLECBuildingGym
-py -3.9 -m venv llec_env
+py -3.12 -m venv llec_env
 .\llec_env\Scripts\activate
 cd LLECBuildingGym
 
