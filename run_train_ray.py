@@ -28,6 +28,7 @@ os.environ["RAY_ACCEL_ENV_VAR_OVERRIDE_ON_ZERO"] = "0"
 os.environ["RAY_DEDUP_LOGS"] = "0"
 
 # Trigger registration of the custom Gym IDs
+# TODO VP 2025.12.16. : rename building_gym things...
 from llec_building_gym import AdvBuildingGym
 from llec_building_gym.env_config import config as env_config
 
@@ -173,11 +174,15 @@ def main():
     args.config_name = env_config.config_name if args.config_name is None else args.config_name
     logger.info("Parsed arguments: %s", vars(args))
 
-    ray.init(ignore_reinit_error=True)
+    # TODO VP 2025.12.17. : these settings should come from the slurm config / as args.
+    ray.init(num_cpus=2, ignore_reinit_error=True)
+    
+    logger.info("Ray initialized.")
     # Map usecase to environment Gym Environment ID alias per reward mode (registered by llec_building_gym)
     env_id:str = "AdvBuilding"
     tune.register_env(env_id, env_creator)
     # Training Model
+    # TODO VP 2025.12.17. : fix this None thing here
     algo = select_model(args.algorithm, None, args.seed)
 
     t0 = time.time()
@@ -217,4 +222,5 @@ def main():
 if __name__ == "__main__":
     main()
 
-# python run_train_v2.py --algorithm ppo --training --seed 18 --timesteps 1e6
+# On slurm: sbatch slurm_script/slurm_train_ray.sh
+# On desktop: python run_train_v2.py --algorithm ppo --training --seed 18 --timesteps 1e6

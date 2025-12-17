@@ -12,6 +12,7 @@
 
 <h1 align="center">Advanced Deep Reinforcement Learning for Heat Pump Control in Residential Buildings</h1>
 
+# TODO change things here...
 
 <div align="center">
     <img src="data/img/HeatPumpEnvironment.gif" style="width:44%;">
@@ -98,12 +99,18 @@ LLECBuildingGym/                              # Root directory of the project
 
 ### 2.1a Haicore (Linux):
 
+Install / make sure you have Python 3.12.1 (`python --version` or `python3.12 --version`)
+
+Install link: https://www.python.org/downloads/release/python-3121/
+
 Clone the repository:
 ```bash
-git clone https://github.com/KIT-IAI/LLECBuildingGym
-python3.12 -m venv llec_env
-source llec_env/bin/activate
-cd LLECBuildingGym
+git clone https://github.com/vince-pongracz/AdvBuildingGym
+python3.12 -m venv adv_env
+source adv_env/bin/activate
+cd AdvBuildingGym
+
+alias pip='python -m pip'
 
 pip install --upgrade pip
 pip install -r requirements.txt
@@ -112,13 +119,13 @@ pip install -e .
 
 The virtual environment and project directory should be organized as shown below:
 ```bash
-llec_env/        # Python virtual environment
-LLECBuildingGym/ # Root directory of the project
+adv_env/        # Python virtual environment
+AdvBuildingGym/ # Root directory of the project
 ```
 
 ### 2.1b Local (Windows):
 
-Install Python 3.9.18 from https://www.python.org/downloads/release/python-3918 (newer Python versions may work but are not tested).
+Install Python 3.12.1 from https://www.python.org/downloads/release/python-3918 (newer Python versions may work but are not tested).
 
 ```bash
 git clone https://github.com/KIT-IAI/LLECBuildingGym
@@ -249,6 +256,16 @@ chmod +x slurm_script/slurm_train_01_rl_batch.sh
 ```
 
 The modular design allows users to plug in their own controllers or extend the environment with new features, e.g., building dynamics or pricing schemes.
+
+### Slurm
+
+Help: https://www.nhr.kit.edu/userdocs/haicore/batch/
+
+```bash
+sbatch slurm_script/slurm_train_ray.sh # start batch job
+scontrol show job [jobid] # see job state info
+```
+
 
 </details>
 
