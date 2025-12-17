@@ -4,6 +4,8 @@
 # Created: 2025-06-17 | Version: 1.0
 # Description: GPU availability and configuration check using nvidia-smi and PyTorch
 
+# TODO VP 2025.12.17. : Clean up unused/not necessary slurm scripts
+
 #SBATCH --job-name=gpu-info
 #SBATCH --output=slurm_logs_train/gpu-info-%j.out
 #SBATCH --error=slurm_logs_train/gpu-info-%j.err
@@ -19,12 +21,12 @@ set -euo pipefail
 # Select the path where the environment was installed.
 # This method always works, especially inside SLURM jobs.
 # Example:
-#   source /home/xx1234/llec_env/bin/activate
+#   source /home/xx1234/adv_env/bin/activate
 
 # RELATIVE PATH:
 # Works if you followed the README.md setup and your terminal or SLURM script runs:
 #   cd LLECBuildingGym
-PYTHON_ENV="../llec_env"
+PYTHON_ENV="../adv_env"
 source "${PYTHON_ENV}/bin/activate"
 
 echo "=== GPU Hardware Info (nvidia-smi) ==="
