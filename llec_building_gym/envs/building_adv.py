@@ -186,13 +186,13 @@ class AdvBuildingGym(gym.Env):
         """
         super(AdvBuildingGym, self).__init__()
 
+        self.iteration = 0
+        
         observation_space = OrderedDict()
         action_space = OrderedDict()
 
         # TODO VP 2025.12.03. : refactor it to a datasource...
         observation_space["cum_E_Wh"] = spaces.Box(low=0, high=np.inf, shape=(1,), dtype=np.float32)
-        # TODO VP 2025.12.12. : it is not really an observation about the environment...
-        observation_space["iteration"] = spaces.Box(low=0, high=np.inf, shape=(1,), dtype=np.float32)
 
         self.infras = infras
         self.action_space_keys = []
@@ -246,6 +246,10 @@ class AdvBuildingGym(gym.Env):
             seed = np.random.randint(0, 10000)  # global RNG
         super().reset(seed=seed, options=options)
 
+        self.iteration = 0
+        for sync in self.infras + self.datasources:
+            sync.synchronize(self.iteration)
+
         logger.debug(self.state.keys())
 
         for k, v in self.state.items():
@@ -267,8 +271,7 @@ class AdvBuildingGym(gym.Env):
         return state
 
     def is_done(self):
-        iteration = self.state.get("iteration", np.zeros(1, dtype=np.float32))[0]
-        return bool(iteration >= self.max_iteration)
+        return bool(self.iteration >= self.max_iteration)
 
     def step(self, action):
         """
@@ -330,8 +333,13 @@ class AdvBuildingGym(gym.Env):
         # Check if episode should terminate
         terminated = self.is_done()
         truncated = False
-        self.state["iteration"][0] += 1
-        logger.debug(f"Iter: {self.state["iteration"]}\n")
+        
+        self.iteration += 1
+        # Sync iterations
+        for sync in self.infras + self.datasources:
+            sync.synchronize(self.iteration)
+
+        logger.debug(f"Iter: {self.iteration}\n")
         
         info = {
             "action": action,

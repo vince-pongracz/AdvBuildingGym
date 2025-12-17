@@ -1,14 +1,13 @@
 
 import logging
 from collections import OrderedDict
-from abc import ABC
 
 import numpy as np
 import pandas as pd
 
 from gymnasium.spaces import Box, Dict as SDict
 
-# or device --> general stuff for HP, battery, charger
+from llec_building_gym.utils import EnvSyncInterface
 
 # Logging configuration
 logging.basicConfig(
@@ -16,13 +15,13 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-
-class DataSource(ABC):
+class DataSource(EnvSyncInterface):
     def __init__(self,
                  name: str,
-                 # TODO VP 2025.12.03. : update to python newest (3.14 maybe?) But at least 3.11...
                  ds_path: str | None = None,
                  ) -> None:
+        super().__init__()
+
         self.name = name
         self.price_max = None
         if ds_path is not None:
@@ -47,9 +46,7 @@ class EnergyPriceDataSource(DataSource):
                      ) -> tuple:
         state_spaces["E_price"] = Box(low=-1, high=1, shape=(1,), dtype=np.float32)
         state_spaces["E_price_max"] = Box(low=-1, high=1, shape=(1,), dtype=np.float32)
-        
-        if "iteration" not in state_spaces.keys():
-            state_spaces["iteration"] = Box(low=0, high=np.inf, shape=(1,), dtype=np.int32)
+
         if "sim_hour" not in state_spaces.keys():
             logger.debug("sim_hour present")
             state_spaces["sim_hour"] = Box(low=0, high=np.inf, shape=(1,), dtype=np.int32)
@@ -57,11 +54,9 @@ class EnergyPriceDataSource(DataSource):
         return state_spaces, action_spaces
 
     def update_state(self, states) -> None:
-        iteration = states.get("iteration", np.zeros(shape=(1,)))[0]
-
         if self.ts is not None:
-            if iteration < len(self.ts):
-                energy_price = self.ts.iloc[int(iteration)]["price_normalized"]
+            if self.iteration < len(self.ts):
+                energy_price = self.ts.iloc[int(self.iteration)]["price_normalized"]
             else:
                 energy_price = self.ts.iloc[-1]["price_normalized"]
             if self.price_max is None:

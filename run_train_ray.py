@@ -31,6 +31,8 @@ os.environ["RAY_DEDUP_LOGS"] = "0"
 from llec_building_gym import AdvBuildingGym
 from llec_building_gym.env_config import config as env_config
 
+from llec_building_gym.utils import CustomJSONEncoder
+
 # Logging configuration
 logging.basicConfig(
     level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(logger) - %(message)s"
@@ -69,35 +71,6 @@ class Callbacks(RLlibCallback):
         episode.custom_metrics["episode_length"] = episode.length
         return super().on_episode_end(episode=episode, prev_episode_chunks=prev_episode_chunks, env_runner=env_runner, metrics_logger=metrics_logger, env=env, env_index=env_index, rl_module=rl_module, worker=worker, base_env=base_env, policies=policies, **kwargs)
 
-# TODO VP 2025.12.16. : relocate to utils
-import json
-import inspect
-from abc import ABCMeta
-from pathlib import Path
-
-class NumpyJSONEncoder(json.JSONEncoder):
-    def default(self, obj):
-        # numpy scalars (np.int32, np.float64, etc.)
-        try:
-            import numpy as np
-            if isinstance(obj, np.generic):
-                return obj.item()  # -> Python scalar
-            if isinstance(obj, np.ndarray):
-                return obj.tolist()  # -> Python list
-        except Exception:
-            pass
-
-        # classes / ABCMeta (e.g., abstract base classes, types)
-        if isinstance(obj, ABCMeta) or inspect.isclass(obj):
-            mod = getattr(obj, "__module__", "builtins")
-            qn = getattr(obj, "__qualname__", getattr(obj, "__name__", str(obj)))
-            return f"{mod}.{qn}"
-
-        # common extras
-        if isinstance(obj, Path):
-            return str(obj)
-
-        return super().default(obj)
 
 
 def select_model(algorithm: str, env: gym.Env, seed: int):
@@ -160,6 +133,7 @@ def select_model(algorithm: str, env: gym.Env, seed: int):
         raise ValueError(f"Unknown algorithm: {algorithm}")
     return algo
 
+
 def env_creator(config):
     return AdvBuildingGym(
         infras=env_config.infras,
@@ -167,6 +141,7 @@ def env_creator(config):
         rewards=env_config.rewards,
         building_props=env_config.building_props,
     )  #Return a gymnasium.Env instance.
+
 
 # Main
 def main():
@@ -204,24 +179,24 @@ def main():
     tune.register_env(env_id, env_creator)
     # Training Model
     algo = select_model(args.algorithm, None, args.seed)
-    
+
     t0 = time.time()
     for i in range(1):
         result = algo.train()
-        
-        # Each infra
+
         result['max_possible_reward'] = episode_length * len(env_config.rewards)
+        result["reward_rate"] = result['env_runners']['episode_reward_mean'] / result['max_possible_reward']
         
         logger.info(
             f"""
             iter={i+1}
             reward_mean={result['env_runners']['episode_reward_mean']:.2f}
+            reward_rate={result['reward_rate']:.4f}
             timesteps_total={result['timesteps_total']}
             """)
-        with open("result.json", "w", encoding="utf-8") as f:
-            json.dump(result, f, cls=NumpyJSONEncoder, indent=4)
-        
-    
+        with open(f"result_{i}.json", "w", encoding="utf-8") as f:
+            json.dump(result, f, cls=CustomJSONEncoder, indent=4)
+
     # Log training end time, duration, and save location
     logger.info("Training completed in %.2f min", (time.time() - t0) / 60)
     

@@ -1,20 +1,22 @@
 
-
-from abc import ABC
 from typing import Dict
 
 import numpy as np
 
 from gymnasium.spaces import Box, Dict as SDict
 
+from llec_building_gym.utils import EnvSyncInterface
+
 # or device --> general stuff for HP, battery, charger
 
 
-class Infrastructure(ABC):
+class Infrastructure(EnvSyncInterface):
     def __init__(self,
                  name: str,
                  Q_electric_max: float
                  ) -> None:
+        super().__init__()
+
         self.name = name
         self.Q_electric_max = Q_electric_max  # ~ power consumption max
 
