@@ -17,15 +17,16 @@ from stable_baselines3.common.vec_env import SubprocVecEnv, VecMonitor
 from stable_baselines3.common.callbacks import EvalCallback
 
 # Trigger registration of the custom Gym IDs
-from llec_building_gym import BaseBuildingGym
+from adv_building_gym import BaseBuildingGym
 import logging
 
 # Logging configuration
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
+    force=True
 )
-logger = logging.getLogger(__name__)
-logger.debug("sys.argv: %s", sys.argv)
+logger = logging.getLogger("main")
 
 
 # Helper classes & functions

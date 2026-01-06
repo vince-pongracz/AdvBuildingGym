@@ -34,7 +34,7 @@ It features a custom <a href="https://github.com/Farama-Foundation/Gymnasium" ta
 
 ### 1.1 Description
 
-The **[base_building_gym.py](llec_building_gym/envs/base_building_gym.py)** simulates thermal building dynamics with heat pump control in 5-minute intervals.
+The **[base_building_gym.py](adv_building_gym/envs/base_building_gym.py)** simulates thermal building dynamics with heat pump control in 5-minute intervals.
 This framework leverages the **[Gymnasium](https://github.com/Farama-Foundation/Gymnasium)** and **[Pyomo](https://github.com/Pyomo/pyomo)** libraries, making it suitable for both reinforcement learning agents and advanced control strategies.
 
 To simulate real-world uncertainty, the environment includes:
@@ -57,7 +57,7 @@ These features support the evaluation under uncertainty and help assess the robu
 ```bash
 LLECBuildingGym/                              # Root directory of the project
 ├── data/                                     # Input data (e.g., weather, pricing)
-├── llec_building_gym/                        # Main Python package: Gym environment and controllers
+├── adv_building_gym/                         # Main Python package: Gym environment and controllers
 │   ├── controllers/                          # Other controllers; Fuzzy, MPC, PI, PID
 │   │   ├── __init__.py                       # Exports controller classes
 │   │   ├── fuzzy_controller.py               # Fuzzy controller
@@ -142,7 +142,7 @@ pip install -e .
 ### 2.2 Reinstallation (after code changes):
 
 ```bash
-pip uninstall llec_building_gym -y
+pip uninstall adv_building_gym -y
 pip install -e .
 ```
 

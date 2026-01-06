@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 from datetime import datetime
 from stable_baselines3 import PPO, SAC, DDPG, TD3, A2C
-from llec_building_gym import (
+from adv_building_gym import (
     BaseBuildingGym,
     FuzzyController,
     MPCController,
@@ -22,10 +22,11 @@ import logging
 
 # Logging configuration
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
+    force=True
 )
 logger = logging.getLogger(__name__)
-logger.debug(f"sys.argv: {sys.argv}")
 
 
 def get_model_path(
