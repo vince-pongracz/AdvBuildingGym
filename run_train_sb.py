@@ -30,7 +30,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger("main")
 
+# TODO VP 2026.01.07. : How does the _model_config look like here with the SB setup? -- compare it with the ray setup
 
+# TODO VP 2026.01.08. : Extract these callbacks into a module
 class EpisodeLoggerCallback(BaseCallback):
     """Callback to log episode metrics during training."""
 
@@ -186,18 +188,18 @@ class BestModelCheckpointCallback(BaseCallback):
     def _save_checkpoint(self) -> None:
         """Save checkpoint if current model is better than previous best."""
         # Get the latest evaluation score based on selected metric
-        if self.metric == "mean_reward":
+        # Note: "mean_reward" is normalized to "episode_return_mean" at CLI parsing
+        if self.metric == "episode_return_mean":
+            # SB3's best_mean_reward is equivalent to Ray's episode_return_mean
             current_metric_value = self.eval_callback.best_mean_reward
-        elif self.metric == "episode_return_mean":
-            current_metric_value = self.eval_callback.best_episode_return_mean
         elif self.metric == "achieved_reward":
             current_metric_value = self.eval_callback.best_achieved_reward
         elif self.metric == "reward_rate":
             current_metric_value = self.eval_callback.best_reward_rate
         else:
-            # Default to mean_reward if unknown metric
+            # Default to episode_return_mean if unknown metric
             logger.warning(
-                "Unknown metric '%s', using 'mean_reward' instead",
+                "Unknown metric '%s', using 'episode_return_mean' instead",
                 self.metric
             )
             current_metric_value = self.eval_callback.best_mean_reward
@@ -372,7 +374,8 @@ def main():
         type=str,
         default="reward_rate",
         choices=[
-            # TODO VP 2026.01.06. : mean rewards and episode return mean are the same, use only one of them...
+            # Both "mean_reward" and "episode_return_mean" are accepted for compatibility
+            # (SB3 uses "mean_reward", Ray uses "episode_return_mean" - they are equivalent)
             "mean_reward",
             "episode_return_mean",
             "achieved_reward",
@@ -390,6 +393,11 @@ def main():
 
     args.timesteps = int(args.timesteps)
     args.config_name = env_config.config_name if args.config_name is None else args.config_name
+
+    # Normalize metric name: SB3's "mean_reward" is equivalent to Ray's "episode_return_mean"
+    # Use "episode_return_mean" internally for consistency across frameworks
+    if args.metric == "mean_reward":
+        args.metric = "episode_return_mean"
 
     logger.info("Parsed arguments: %s", vars(args))
 

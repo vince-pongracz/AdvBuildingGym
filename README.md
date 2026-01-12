@@ -12,7 +12,18 @@
 
 <h1 align="center">Advanced Deep Reinforcement Learning for Heat Pump Control in Residential Buildings</h1>
 
-# TODO change things here...
+# TODO VP: change things here...
+
+### Slurm
+
+A bit more detailed help here: https://www.nhr.kit.edu/userdocs/haicore/batch/
+
+```bash
+sbatch slurm_scripts/slurm_train_ray.sh # start a job
+scancel jobID # cancel a job
+scontrol show job [jobid] # see job state info
+squeue #Displays information about active, eligible, blocked, and/or recently completed jobs
+```
 
 <div align="center">
     <img src="data/img/HeatPumpEnvironment.gif" style="width:44%;">
@@ -257,14 +268,6 @@ chmod +x slurm_script/slurm_train_01_rl_batch.sh
 
 The modular design allows users to plug in their own controllers or extend the environment with new features, e.g., building dynamics or pricing schemes.
 
-### Slurm
-
-Help: https://www.nhr.kit.edu/userdocs/haicore/batch/
-
-```bash
-sbatch slurm_script/slurm_train_ray.sh # start batch job
-scontrol show job [jobid] # see job state info
-```
 
 
 </details>

@@ -46,7 +46,7 @@ os.environ["RAY_DEDUP_LOGS"] = "0"
 # os.environ["RAY_USAGE_STATS_ENABLED"] = "0"
 
 # Trigger registration of the custom Gym IDs
-from adv_building_gym import AdvBuildingGym, create_on_episode_end_callback
+from adv_building_gym import AdvBuildingGym, create_on_episode_end_callback, make_checkpoint_callback_class
 from adv_building_gym.env_config import config as env_config
 from adv_building_gym.utils import (
     CustomJSONEncoder,
@@ -66,16 +66,38 @@ logger = logging.getLogger("main")
 ENV_ID: str = "AdvBuilding"
 
 # Create episode end callback using the factory function
-on_episode_end = create_on_episode_end_callback(
+on_episode_end_cb = create_on_episode_end_callback(
     env_id=ENV_ID,
     rewards=env_config.rewards,
     metrics_base_dir="ep_metrics",
+    exec_date=datetime.datetime.now()
 )
 
 
-def select_model(algorithm: str, seed: int, timesteps: int):
+def select_model(
+    algorithm: str,
+    seed: int,
+    timesteps: int,
+    checkpoint_dir: str,
+    checkpoint_frequency: int,
+    metric: str,
+    num_cpus: int,
+    num_gpus: int,
+    clip_actions: bool = True,
+):
     """
     Selects and configures a model for training based on the algorithm name.
+
+    Args:
+        algorithm: RL algorithm to use (e.g., "ppo")
+        seed: Random seed for reproducibility
+        timesteps: Total training timesteps
+        checkpoint_dir: Directory for callback-level checkpoints
+        checkpoint_frequency: Checkpoint every N episodes
+        metric: Metric to optimize for checkpointing
+        num_cpus: Total CPUs available (from Ray/SLURM)
+        num_gpus: Total GPUs available (from Ray/SLURM)
+        clip_actions: Whether to clip actions to action space bounds
     """
     
     # Hyperparameters for consistent evaluation across algorithms
@@ -83,7 +105,28 @@ def select_model(algorithm: str, seed: int, timesteps: int):
     batch_size = 64
     learning_starts = 10 * env_config.EPISODE_LENGTH
     n_steps = env_config.EPISODE_LENGTH
-    
+
+    # Resource allocation:
+    # - Learners: one per GPU, each gets 1 GPU and 1 CPU
+    # - Driver: 1 CPU (taken from env_runners pool)
+    # - Env runners: remaining CPUs after learners and driver
+    num_learners = max(1, num_gpus)  # At least 1 learner even without GPU
+    num_gpus_per_learner = 1 if num_gpus > 0 else 0
+    num_cpus_per_learner = 1
+    num_cpus_per_env_runner = 1
+
+    driver_cpus = 1
+    learner_total_cpus = num_learners * num_cpus_per_learner
+    remaining_cpus = num_cpus - learner_total_cpus - driver_cpus
+    num_env_runners = max(1, remaining_cpus // num_cpus_per_env_runner)
+
+    logger.info(
+        "Resource allocation in select_model: learners=%d (gpus=%d, cpus=%d each), "
+        "env_runners=%d (cpus=%d each), driver=%d CPU",
+        num_learners, num_gpus_per_learner, num_cpus_per_learner,
+        num_env_runners, num_cpus_per_env_runner, driver_cpus
+    )
+
     # Get observation and action spaces from a temporary env instance
     # NOTE: We only provide action_space explicitly. The observation_space is
     # intentionally NOT provided because FlattenObservations connector transforms
@@ -94,58 +137,7 @@ def select_model(algorithm: str, seed: int, timesteps: int):
     logger.debug("Env action_space: %s (obs_space inferred after FlattenObservations)", action_space)
 
     if algorithm == "ppo":
-        config = (PPOConfig()
-            .api_stack(
-                enable_rl_module_and_learner=True,
-                enable_env_runner_and_connector_v2=True,
-            )
-            .environment(
-                env="AdvBuilding",
-                # observation_space intentionally omitted - inferred after FlattenObservations
-                action_space=action_space,
-                normalize_actions=True,
-                clip_actions=True,
-            )
-            .debugging(
-                log_level="INFO", # WARN: Reduces verbosity (suppress connector pipeline INFO messages)
-                log_sys_usage=True,
-                seed=seed
-            )
-            .reporting(
-                keep_per_episode_custom_metrics=True,
-            )
-            .framework(
-                framework="torch",
-                eager_tracing=True,
-                eager_max_retraces=20,
-                tf_session_args={},
-                local_tf_session_args={},
-            )
-            # Learning the NN, policy -- needs GPU
-            .learners(
-                num_learners=1,
-                num_gpus_per_learner=1,
-                num_cpus_per_learner=1,
-            )
-            # Sampling actions -- no GPU needed
-            .env_runners(
-                num_envs_per_env_runner=1,
-                num_env_runners=2,
-                # Flatten dict observation space into a single vector for the RL module
-                # NOTE VP 2026.01.05. : if other observation space needed for the policy, change the observations in the env.
-                # (rather than using a new observation encoder -- that must be learnt as well, it overcomplicates things...)
-                env_to_module_connector=lambda env, spaces, device: FlattenObservations(), # type: ignore
-            )
-            .rl_module(
-                # Use new API to avoid RLModule(config=RLModuleConfig) deprecation warning
-                model_config=DefaultModelConfig(
-                    fcnet_activation='relu',
-                    fcnet_hiddens=[32, 32, 32],
-                    ),
-            )
-        )
-
-        # Training hyperparameters should be set via .training() method
+        config = PPOConfig()
         # NOTE: These values should match SB3 PPO hyperparameters for fair comparison:
         #   - train_batch_size_per_learner: Total timesteps collected before training update
         #     SB3 equivalent: n_steps * num_envs = 288 * 4 = 1,152
@@ -154,20 +146,75 @@ def select_model(algorithm: str, seed: int, timesteps: int):
         #   - num_epochs: Number of passes over collected data (SB3 default is 10, we use 4)
         config.training(
             lr=learning_rate,
+            # TODO VP 2026.01.07. : Use timesteps param?
             train_batch_size_per_learner=4000,  # ~14 episodes worth of data before each training update
             minibatch_size=batch_size,  # 64 - SGD minibatch size (same as SB3)
             num_epochs=4,  # Number of epochs per training iteration (typical for PPO)
         )
-        config.evaluation(
-            evaluation_interval=1, # run evaluation every train() iteration
-            evaluation_duration=10, # e.g., 10 episodes (depending on your RLlib version/settings)
-            evaluation_parallel_to_training=False, # True only if `evaluation_num_env_runners` > 0
-        )
 
     # TODO VP 2025.12.11. : add more RL algos
-    # TODO VP 2026.01.06. : Refactor config, common parts to be extracted and set only once for each algorithm
     else:
         raise ValueError(f"Unknown algorithm: {algorithm}")
+
+    config = config.api_stack(
+        enable_rl_module_and_learner=True,
+        enable_env_runner_and_connector_v2=True,
+    )
+    config.environment(
+        env="AdvBuilding",
+        # observation_space intentionally omitted - inferred after FlattenObservations
+        action_space=action_space,
+        normalize_actions=True,
+        clip_actions=clip_actions,
+    )
+    config.debugging(
+        # WARN: Reduces verbosity (suppress connector pipeline INFO messages)
+        log_level="INFO",
+        log_sys_usage=True,
+        seed=seed
+    )
+    config.reporting(
+        keep_per_episode_custom_metrics=True,
+    )
+    config.framework(
+        framework="torch",
+        eager_tracing=True,
+        eager_max_retraces=20,
+        tf_session_args={},
+        local_tf_session_args={},
+    )
+    # NOTE VP 2026.01.08. : about ray and rllib concept https://docs.ray.io/en/latest/rllib/key-concepts.html
+    # Learning the NN, policy (gradient updates) -- needs GPU
+    config.learners(
+        num_learners=num_learners,
+        num_gpus_per_learner=num_gpus_per_learner,
+        num_cpus_per_learner=num_cpus_per_learner,
+    )
+    # Sampling actions (querying the env, using the policy, sample trajectories) -- no GPU needed
+    config.env_runners(
+        num_env_runners=num_env_runners,
+        num_envs_per_env_runner=1,
+        num_cpus_per_env_runner=num_cpus_per_env_runner,
+        num_gpus_per_env_runner=0,
+        # Flatten dict observation space into a single vector for the RL module
+        # NOTE VP 2026.01.05. : if other observation space needed for the policy, change the observations in the env.
+        # (rather than using a new observation encoder -- that must be learnt as well, it overcomplicates things...)
+        env_to_module_connector=lambda env, spaces, device: FlattenObservations(),  # type: ignore
+    )
+    config.rl_module(
+        # Use new API to avoid RLModule(config=RLModuleConfig) deprecation warning
+        model_config=DefaultModelConfig(
+            fcnet_activation='relu',
+            fcnet_hiddens=[32, 32, 32],
+        ),
+    )
+    config.evaluation(
+        evaluation_interval=1,  # run evaluation every train() iteration
+        evaluation_duration_unit="episodes",
+        evaluation_duration=2,  # e.g., 2 episodes
+        # True only if `evaluation_num_env_runners` > 0
+        evaluation_parallel_to_training=False,
+    )
 
     config.logger_config = {
         "type": "ray.tune.logger.UnifiedLogger",
@@ -177,7 +224,22 @@ def select_model(algorithm: str, seed: int, timesteps: int):
                 "ray.tune.tensorboardx.TBXLoggerCallback",
         ],
     }
-    config.callbacks_on_episode_end = on_episode_end
+
+    # Configure callbacks:
+    # - on_episode_end: Logs episode metrics (reward_rate, achieved_reward, etc.)
+    # - Checkpoint callback: Saves best model based on metric every N episodes
+    #
+    # RLlib calls on_episode_end callbacks first, then callback class methods -- ensures metrics are logged before checkpoint decisions are made.
+    config.callbacks(
+        make_checkpoint_callback_class(
+            checkpoint_dir=checkpoint_dir,
+            checkpoint_frequency=checkpoint_frequency,
+            num_to_keep=1,  # Only keep best checkpoint at callback level
+            metric=metric,
+        ),
+        on_episode_end=on_episode_end_cb,  # Episode metrics callback (runs first)
+    )
+
     return config
 
 
@@ -233,6 +295,16 @@ def main():
         type=str,
         default="reward_rate",
         choices=[
+            # NOTE VP 2026.01.12: Diff between episode_return_mean and achieved_reward:
+            # - achieved_reward: Custom metric from episode_callbacks.py
+            #   Calculates sum(rewards) per episode, then averages across episodes in CURRENT iteration only (~14 episodes)
+            #   More responsive to recent performance changes
+            # - episode_return_mean: RLlib built-in metric
+            #   Same base calculation (sum of rewards per episode), but uses exponential moving average (EMA)
+            #   smoothed over last 100 episodes (metrics_num_episodes_for_smoothing=100)
+            #   More stable, less sensitive to noise, better for detecting long-term trends
+            # - reward_rate: Custom metric = achieved_reward / max_possible_reward
+            #   Normalized performance score in [0, 1] range
             "episode_return_mean",
             "achieved_reward",
             "reward_rate",
@@ -306,64 +378,41 @@ def main():
     # Map usecase to environment Gym Environment ID alias per reward mode (registered by adv_building_gym)
     tune.register_env(ENV_ID, env_creator)
 
-    # Build an algorithm config via helper
-    algo_config = select_model(args.algorithm, args.seed, args.timesteps)
-    # Convert the RLlib config into a Tune param space
-    param_space = algo_config.to_dict()
-
     # Create run name with timestamp (similar to SB3 naming convention)
     exec_date = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     run_name = f"{args.algorithm}_seed{args.seed}_{exec_date}"
     storage_path = os.path.abspath(f"models/{args.config_name}/ray/{args.algorithm}")
     os.makedirs(storage_path, exist_ok=True)
-    
-    # Compute resource allocation for RLlib components.
-    # Total CPU footprint: driver + (num_learners × cpus_per_learner) + (num_env_runners × cpus_per_env_runner)
-    # We dynamically adjust num_env_runners to use all available CPUs.
 
-    # Get CPU requirements per component from config (with defaults)
+    # Checkpoint directory path for callback-level checkpointing (similar to SB3)
+    # Note: Directory will be created lazily by BestModelCheckpointCallback when first checkpoint is saved
+    checkpoint_dir = os.path.abspath(f"{storage_path}/checkpoints_{run_name}")
+
+    # Build algorithm config with checkpoint parameters and resource allocation
+    algo_config = select_model(
+        algorithm=args.algorithm,
+        seed=args.seed,
+        timesteps=args.timesteps,
+        checkpoint_dir=checkpoint_dir,
+        checkpoint_frequency=args.checkpoint_frequency_episodes,
+        metric=args.metric,
+        num_cpus=cpus,
+        num_gpus=gpus,
+    )
+    # Convert the RLlib config into a Tune param space
+    param_space = algo_config.to_dict()
+
+    # Extract resource allocation from config (set by select_model)
     num_learners = int(param_space.get("num_learners", 1))
     cpus_per_learner = int(param_space.get("num_cpus_per_learner", 1))
     cpus_per_env_runner = int(param_space.get("num_cpus_per_env_runner", 1))
+    actual_env_runners = int(param_space.get("num_env_runners", 1))
 
-    # Fixed CPU reservations: 1 for Ray driver + learner CPUs
+    # Calculate total CPU usage for validation
     driver_cpus = 1
     learner_total_cpus = num_learners * cpus_per_learner
-    fixed_reserved_cpus = driver_cpus + learner_total_cpus
-
-    # Calculate how many CPUs remain for env_runners
-    available_for_env_runners = max(0, cpus - fixed_reserved_cpus)
-
-    # Calculate max env_runners that can fit in available CPUs
-    if cpus_per_env_runner > 0:
-        max_env_runners = available_for_env_runners // cpus_per_env_runner
-    else:
-        max_env_runners = available_for_env_runners
-
-    # Get requested num_env_runners from config, default to using all available
-    requested_env_runners = int(param_space.get("num_env_runners", max_env_runners))
-
-    # Use the minimum of requested and what fits, but ensure at least 1
-    actual_env_runners = max(1, min(requested_env_runners, max_env_runners))
-    param_space["num_env_runners"] = actual_env_runners
-
-    # Ensure env-runner cpu/gpu settings are present
-    param_space["num_cpus_per_env_runner"] = cpus_per_env_runner
-    param_space["num_gpus_per_env_runner"] = 0
-
-    # Give the trainer/learner access to the detected GPU(s)
-    param_space["num_gpus"] = gpus
-
-    # Calculate total CPU usage for logging
-    total_cpu_usage = fixed_reserved_cpus + (actual_env_runners * cpus_per_env_runner)
+    total_cpu_usage = driver_cpus + learner_total_cpus + (actual_env_runners * cpus_per_env_runner)
     unused_cpus = cpus - total_cpu_usage
-
-    logger.info(
-        "Resource allocation: SLURM_CPUS=%d, driver=%d, learners=%d×%d=%d CPUs, "
-        "env_runners=%d×%d=%d CPUs, total_used=%d, unused=%d",
-        cpus, driver_cpus, num_learners, cpus_per_learner, learner_total_cpus,
-        actual_env_runners, cpus_per_env_runner, actual_env_runners * cpus_per_env_runner,
-        total_cpu_usage, unused_cpus)
 
     # Validate resource allocation against SLURM constraints
     allocation = ResourceAllocation(
@@ -385,15 +434,19 @@ def main():
         json.dump(dump, f, cls=CustomJSONEncoder, indent=4)
 
     # Calculate checkpoint frequency in training iterations based on episodes
-    # Episode length from env config (approximately 289 timesteps per episode)
+    # Episode length from env config (288 timesteps per episode)
     # Training batch size per iteration: train_batch_size_per_learner = 4000 timesteps
-    timesteps_per_episode = env_config.EPISODE_LENGTH + 1  # Approximately 289 timesteps
+    timesteps_per_episode = env_config.EPISODE_LENGTH  # 288 timesteps
     timesteps_per_iteration = param_space.get("train_batch_size_per_learner", 4000)
     checkpoint_freq_iterations = max(1, int((args.checkpoint_frequency_episodes * timesteps_per_episode) / timesteps_per_iteration))
 
-    logger.info(
-        "Checkpoint configuration: every %d episodes ≈ %d iterations (%.1f timesteps per episode, %d timesteps per iteration)",
+    logger.info("Checkpoint configuration:")
+    logger.info("  Callback-level (best model): every %d episodes, metric=%s, dir=%s",
         args.checkpoint_frequency_episodes,
+        args.metric,
+        checkpoint_dir
+    )
+    logger.info("  Ray Tune-level: every %d iterations (%.1f timesteps/episode, %d timesteps/iteration), num_to_keep=5",
         checkpoint_freq_iterations,
         timesteps_per_episode,
         timesteps_per_iteration
@@ -441,8 +494,10 @@ def main():
             checkpoint_config=tune.CheckpointConfig(
                 checkpoint_at_end=True,
                 checkpoint_frequency=checkpoint_freq_iterations,  # Based on episode frequency
-                num_to_keep=1,  # Only keep the single best checkpoint
-                # Keep best model based on the eval metric
+                num_to_keep=5,  # Keep 5 checkpoints to reduce experiment state snapshot frequency
+                # Increasing num_to_keep reduces Ray Tune's experiment state snapshotting overhead
+                # (see TUNE_WARN_EXCESSIVE_EXPERIMENT_CHECKPOINT_SYNC_THRESHOLD_S warning)
+                # Best model tracking is handled by BestModelCheckpointCallback at callback level
                 checkpoint_score_attribute=args.metric,
                 checkpoint_score_order="max",
                 ),
@@ -479,13 +534,15 @@ def main():
             logger.info("Best trial results:")
             logger.info("  Trial directory: %s", best_result.path)
 
-            # Get checkpoint information
+            # Get checkpoint information (Ray Tune-level)
             if best_result.checkpoint:
                 checkpoint_path = best_result.checkpoint.path
-                logger.info("  Checkpoint saved at: %s", checkpoint_path)
+                logger.info("  Ray Tune checkpoint: %s", checkpoint_path)
             else:
-                logger.warning("  No checkpoint available for best trial")
+                logger.warning("  No Ray Tune checkpoint available for best trial")
 
+            # Callback-level checkpoint (best model only)
+            logger.info("  Callback checkpoint (best model): %s", checkpoint_dir)
             logger.info("  Storage path: %s", storage_path)
             logger.info("=" * 70)
 

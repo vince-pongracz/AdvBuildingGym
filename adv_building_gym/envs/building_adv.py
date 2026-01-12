@@ -9,12 +9,13 @@ from gymnasium.spaces import Dict as SDict
 import numpy as np
 import pandas as pd
 
-from adv_building_gym.devices.data_sources import DataSource
-from adv_building_gym.rewards.rewards import RewardFunction
+from adv_building_gym.devices.datasources import DataSource
+from adv_building_gym.rewards import RewardFunction
 from adv_building_gym.devices.infrastructure import Infrastructure
 
 from adv_building_gym.utils.temporal_features import TemporalFeatureBuffer
 from adv_building_gym.utils.warning_filters import setup_warning_filters
+from adv_building_gym.envs.utils import BuildingProps
 
 # Logging configuration
 logging.basicConfig(
@@ -23,12 +24,6 @@ logging.basicConfig(
     force=True  # Override any existing logging configuration (e.g., from Ray/RLlib)
 )
 logger = logging.getLogger(__name__)
-
-
-class BuildingProps():
-    def __init__(self, mC: float = 300, K: float = 20):
-        self.mC = mC
-        self.K = K
 
 
 class AdvBuildingGym(gym.Env):
@@ -165,26 +160,8 @@ class AdvBuildingGym(gym.Env):
     ):
         """
         Initialize the Gym environment with building parameters and reward structure.
-
-        Args:
-            mC (float, optional): Effective thermal mass (J/K). Defaults to 300.
-            K (float, optional): Overall heat transfer coefficient (W/K). Defaults to 20.
-            Q_HP_Max (float, optional): Max heat pump power in W. Defaults to 1500.
-            simulation_time (int, optional): Total simulation duration in seconds.
-                Defaults to one day (24*60*60).
-            control_step (int, optional): Simulation time step in seconds.
-                Defaults to 300.
-            schedule_type (str, optional): Type of outdoor temperature schedule.
-                Defaults to "24-hour".
-            reward_mode (str, optional): One of {"temperature", "combined"}.
-                Determines how rewards are calculated. Defaults to "temperature".
-            temperature_weight (float, optional): Weight for the temperature objective
-                in the combined mode. Defaults to 1.0.
-            economic_weight (float, optional): Weight for the economic objective
-                in the combined mode. Defaults to 1.0.
-            render_mode (None or str, optional): For compatibility with Gym APIs.
-                Not used in this environment. Defaults to None.
         """
+        # TODO VP 2026.01.07. : add docsstring
         # Setup warning filters for Ray workers (must be called early)
         setup_warning_filters()
 
@@ -195,8 +172,8 @@ class AdvBuildingGym(gym.Env):
         observation_space = OrderedDict()
         action_space = OrderedDict()
 
-        # TODO VP 2025.12.03. : refactor it to a datasource...
-        # Use float32-typed bounds to avoid gym casting warnings
+        # TODO VP 2025.12.03. : refactor it to a datasource..?
+        # TODO VP 2026.01.12. : Rename datasource to statesource / stateprovider? -- it is rather a stream of states which are provided
         observation_space["cum_E_Wh"] = spaces.Box(
             low=np.zeros((1,), dtype=np.float32),
             high=np.full((1,), np.inf, dtype=np.float32),
@@ -216,10 +193,14 @@ class AdvBuildingGym(gym.Env):
 
         self.reward_funcs = rewards
 
+        # Calculate total action dimension (sum of all action space shapes)
+        # This must match the flattened action vector built in step()
+        total_action_dim = sum(int(np.prod(space.shape)) for space in action_space.values())
+
         observation_space["prev_action"] = spaces.Box(
-            low=np.full((len(action_space),), -1.0, dtype=np.float32),
-            high=np.full((len(action_space),), 1.0, dtype=np.float32),
-            shape=(len(action_space),),
+            low=np.full((total_action_dim,), -1.0, dtype=np.float32),
+            high=np.full((total_action_dim,), 1.0, dtype=np.float32),
+            shape=(total_action_dim,),
             dtype=np.float32,
         )
 
@@ -228,8 +209,7 @@ class AdvBuildingGym(gym.Env):
         self.state = OrderedDict()
         for state_name, state_space in observation_space.items():
             # Initialize internal state arrays with the same dtype as the declared space
-            self.state[state_name] = np.zeros(
-                shape=state_space.shape, dtype=state_space.dtype)
+            self.state[state_name] = np.zeros(shape=state_space.shape, dtype=state_space.dtype)
 
         # Store the original Dict action space for internal use
         self._dict_action_space = SDict(action_space)
@@ -237,16 +217,13 @@ class AdvBuildingGym(gym.Env):
         # Flatten Dict action space to Box for compatibility with RLlib's
         # vectorized environments (SyncVectorEnv). Dict action spaces cause
         # IndexError in gymnasium's _iterate_dict when used with vectorization.
-        total_action_dim = sum(
-            int(np.prod(space.shape)) for space in action_space.values()
-        )
+        # Note: total_action_dim already calculated above for prev_action space
         self.action_space = spaces.Box(
             low=-1.0,
             high=1.0,
             shape=(total_action_dim,),
             dtype=np.float32,
         )
-        # self.action_space = dict_space_to_space(action_space)
 
         self.building_props = building_props
         self.simulation_time = simulation_time
@@ -280,8 +257,6 @@ class AdvBuildingGym(gym.Env):
         self.iteration = 0
         for sync in self.infras + self.datasources:
             sync.synchronize(self.iteration)
-
-        logger.debug(self.state.keys())
 
         for k, v in self.state.items():
             if isinstance(v, np.ndarray):
@@ -350,13 +325,12 @@ class AdvBuildingGym(gym.Env):
 
     def step(self, action):
         """
-        Execute a single control step in the env by applying the selected
-        action to the heat pump.
+        Execute a single control step in the env by applying the selected action.
 
         Calculates:
           - new state
           - reward
-          - Termination conditions
+          - termination conditions
 
         Args:
             action (np.array): Flat action array in [-1, 1] with shape (total_action_dim,).
@@ -368,10 +342,10 @@ class AdvBuildingGym(gym.Env):
             truncated (bool): False in this environment.
             info (dict): Additional information data.
         """
-        # Clip actions
-        action = np.clip(action, -1, 1)
+        # Clip actions and store for logging
+        clipped_flat_action = np.clip(action, -1, 1)
         # Convert flat action to Dict format for internal infrastructure use
-        action = self._flat_action_to_dict(action)
+        action = self._flat_action_to_dict(clipped_flat_action)
 
         for infr in self.infras:
             infr.exec_action(action, self.state)
@@ -384,16 +358,22 @@ class AdvBuildingGym(gym.Env):
         prev_action_vec = []
         for key in self.action_space_keys:
             act_val = action.get(key)
-            act_scalar = float(np.atleast_1d(act_val)[0]) if act_val is not None else 0.0
-            prev_action_vec.append(act_scalar)
+            if act_val is not None:
+                # Flatten multi-dimensional actions (e.g., HP_action is 2D)
+                act_array = np.atleast_1d(act_val).flatten()
+                prev_action_vec.extend(act_array)
+            else:
+                # Default to 0 if action not present
+                space = self._dict_action_space.spaces[key]
+                action_dim = int(np.prod(space.shape)) if space.shape else 1
+                prev_action_vec.extend([0.0] * action_dim)
         self.state["prev_action"] = np.array(prev_action_vec, dtype=np.float32)
 
+        # Calculate reward
         reward: float = 0
-        reward_hist = dict()
         for rew_f in self.reward_funcs:
             rew_val = float(np.asarray(rew_f.get_reward(action, self.state)).item())
             reward += rew_val
-            reward_hist[rew_f.name] = rew_val
 
         # Sync iterations
         for sync in self.infras + self.datasources:
@@ -402,14 +382,13 @@ class AdvBuildingGym(gym.Env):
         # Check if episode should terminate
         terminated = self.is_done()
         truncated = False
-        
-        # if terminated:
-        #     logger.info(f"Done! (iter: {self.iteration})")
+
         if not terminated:
             self.iteration += 1
 
         info = {
-            "action": action,
+            "action": action,  # Dict format (for compatibility)
+            "clipped_action": clipped_flat_action,  # Flat clipped action for logging
             "reward": reward,
             "state": {k: np.array(v, copy=True) for k, v in self.state.items()},
             "E_HP_el_Wh": self.state["cum_E_Wh"],
