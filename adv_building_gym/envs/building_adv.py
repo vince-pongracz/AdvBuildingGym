@@ -25,6 +25,10 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# TODO VP 2026.01.12. : Use Env-to-module and module-to-Env pipelines and keep the dict state and action spaces in the env...
+# So the mapping from action vector to dict and vice versa is done in the pipelines, not in the env directly... -- this mapping is rather the task of the Rllib, not the env's
+# In this case, SB could not really work anymore, because of the dict spaces... but RLlib could work with custom pipelines...
+# Link: https://docs.ray.io/en/latest/rllib/env-to-module-connector.html#env-to-module-pipeline-docs
 
 class AdvBuildingGym(gym.Env):
     """
@@ -166,6 +170,7 @@ class AdvBuildingGym(gym.Env):
         setup_warning_filters()
 
         super(AdvBuildingGym, self).__init__()
+
 
         self.iteration = 0
 

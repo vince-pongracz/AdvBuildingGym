@@ -8,6 +8,8 @@ from .base import Infrastructure
 logger = logging.getLogger(__name__)
 
 
+# TODO VP 2026.01.12. : Do we also need such datasources, which are not included in the state?
+
 class HP(Infrastructure):
     """Heat Pump infrastructure component."""
 
@@ -89,3 +91,17 @@ class HP(Infrastructure):
         new_temp = states["temp_norm_in"][0] + self.temp_norm_in_change
         # Clip to observation space bounds and ensure float32
         states["temp_norm_in"][0] = np.float32(np.clip(new_temp, -1.0, 1.0))
+
+    def get_electric_consumption(self, actions) -> float:
+        """Get current electric energy consumption from heat pump.
+
+        HP action is [energy, mode] where energy is in [-1, 0].
+        Actual consumption is abs(energy) * Q_electric_max.
+        """
+        if "HP_action" not in actions:
+            return 0.0
+
+        action = actions["HP_action"]
+        energy = float(np.atleast_1d(action)[0])
+        # Energy is negative ([-1, 0]), so take absolute value
+        return abs(energy) * self.Q_electric_max

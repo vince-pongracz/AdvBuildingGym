@@ -12,7 +12,7 @@ from .devices.datasources import (
 from .rewards import RewardFunction, TempReward, EconomicReward, MinimiseEnergyConsumption_Reward, UserEnergyNeedReward
 
 # TODO VP 2026.01.07. : Create serialisation or dump for config, dump and load back from specific file (json, yaml, etc.)
-# Do not serialise such params at datasources or infrastructures, which are e.g coming from the BuildingProps during initialisation
+# Do not serialise such params of datasources or infrastructures, which are e.g coming from the BuildingProps during initialisation
 
 @dataclass
 class Config:

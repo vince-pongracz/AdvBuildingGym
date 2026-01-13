@@ -14,6 +14,7 @@ from .building_heat_loss import BuildingHeatLoss
 from .desired_user_energy_need import DesiredUserEnergyNeed
 from .desired_user_temperature import DesiredInsideTemperature
 from .energy_price import EnergyPriceDataSource
+from .operator_energy_control import OperatorEnergyControl
 from .weather import WeatherDataSource
 
 __all__ = [
@@ -22,5 +23,6 @@ __all__ = [
     "DesiredUserEnergyNeed",
     "DesiredInsideTemperature",
     "EnergyPriceDataSource",
+    "OperatorEnergyControl",
     "WeatherDataSource",
 ]

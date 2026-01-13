@@ -11,12 +11,12 @@ logging.basicConfig(
 
 from .base import Infrastructure
 from .battery import Battery
-from .hh_consumers import HHConsumers
+from .hh_consumers import HouseholdEnergyConsumers
 from .hp import HP
 
 __all__ = [
     "Infrastructure",
     "HP",
-    "HHConsumers",
+    "HouseholdEnergyConsumers",
     "Battery",
 ]

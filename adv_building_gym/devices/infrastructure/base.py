@@ -41,3 +41,18 @@ class Infrastructure(EnvSyncInterface):
     def update_state(self, states: Dict) -> None:
         """Update state based on current iteration. Implement in derived classes."""
         pass
+
+    def get_electric_consumption(self, actions: Dict) -> float:
+        """Get current electric energy consumption in kW.
+
+        Default implementation: extracts action for this component and scales by Q_electric_max.
+        Override in derived classes for more complex calculations.
+
+        Args:
+            actions: Dictionary containing all actions
+
+        Returns:
+            Electric energy consumption in kW
+        """
+        # Default: return 0 if no action found
+        return 0.0

@@ -61,3 +61,19 @@ class Battery(Infrastructure):
         history[:-1] = history[1:]
         # Insert new state at the end
         history[-1] = np.float32(self.percentage)
+
+    def get_electric_consumption(self, actions: Dict) -> float:
+        """Get current electric energy consumption from battery.
+
+        Battery action is in [-1, 1]:
+        - Positive: charging (consuming from grid)
+        - Negative: discharging (providing to grid, no consumption)
+
+        Returns only positive consumption from grid.
+        """
+        if "battery_action" not in actions:
+            return 0.0
+
+        action = float(np.atleast_1d(actions["battery_action"])[0])
+        # Only positive actions (charging) consume from grid
+        return max(0.0, action) * self.Q_electric_max
