@@ -12,6 +12,18 @@
 
 <h1 align="center">Advanced Deep Reinforcement Learning for Heat Pump Control in Residential Buildings</h1>
 
+# TODO VP: change things here...
+
+### Slurm
+
+A bit more detailed help here: https://www.nhr.kit.edu/userdocs/haicore/batch/
+
+```bash
+sbatch slurm_scripts/slurm_train_ray.sh # start a job
+scancel jobID # cancel a job
+scontrol show job [jobid] # see job state info
+squeue #Displays information about active, eligible, blocked, and/or recently completed jobs
+```
 
 <div align="center">
     <img src="data/img/HeatPumpEnvironment.gif" style="width:44%;">
@@ -33,7 +45,7 @@ It features a custom <a href="https://github.com/Farama-Foundation/Gymnasium" ta
 
 ### 1.1 Description
 
-The **[base_building_gym.py](llec_building_gym/envs/base_building_gym.py)** simulates thermal building dynamics with heat pump control in 5-minute intervals.
+The **[base_building_gym.py](adv_building_gym/envs/base_building_gym.py)** simulates thermal building dynamics with heat pump control in 5-minute intervals.
 This framework leverages the **[Gymnasium](https://github.com/Farama-Foundation/Gymnasium)** and **[Pyomo](https://github.com/Pyomo/pyomo)** libraries, making it suitable for both reinforcement learning agents and advanced control strategies.
 
 To simulate real-world uncertainty, the environment includes:
@@ -56,7 +68,7 @@ These features support the evaluation under uncertainty and help assess the robu
 ```bash
 LLECBuildingGym/                              # Root directory of the project
 ├── data/                                     # Input data (e.g., weather, pricing)
-├── llec_building_gym/                        # Main Python package: Gym environment and controllers
+├── adv_building_gym/                         # Main Python package: Gym environment and controllers
 │   ├── controllers/                          # Other controllers; Fuzzy, MPC, PI, PID
 │   │   ├── __init__.py                       # Exports controller classes
 │   │   ├── fuzzy_controller.py               # Fuzzy controller
@@ -98,12 +110,18 @@ LLECBuildingGym/                              # Root directory of the project
 
 ### 2.1a Haicore (Linux):
 
+Install / make sure you have Python 3.12.1 (`python --version` or `python3.12 --version`)
+
+Install link: https://www.python.org/downloads/release/python-3121/
+
 Clone the repository:
 ```bash
-git clone https://github.com/KIT-IAI/LLECBuildingGym
-python3.9 -m venv llec_env
-source llec_env/bin/activate
-cd LLECBuildingGym
+git clone https://github.com/vince-pongracz/AdvBuildingGym
+python3.12 -m venv adv_env
+source adv_env/bin/activate
+cd AdvBuildingGym
+
+alias pip='python -m pip'
 
 pip install --upgrade pip
 pip install -r requirements.txt
@@ -112,17 +130,17 @@ pip install -e .
 
 The virtual environment and project directory should be organized as shown below:
 ```bash
-llec_env/        # Python virtual environment
-LLECBuildingGym/ # Root directory of the project
+adv_env/        # Python virtual environment
+AdvBuildingGym/ # Root directory of the project
 ```
 
 ### 2.1b Local (Windows):
 
-Install Python 3.9.18 from https://www.python.org/downloads/release/python-3918 (newer Python versions may work but are not tested).
+Install Python 3.12.1 from https://www.python.org/downloads/release/python-3918 (newer Python versions may work but are not tested).
 
 ```bash
 git clone https://github.com/KIT-IAI/LLECBuildingGym
-py -3.9 -m venv llec_env
+py -3.12 -m venv llec_env
 .\llec_env\Scripts\activate
 cd LLECBuildingGym
 
@@ -135,7 +153,7 @@ pip install -e .
 ### 2.2 Reinstallation (after code changes):
 
 ```bash
-pip uninstall llec_building_gym -y
+pip uninstall adv_building_gym -y
 pip install -e .
 ```
 
@@ -249,6 +267,8 @@ chmod +x slurm_script/slurm_train_01_rl_batch.sh
 ```
 
 The modular design allows users to plug in their own controllers or extend the environment with new features, e.g., building dynamics or pricing schemes.
+
+
 
 </details>
 

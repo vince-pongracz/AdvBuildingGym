@@ -27,17 +27,31 @@ models/il_agent/
 .idea/
 
 # SLURM output logs (optional, for HPC clusters)
-slurm/*.out
-slurm/*.err
+**slurm_logs_eval/**.out
+**slurm_logs_eval/**.err
+**slurm_logs_train/**.err
+**slurm_logs_train/**.out
 
 # Environment and runtime
 .env
 .venv
 *.log
 .DS_Store
-slurm/*
 *.pyc
 __pycache__/
 plot-paper/workshop_animation.ipynb
 results/
 models/temperature/T01/ppo_model_seed18.zip
+adv_env
+
+# Temporary files
+result_**.json
+result.json
+
+models/test1/**
+
+# Episode metrics -- on episode end
+ep_metrics/**
+
+# SB logs
+logs/**
