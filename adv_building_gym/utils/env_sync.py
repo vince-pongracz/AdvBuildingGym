@@ -1,6 +1,6 @@
 
 
-# TODO use of PyDispatcher?
+# TODO VP 2026.01.14. : use of PyDispatcher?
 
 from abc import ABC
 

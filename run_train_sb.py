@@ -19,7 +19,7 @@ from stable_baselines3.common.vec_env import SubprocVecEnv, DummyVecEnv, VecMoni
 from stable_baselines3.common.callbacks import EvalCallback, BaseCallback
 
 from adv_building_gym import AdvBuildingGym
-from adv_building_gym.env_config import config as env_config
+from adv_building_gym.config import config as env_config
 from adv_building_gym.utils import CustomJSONEncoder
 
 # Logging configuration
@@ -253,8 +253,8 @@ def make_env(rank: int, seed: int):
     """Factory function for creating environment instances."""
     def _init() -> gym.Env:
         env = AdvBuildingGym(
-            infras=env_config.infras,
-            datasources=env_config.datasources,
+            infras=env_config.infras, # type: ignore
+            statesources=env_config.statesources, # type: ignore
             rewards=env_config.rewards,
             building_props=env_config.building_props,
         )

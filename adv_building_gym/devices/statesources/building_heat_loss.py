@@ -1,15 +1,17 @@
 import logging
 from collections import OrderedDict
+from typing import ClassVar, Set
 
 import numpy as np
 from gymnasium.spaces import Box
 
-from .base import DataSource
+from .base import StateSource
+from adv_building_gym.config.utils.serializable import ComponentRegistry
 
 logger = logging.getLogger(__name__)
 
 
-class BuildingHeatLoss(DataSource):
+class BuildingHeatLoss(StateSource):
     """
     Data source for building heat loss/gain due to temperature difference
     between inside and outside.
@@ -19,7 +21,13 @@ class BuildingHeatLoss(DataSource):
 
     where K is the building's heat transfer coefficient and temperatures
     are the normalized indoor and outdoor temperatures.
+
+    **Note**: No additional time series data is required for this statesource,
+    it is just updates the indoor temperature state.
     """
+
+    # K and mC come from building_props, timestep from control_step
+    _context_params: ClassVar[Set[str]] = {'K', 'mC', 'timestep'}
 
     def __init__(self,
                  name: str,
@@ -62,17 +70,25 @@ class BuildingHeatLoss(DataSource):
         This should be called after infrastructure exec_action to apply
         heat loss on top of any heating/cooling provided by HP or other devices.
         """
+
+        # NOTE VP 2026.01.14. : Reference to the 1R1C thermal model
+        # Paper: EKF based self-adaptive thermal model for a passive house
+        # Link: https://www.sciencedirect.com/science/article/pii/S0378778812003039?via%3Dihub
         Tin = states["temp_norm_in"][0]
         Tout = states["temp_norm_out"][0]
 
-        # Heat transfer from inside to outside (positive when Tin > Tout)
-        Q_transfer = self.K * (Tin - Tout)
+        # Heat transfer -- drawn from inside to the outside
+        Q_transfer = self.K * (Tout - Tin)
 
         # Temperature change due to heat loss
         dTemp = 0.001 * self.timestep * Q_transfer / self.mC
 
         # Apply heat loss to indoor temperature
-        new_temp = Tin - dTemp
+        new_temp = Tin + dTemp
 
         # Clip to observation space bounds and ensure float32
         states["temp_norm_in"][0] = np.float32(np.clip(new_temp, -1.0, 1.0))
+
+
+# Register BuildingHeatLoss with the component registry
+ComponentRegistry.register('statesource', BuildingHeatLoss)

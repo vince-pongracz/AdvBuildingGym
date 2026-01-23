@@ -1,6 +1,7 @@
 import logging
 
 from .base import Infrastructure
+from adv_building_gym.config.utils.serializable import ComponentRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -27,3 +28,7 @@ class HouseholdEnergyConsumers(Infrastructure):
             Constant baseline consumption Q_electric_max
         """
         return self.Q_electric_max
+
+
+# Register HouseholdEnergyConsumers with the component registry
+ComponentRegistry.register('infrastructure', HouseholdEnergyConsumers)

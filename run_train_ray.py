@@ -1,6 +1,9 @@
+"""Ray RLlib training script for AdvBuildingGym environment.
 
-
-# TODO VP 2026.01.13. : add docstring to the file
+Configures RL algorithms (PPO, SAC), manages distributed training with
+automatic SLURM resource detection, handles checkpointing, and tracks multi-objective
+reward metrics during training.
+"""
 
 import os
 import time
@@ -23,8 +26,8 @@ from ray.tune import CLIReporter
 from adv_building_gym.utils import setup_warning_filters
 
 # Trigger registration of the custom Gym IDs
-from adv_building_gym import make_checkpoint_callback_class
-from adv_building_gym.env_config import config as env_config
+from adv_building_gym import make_checkpoint_callback_class, ConfigManager
+from adv_building_gym.config import config as default_config
 from adv_building_gym.envs import adv_building_env_creator
 from adv_building_gym.ray_training import common_model_config, select_model
 from adv_building_gym.utils import (
@@ -82,8 +85,16 @@ def main():
         "--algorithm", default="ppo", choices=["ppo", "sac", "ddpg", "td3", "a2c"]
     )
     parser.add_argument(
-        "-cn", "--config_name", type=str, 
+        "-cn", "--config_name", type=str,
         help="Name of the configuration file or experiment setup to use"
+    )
+    parser.add_argument(
+        "--load-config", type=str,
+        help="Path to JSON config file to load (e.g., 'configs/my_config.json')"
+    )
+    parser.add_argument(
+        "--save-config", type=str,
+        help="Path where to save the config as JSON (e.g., 'configs/my_config.json')"
     )
     parser.add_argument("--timesteps", type=float, default=1e6) # a million
     parser.add_argument(
@@ -107,7 +118,7 @@ def main():
             #   More responsive to recent performance changes
             # - episode_return_mean: RLlib built-in metric
             #   Same base calculation (sum of rewards per episode), but uses exponential moving average (EMA)
-            #   smoothed over last 100 episodes (metrics_num_episodes_for_smoothing=100)
+            #   smoothed over last 25 episodes (metrics_num_episodes_for_smoothing=25)
             #   More stable, less sensitive to noise, better for detecting long-term trends
             # - reward_rate: Custom metric = achieved_reward / max_possible_reward
             #   Normalized performance score in [0, 1] range
@@ -126,11 +137,27 @@ def main():
     args = parser.parse_args()
 
     args.timesteps = int(args.timesteps)
-    args.config_name = env_config.config_name if args.config_name is None else args.config_name
+
+    # Load config from file if specified, otherwise use default
+    if args.load_config:
+        logger.info("Loading config from: %s", args.load_config)
+        active_config = ConfigManager.load(args.load_config)
+        logger.info("Config loaded successfully: %s", active_config.config_name)
+    else:
+        active_config = default_config
+
+    args.config_name = active_config.config_name if args.config_name is None else args.config_name
+
+    # Save config to file if specified
+    if args.save_config:
+        logger.info("Saving config to: %s", args.save_config)
+        ConfigManager.save(active_config, args.save_config)
+        logger.info("Config saved successfully")
+
     # Add env_runners/ prefix to metric if not already present
     if not args.metric.startswith("env_runners/"):
         args.metric = f"env_runners/{args.metric}"
-    
+
     logger.info("Parsed arguments: %s", vars(args))
     # ------------------------------------------------
     # Configure Ray from SLURM / environment when available so Ray doesn't
@@ -183,7 +210,7 @@ def main():
     # Build algorithm-specific config
     algo_config = select_model(
         algorithm=args.algorithm,
-        episode_length=env_config.EPISODE_LENGTH,
+        episode_length=active_config.EPISODE_LENGTH,
     )
 
     # Apply common RLlib configuration (resource allocation, action space, and callbacks)
@@ -195,7 +222,7 @@ def main():
         num_gpus=gpus,
         checkpoint_callback_class=checkpoint_callback_class,
         env_id=ENV_ID,
-        rewards=env_config.rewards,
+        rewards=active_config.rewards,
         metrics_base_dir="ep_metrics",
         clip_actions=True,
     )
@@ -212,7 +239,7 @@ def main():
     # Calculate checkpoint frequency in training iterations based on episodes
     # Episode length from env config (288 timesteps per episode)
     # Training batch size per iteration: train_batch_size_per_learner = 4000 timesteps
-    timesteps_per_episode = env_config.EPISODE_LENGTH  # 288 timesteps
+    timesteps_per_episode = active_config.EPISODE_LENGTH  # 288 timesteps
     timesteps_per_iteration = param_space.get("train_batch_size_per_learner", 4000)
     checkpoint_freq_iterations = max(1, int((args.checkpoint_frequency_episodes * timesteps_per_episode) / timesteps_per_iteration))
 

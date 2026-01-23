@@ -9,7 +9,7 @@ from gymnasium.spaces import Dict as SDict
 import numpy as np
 import pandas as pd
 
-from adv_building_gym.devices.datasources import DataSource
+from adv_building_gym.devices.statesources import StateSource
 from adv_building_gym.rewards import RewardFunction
 from adv_building_gym.devices.infrastructure import Infrastructure
 
@@ -149,7 +149,7 @@ class AdvBuildingGym(gym.Env):
     def __init__(
         self,
         infras: list[Infrastructure],
-        datasources: list[DataSource],
+        statesources: list[StateSource],
         rewards: list[RewardFunction],
         building_props: BuildingProps,
         simulation_time=24 * 60 * 60,
@@ -177,8 +177,7 @@ class AdvBuildingGym(gym.Env):
         observation_space = OrderedDict()
         action_space = OrderedDict()
 
-        # TODO VP 2025.12.03. : refactor it to a datasource..?
-        # TODO VP 2026.01.12. : Rename datasource to statesource / stateprovider? -- it is rather a stream of states which are provided
+        # TODO VP 2025.12.03. : refactor it to a datasource..? -- no, but keep track of it
         observation_space["cum_E_Wh"] = spaces.Box(
             low=np.zeros((1,), dtype=np.float32),
             high=np.full((1,), np.inf, dtype=np.float32),
@@ -187,13 +186,12 @@ class AdvBuildingGym(gym.Env):
         )
 
         self.infras = infras
-        self.action_space_keys = []
         for infr in self.infras:
             infr.setup_spaces(observation_space, action_space)
-            self.action_space_keys.append(f"{infr.name}_action")
+        self.action_space_keys = list(action_space.keys())
 
-        self.datasources = datasources
-        for ds in self.datasources:
+        self.statesources = statesources
+        for ds in self.statesources:
             ds.setup_spaces(observation_space, action_space)
 
         self.reward_funcs = rewards
@@ -246,7 +244,7 @@ class AdvBuildingGym(gym.Env):
         logger.debug("AdvBuildingGym created!")
         logger.debug("  Objectives: %s", [rew.name for rew in rewards])
         logger.debug("  Actions: %s", [infr.name for infr in infras])
-        logger.debug("  States: %s", [ds.name for ds in datasources])
+        logger.debug("  States: %s", [ds.name for ds in statesources])
 
     def get_state_space(self):
         return self.observation_space
@@ -260,7 +258,7 @@ class AdvBuildingGym(gym.Env):
         super().reset(seed=seed, options=options)
 
         self.iteration = 0
-        for sync in self.infras + self.datasources:
+        for sync in self.infras + self.statesources:
             sync.synchronize(self.iteration)
 
         for k, v in self.state.items():
@@ -270,9 +268,9 @@ class AdvBuildingGym(gym.Env):
             else:
                 logger.debug("Unidentified type: %s", type(v))
 
-        # Update state from datasources to populate initial observations
+        # Update state from statesources to populate initial observations
         # This ensures observations are within bounds after reset
-        for ds in self.datasources:
+        for ds in self.statesources:
             ds.update_state(states=self.state)
 
         # Update infrastructure states as well
@@ -283,11 +281,11 @@ class AdvBuildingGym(gym.Env):
         return self.state, info
 
     def _get_observation(self) -> dict:
-        # Start with the current env state so datasources have access to
+        # Start with the current env state so statesources have access to
         # bookkeeping keys such as "iteration" and "sim_hour" during reset.
         state = OrderedDict(self.state) if isinstance(self.state, OrderedDict) else OrderedDict()
-        for ds in self.datasources:
-            # datasources accept a dict and update it in-place
+        for ds in self.statesources:
+            # statesources accept a dict and update it in-place
             ds.update_state(states=state)
         return state
 
@@ -356,7 +354,7 @@ class AdvBuildingGym(gym.Env):
             infr.exec_action(action, self.state)
             infr.update_state(self.state)
 
-        for ds in self.datasources:
+        for ds in self.statesources:
             ds.update_state(states=self.state)
 
         # Track last executed action for observability (flattened order matches action_space_keys)
@@ -381,7 +379,7 @@ class AdvBuildingGym(gym.Env):
             reward += rew_val
 
         # Sync iterations
-        for sync in self.infras + self.datasources:
+        for sync in self.infras + self.statesources:
             sync.synchronize(self.iteration)
 
         # Check if episode should terminate
@@ -396,7 +394,7 @@ class AdvBuildingGym(gym.Env):
             "clipped_action": clipped_flat_action,  # Flat clipped action for logging
             "reward": reward,
             "state": {k: np.array(v, copy=True) for k, v in self.state.items()},
-            "E_HP_el_Wh": self.state["cum_E_Wh"],
+            "cum_E_Wh": self.state["cum_E_Wh"],
         }
 
         return self.state, reward, terminated, truncated, info

@@ -6,7 +6,7 @@ from gymnasium.envs.registration import register
 
 from .envs import AdvBuildingGym
 from .controllers import FuzzyController, MPCController, PIController, PIDController
-from .env_config import config
+from .config import config, ConfigManager
 from .callbacks import (
     create_on_episode_end_callback,
     make_checkpoint_callback_class,
@@ -20,7 +20,7 @@ register(
     max_episode_steps=288,
     kwargs={
         "infras": config.infras,
-        "datasources": config.datasources,
+        "statesources": config.statesources,
         "rewards": config.rewards,
         "building_props": config.building_props,
         "render_mode": None,
@@ -31,6 +31,7 @@ register(
 __all__ = [
     "AdvBuildingGym",
     "config",
+    "ConfigManager",
     "FuzzyController",
     "MPCController",
     "PIController",

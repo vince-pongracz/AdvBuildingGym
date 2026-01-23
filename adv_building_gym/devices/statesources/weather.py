@@ -1,5 +1,7 @@
 import logging
 from collections import OrderedDict
+from enum import Enum
+from typing import ClassVar, Set
 
 import numpy as np
 from gymnasium.spaces import Box
@@ -7,11 +9,10 @@ from gymnasium.spaces import Box
 # TODO VP 2026.01.07. : change scaling implementation, use sklearn classes and functions for that -- not really important, low priority task
 from sklearn import preprocessing
 
-from .base import DataSource
+from .base import StateSource
+from adv_building_gym.config.utils.serializable import ComponentRegistry
 
 logger = logging.getLogger(__name__)
-
-from enum import Enum
 
 
 class Normalisation(Enum):
@@ -19,16 +20,23 @@ class Normalisation(Enum):
     MAX_ABS_SCALING = "max_abs"
     MIN_MAX_SCALING = "min_max"
     STANDARDISATION = "std"
-    
 
-class WeatherDataSource(DataSource):
-    """WeatherDataSource
-    """
 
-    def __init__(self, name: str, ds_path: str | None = None, 
-                 normalise: Normalisation | None = Normalisation.MAX_ABS_SCALING) -> None:
+class WeatherDataSource(StateSource):
+    """WeatherDataSource"""
+
+    # normalise is an enum, need special handling for serialization
+    _exclude_params: ClassVar[Set[str]] = {'iteration', 'ts'}
+
+    def __init__(self, name: str, ds_path: str | None = None,
+                 normalise: Normalisation | str | None = Normalisation.MAX_ABS_SCALING) -> None:
         super().__init__(name, ds_path)
-        
+
+        # Convert string to enum if needed (for deserialization)
+        if isinstance(normalise, str):
+            normalise = Normalisation(normalise)
+        self.normalise = normalise  # Store for serialization
+
         if self.ts is not None:
             logger.info("Use data file: %s", ds_path)
             column_name: str = "temp_amb [°C]"
@@ -41,22 +49,22 @@ class WeatherDataSource(DataSource):
                     self.ts["temp_norm_out"] = (self.ts[column_name] - self.ts[column_name].mean()) / self.ts[column_name].std()
                 case None:
                     self.ts["temp_norm_out"] = self.ts[column_name]
-                    
+        else:
+            logger.info("No data file provided, will use synthetic data")
 
 
     def setup_spaces(self,
                      state_spaces: OrderedDict,
                      action_spaces: OrderedDict
                      ) -> tuple[OrderedDict, OrderedDict]:
-        state_spaces["temp_norm_out"] = Box(low=-1, high=1, shape=(1,), dtype=np.float32)
+        if "temp_norm_out" not in state_spaces.keys():
+            state_spaces["temp_norm_out"] = Box(low=-1, high=1, shape=(1,), dtype=np.float32)
 
         if "sim_hour" not in state_spaces.keys():
             state_spaces["sim_hour"] = Box(low=np.full((1,), 0, dtype=np.float32),
                                             high=np.full((1,), np.inf, dtype=np.float32),
                                             shape=(1,),
                                             dtype=np.float32)
-        if "temp_diff" not in state_spaces.keys():
-            state_spaces["temp_diff"] = Box(low=-1, high=1, shape=(1,), dtype=np.float32)
 
         return state_spaces, action_spaces
 
@@ -92,7 +100,12 @@ class WeatherDataSource(DataSource):
         temp_norm_out = np.float32(temp_norm_out)
         states["temp_norm_out"][0] = temp_norm_out
 
-        # Track simple difference between indoor and outdoor normalised temps
-        temp_norm_value = states.get("temp_norm_in", np.zeros(1, dtype=np.float32))[0]
-        temp_diff = np.float32(np.clip(temp_norm_value - temp_norm_out, -1.0, 1.0))
-        states["temp_diff"][0] = temp_diff
+    def _get_serialize_value(self, param_name: str, value):
+        """Handle enum serialization for normalise parameter."""
+        if param_name == 'normalise' and isinstance(value, Normalisation):
+            return value.value  # Serialize as string
+        return super()._get_serialize_value(param_name, value)
+
+
+# Register WeatherDataSource with the component registry
+ComponentRegistry.register('statesource', WeatherDataSource)

@@ -113,6 +113,7 @@ def common_model_config(
     )
     config.reporting(
         keep_per_episode_custom_metrics=True,
+        metrics_num_episodes_for_smoothing=25,
     )
     config.framework(
         framework="torch",

@@ -17,13 +17,13 @@ def adv_building_env_creator(config):
 
     Args:
         config: Configuration dict passed by Ray Tune (currently unused,
-                environment config is loaded from env_config module)
+                environment config is loaded from config module)
 
     Returns:
-        AdvBuildingGym instance configured with the settings from env_config
+        AdvBuildingGym instance configured with the settings from config module
     """
-    # Import env_config here to avoid circular imports
-    from ..env_config import config as env_config
+    # Import config here to avoid circular imports
+    from ..config import config as env_config
 
     # NOTE VP 2026.01.13. : Warnings about config fields being None are supressed, 
     # because Config initionalises them as None by default, 
@@ -31,7 +31,7 @@ def adv_building_env_creator(config):
     # --> that is why the type:ignore comments below
     return AdvBuildingGym(
         infras=env_config.infras, # type: ignore
-        datasources=env_config.datasources, # type: ignore
+        statesources=env_config.statesources, # type: ignore
         rewards=env_config.rewards,
         building_props=env_config.building_props,
     )
