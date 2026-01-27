@@ -154,9 +154,10 @@ def main():
         ConfigManager.save(active_config, args.save_config)
         logger.info("Config saved successfully")
 
-    # Add env_runners/ prefix to metric if not already present
-    if not args.metric.startswith("env_runners/"):
-        args.metric = f"env_runners/{args.metric}"
+    # Add evaluation/env_runners/ prefix to metric if not already present
+    # RLlib reports custom metrics under evaluation/env_runners/ in the results dict
+    if not args.metric.startswith("evaluation/"):
+        args.metric = f"evaluation/env_runners/{args.metric}"
 
     logger.info("Parsed arguments: %s", vars(args))
     # ------------------------------------------------
@@ -170,12 +171,22 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logger.info("Training on device: %s", device)
 
-    cuda_visible = os.environ.get("CUDA_VISIBLE_DEVICES")
-    if cuda_visible:
-        # CUDA_VISIBLE_DEVICES may contain comma-separated GPU ids
-        gpus = len([x for x in cuda_visible.split(",") if x.strip() != ""])
+    # Only count GPUs if PyTorch can actually use CUDA
+    if torch.cuda.is_available():
+        cuda_visible = os.environ.get("CUDA_VISIBLE_DEVICES")
+        if cuda_visible:
+            # CUDA_VISIBLE_DEVICES may contain comma-separated GPU ids
+            gpus = len([x for x in cuda_visible.split(",") if x.strip() != ""])
+        else:
+            gpus = torch.cuda.device_count()
     else:
         gpus = 0
+        if os.environ.get("CUDA_VISIBLE_DEVICES"):
+            logger.warning(
+                "CUDA_VISIBLE_DEVICES=%s but PyTorch cannot see GPU. "
+                "Training will use CPU only. Check CUDA/driver setup.",
+                os.environ.get("CUDA_VISIBLE_DEVICES")
+            )
 
     logger.info("Initializing Ray with cpus=%s gpus=%s (from SLURM/CUDA env)", cpus, gpus)
 
@@ -268,9 +279,9 @@ def main():
             "training_iteration": "Iter",
             "num_env_steps_sampled_lifetime": "Steps",
             args.metric: "Metric",
-            "env_runners/episode_return_mean": "EpRet",
-            "env_runners/achieved_reward": "AchRew",
-            "env_runners/reward_rate": "RewRate",
+            "evaluation/env_runners/episode_return_mean": "EpRet",
+            "evaluation/env_runners/achieved_reward": "AchRew",
+            "evaluation/env_runners/reward_rate": "RewRate",
         },
         max_report_frequency=30,  # Report every 30 seconds
         print_intermediate_tables=True,

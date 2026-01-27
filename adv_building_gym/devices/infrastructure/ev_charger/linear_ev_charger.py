@@ -16,6 +16,9 @@ logger = logging.getLogger(__name__)
 class LinearEVCharger(Infrastructure):
     """Electric Vehicle Charger infrastructure component.
 
+    Action convention: positive = consumption (charging from grid), negative = production (V2G to grid).
+    EV charger action is in [-1, 1] if V2G enabled, [0, 1] if V2G disabled.
+
     Models an EV charging station with controllable charging rate.
     Supports vehicle-to-grid (V2G) when action is negative -- in this case it behaves like a battery.
 
@@ -82,12 +85,14 @@ class LinearEVCharger(Infrastructure):
                      state_spaces,
                      action_spaces
                      ):
-        """
-        Setup observation and action spaces for EV charger.
+        """Setup observation and action spaces for EV charger.
 
-        Action: charging rate [-1, 1]
-        - Positive: V2G discharge (if enabled) -- E added to battery from grid
-        - Negative: charging from grid -- E drained from battery to grid
+        Action convention: positive = consumption (charging from grid), negative = production (V2G to grid).
+
+        Action: charging/discharging rate
+        - Range: [-1, 1] if V2G enabled, [0, 1] if V2G disabled
+        - Positive: charging EV from grid (consuming energy)
+        - Negative: V2G discharge to grid (providing energy, if enabled)
         """
 
         # Actions
@@ -207,8 +212,11 @@ class LinearEVCharger(Infrastructure):
     def get_electric_consumption(self, actions: Dict) -> float:
         """Get current electric energy consumption from EV charger.
 
-        Positive: consuming from grid (charging)
-        Negative: providing to grid (V2G discharge)
+        Sign convention: positive = consumption from grid, negative = production to grid.
+
+        Returns:
+            Positive value when charging EV (consuming from grid).
+            Negative value when V2G discharging (providing to grid).
         """
         if "lin_ev_charger_action" not in actions or not self.ev_connected:
             return 0.0

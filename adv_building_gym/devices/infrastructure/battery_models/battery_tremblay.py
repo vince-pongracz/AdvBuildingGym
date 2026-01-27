@@ -39,11 +39,14 @@ logger = logging.getLogger(__name__)
 # NOTE VP 2026.01.20. : It is optional to add this in a .py class
 # - PyBaMM (more complex, maybe keep it as an option later, but do not implement that)
 
-# TODO VP 2026.01.15. : Implement a reward function, which rewards shorter fully charged and fully drained times of the battery.
+# TODO VP / IDEA 2026.01.15. : Implement a reward function, which rewards shorter fully charged and fully drained times of the battery.
 
 
 class BatteryTremblay(Infrastructure):
     """Battery infrastructure using Tremblay model with series-parallel cell configuration.
+
+    Action convention: positive = consumption (charging from grid), negative = production (discharging to grid).
+    Battery action is in [-1, 1] where +1 = max charge rate, -1 = max discharge rate.
 
     Tremblay model (IEEE 2008) describes battery terminal voltage as a function of
     state-of-charge, current, and internal parameters. This provides more realistic
@@ -162,7 +165,13 @@ class BatteryTremblay(Infrastructure):
                      state_spaces,
                      action_spaces
                      ):
-        # Action
+        """Setup observation and action spaces for battery.
+
+        Action convention: positive = consumption (charging from grid), negative = production (discharging to grid).
+        Battery action is in [-1, 1].
+        """
+        # Action: charge/discharge level [-1, 1]
+        # Sign convention: positive = charging (consuming from grid), negative = discharging (providing to grid)
         if "battery_action" not in action_spaces.keys():
             action_spaces["battery_action"] = Box(low=-1, high=1, shape=(1,), dtype=np.float32)
 

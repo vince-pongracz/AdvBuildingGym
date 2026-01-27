@@ -60,6 +60,13 @@ def create_on_episode_end_callback(
         max_achievable_reward = ep_length * max_reward_per_step
         reward_rate = ep_achieved_reward / max_achievable_reward if max_achievable_reward > 0 else 0.0
 
+        # Extract cumulative energy from last info dict
+        cum_E_kWh = None
+        if hasattr(episode, "get_infos"):
+            infos = episode.get_infos()
+            if infos and len(infos) > 0 and isinstance(infos[-1], dict):
+                cum_E_kWh = infos[-1].get("cum_E_kWh")
+
         # Register custom metrics with RLlib's metrics system
         # These will appear in results under "env_runners/achieved_reward_mean" etc.
         metrics_logger.log_value("achieved_reward", ep_achieved_reward, reduce="mean")
@@ -69,6 +76,9 @@ def create_on_episode_end_callback(
         metrics_logger.log_value("achieved_reward_max", ep_achieved_reward, reduce="max")
         metrics_logger.log_value("reward_rate_min", reward_rate, reduce="min")
         metrics_logger.log_value("reward_rate_max", reward_rate, reduce="max")
+        # Log cumulative energy consumption
+        if cum_E_kWh is not None:
+            metrics_logger.log_value("cum_E_kWh", cum_E_kWh, reduce="mean")
 
         episode_id: str = episode.id_[:6]
         logger.info(
@@ -130,6 +140,7 @@ def create_on_episode_end_callback(
             "achieved_reward": float(ep_achieved_reward),
             "total_reward": float(max_achievable_reward),
             "reward_rate": float(reward_rate),
+            "cum_E_kWh": float(cum_E_kWh) if cum_E_kWh is not None else None,
             "rewards": episode.get_rewards() if hasattr(episode, "get_rewards") else None,
             "observations": episode.get_observations() if hasattr(episode, "get_observations") else None,
             "actions": clipped_actions,

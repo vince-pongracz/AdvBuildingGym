@@ -11,7 +11,7 @@ from adv_building_gym.config.utils.serializable import ComponentRegistry
 logger = logging.getLogger(__name__)
 
 # TODO VP 2026.01.08. : Search for energy need profile data during a day. Pay attention to weekdays, weekends, etc...
-# TODO VP 2026.01.08. : add reward function to this, using this...
+# TODO VP 2026.01.08. : add reward function to this
 
 class DesiredUserEnergyNeed(StateSource):
     """

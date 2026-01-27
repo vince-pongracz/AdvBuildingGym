@@ -10,7 +10,6 @@ from adv_building_gym.config.utils.serializable import ComponentRegistry
 
 logger = logging.getLogger(__name__)
 
-# TODO VP 2026.01.13. : it is a good starting point -- inspect & refine
 
 class OperatorEnergyControl(StateSource):
     """
@@ -25,7 +24,7 @@ class OperatorEnergyControl(StateSource):
                  name: str,
                  ds_path: str | None = None,
                  max_power_kW: float = 10.0,
-                 derive_max_power_from_data: bool = False
+                 derive_max_power_from_data: bool = True
                  ) -> None:
         """
         Initialize OperatorEnergyControl datasource.
@@ -70,28 +69,30 @@ class OperatorEnergyControl(StateSource):
         """Setup observation spaces for operator energy control limit."""
         # Normalized to [0, 1] range (non-negative power limit)
         if "operator_energy_max" not in state_spaces.keys():
-            state_spaces["operator_energy_max"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
+            state_spaces["operator_energy_max"] = Box(
+                low=0, high=1, shape=(1,), dtype=np.float32)
 
         # Instantaneous grid power consumption in kW
         # This will be calculated by the environment using infrastructure.get_electric_consumption()
         if "grid_power_kW" not in state_spaces.keys():
             state_spaces["grid_power_kW"] = Box(
-                low=np.zeros((1,), dtype=np.float32),
-                high=np.full((1,), np.inf, dtype=np.float32),
+                low=0.0, high=np.inf,
                 shape=(1,),
                 dtype=np.float32,
             )
 
         if "sim_hour" not in state_spaces.keys():
-            state_spaces["sim_hour"] = Box(low=np.full((1,), 0, dtype=np.float32),
-                                            high=np.full((1,), np.inf, dtype=np.float32),
-                                            shape=(1,),
-                                            dtype=np.float32)
+            state_spaces["sim_hour"] = Box(low=0,
+                high=np.inf,
+                shape=(1,),
+                dtype=np.float32
+            )
 
         return state_spaces, action_spaces
 
     def update_state(self, states) -> None:
         """Update operator energy limit state based on current iteration."""
+
         if self.ts is not None:
             if self.iteration < len(self.ts):
                 operator_energy_max_norm = float(self.ts.iloc[int(self.iteration)]["operator_energy_max_norm"])

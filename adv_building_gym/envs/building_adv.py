@@ -85,8 +85,7 @@ class AdvBuildingGym(gym.Env):
     Observation and action spaces
     - The environment builds an observation_space (SDict) and action_space (SDict)
         by aggregating spaces declared by every Infrastructure and DataSource. The
-        env also supplies a "prev_action" entry (Box in [-1, 1]) and bookkeeping keys
-        such as "cum_E_Wh" and "iteration".
+        env also supplies a "prev_action" entry (Box in [-1, 1]).
     - Observations returned by reset() and step() are Python dicts matching the
         observation_space keys. The environment does not return a flattened vector
         by default.
@@ -95,8 +94,10 @@ class AdvBuildingGym(gym.Env):
         internal bookkeeping entries. Datasources and infrastructures update this
         dict in-place during reset and step. Typical keys include:
             - iteration: current step index (int)
-            - cum_E_Wh: cumulative electrical energy consumed (or produced) in Wh
             - device-specific signals provided by datasources/infrastructures
+    Info
+    - step() returns an info dict containing:
+            - cum_E_kWh: cumulative net electrical energy in kWh (positive=consumption, negative=production)
     Reset semantics
     - reset(seed=None, options=None) -> (state: dict, info: dict)
             Resets internal state and datasources. If seed is None, a random integer
@@ -173,17 +174,10 @@ class AdvBuildingGym(gym.Env):
 
 
         self.iteration = 0
+        self.cum_E_kWh = 0.0  # Cumulative net energy in kWh (tracked in info, not observation)
 
         observation_space = OrderedDict()
         action_space = OrderedDict()
-
-        # TODO VP 2025.12.03. : refactor it to a datasource..? -- no, but keep track of it
-        observation_space["cum_E_Wh"] = spaces.Box(
-            low=np.zeros((1,), dtype=np.float32),
-            high=np.full((1,), np.inf, dtype=np.float32),
-            shape=(1,),
-            dtype=np.float32,
-        )
 
         self.infras = infras
         for infr in self.infras:
@@ -258,8 +252,9 @@ class AdvBuildingGym(gym.Env):
         super().reset(seed=seed, options=options)
 
         self.iteration = 0
+        self.cum_E_kWh = 0.0  # Reset cumulative energy on episode reset
         for sync in self.infras + self.statesources:
-            sync.synchronize(self.iteration)
+            sync.synchronise(self.iteration)
 
         for k, v in self.state.items():
             if isinstance(v, np.ndarray):
@@ -372,6 +367,12 @@ class AdvBuildingGym(gym.Env):
                 prev_action_vec.extend([0.0] * action_dim)
         self.state["prev_action"] = np.array(prev_action_vec, dtype=np.float32)
 
+        # Accumulate net energy consumption from all infrastructures
+        # Positive = consumption from grid, Negative = production to grid
+        total_power_kW = sum(infra.get_electric_consumption(action) for infra in self.infras)
+        energy_kWh = total_power_kW * (self.control_step / 3600)  # kW * hours = kWh
+        self.cum_E_kWh += energy_kWh
+
         # Calculate reward
         reward: float = 0
         for rew_f in self.reward_funcs:
@@ -380,7 +381,7 @@ class AdvBuildingGym(gym.Env):
 
         # Sync iterations
         for sync in self.infras + self.statesources:
-            sync.synchronize(self.iteration)
+            sync.synchronise(self.iteration)
 
         # Check if episode should terminate
         terminated = self.is_done()
@@ -394,7 +395,7 @@ class AdvBuildingGym(gym.Env):
             "clipped_action": clipped_flat_action,  # Flat clipped action for logging
             "reward": reward,
             "state": {k: np.array(v, copy=True) for k, v in self.state.items()},
-            "cum_E_Wh": self.state["cum_E_Wh"],
+            "cum_E_kWh": self.cum_E_kWh,  # Cumulative net energy (positive=consumption, negative=production)
         }
 
         return self.state, reward, terminated, truncated, info

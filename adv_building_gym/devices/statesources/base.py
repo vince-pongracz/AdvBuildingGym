@@ -15,7 +15,7 @@ class StateSource(EnvSyncInterface, Serializable):
     """Base class for data sources in the building environment."""
 
     # Parameters derived from context (building_props, control_step)
-    _context_params: ClassVar[Set[str]] = set()
+    _context_params: ClassVar[Set[str]] = {'control_step'}
 
     # Internal state - never serialize (ts is loaded from ds_path)
     _exclude_params: ClassVar[Set[str]] = {'iteration', 'ts'}
@@ -23,11 +23,13 @@ class StateSource(EnvSyncInterface, Serializable):
     def __init__(self,
                  name: str,
                  ds_path: str | None = None,
+                 control_step: float = 300.0,
                  ) -> None:
         super().__init__()
 
         self.name = name
         self.ds_path = ds_path  # Store path for serialization
+        self.control_step = control_step  # Control timestep in seconds
         if ds_path is not None:
             self.ts = pd.read_csv(ds_path)
             """Time series"""

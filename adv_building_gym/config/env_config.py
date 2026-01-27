@@ -22,6 +22,7 @@ class Config:
     """
     config_name: str = "test1"
 
+    seed: int = 42
     EPISODE_LENGTH: int = 288
     control_step: int = 300  # seconds (5 minutes)
 
@@ -42,7 +43,6 @@ class Config:
         """Initialize infras, statesources, and rewards using building_props if not provided."""
         if self.statesources is None:
             self.statesources = [
-                # TODO VP 2026.01.23. : Statesources also need a passed control_step...
                 EnergyPriceDataSource("E_price", ds_path="data/price_data_2025.csv"),
                 WeatherDataSource("weather", ds_path="data/LLEC_outdoor_temperature_5min_data.csv"),
                 InsideTemperature("desired_temp_in"),
@@ -68,14 +68,14 @@ class Config:
                 ),
                 BatteryTremblay("battery", control_step=self.control_step),  # 14 kWh, 48A defaults
                 LinearEVCharger("ev_charger", Q_electric_max=7.0, max_cap_kWh=60.0, max_charging_kW=7.0, control_step=self.control_step),
-                SolarPanel("solar", Q_electric_max=5.0, peak_power_kW=5.0, control_step=self.control_step),
+                SolarPanel("solar", Q_electric_max=5.0, peak_power_kW=5.0, seed=self.seed, control_step=self.control_step),
             ]
 
         if self.rewards is None:
             self.rewards = [
-                TempReward(1),
-                EconomicReward(1),
-                MinimiseEnergyConsumption_Reward(1),
+                TempReward(weight=1),
+                EconomicReward(weight=1),
+                MinimiseEnergyConsumption_Reward(weight=1),
                 OperatorEnergyControlReward(self.infras, weight=1),
             ]
 

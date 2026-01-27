@@ -38,6 +38,8 @@
 #SBATCH --cpus-per-task=4
 #SBATCH --gres=gpu:full:1
 #SBATCH --time=00:10:00
+# Exclude nodes with known GPU issues (add problematic nodes here)
+#SBATCH --exclude=haicn1704
 #SBATCH --output=slurm_logs_train/slurm-train-ray-%j.out
 #SBATCH --error=slurm_logs_train/slurm-train-ray-%j.err
 #SBATCH --job-name=ray-train-%j
@@ -142,22 +144,66 @@ echo "SLURM_CPUS_PER_TASK : ${SLURM_CPUS_PER_TASK:-}"
 echo "Node                : $(hostname)"
 echo "CUDA_VISIBLE_DEVICES : ${CUDA_VISIBLE_DEVICES:-}"
 
-# Unset LD_LIBRARY_PATH to avoid conflicts at torch / cuDNN (cuDNN mismatch occoured in earlier tests)
-unset LD_LIBRARY_PATH
+# Debug: Show LD_LIBRARY_PATH before any modifications
+echo "=== LD_LIBRARY_PATH (before) ==="
+echo "${LD_LIBRARY_PATH:-<not set>}"
+
+# Fix cuDNN version mismatch: PyTorch bundles cuDNN 9.10.2, but system CUDA 12.4 has cuDNN 9.5.1.
+# Solution: Remove the system CUDA toolkit path entirely, then prepend PyTorch's lib path.
+# The NVIDIA driver (libcuda.so) should be in /usr/lib64, accessible without the toolkit path.
+PYTORCH_LIB=$(python -c "import torch; print(torch.__path__[0] + '/lib')" 2>/dev/null || echo "")
+if [ -n "$LD_LIBRARY_PATH" ]; then
+    # Remove system CUDA paths (which contain conflicting cuDNN)
+    FILTERED_PATH=$(echo "$LD_LIBRARY_PATH" | tr ':' '\n' | grep -v '/cuda/' | tr '\n' ':' | sed 's/:$//')
+    # Prepend PyTorch's lib path (contains correct cuDNN)
+    if [ -n "$PYTORCH_LIB" ] && [ -d "$PYTORCH_LIB" ]; then
+        export LD_LIBRARY_PATH="${PYTORCH_LIB}:${FILTERED_PATH}"
+    else
+        export LD_LIBRARY_PATH="${FILTERED_PATH}"
+    fi
+    echo "=== LD_LIBRARY_PATH (cuda removed, pytorch prepended) ==="
+    echo "${LD_LIBRARY_PATH:-<empty>}"
+fi
+
+# CUDA initialization workarounds for HPC clusters
+export CUDA_MODULE_LOADING=LAZY          # Delay CUDA init, can help with driver issues
+export CUDA_DEVICE_ORDER=PCI_BUS_ID      # Consistent GPU ordering with nvidia-smi
+export TORCH_CUDA_ARCH_LIST="8.0"        # A100 compute capability, skip auto-detection
 
 echo "=== GPU Info (nvidia-smi) ==="
 nvidia-smi || true
 
 echo "=== Python / CUDA Info ==="
 python - <<'PY'
-import torch, sys
+import os, sys
 print('Python executable :', sys.executable)
 print('Python version    :', sys.version.splitlines()[0])
-print('CUDA available    :', torch.cuda.is_available())
-if torch.cuda.is_available():
-    print('Device name       :', torch.cuda.get_device_name(0))
-    print('CUDA version (torch):', torch.version.cuda)
-    print('CUDNN version     :', torch.backends.cudnn.version())
+
+# Check CUDA env vars before importing torch
+print('CUDA_VISIBLE_DEVICES:', os.environ.get('CUDA_VISIBLE_DEVICES', '<not set>'))
+print('CUDA_MODULE_LOADING :', os.environ.get('CUDA_MODULE_LOADING', '<not set>'))
+ld_path = os.environ.get('LD_LIBRARY_PATH', '<not set>')
+print('LD_LIBRARY_PATH     :', ld_path[:200] + '...' if len(ld_path) > 200 else ld_path)
+
+import torch
+print('PyTorch version     :', torch.__version__)
+print('CUDA built with     :', torch.version.cuda)
+
+# Try explicit CUDA initialization with better error reporting
+try:
+    if torch.cuda.is_available():
+        print('CUDA available      : True')
+        print('Device count        :', torch.cuda.device_count())
+        # Try to actually initialize CUDA
+        torch.cuda.init()
+        print('CUDA init           : SUCCESS')
+        print('Device name         :', torch.cuda.get_device_name(0))
+        print('CUDNN version       :', torch.backends.cudnn.version())
+    else:
+        print('CUDA available      : False')
+        print('CUDA init failed - torch.cuda.is_available() returned False')
+except Exception as e:
+    print(f'CUDA init FAILED    : {type(e).__name__}: {e}')
 PY
 
 # Disable ANSI color codes and log deduplication in Ray logs

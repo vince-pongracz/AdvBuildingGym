@@ -16,7 +16,11 @@ logger = logging.getLogger(__name__)
 # It is important to keep this distinction in mind and not mix them up.
 
 class HP(Infrastructure):
-    """Heat Pump infrastructure component."""
+    """Heat Pump infrastructure component.
+
+    Action convention: positive = consumption (from grid), negative = production (to grid).
+    Heat pumps only consume energy, so action is in [0, 1].
+    """
 
     # K and mC come from building_props context
     _context_params: ClassVar[Set[str]] = {'K', 'mC'}
@@ -54,11 +58,11 @@ class HP(Infrastructure):
                      action_spaces
                      ):
         # HP action is 2D: [energy, mode]
-        # - energy: [-1, 0] - HP always consumes energy (no positive E possible)
+        # - energy: [0, 1] - HP always consumes energy (positive = consumption)
         # - mode: [0, 1] - <0.4: cooling, >0.6: heating, [0.4, 0.6]: no action
         action_spaces["HP_action"] = Box(
-            low=np.array([-1.0, 0.0], dtype=np.float32),
-            high=np.array([0.0, 1.0], dtype=np.float32),
+            low=np.array([0.0, 0.0], dtype=np.float32),
+            high=np.array([1.0, 1.0], dtype=np.float32),
             shape=(2,),
             dtype=np.float32
         )
@@ -78,15 +82,15 @@ class HP(Infrastructure):
 
         # NOTE VP 2026.01.20. : Thermal model is 1R1C, same as links below
         # Determine mode: cooling (<0.4), heating (>0.6), or no action ([0.4, 0.6])
-        # energy is in [-1, 0], thermal power Q_thermal = abs(energy) * Q_electric_max * COP
+        # energy is in [0, 1], thermal power Q_thermal = energy * Q_electric_max * COP
         if mode < 0.4:
             # Cooling mode: remove heat from building (negative q_hp)
             cop = self.cop_cool
-            q_hp = -abs(energy) * self.Q_electric_max * cop  # heat removed from building
+            q_hp = -energy * self.Q_electric_max * cop  # heat removed from building
         elif mode > 0.6:
             # Heating mode: add heat to building (positive q_hp)
             cop = self.cop_heat
-            q_hp = abs(energy) * self.Q_electric_max * cop  # heat added to building
+            q_hp = energy * self.Q_electric_max * cop  # heat added to building
         else:
             # No action zone [0.4, 0.6]
             q_hp = 0.0
@@ -130,15 +134,13 @@ class HP(Infrastructure):
 
             # Back-calculate actual energy from actual q_hp
             if mode < 0.4:
-                # Cooling: q_hp = -abs(energy) * Q_electric_max * cop
-                # => abs(energy) = -q_hp / (Q_electric_max * cop)
-                # energy in [-1, 0], so energy = -abs(energy) = q_hp / (Q_electric_max * cop)
-                actual_energy = actual_q_hp / (self.Q_electric_max * cop) if (self.Q_electric_max * cop) > 0 else 0.0
-            else:  # mode > 0.6 (heating)
-                # Heating: q_hp = abs(energy) * Q_electric_max * cop
-                # => abs(energy) = q_hp / (Q_electric_max * cop)
-                # energy in [-1, 0], so energy = -abs(energy) = -q_hp / (Q_electric_max * cop)
+                # Cooling: q_hp = -energy * Q_electric_max * cop
+                # => energy = -q_hp / (Q_electric_max * cop)
                 actual_energy = -actual_q_hp / (self.Q_electric_max * cop) if (self.Q_electric_max * cop) > 0 else 0.0
+            else:  # mode > 0.6 (heating)
+                # Heating: q_hp = energy * Q_electric_max * cop
+                # => energy = q_hp / (Q_electric_max * cop)
+                actual_energy = actual_q_hp / (self.Q_electric_max * cop) if (self.Q_electric_max * cop) > 0 else 0.0
 
             # Update action with the reduced energy (preserve mode)
             actions["HP_action"][0] = np.float32(actual_energy)
@@ -157,16 +159,17 @@ class HP(Infrastructure):
     def get_electric_consumption(self, actions) -> float:
         """Get current electric energy consumption from heat pump.
 
-        HP action is [energy, mode] where energy is in [-1, 0].
-        Actual consumption is abs(energy) * Q_electric_max.
+        HP action is [energy, mode] where energy is in [0, 1].
+        Positive value indicates consumption from grid.
+        Actual consumption is energy * Q_electric_max.
         """
         if "HP_action" not in actions:
             return 0.0
 
         action = actions["HP_action"]
         energy = float(np.atleast_1d(action)[0])
-        # Energy is negative ([-1, 0]), so take absolute value
-        return abs(energy) * self.Q_electric_max
+        # Energy is positive ([0, 1]), consumption from grid
+        return energy * self.Q_electric_max
 
 
 # Register HP with the component registry

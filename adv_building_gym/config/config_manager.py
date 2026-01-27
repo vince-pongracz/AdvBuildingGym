@@ -31,6 +31,7 @@ class ConfigManager:
         """
         config_dict = {
             "config_name": config.config_name,
+            "seed": config.seed,
             "EPISODE_LENGTH": config.EPISODE_LENGTH,
             "control_step": config.control_step,
             "building_props": {
@@ -81,10 +82,12 @@ class ConfigManager:
         )
 
         control_step = config_dict.get("control_step", 300)
+        seed = config_dict.get("seed", 42)
 
         # Create Config with basic params (don't trigger __post_init__ defaults)
         config = Config(
             config_name=config_dict.get("config_name", "loaded_config"),
+            seed=seed,
             EPISODE_LENGTH=config_dict.get("EPISODE_LENGTH", 288),
             control_step=control_step,
             building_props=building_props,
@@ -99,6 +102,7 @@ class ConfigManager:
             "K": building_props.K,
             "mC": building_props.mC,
             "control_step": control_step,
+            "seed": seed,
         }
 
         # Reconstruct infrastructures
