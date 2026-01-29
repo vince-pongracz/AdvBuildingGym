@@ -1,9 +1,12 @@
+import logging
 import numpy as np
-from typing import List
+from typing import ClassVar, List, Set
 
 from .base import RewardFunction
+from adv_building_gym.config.utils.serializable import ComponentRegistry
 
-# TODO VP 2026.01.13. : refine reward function
+logger = logging.getLogger(__name__)
+
 
 class OperatorEnergyControlReward(RewardFunction):
     """
@@ -16,15 +19,20 @@ class OperatorEnergyControlReward(RewardFunction):
     - Zero reward (0.0) when consumption equals the limit
     - Negative penalty when consumption exceeds the limit
 
-    The reward scales linearly:
+    Linear reward calculation:
         reward = (operator_energy_max - grid_power_kW) / operator_energy_max
     """
+
+    # infrastructures comes from context (the Config's infras list)
+    _context_params: ClassVar[Set[str]] = {'infrastructures'}
 
     def __init__(self,
                  infrastructures: List,
                  weight: float,
                  max_power_kW: float = 10.0,
-                 name: str = "operator_energy_control_reward") -> None:
+                 name: str = "operator_energy_control_reward",
+                 harsh_penalty: float = -10.0
+                 ) -> None:
         """
         Initialize OperatorEnergyControlReward.
 
@@ -37,6 +45,7 @@ class OperatorEnergyControlReward(RewardFunction):
         super().__init__(weight, name)
         self.infrastructures = infrastructures
         self.max_power_kW = max_power_kW
+        self.harsh_penalty = harsh_penalty
 
     def get_reward(self, actions, states) -> float:
         """
@@ -55,13 +64,14 @@ class OperatorEnergyControlReward(RewardFunction):
         Returns:
             Scaled reward value
         """
-        # Calculate total grid power consumption by summing all infrastructure consumption
+        # Calculate total grid E consumption by summing all infrastructure consumption
         grid_power_kW = 0.0
         for infra in self.infrastructures:
             grid_power_kW += infra.get_electric_consumption(actions)
 
         # Store in state for observability (e.g., logging, other reward functions)
-        states["grid_power_kW"] = np.array([grid_power_kW], dtype=np.float32)
+        # TODO VP 2026.01.14. : Store it in info instead?
+        # states["grid_power_kW"] = np.array([grid_power_kW], dtype=np.float32)
 
         # Get normalized operator limit from state [0, 1]
         operator_limit_norm = float(states.get("operator_energy_max", np.array([1.0]))[0])
@@ -80,6 +90,10 @@ class OperatorEnergyControlReward(RewardFunction):
             reward = -1.0 if grid_power_kW > 0 else 0.0
 
         # Clip to reasonable range to avoid extreme penalties
-        reward = np.clip(reward, -2.0, 1.0)
+        clipped_reward = np.clip(reward, self.harsh_penalty, 1.0)
 
-        return float(self.weight * reward)
+        return float(self.weight * clipped_reward)
+
+
+# Register OperatorEnergyControlReward with the component registry
+ComponentRegistry.register('reward', OperatorEnergyControlReward)

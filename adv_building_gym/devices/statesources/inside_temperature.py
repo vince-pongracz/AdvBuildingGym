@@ -1,17 +1,21 @@
 import logging
 from collections import OrderedDict
+from typing import ClassVar, Set
 
 import numpy as np
 from gymnasium.spaces import Box
 
-from .base import DataSource
+from .base import StateSource
+from adv_building_gym.config.utils.serializable import ComponentRegistry
 
 logger = logging.getLogger(__name__)
 
 # TODO VP 2026.01.08. : Refactor temp reward based on this, consider this as well
-# TODO VP 2026.01.07. : Research options, how can be a datasource dynamic during execution -- user can set a new setpoint or a whole curve as a profile during runtime...
+# TODO VP 2026.01.07. : Research options, how can be a datasource dynamic during execution -- 
+# user can set a new setpoint or a whole curve as a profile during runtime...
+# 1st create profiles in .csv-s about random user set_targets -- use user set_targets programatically
 
-class DesiredInsideTemperature(DataSource):
+class InsideTemperature(StateSource):
     """Data source for desired inside temperature setpoint."""
 
     def __init__(self, name: str, ds_path: str | None = None) -> None:
@@ -44,7 +48,9 @@ class DesiredInsideTemperature(DataSource):
                      action_spaces: OrderedDict
                      ) -> tuple[OrderedDict, OrderedDict]:
         """Setup observation spaces for desired user temperature."""
-        state_spaces["desired_temp_in_norm"] = Box(low=-1, high=1, shape=(1,), dtype=np.float32)
+        
+        if "desired_temp_in_norm" not in state_spaces.keys():
+            state_spaces["desired_temp_in_norm"] = Box(low=-1, high=1, shape=(1,), dtype=np.float32)
 
         if "sim_hour" not in state_spaces.keys():
             state_spaces["sim_hour"] = Box(low=np.full((1,), 0, dtype=np.float32),
@@ -83,3 +89,7 @@ class DesiredInsideTemperature(DataSource):
         # Ensure float32 dtype and clip to bounds
         desired_temp_in_norm = np.float32(np.clip(desired_temp_in_norm, -1.0, 1.0))
         states["desired_temp_in_norm"][0] = desired_temp_in_norm
+
+
+# Register InsideTemperature with the component registry
+ComponentRegistry.register('statesource', InsideTemperature)

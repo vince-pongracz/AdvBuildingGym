@@ -9,19 +9,19 @@ logging.basicConfig(
     force=True
 )
 
-from .base import DataSource
+from .base import StateSource
 from .building_heat_loss import BuildingHeatLoss
 from .desired_user_energy_need import DesiredUserEnergyNeed
-from .desired_user_temperature import DesiredInsideTemperature
+from .inside_temperature import InsideTemperature
 from .energy_price import EnergyPriceDataSource
 from .operator_energy_control import OperatorEnergyControl
 from .weather import WeatherDataSource
 
 __all__ = [
-    "DataSource",
+    "StateSource",
     "BuildingHeatLoss",
     "DesiredUserEnergyNeed",
-    "DesiredInsideTemperature",
+    "InsideTemperature",
     "EnergyPriceDataSource",
     "OperatorEnergyControl",
     "WeatherDataSource",

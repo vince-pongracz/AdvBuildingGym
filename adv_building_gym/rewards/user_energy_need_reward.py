@@ -1,6 +1,7 @@
 import numpy as np
 
 from .base import RewardFunction
+from adv_building_gym.config.utils.serializable import ComponentRegistry
 
 
 class UserEnergyNeedReward(RewardFunction):
@@ -46,3 +47,7 @@ class UserEnergyNeedReward(RewardFunction):
             reward = np.exp(-shortfall)
 
         return float(self.weight * reward)
+
+
+# Register UserEnergyNeedReward with the component registry
+ComponentRegistry.register('reward', UserEnergyNeedReward)

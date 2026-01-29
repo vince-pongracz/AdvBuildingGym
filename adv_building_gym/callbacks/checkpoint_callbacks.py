@@ -21,7 +21,7 @@ def make_checkpoint_callback_class(
     checkpoint_dir: str,
     checkpoint_frequency: int = 20,
     num_to_keep: int = 1,
-    metric: str = "env_runners/reward_rate",
+    metric: str = "evaluation/env_runners/reward_rate",
 ) -> Type["BestModelCheckpointCallback"]:
     """
     Factory function that returns a configured BestModelCheckpointCallback class.
@@ -33,7 +33,7 @@ def make_checkpoint_callback_class(
         checkpoint_dir: Directory to save checkpoints
         checkpoint_frequency: Save checkpoint every N episodes (default: 20)
         num_to_keep: Number of best checkpoints to keep (default: 1)
-        metric: Metric name to optimize (default: "env_runners/reward_rate")
+        metric: Metric name to optimize (default: "evaluation/env_runners/reward_rate")
 
     Returns:
         A BestModelCheckpointCallback subclass with parameters pre-configured
@@ -44,7 +44,7 @@ def make_checkpoint_callback_class(
             make_checkpoint_callback_class(
                 checkpoint_dir="/path/to/checkpoints",
                 checkpoint_frequency=20,
-                metric="env_runners/reward_rate",
+                metric="evaluation/env_runners/reward_rate",
             ),
             on_episode_end=my_episode_end_callback,  # Separate callback
         )
@@ -91,7 +91,7 @@ class BestModelCheckpointCallback(DefaultCallbacks):
         checkpoint_dir: Directory to save checkpoints
         checkpoint_frequency: Save checkpoint every N episodes (default: 20)
         num_to_keep: Number of best checkpoints to keep (default: 1)
-        metric: Metric name to optimize (default: "env_runners/reward_rate")
+        metric: Metric name to optimize (default: "evaluation/env_runners/reward_rate")
     """
 
     def __init__(
@@ -99,7 +99,7 @@ class BestModelCheckpointCallback(DefaultCallbacks):
         checkpoint_dir: str,
         checkpoint_frequency: int = 20,
         num_to_keep: int = 1,
-        metric: str = "env_runners/reward_rate",
+        metric: str = "evaluation/env_runners/reward_rate",
     ):
         super().__init__()
         self.checkpoint_dir = checkpoint_dir

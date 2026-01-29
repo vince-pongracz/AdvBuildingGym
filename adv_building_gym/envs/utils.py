@@ -1,6 +1,9 @@
 """Utility classes for AdvBuildingGym environments."""
 
 
+# NOTE VP 2026.01.20. : These params are not constant for real for the building's lifetime...
+# Link: https://www.researchgate.net/publication/301310479_Particle_Swarm_Optimization_and_Kalman_Filtering_for_Demand_Prediction_of_Commercial_Buildings
+
 class BuildingProps:
     """Building thermal properties for simulation.
 

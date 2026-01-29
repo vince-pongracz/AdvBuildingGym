@@ -21,7 +21,7 @@ import ray
 from ray.rllib.algorithms import Algorithm
 
 from adv_building_gym import AdvBuildingGym
-from adv_building_gym.env_config import config as env_config
+from adv_building_gym.config import config as env_config
 from adv_building_gym.utils import CustomJSONEncoder, setup_warning_filters
 
 # Apply warning filters
@@ -118,7 +118,7 @@ def evaluate_ray_model(
     logger.info("Creating evaluation environment...")
     env = AdvBuildingGym(
         infras=env_config.infras,
-        datasources=env_config.datasources,
+        statesources=env_config.statesources,
         rewards=env_config.rewards,
         building_props=env_config.building_props,
         training=False,  # Evaluation mode

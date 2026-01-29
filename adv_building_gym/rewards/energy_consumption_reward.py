@@ -1,7 +1,10 @@
 import numpy as np
 
 from .base import RewardFunction
+from adv_building_gym.config.utils.serializable import ComponentRegistry
 
+
+# TODO VP 2026.01.14. : Add battery life saving reward
 
 class MinimiseEnergyConsumption_Reward(RewardFunction):
     """Energy consumption-based reward function."""
@@ -23,3 +26,7 @@ class MinimiseEnergyConsumption_Reward(RewardFunction):
         reward = e_consumption / e_consumption_max
 
         return float(self.weight * reward)
+
+
+# Register MinimiseEnergyConsumption_Reward with the component registry
+ComponentRegistry.register('reward', MinimiseEnergyConsumption_Reward)
