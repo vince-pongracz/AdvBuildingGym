@@ -1,0 +1,17 @@
+# Configuration for HDF5 file exploration
+# Specify the path to the HDF5 file to analyze
+
+input_file: "data/zenodo/2018_weather.hdf5"
+
+# Optional: specific groups or datasets to explore (leave empty for full exploration)
+# If empty, explores entire file structure
+target_groups: []
+
+# Optional: maximum number of sample values to display per dataset
+max_sample_values: 10
+
+# Optional: output format for the report ("console", "json", or "both")
+output_format: "json"
+
+# Optional: output file path for JSON report (only used if output_format includes "json")
+output_json_path: "hdf5_report.json"

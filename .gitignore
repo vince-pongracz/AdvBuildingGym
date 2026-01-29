@@ -55,3 +55,13 @@ ep_metrics/**
 
 # SB logs
 logs/**
+
+# Data
+data/zenodo/**
+!data/zenodo/ds_links.txt
+
+# HDF file report
+hdf5_report.json
+
+param_space.json
+test1.json

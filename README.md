@@ -2,17 +2,63 @@
     <img src="data/img/icon_kit.png" width="10%" hspace="20"/>
 </p>
 
-[![Python](https://img.shields.io/badge/Python-3.9.18-blue?logo=python)](https://www.python.org/downloads/release/python-3918/)
+[![Python](https://img.shields.io/badge/Python-3.12.1-blue?logo=python)](https://www.python.org/downloads/release/python-3121/)
 [![License](https://img.shields.io/badge/License-MIT-green?logo=opensource)](./LICENSE)
 [![Code Style](https://img.shields.io/badge/Code%20Style-black-000000.svg?logo=python)](https://github.com/psf/black)
 
-<p float="left">
-    <img src="data/img/icon_llecbuildinggym.svg" width="40%" hspace="30"/>
-</p>
 
-<h1 align="center">Advanced Deep Reinforcement Learning for Heat Pump Control in Residential Buildings</h1>
+<h1 align="center">Advanced Deep Reinforcement Learning for Smart Energy Management in Residential Buildings</h1>
 
-# TODO VP: change things here...
+<!-- TODO VP: change things here -->
+
+### Data about residental homes and their heat pump energy need
+
+Paper: Dataset on electrical single-family house and heat pump load profiles in Germany
+
+Paper link: https://www.nature.com/articles/s41597-022-01156-1
+
+Data link: https://zenodo.org/records/5642902
+
+<!-- TODO VP: add it to the repo setup description... -->
+
+Script to download data from zenedo:
+```bash
+while IFS= read -r link; do
+  [[ -z "${link//[[:space:]]/}" ]] && continue
+  curl -L --progress-bar -OJ "$link"
+done < ds_links.txt
+```
+
+Diff between local and district heating networks: https://www.npro.energy/main/en/district-heating-cooling/local-district-heating
+
+District heating grid ^^
+
+### Power measure explanations
+
+Active, reactive, apparent power
+
+Link: https://eshop.se.com/in/blog/post/difference-between-active-power-reactive-power-and-apparent-power.html?srsltid=AfmBOoo_z3uMQTGngU470DqVz29bTNpcSOKL1ch39emWHsMA7PthqQVC
+
+https://en.wikipedia.org/wiki/AC_power
+
+
+
+### Curl help
+
+Download `link` under the name `name` with progress-bar:
+
+`curl -L --progress-bar -o "name" "link"`
+
+Download links form a file (one link per line, skipping empty lines):
+
+```bash
+while IFS= read -r link; do
+  [[ -z "${link//[[:space:]]/}" ]] && continue
+  curl -L --progress-bar -OJ "$link"
+done < ds_links.txt
+```
+or
+`cat ds_links.txt | xargs -n 1 -P 4 curl -L --progress-bar -OJ`
 
 ### Slurm
 
@@ -30,7 +76,7 @@ squeue #Displays information about active, eligible, blocked, and/or recently co
 </div>
 
 
-**⚠️ Note**: _Last update on 16.11.2025_
+**⚠️ Note**: _Last update on 28.01.2026_
 
 <div align="left"> 
 This repository contains the official code of our paper <strong>"Advanced Deep Reinforcement Learning for Heat Pump Control in Residential Buildings"</strong>.
@@ -45,7 +91,7 @@ It features a custom <a href="https://github.com/Farama-Foundation/Gymnasium" ta
 
 ### 1.1 Description
 
-The **[base_building_gym.py](adv_building_gym/envs/base_building_gym.py)** simulates thermal building dynamics with heat pump control in 5-minute intervals.
+The **[adv_building_gym.py](adv_building_gym/envs/adv_building_gym.py)** simulates thermal building dynamics with heat pump control in 5-minute intervals.
 This framework leverages the **[Gymnasium](https://github.com/Farama-Foundation/Gymnasium)** and **[Pyomo](https://github.com/Pyomo/pyomo)** libraries, making it suitable for both reinforcement learning agents and advanced control strategies.
 
 To simulate real-world uncertainty, the environment includes:
