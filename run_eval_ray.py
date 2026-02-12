@@ -1,9 +1,11 @@
 """
-run_evaluation_ray.py – Evaluate Ray/RLlib trained models on AdvBuildingGym.
+run_eval_ray.py – Evaluate Ray/RLlib trained models on AdvBuildingGym.
 
 This script loads a trained Ray/RLlib checkpoint and evaluates it on the environment
 in inference mode, logging episode metrics and performance statistics.
 """
+
+# TODO VP 2026.02.12. : Provisional, try to run it on HAICORE
 
 import os
 import sys
@@ -20,8 +22,8 @@ import torch
 import ray
 from ray.rllib.algorithms import Algorithm
 
-from adv_building_gym import AdvBuildingGym
-from adv_building_gym.config import config as env_config
+from adv_building_gym import AdvBuildingGym, ConfigManager
+from adv_building_gym.config import config as default_config
 from adv_building_gym.utils import CustomJSONEncoder, setup_warning_filters
 
 # Apply warning filters
@@ -36,9 +38,67 @@ logging.basicConfig(
 logger = logging.getLogger("main")
 
 
+def find_best_checkpoint(base_path: str) -> str:
+    """
+    Find the best-performing Ray checkpoint by reading best_checkpoint_metadata.json
+    files saved by BestModelCheckpointCallback during training.
+
+    Searches for metadata files in checkpoint directories under base_path,
+    selects the one with the highest metric value.
+
+    Args:
+        base_path: Root directory to search (e.g., models/{config}/ray/{algo})
+
+    Returns:
+        str: Path to the best checkpoint directory
+
+    Raises:
+        FileNotFoundError: If no checkpoint metadata is found
+    """
+    candidates = []
+
+    for root, dirs, files in os.walk(base_path):
+        if "best_checkpoint_metadata.json" in files:
+            metadata_path = os.path.join(root, "best_checkpoint_metadata.json")
+            try:
+                with open(metadata_path, "r", encoding="utf-8") as f:
+                    metadata = json.load(f)
+                metric_value = metadata.get("best_metric_value", -np.inf)
+                checkpoint_path = metadata.get("checkpoint_path", "")
+                if checkpoint_path and os.path.exists(checkpoint_path):
+                    candidates.append((metric_value, checkpoint_path, metadata))
+                    logger.info(
+                        "  Found checkpoint: %s=%s, path=%s",
+                        metadata.get("metric", "unknown"),
+                        metric_value,
+                        checkpoint_path,
+                    )
+            except (json.JSONDecodeError, OSError) as e:
+                logger.warning("Failed to read metadata %s: %s", metadata_path, e)
+
+    if not candidates:
+        raise FileNotFoundError(
+            f"No best_checkpoint_metadata.json found in {base_path}"
+        )
+
+    # Sort by metric value descending, pick best
+    candidates.sort(key=lambda x: x[0], reverse=True)
+    best_value, best_path, best_metadata = candidates[0]
+
+    logger.info(
+        "Selected best checkpoint: %s=%.4f, episode=%d, path=%s",
+        best_metadata.get("metric", "unknown"),
+        best_value,
+        best_metadata.get("episode", -1),
+        best_path,
+    )
+    return best_path
+
+
 def find_latest_checkpoint(base_path: str = "models") -> str:
     """
-    Find the most recent Ray checkpoint in the models directory.
+    Fallback: find the most recent Ray checkpoint in the models directory
+    by modification time. Used when no best_checkpoint_metadata.json exists.
 
     Returns:
         str: Path to the checkpoint directory
@@ -46,8 +106,21 @@ def find_latest_checkpoint(base_path: str = "models") -> str:
     checkpoint_paths = []
 
     for root, dirs, files in os.walk(base_path):
-        if "checkpoint_" in root and any(f.endswith(".pkl") for f in files):
-            # Get modification time
+        # Ray checkpoints contain either .pkl files (older) or
+        # algorithm_state.pkl / .is_checkpoint marker files (newer)
+        is_checkpoint = (
+            "checkpoint_" in root
+            and any(
+                f.endswith(".pkl") or f == ".is_checkpoint"
+                for f in files
+            )
+        ) or (
+            # Callback-saved best_model checkpoints
+            "best_model_" in os.path.basename(root)
+            and any(f.endswith(".pkl") or f == ".is_checkpoint" for f in files)
+        )
+
+        if is_checkpoint:
             mtime = os.path.getmtime(root)
             checkpoint_paths.append((mtime, root))
 
@@ -58,13 +131,18 @@ def find_latest_checkpoint(base_path: str = "models") -> str:
     checkpoint_paths.sort(reverse=True)
     latest_checkpoint = checkpoint_paths[0][1]
 
-    logger.info("Found %d checkpoints, using latest: %s", len(checkpoint_paths), latest_checkpoint)
+    logger.info(
+        "Found %d checkpoints, using latest: %s",
+        len(checkpoint_paths),
+        latest_checkpoint,
+    )
     return latest_checkpoint
 
 
 def evaluate_ray_model(
     checkpoint_path: str,
-    num_episodes: int = 10,
+    active_config,
+    num_episodes: int = 1,
     seed: int = 42,
     save_results: bool = True,
     output_dir: str = "eval_results",
@@ -74,6 +152,7 @@ def evaluate_ray_model(
 
     Args:
         checkpoint_path: Path to the Ray checkpoint directory
+        active_config: Config object with infras, statesources, rewards, building_props
         num_episodes: Number of evaluation episodes
         seed: Random seed for reproducibility
         save_results: Whether to save results to file
@@ -89,6 +168,7 @@ def evaluate_ray_model(
     logger.info("=" * 70)
     logger.info("Starting Ray model evaluation")
     logger.info("  Checkpoint: %s", checkpoint_path)
+    logger.info("  Config: %s", active_config.config_name)
     logger.info("  Episodes: %d", num_episodes)
     logger.info("  Seed: %d", seed)
     logger.info("  Device: %s", device)
@@ -114,15 +194,19 @@ def evaluate_ray_model(
     logger.info("Algorithm: %s", algo.__class__.__name__)
     logger.info("Framework: %s", algorithm_name)
 
-    # Create evaluation environment
+    # Create evaluation environment using the active config (matches training)
     logger.info("Creating evaluation environment...")
     env = AdvBuildingGym(
-        infras=env_config.infras,
-        statesources=env_config.statesources,
-        rewards=env_config.rewards,
-        building_props=env_config.building_props,
+        infras=active_config.infras,
+        statesources=active_config.statesources,
+        rewards=active_config.rewards,
+        building_props=active_config.building_props,
         training=False,  # Evaluation mode
     )
+
+    # Pre-compute max reward per step consistent with episode_callbacks.py
+    # max_reward_per_step = sum of reward weights (assumes base max is 1.0 per reward)
+    max_reward_per_step = sum(r.weight for r in active_config.rewards)
 
     # Evaluation loop
     episode_stats = []
@@ -141,10 +225,10 @@ def evaluate_ray_model(
 
         while not done:
             # Compute action using the policy (inference mode)
-            # Note: RLlib expects dict observations, which AdvBuildingGym provides
             action = algo.compute_single_action(obs, explore=False)
 
             # Step environment
+            # TODO VP 2026.02.12. : Preserve step_info
             next_obs, reward, terminated, truncated, step_info = env.step(action)
             done = terminated or truncated
 
@@ -154,10 +238,10 @@ def evaluate_ray_model(
 
             obs = next_obs
 
-        # Calculate episode statistics
+        # Calculate episode statistics (consistent with episode_callbacks.py)
         achieved_reward = np.sum(episode_rewards)
-        max_achievable_reward = episode_length * len(env_config.rewards)
-        reward_rate = achieved_reward / max_achievable_reward if episode_length > 0 else 0.0
+        max_achievable_reward = episode_length * max_reward_per_step
+        reward_rate = achieved_reward / max_achievable_reward if max_achievable_reward > 0 else 0.0
 
         ep_stats = {
             "episode": ep + 1,
@@ -175,6 +259,7 @@ def evaluate_ray_model(
         logger.info("  Length: %d", episode_length)
         logger.info("  Total Reward: %.2f", episode_reward)
         logger.info("  Achieved Reward: %.2f", achieved_reward)
+        logger.info("  Max Achievable: %.2f", max_achievable_reward)
         logger.info("  Reward Rate: %.4f", reward_rate)
 
     eval_time = time.time() - start_time
@@ -182,6 +267,7 @@ def evaluate_ray_model(
     # Compute summary statistics
     summary_stats = {
         "checkpoint_path": checkpoint_path,
+        "config_name": active_config.config_name,
         "algorithm": algo.__class__.__name__,
         "num_episodes": num_episodes,
         "seed": seed,
@@ -198,8 +284,8 @@ def evaluate_ray_model(
     # Log summary
     logger.info("=" * 70)
     logger.info("Evaluation Summary")
-    logger.info("  Mean Reward: %.2f ± %.2f", summary_stats["mean_reward"], summary_stats["std_reward"])
-    logger.info("  Mean Reward Rate: %.4f ± %.4f", summary_stats["mean_reward_rate"], summary_stats["std_reward_rate"])
+    logger.info("  Mean Reward: %.2f +/- %.2f", summary_stats["mean_reward"], summary_stats["std_reward"])
+    logger.info("  Mean Reward Rate: %.4f +/- %.4f", summary_stats["mean_reward_rate"], summary_stats["std_reward_rate"])
     logger.info("  Min/Max Reward: %.2f / %.2f", summary_stats["min_reward"], summary_stats["max_reward"])
     logger.info("  Evaluation time: %.2f seconds", eval_time)
     logger.info("=" * 70)
@@ -208,8 +294,8 @@ def evaluate_ray_model(
     if save_results:
         os.makedirs(output_dir, exist_ok=True)
 
-        # Generate filename based on checkpoint
-        checkpoint_name = Path(checkpoint_path).parent.name
+        # Generate filename based on checkpoint directory name
+        checkpoint_name = Path(checkpoint_path).name
         timestamp = pd.Timestamp.now().strftime("%Y%m%d_%H%M%S")
         results_file = os.path.join(output_dir, f"eval_{checkpoint_name}_{timestamp}.json")
 
@@ -244,16 +330,20 @@ def main():
         help="RL algorithm to evaluate"
     )
     parser.add_argument(
-        "--config-name", "-cn",
+        "-cn", "--config-name",
         type=str,
-        default="test1",
-        help="Configuration name"
+        help="Name of the configuration (used for checkpoint search path)"
+    )
+    parser.add_argument(
+        "--load-config",
+        type=str,
+        help="Path to JSON config file to load (e.g., 'configs/my_config.json')"
     )
     parser.add_argument(
         "--checkpoint",
         type=str,
         default=None,
-        help="Path to Ray checkpoint directory. If not provided, searches for latest checkpoint."
+        help="Path to Ray checkpoint directory. If not provided, searches for best checkpoint."
     )
     parser.add_argument(
         "--episodes",
@@ -281,18 +371,38 @@ def main():
 
     args = parser.parse_args()
 
+    # Load config from file if specified, otherwise use default
+    if args.load_config:
+        logger.info("Loading config from: %s", args.load_config)
+        active_config = ConfigManager.load(args.load_config)
+        logger.info("Config loaded successfully: %s", active_config.config_name)
+    else:
+        active_config = default_config
+
+    args.config_name = active_config.config_name if args.config_name is None else args.config_name
+
+    logger.info("Parsed arguments: %s", vars(args))
+
     # Determine checkpoint path
     if args.checkpoint is None:
-        # Search for latest checkpoint in the algorithm's directory
         search_base = f"models/{args.config_name}/ray/{args.algorithm}"
 
         if os.path.exists(search_base):
-            logger.info("Searching for latest checkpoint in: %s", search_base)
-            checkpoint_path = find_latest_checkpoint(search_base)
+            # First try to find the best-performing checkpoint via metadata
+            try:
+                logger.info("Searching for best checkpoint in: %s", search_base)
+                checkpoint_path = find_best_checkpoint(search_base)
+            except FileNotFoundError:
+                # Fallback to latest checkpoint by modification time
+                logger.info("No best checkpoint metadata found, falling back to latest checkpoint")
+                checkpoint_path = find_latest_checkpoint(search_base)
         else:
             logger.warning("Algorithm directory not found: %s", search_base)
-            logger.info("Searching for latest checkpoint in all models...")
-            checkpoint_path = find_latest_checkpoint()
+            logger.info("Searching in all models...")
+            try:
+                checkpoint_path = find_best_checkpoint("models")
+            except FileNotFoundError:
+                checkpoint_path = find_latest_checkpoint()
     else:
         checkpoint_path = args.checkpoint
 
@@ -308,6 +418,7 @@ def main():
     try:
         results = evaluate_ray_model(
             checkpoint_path=checkpoint_path,
+            active_config=active_config,
             num_episodes=args.episodes,
             seed=args.seed,
             save_results=not args.no_save,
@@ -325,14 +436,17 @@ if __name__ == "__main__":
     main()
 
 # Usage examples:
-# Evaluate latest PPO model with default config
-# python run_evaluation_ray.py --algorithm ppo --episodes 10 --seed 42
+# Evaluate best PPO model with default config
+# python run_eval_ray.py --algorithm ppo --episodes 10 --seed 42
+
+# Evaluate with a custom config file (matching training config)
+# python run_eval_ray.py --algorithm ppo --load-config configs/my_config.json --episodes 10
 
 # Evaluate latest SAC model
-# python run_evaluation_ray.py --algorithm sac --config-name test1 --episodes 10
+# python run_eval_ray.py --algorithm sac --config-name test1 --episodes 10
 
-# Evaluate specific checkpoint (with timestamp and trial_id in path)
-# python run_evaluation_ray.py --checkpoint models/test1/ray/ppo/ppo_seed42_20260106_143022/d1e85a/checkpoint_000000
+# Evaluate specific checkpoint
+# python run_eval_ray.py --checkpoint models/test1/ray/ppo/checkpoints_ppo_seed42_20260106/best_model_ep100_...
 
 # Evaluate without saving results
-# python run_evaluation_ray.py --algorithm ppo --episodes 50 --no-save
+# python run_eval_ray.py --algorithm ppo --episodes 50 --no-save

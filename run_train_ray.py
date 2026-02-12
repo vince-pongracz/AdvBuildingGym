@@ -17,6 +17,7 @@ import torch
 import ray
 from ray import tune
 from ray.tune import CLIReporter
+from ray.tune.registry import register_env
 
 # Import warning filter setup from utils
 # The function is centrally defined in adv_building_gym/utils/warning_filters.py
@@ -218,6 +219,8 @@ def main():
         metric=args.metric,
     )
 
+    register_env("AdvBuilding", adv_building_env_creator)
+
     # Build algorithm-specific config
     algo_config = select_model(
         algorithm=args.algorithm,
@@ -243,7 +246,7 @@ def main():
 
     # Save parameter space for inspection -- 
     with open("param_space.json", "w", encoding="utf-8") as f:
-        # NOTE: param_space stores both new and old API stuff for backward compatibility, 
+        # NOTE: param_space stores both new and old API stuff for backward compatibility,
         # that is why the model dict contains the default values and _model_config the true specification
         json.dump(param_space, f, cls=CustomJSONEncoder, indent=4)
 
@@ -288,7 +291,7 @@ def main():
     )
 
     tuner = tune.Tuner(
-        args.algorithm.upper(),  # "PPO"
+        args.algorithm.upper(),  # e.g.: "PPO" or "SAC"
         param_space=param_space,
         tune_config=tune.TuneConfig(
             reuse_actors=True,

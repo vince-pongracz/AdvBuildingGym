@@ -13,6 +13,7 @@ from adv_building_gym.rewards import RewardFunction, TempReward, EconomicReward,
 
 
 # TODO VP 2026.01.13. : How to learn more days during training? -- solve consecutive days from data sources
+# TODO VP 2026.02.11. : Use shorter state source .csv-s, retrieve data row based on the control step -- if no such step given, keep the previous state value -- works for EV target state source
 
 @dataclass
 class Config:

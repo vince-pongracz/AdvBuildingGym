@@ -1,0 +1,495 @@
+How to implement e.g. a PID controller as a ray rllib algorithm?
+Nachgedacht für 56s
+
+If what you want is “a PID controller that can be run inside RLlib’s rollout/evaluation machinery (and optionally tuned with Ray Tune)”, the clean mental model is:
+
+PID = a (non-learning) Policy/RLModule that maps observations → actions deterministically.
+
+Algorithm = the orchestration (“when to sample, when to update”). For PID there’s usually no learner/update, so training_step() is basically “rollout + report metrics” (and if you’re tuning gains, Tune will treat your gains as hyperparams and your rollout return as the objective). RLlib explicitly expects you to subclass Algorithm and override methods like get_default_policy_class() and training_step() for custom algorithms.
+
+Below are two practical patterns.
+
+Pattern A (most common): PID as a custom Policy, with a “no-op” Algorithm that just evaluates
+
+This is “implement PID as an RLlib Algorithm” in the literal sense: you register a new Algorithm class, but there is no gradient learning.
+
+1) The PID controller policy (old API Policy, simplest for heuristics)
+import numpy as np
+from ray.rllib.policy.policy import Policy
+
+class PIDPolicy(Policy):
+    """Deterministic PID controller as an RLlib Policy.
+
+    Assumes each obs contains (setpoint, measurement) or you adapt parsing below.
+    """
+
+    def __init__(self, observation_space, action_space, config):
+        super().__init__(observation_space, action_space, config)
+        self.kp = config.get("kp", 1.0)
+        self.ki = config.get("ki", 0.0)
+        self.kd = config.get("kd", 0.0)
+        self.dt = config.get("dt", 0.02)
+
+        self.integral = 0.0
+        self.prev_error = None
+
+        # Optional action bounds (works for gymnasium Box)
+        self.low = getattr(action_space, "low", None)
+        self.high = getattr(action_space, "high", None)
+
+    def compute_actions(
+        self,
+        obs_batch,
+        state_batches=None,
+        prev_action_batch=None,
+        prev_reward_batch=None,
+        info_batch=None,
+        episodes=None,
+        explore=None,
+        timestep=None,
+        **kwargs,
+    ):
+        actions = []
+        for obs in obs_batch:
+            obs = np.asarray(obs)
+
+            # --- ADAPT THIS TO YOUR ENV ---
+            setpoint = float(obs[0])
+            measurement = float(obs[1])
+            # ------------------------------
+
+            error = setpoint - measurement
+            self.integral += error * self.dt
+            derivative = 0.0 if self.prev_error is None else (error - self.prev_error) / self.dt
+            self.prev_error = error
+
+            u = self.kp * error + self.ki * self.integral + self.kd * derivative
+
+            # Clip to action space if Box.
+            if self.low is not None and self.high is not None:
+                u = np.clip(u, self.low, self.high)
+
+            # RLlib expects shape = action_space.shape for Box
+            actions.append(np.asarray(u, dtype=np.float32))
+
+        return np.stack(actions), [], {}
+
+    # Make checkpointing happy (optional but nice).
+    def get_weights(self):
+        return {
+            "kp": self.kp, "ki": self.ki, "kd": self.kd, "dt": self.dt,
+            "integral": self.integral, "prev_error": self.prev_error,
+        }
+
+    def set_weights(self, weights):
+        for k, v in weights.items():
+            setattr(self, k, v)
+
+2) A minimal Algorithm that just rolls out and reports return
+
+RLlib’s docs show that the supported way is subclassing Algorithm and overriding training_step() etc.
+However, RLlib is in a transition from old → new API stack, so internal sampling primitives differ depending on your stack.
+
+A robust approach is: don’t fight internals—run evaluation via RLlib’s built-in evaluate() and treat each “train” iteration as “evaluate current PID”.
+
+from ray.rllib.algorithms.algorithm import Algorithm
+from ray.rllib.algorithms.algorithm_config import AlgorithmConfig
+
+class PIDConfig(AlgorithmConfig):
+    def __init__(self, algo_class=None):
+        super().__init__(algo_class=algo_class or PIDAlgorithm)
+        self.kp = 1.0
+        self.ki = 0.0
+        self.kd = 0.0
+        self.dt = 0.02
+
+    def pid(self, *, kp=None, ki=None, kd=None, dt=None):
+        if kp is not None: self.kp = kp
+        if ki is not None: self.ki = ki
+        if kd is not None: self.kd = kd
+        if dt is not None: self.dt = dt
+        return self
+
+class PIDAlgorithm(Algorithm):
+    @classmethod
+    def get_default_config(cls):
+        return PIDConfig()
+
+    def get_default_policy_class(self, config):
+        return PIDPolicy
+
+    def training_step(self):
+        # “Training” is just evaluation/rollout for a fixed controller.
+        # RLlib supports evaluate() driven by evaluation_config. :contentReference[oaicite:3]{index=3}
+        results = self.evaluate()
+
+        # Normalize metrics into the dict train() expects.
+        # Return keys like "episode_reward_mean" so Tune can optimize.
+        out = {
+            "episode_reward_mean": results["evaluation"]["episode_reward_mean"],
+            "evaluation": results["evaluation"],
+        }
+        return out
+
+3) Build and run (and optionally Tune kp/ki/kd)
+from ray import tune
+import ray
+
+ray.init()
+
+config = (
+    PIDConfig()
+    .environment("YourEnvNameOrCreator")
+    .evaluation(evaluation_interval=1, evaluation_num_env_runners=1)
+)
+
+# Use fixed gains:
+algo = config.pid(kp=2.0, ki=0.1, kd=0.01, dt=0.02).build()
+print(algo.train())   # will run evaluate() and report episode_reward_mean
+
+# Or tune gains (black-box):
+tune.Tuner(
+    PIDAlgorithm,
+    param_space=config.to_dict() | {
+        "kp": tune.loguniform(1e-3, 1e2),
+        "ki": tune.loguniform(1e-6, 1e1),
+        "kd": tune.loguniform(1e-6, 1e1),
+    },
+).fit()
+
+
+Why this works well:
+
+You get RLlib’s env distribution, episode metrics, evaluation, checkpointing hooks.
+
+Tune can optimize gains without you writing a separate Trainable (since Algorithm is a Trainable).
+
+Pattern B: Don’t make a new Algorithm; just plug PID in as a “heuristic policy” alongside RL policies
+
+If your end-goal is “run PID as a baseline”, or “PID controls one agent in multi-agent while another agent learns”, RLlib supports mixing hand-coded and trainable policies (this is a common pattern in RLlib examples, and the examples index explicitly points to such use-cases).
+
+High level:
+
+Register PIDPolicy
+
+In a multi-agent setup, set policies={ "pid": (PIDPolicy, ...), "learned": (...) }
+
+policy_mapping_fn decides which agent uses PID.
+
+This avoids writing a new Algorithm entirely.
+
+Practical gotchas (PID-in-RLlib specific)
+
+Statefulness: PID has internal state (integral, prev_error). In RLlib, a single Policy object may serve many episodes/envs depending on worker/vectorization. If you need per-episode PID state, reset it when an episode ends (e.g., via callbacks) or encode it into RLlib “state_batches” (RNN-style).
+
+Observation parsing: Decide where setpoint/measurement comes from:
+
+in obs, or
+
+in info dict, or
+
+setpoint fixed in config.
+
+New vs old RLlib API stack: RLlib is mid-migration.
+If you’re already using the new stack (RLModule/Learner), you can implement PID as an RLModule.forward_inference() and keep the rest similar, but the Policy route above is still the fastest way to get a deterministic controller running.
+
+If you tell me:
+
+your action space (Box? Discrete?),
+
+what your observation contains (where is setpoint/measurement?), and
+
+whether you’re on the new API stack or still using classic Policy/RolloutWorker,
+
+…I can adapt the snippets into a drop-in runnable file for your exact environment setup.
+
+I use the new Rllib api stack. Action and state spaces are boxes (more precisely, dictonary of boxes), observation is a dictonary, containing boxes. Both setpoint and measurement are in the observation dict. Adapt answer based on these information.
+
+Got it — on the new RLlib API stack, the right place for a hand-coded controller is a custom RLModule (not a Policy). Then you either:
+
+Run it via an Algorithm that never learns (evaluation-only “training”), or
+
+Use it in multi-agent next to learning modules.
+
+Below is a concrete, new-stack-friendly implementation for:
+
+Obs: Dict[str, Box] (setpoint + measurement inside the obs dict)
+
+Action: Dict[str, Box]
+
+Per-batch state: integral + previous error (so PID works across timesteps)
+
+Torch (recommended on new stack)
+
+1) PID as an RLModule (new API stack)
+
+Key idea: RLlib passes obs as a dict of tensors in Columns.OBS. We compute actions deterministically and return them in Columns.ACTIONS. PID needs memory, so we also read/write Columns.STATE_IN / STATE_OUT.
+
+You configure which obs-keys are the setpoint and measurement for each action key (so it works with dict-of-boxes).
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Dict, Any, Tuple
+
+import torch
+import torch.nn as nn
+import gymnasium as gym
+
+from ray.rllib.core.rl_module.rl_module import RLModule
+from ray.rllib.core.columns import Columns
+
+
+@dataclass
+class PIDChannelSpec:
+    # Which observation entries define the error for this channel
+    setpoint_key: str
+    measurement_key: str
+
+    # Gains (can be scalars or broadcastable tensors)
+    kp: float = 1.0
+    ki: float = 0.0
+    kd: float = 0.0
+
+    # Time step
+    dt: float = 0.02
+
+    # Optional output scaling / clipping
+    clip_low: float | None = None
+    clip_high: float | None = None
+
+
+class PIDRLModule(RLModule, nn.Module):
+    """
+    New-API RLModule implementing a deterministic PID controller.
+
+    - observation_space: gym.spaces.Dict of Boxes
+    - action_space: gym.spaces.Dict of Boxes
+    - config["pid_specs"]: Dict[action_key, PIDChannelSpec-like dict]
+      Each action key maps to setpoint/measurement obs keys and gains.
+
+    State:
+      - integral[action_key]  (same shape as action component)
+      - prev_error[action_key] (same shape as action component)
+    """
+
+    def __init__(
+        self,
+        observation_space: gym.Space,
+        action_space: gym.Space,
+        model_config: Dict[str, Any] | None = None,
+        *,
+        pid_specs: Dict[str, Dict[str, Any]],
+        device: str | torch.device = "cpu",
+    ):
+        nn.Module.__init__(self)
+        RLModule.__init__(self, observation_space, action_space, model_config=model_config)
+
+        assert isinstance(observation_space, gym.spaces.Dict), "Obs space must be Dict."
+        assert isinstance(action_space, gym.spaces.Dict), "Action space must be Dict."
+
+        self.device = torch.device(device)
+
+        # Build per-action-channel specs.
+        self.specs: Dict[str, PIDChannelSpec] = {
+            act_key: PIDChannelSpec(**spec_dict) for act_key, spec_dict in pid_specs.items()
+        }
+
+        # Cache action component shapes and bounds for clipping (Box).
+        self._act_shapes: Dict[str, Tuple[int, ...]] = {}
+        self._act_lows: Dict[str, torch.Tensor | None] = {}
+        self._act_highs: Dict[str, torch.Tensor | None] = {}
+
+        for act_key, space in action_space.spaces.items():
+            assert isinstance(space, gym.spaces.Box), f"Action[{act_key}] must be Box."
+            self._act_shapes[act_key] = space.shape
+
+            low = torch.as_tensor(space.low, device=self.device, dtype=torch.float32)
+            high = torch.as_tensor(space.high, device=self.device, dtype=torch.float32)
+            self._act_lows[act_key] = low
+            self._act_highs[act_key] = high
+
+        self.to(self.device)
+
+    # ---- State handling (new API) ----
+    def get_initial_state(self) -> Dict[str, torch.Tensor]:
+        """
+        Return initial module state (unbatched). RLlib will batch it.
+        We store integral and prev_error per action key.
+        """
+        state = {}
+        for act_key, shape in self._act_shapes.items():
+            state[f"integral::{act_key}"] = torch.zeros(shape, dtype=torch.float32, device=self.device)
+            state[f"prev_error::{act_key}"] = torch.zeros(shape, dtype=torch.float32, device=self.device)
+        return state
+
+    # ---- Forward passes ----
+    def _pid_step(
+        self,
+        obs: Dict[str, torch.Tensor],
+        state_in: Dict[str, torch.Tensor],
+    ) -> Tuple[Dict[str, torch.Tensor], Dict[str, torch.Tensor]]:
+        """
+        obs: dict of tensors, each [B, ...]
+        state_in: dict of tensors, each [B, ...] (batched by RLlib)
+        """
+        actions: Dict[str, torch.Tensor] = {}
+        state_out: Dict[str, torch.Tensor] = dict(state_in)  # copy; we’ll overwrite updated entries
+
+        for act_key, spec in self.specs.items():
+            sp = obs[spec.setpoint_key].to(self.device)
+            meas = obs[spec.measurement_key].to(self.device)
+
+            # Ensure sp/meas broadcast to the action component shape.
+            # Common case: both already [B, *act_shape]
+            error = sp - meas
+
+            integ_key = f"integral::{act_key}"
+            prev_key = f"prev_error::{act_key}"
+
+            integral = state_in[integ_key]
+            prev_error = state_in[prev_key]
+
+            dt = torch.tensor(spec.dt, device=self.device, dtype=torch.float32)
+
+            integral_new = integral + error * dt
+            deriv = (error - prev_error) / dt
+
+            u = (spec.kp * error) + (spec.ki * integral_new) + (spec.kd * deriv)
+
+            # Clip to action space bounds first (Box bounds).
+            low = self._act_lows.get(act_key)
+            high = self._act_highs.get(act_key)
+            if low is not None and high is not None:
+                # Broadcast low/high to batch dim
+                u = torch.max(torch.min(u, high), low)
+
+            # Optional extra clipping from spec (if you want tighter than action space)
+            if spec.clip_low is not None or spec.clip_high is not None:
+                lo = -torch.inf if spec.clip_low is None else spec.clip_low
+                hi = torch.inf if spec.clip_high is None else spec.clip_high
+                u = torch.clamp(u, lo, hi)
+
+            actions[act_key] = u
+
+            state_out[integ_key] = integral_new
+            state_out[prev_key] = error
+
+        return actions, state_out
+
+    def forward_inference(self, batch: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+        obs: Dict[str, torch.Tensor] = batch[Columns.OBS]
+        state_in: Dict[str, torch.Tensor] = batch[Columns.STATE_IN]
+        actions, state_out = self._pid_step(obs, state_in)
+        return {Columns.ACTIONS: actions, Columns.STATE_OUT: state_out}
+
+    # Deterministic controller: exploration == inference
+    def forward_exploration(self, batch: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+        return self.forward_inference(batch, **kwargs)
+
+    # No training pass (but RLlib may call it); return same deterministic actions.
+    def forward_train(self, batch: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+        return self.forward_inference(batch, **kwargs)
+
+What your pid_specs looks like
+
+Example for dict actions "throttle" and "steer":
+
+pid_specs = {
+    "throttle": {
+        "setpoint_key": "v_ref",
+        "measurement_key": "v",
+        "kp": 2.0, "ki": 0.2, "kd": 0.01,
+        "dt": 0.02,
+    },
+    "steer": {
+        "setpoint_key": "yaw_ref",
+        "measurement_key": "yaw",
+        "kp": 1.5, "ki": 0.0, "kd": 0.05,
+        "dt": 0.02,
+    },
+}
+
+2) Plug it into RLlib (new stack)
+
+You typically do this by providing an rl_module_spec / rl_module() config that builds your module.
+
+The exact config API varies a bit by RLlib version, but on the new stack you want:
+
+api_stack(enable_rl_module_and_learner=True, enable_env_runner_and_connector_v2=True)
+
+an RLModuleSpec that points at PIDRLModule
+
+and a “no learning” algorithm approach (evaluation-only).
+
+Minimal “evaluation-only Algorithm run”
+
+You can run any algorithm shell that supports the new stack and simply disable learning by not having a Learner update (or by setting train batch / lr to 0), but the cleanest is to create a tiny custom Algorithm whose training_step() only evaluates.
+
+If you already have a working new-stack setup, here’s the conceptual wiring (adapt the exact config calls to your RLlib version):
+
+from ray.rllib.core.rl_module.rl_module import RLModuleSpec
+from ray.rllib.algorithms.algorithm import Algorithm
+from ray.rllib.algorithms.algorithm_config import AlgorithmConfig
+
+class PIDEvalConfig(AlgorithmConfig):
+    def __init__(self, algo_class=None):
+        super().__init__(algo_class=algo_class or PIDEvalAlgorithm)
+        self.pid_specs = {}
+
+    def pid(self, *, pid_specs: dict):
+        self.pid_specs = pid_specs
+        return self
+
+class PIDEvalAlgorithm(Algorithm):
+    @classmethod
+    def get_default_config(cls):
+        return PIDEvalConfig()
+
+    def training_step(self):
+        # No learning; just run evaluation/rollouts and report return.
+        results = self.evaluate()
+        return {
+            "episode_reward_mean": results["evaluation"]["episode_reward_mean"],
+            "evaluation": results["evaluation"],
+        }
+
+config = (
+    PIDEvalConfig()
+    .api_stack(enable_rl_module_and_learner=True, enable_env_runner_and_connector_v2=True)
+    .environment("YourEnvNameOrCreator")
+    .evaluation(evaluation_interval=1, evaluation_num_env_runners=1)
+    .pid(pid_specs=pid_specs)
+)
+
+# Provide the RLModuleSpec:
+config.rl_module(
+    rl_module_spec=RLModuleSpec(
+        module_class=PIDRLModule,
+        module_kwargs={"pid_specs": pid_specs, "device": "cpu"},
+    )
+)
+
+algo = config.build()
+print(algo.train())  # runs evaluation and reports reward
+
+
+If your RLlib version complains about rl_module(...) / RLModuleSpec(...) naming, the fix is usually just API naming differences; the shape is the same: “build module from spec”.
+
+3) Important details for Dict(Box) + PID state
+Batch shapes / broadcasting
+
+RLlib will batch your dict obs tensors as [B, *space.shape].
+
+Your setpoint and measurement should be compatible with your corresponding action component’s shape.
+If they’re scalars but action is vector, you can broadcast explicitly (e.g., error = error.expand(-1, *act_shape)).
+
+Per-env / per-episode reset
+
+The RLModule state is per agent trajectory as RLlib rolls forward, but you still need to ensure it resets at episode start. RLlib will typically re-init state for new episodes; if you see “integral windup across episodes”, you can also zero out integral in an episode-start connector/callback.
+
+Multi-agent
+
+This same module works great as one policy in multi-agent. You’d create an RLModuleSpec for PID and another for your learner, then map agents accordingly.
+
+If you paste a small example of your spaces (the keys + shapes for obs_space.spaces and action_space.spaces) I can adjust the _pid_step to handle any mismatch (scalar setpoint → vector action, different keys per dimension, etc.) and show the exact RLModuleSpec wiring for your specific RLlib version (the method names are the only part that tends to differ).

@@ -285,6 +285,10 @@ class AdvBuildingGym(gym.Env):
         return state
 
     def is_done(self) -> bool:
+        """        
+        :return: True if episode (a day) elapsed
+        :rtype: bool
+        """
         return bool(self.iteration >= self.max_iteration)
 
     def _flat_action_to_dict(self, flat_action: np.ndarray) -> Dict[str, np.ndarray]:

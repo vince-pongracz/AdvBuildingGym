@@ -37,11 +37,11 @@ def select_model(
     """
 
     # Common hyperparameters for consistent evaluation across algorithms
+    # TODO VP 2026.02.11. : kick them out into a training_config or network_config file...
     learning_rate = 3e-4
     batch_size = 64
     # TODO VP 2026.01.12. : What about these? -- they does not seem like something important...
     learning_starts = 10 * episode_length
-    n_steps = episode_length
 
     # Algorithm-specific configuration
     if algorithm == "ppo":
@@ -73,9 +73,11 @@ def select_model(
         # New API stack (default in RLlib 2.7+) requires EpisodeReplayBuffer
         # New API stack requires separate learning rates for actor, critic, and alpha
         config.training(
-            actor_lr=learning_rate,
-            critic_lr=learning_rate,
-            alpha_lr=learning_rate,
+            # NOTE VP 2026.02.11. : Actor critic methods SAC & PPO - blog
+            # Link: https://joel-baptista.github.io/phd-weekly-report/posts/ac/
+            actor_lr=learning_rate, # LR of the policy network
+            critic_lr=learning_rate, # LR of the critic network
+            alpha_lr=learning_rate, # Influences weight of entropy -- and thus exploration
             replay_buffer_config={
                 "type": "EpisodeReplayBuffer",
                 "capacity": 100000,
@@ -83,12 +85,13 @@ def select_model(
             # SAC-specific hyperparameters
             twin_q=True,  # Use twin Q-networks to reduce overestimation bias
             initial_alpha=1.0,  # Initial entropy coefficient (auto-tuned)
-            target_network_update_freq=1,  # Update target networks every step
-            tau=0.005,  # Soft update coefficient for target networks
-            train_batch_size_per_learner=256,  # Batch size sampled from replay buffer
+            target_network_update_freq=4,  # Update target networks every step
+            tau=0.005,  # Soft update coefficient for target networks (at Polyak averaging)
+            train_batch_size_per_learner=batch_size,  # Batch size sampled from replay buffer
             num_steps_sampled_before_learning_starts=learning_starts,
         )
-
+    # NOTE VP 2026.02.11. : Maybe add DreamerV3 -- but in that case drop the forecast states
+    # DreamerV3 paper link: https://arxiv.org/pdf/2301.04104
     else:
         raise ValueError(f"Unknown algorithm: {algorithm}. Supported: ppo, sac")
 
@@ -97,7 +100,7 @@ def select_model(
     # TODO VP 2026.01.12. : look up rl_module config options, define own model -- in model_backbone module (?)
     config.rl_module(
         # Use new API to avoid RLModule(config=RLModuleConfig) deprecation warning
-        # TODO VP 2026.01.12. : Use transformer model for better learning, it is a time series after all
+        # TODO VP 2026.01.12. : Use transformer model for better learning, it is a time series after all -- but does it really matter here?
         model_config=DefaultModelConfig(
             fcnet_activation='relu',
             fcnet_hiddens=[32, 32, 32],

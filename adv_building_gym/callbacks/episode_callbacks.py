@@ -16,6 +16,7 @@ from ..utils import CustomJSONEncoder
 
 logger = logging.getLogger(__name__)
 
+# TODO VP 2026.02.11. : Check smoothing: metrics_smoothing_episodes
 
 def create_on_episode_end_callback(
     env_id: str,
