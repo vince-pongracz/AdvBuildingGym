@@ -6,7 +6,7 @@ from adv_building_gym.envs.utils import BuildingProps
 
 from adv_building_gym.devices.infrastructure import Infrastructure, HP, BatteryTremblay, SolarPanel, LinearEVCharger
 from adv_building_gym.devices.statesources import (
-    StateSource, BuildingHeatLoss, DesiredUserEnergyNeed, InsideTemperature,
+    StateSource, BuildingHeatLoss, DesiredUserEnergyNeed, EVState, InsideTemperature,
     EnergyPriceDataSource, WeatherDataSource
 )
 from adv_building_gym.rewards import RewardFunction, TempReward, EconomicReward, MinimiseEnergyConsumption_Reward, UserEnergyNeedReward, OperatorEnergyControlReward
@@ -54,6 +54,8 @@ class Config:
                     mC=self.building_props.mC,
                     timestep=self.control_step
                 ),
+                # TODO VP 2026.02.12. : check this, it's still provisional -- maybe use a shorter .csv with only the relevant day and match the iteration to the timestamp via control_step
+                EVState("ev_schedule", ds_path="data/ev_usage_profiles/ev_1.csv"),
             ]
 
         if self.infras is None:
