@@ -247,7 +247,7 @@ class AdvBuildingGym(gym.Env):
         self.train_ratio = train_ratio
         self.max_iteration = int(self.simulation_time / self.control_step)
 
-        # TODO VP 2025.12.09. : inspect this
+        # TODO VP 2025.12.09. : inspect this -- drop it, it is not useful for us for now
         self.temporal_features = TemporalFeatureBuffer(window_size=self.prediction_horizon)
 
         self.state, _ = self.reset()

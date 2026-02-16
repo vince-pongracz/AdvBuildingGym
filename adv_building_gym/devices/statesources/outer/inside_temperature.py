@@ -5,15 +5,15 @@ from typing import ClassVar, Set
 import numpy as np
 from gymnasium.spaces import Box
 
-from .base import StateSource
+from ..base import StateSource
 from adv_building_gym.config.utils.serializable import ComponentRegistry
 
 logger = logging.getLogger(__name__)
 
-# TODO VP 2026.01.08. : Refactor temp reward based on this, consider this as well
-# TODO VP 2026.01.07. : Research options, how can be a datasource dynamic during execution -- 
+# TODO VP 2026.01.07. : Looking for options, how can be a datasource dynamic during evaluation -- 
 # user can set a new setpoint or a whole curve as a profile during runtime...
 # 1st create profiles in .csv-s about random user set_targets -- use user set_targets programatically
+# Implement similar user intervention logic as it is for the EV charger -- it is easier here as it's a single Celsius temperature value.
 
 class InsideTemperature(StateSource):
     """Data source for desired inside temperature setpoint."""

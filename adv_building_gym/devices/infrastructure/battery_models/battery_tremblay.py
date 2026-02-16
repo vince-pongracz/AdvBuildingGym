@@ -185,7 +185,8 @@ class BatteryTremblay(Infrastructure):
 
         return state_spaces, action_spaces
 
-    # TODO VP 2026.01.13. : How to set it dinamically, at eval?
+    # TODO VP 2026.01.13. : How to set it dinamically, at eval? -- Do we want to allow it?
+    # NOTE VP 2026.01.13. : Let's say it's an improvement opportunity, but not a priority for now.
     def set_target(self, target: Optional[float] = None) -> None:
         self.target_soc = target
 

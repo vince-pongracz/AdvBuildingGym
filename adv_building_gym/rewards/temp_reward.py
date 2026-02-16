@@ -31,7 +31,7 @@ class TempReward(RewardFunction):
         Returns exponential reward that approaches 1 when temperatures match
         and decreases as the difference increases.
         """
-        actual_temp = states["temp_norm_in"][0]
+        actual_temp = states["temp_in_norm"][0]
         desired_temp = states["desired_temp_in_norm"][0]
         temp_diff = abs(actual_temp - desired_temp)
         

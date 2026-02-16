@@ -31,7 +31,7 @@ PIDConfig (AlgorithmConfig)     — holds PID gains and channel specs
 | 3 | Outputs Dict actions | Output flat `Box` actions matching env's flattened action space |
 | 4 | No anti-windup | Add integral clamping to prevent windup |
 | 5 | Derivative spike on first step | Set derivative to 0 when `prev_error is None` (matches existing controller) |
-| 6 | Generic obs keys (`v_ref`, `yaw`) | Use actual env keys: `temp_norm_in`, `desired_temp_in_norm`, `E_price`, etc. |
+| 6 | Generic obs keys (`v_ref`, `yaw`) | Use actual env keys: `temp_in_norm`, `desired_temp_in_norm`, `E_price`, etc. |
 | 7 | No integration with project | Integrate with `select_model.py`, `common_model_config.py`, `run_train_ray.py` |
 | 8 | Ignores optional infrastructure | Guard each channel with obs key existence checks (e.g., no solar in some configs) |
 | 9 | No Ray Tune config | Concrete `tune.loguniform` ranges for gain search |
@@ -88,7 +88,7 @@ class PIDRLModule(RLModule, nn.Module):
     Outputs a flat action tensor matching the env's Box action space.
 
     Channels:
-      - HP: PID on temperature error (desired_temp_in_norm - temp_norm_in)
+      - HP: PID on temperature error (desired_temp_in_norm - temp_in_norm)
       - Battery: rule-based on E_price and battery_pct
       - EV Charger: rule-based on ev_soc, ev_target_soc, ev_connected
       - Solar: pass-through (solar_action = -solar_irradiance)
@@ -246,7 +246,7 @@ HP_CHANNEL = {
     "action_key": "HP_action",
     "action_dim": 2,                    # [energy_level, mode]
     "setpoint_key": "desired_temp_in_norm",
-    "measurement_key": "temp_norm_in",
+    "measurement_key": "temp_in_norm",
     "kp": 0.15,                         # From existing PIDController
     "ki": 0.0002,
     "kd": 0.01,

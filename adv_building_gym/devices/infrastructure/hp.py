@@ -26,7 +26,7 @@ class HP(Infrastructure):
     _context_params: ClassVar[Set[str]] = {'K', 'mC'}
 
     # Internal state variables - don't serialize
-    _exclude_params: ClassVar[Set[str]] = {'iteration', 'temp_norm_in', 'temp_norm_in_change', 'control_step'}
+    _exclude_params: ClassVar[Set[str]] = {'iteration', 'temp_in_norm', 'temp_in_norm_change', 'control_step'}
 
     def __init__(self,
                  name: str,
@@ -47,8 +47,8 @@ class HP(Infrastructure):
         self.K = K
         self.mC = mC
 
-        self.temp_norm_in = 0
-        self.temp_norm_in_change = 0
+        self.temp_in_norm = 0
+        self.temp_in_norm_change = 0
 
         if self.cop_heat <= 0 or self.cop_cool <= 0:
             raise ValueError("cop_heat and cop_cool must be positive.")
@@ -67,10 +67,10 @@ class HP(Infrastructure):
             dtype=np.float32
         )
 
-        if "temp_norm_in" not in state_spaces:
-            state_spaces["temp_norm_in"] = Box(low=-1, high=1, shape=(1,), dtype=np.float32)
-        if "temp_norm_out" not in state_spaces:
-            state_spaces["temp_norm_out"] = Box(low=-1, high=1, shape=(1,), dtype=np.float32)
+        if "temp_in_norm" not in state_spaces:
+            state_spaces["temp_in_norm"] = Box(low=-1, high=1, shape=(1,), dtype=np.float32)
+        if "temp_out_norm" not in state_spaces:
+            state_spaces["temp_out_norm"] = Box(low=-1, high=1, shape=(1,), dtype=np.float32)
 
         return state_spaces, action_spaces
 
@@ -96,7 +96,7 @@ class HP(Infrastructure):
             q_hp = 0.0
             # Set also the energy part to 0 in this case -- at rewards it is useful to have the real actions
             actions["HP_action"][0] = 0.0
-            self.temp_norm_in_change = 0.0
+            self.temp_in_norm_change = 0.0
             return
 
         # TODO VP 2026.01.20. : Add forecasting window (and thus MPC) for the states and the
@@ -117,7 +117,7 @@ class HP(Infrastructure):
         dTemp = 0.001 * self.control_step * q_hp / self.mC
 
         # Check if temperature would be clipped after the change
-        current_temp = states["temp_norm_in"][0]
+        current_temp = states["temp_in_norm"][0]
         new_temp = current_temp + dTemp
 
         if new_temp > 1.0 or new_temp < -1.0:
@@ -146,15 +146,15 @@ class HP(Infrastructure):
             actions["HP_action"][0] = np.float32(actual_energy)
 
             # Store the actual temperature change
-            self.temp_norm_in_change = actual_dTemp
+            self.temp_in_norm_change = actual_dTemp
         else:
             # No clipping needed, use the original dTemp
-            self.temp_norm_in_change = dTemp
+            self.temp_in_norm_change = dTemp
 
     def update_state(self, states) -> None:
-        new_temp = states["temp_norm_in"][0] + self.temp_norm_in_change
+        new_temp = states["temp_in_norm"][0] + self.temp_in_norm_change
         # Clipping ensured in exec_action -- maybe reintroduction needed later
-        states["temp_norm_in"][0] = np.float32(new_temp)
+        states["temp_in_norm"][0] = np.float32(new_temp)
 
     def get_electric_consumption(self, actions) -> float:
         """Get current electric energy consumption from heat pump.

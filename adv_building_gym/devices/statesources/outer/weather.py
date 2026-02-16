@@ -9,7 +9,7 @@ from gymnasium.spaces import Box
 # TODO VP 2026.01.07. : change scaling implementation, use sklearn classes and functions for that -- not really important, low priority task
 from sklearn import preprocessing
 
-from .base import StateSource
+from ..base import StateSource
 from adv_building_gym.config.utils.serializable import ComponentRegistry
 
 logger = logging.getLogger(__name__)
