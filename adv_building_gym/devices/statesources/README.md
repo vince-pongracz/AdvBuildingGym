@@ -1,6 +1,8 @@
 # State Sources
 
-State sources provide observation signals to the building environment. They are split into two categories:
+State sources provide observation signals to the building environment. They are split into two categories: inner and outer.
+
+It's worth mentioning, that some states are introduced by the infrastructure elements, so not all state space variable is defined in a statesource.
 
 ## Inner
 
@@ -18,3 +20,7 @@ State sources that represent **external constraints or signals**, driven by time
 - `EVState` — EV connect/disconnect schedule (from CSV)
 - `OperatorEnergyControl` — grid operator power limits
 - `DesiredUserEnergyNeed` — user energy consumption profile
+
+---
+
+TODO VP: maybe the above mentioned distinction does not make sense at all...
