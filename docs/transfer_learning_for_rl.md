@@ -8,6 +8,8 @@ Definitions:
 
 Paper link: https://www.jmlr.org/papers/volume10/taylor09a/taylor09a.pdf
 
+Paper reference: Taylor, M. E., & Stone, P. (2009). "Transfer learning for reinforcement learning domains: A survey." Journal of Machine Learning Research
+
 - "The core idea of transfer is that experience gained in learning to perform one task can help improve learning performance in a related, but different, task"
 
 --> In my case, the task is the same (and the spaces are the same as well)
@@ -43,6 +45,17 @@ Useful metrics (section is same as the quoting):
 Dimensions of comparison:
 - "Task difference assumptions", page 8 of the link
 
+Asymptotic performance would be the interesting thing for us (Figure 3. in the paper)
+
+
+### TL counterproductivity:
+
+Link, source: https://milvus.io/ai-quick-reference/how-does-transfer-learning-work-in-rl
+
+TL can be counterproductive as well -- in the case of unrelated tasks (no connection between source and target tasks). 
+Task similarity --> greater chance of success
+
+
 
 ### Conclusions drawn
 
@@ -57,7 +70,7 @@ Dimensions of comparison:
     - both algos learning the same amount of iters (predefined)
     - Eval: run both on the same 10 episodes (on the same full setup), check reward rates or other metric -- which one is better
 
-### If TL in RL wanted
+### If TL in RL needed / desired:
 
 - TODO VP: design TL mode of the environment, when some rewards, states and actions are part of the environment, thus the config is the same, however they do not act / their provided information is null/neutral to the system. 
 In this case, reread the linked paper.
