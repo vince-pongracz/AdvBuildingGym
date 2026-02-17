@@ -1,5 +1,5 @@
 import logging
-from typing import ClassVar, Dict, Optional, Set
+from typing import ClassVar, Dict, Set
 
 import numpy as np
 from gymnasium.spaces import Box
@@ -10,15 +10,20 @@ from adv_building_gym.config.utils.serializable import ComponentRegistry
 logger = logging.getLogger(__name__)
 
 # TODO VP 2026.01.20. : Get solar irradiation data -- at climate/weather data
+# TODO VP 2026.02.17. : Addnal parameters for solar panel modeling.
+# E.g. temperature effects, panel orientation, inverter efficiency, etc.
+# For now it's kept simple with a direct mapping from irradiance to production.
 
 class SolarPanel(Infrastructure):
     """Solar Panel (PV) infrastructure component.
 
-    Action convention: positive = consumption (from grid), negative = production (to grid).
-    Solar panels only produce energy, so action is in [-1, 0] where -1 = max production.
+    Solar panels always produce the full energy amount determined by solar irradiance.
+    There is no policy-controlled action — production is purely a function of irradiance
+    and peak power capacity. The actual production is written into actions['solar_action']
+    as a read-only output for other components to observe.
 
-    Models a photovoltaic system that produces power based on solar irradiance.
-    Supports optional curtailment control to limit power output.
+    Action convention: negative = production (energy to grid).
+    solar_action value: -1 = full peak production, 0 = no production.
 
     Irradiance can be provided via:
     - External state update (from a DataSource providing irradiance)
@@ -30,7 +35,7 @@ class SolarPanel(Infrastructure):
 
     # Internal state variables - don't serialize
     _exclude_params: ClassVar[Set[str]] = {
-        'iteration', 'irradiance_norm', 'current_production_kW', 'curtailment_factor'
+        'iteration', 'irradiance_norm', 'current_production_kW'
     }
 
     def __init__(self,
@@ -64,7 +69,7 @@ class SolarPanel(Infrastructure):
 
         # State variables
         self.irradiance_norm = 0.0  # Normalized irradiance [0, 1]
-        self.current_production_kW = 0.0  # Actual power production after curtailment
+        self.current_production_kW = 0.0  # Actual power production in kW
 
 
     def setup_spaces(self,
@@ -73,20 +78,10 @@ class SolarPanel(Infrastructure):
                      ):
         """Setup observation and action spaces for solar panel.
 
-        Action convention: negative = production (energy to grid), positive = consumption (energy from grid).
-        Solar panels only produce, so action is in [-1, 0].
+        Solar panel has no policy-controlled action space — production is
+        fully determined by solar irradiance. Only state space is registered.
         """
 
-        # Action: production level [-1, 0]
-        # Sign convention: negative = production (providing energy to grid)
-        # 0 = no production (fully curtailed, no influence on grid)
-        # -1 = full production (maximum energy provided to grid)
-        if "solar_action" not in action_spaces.keys():
-            action_spaces["solar_action"] = Box(
-                low=-1, high=0, shape=(1,), dtype=np.float32
-            )
-
-        # States
         if "solar_irradiance" not in state_spaces.keys():
             # Normalized irradiance [0, 1]
             state_spaces["solar_irradiance"] = Box(
@@ -97,17 +92,12 @@ class SolarPanel(Infrastructure):
 
 
     def exec_action(self, actions: Dict, states: Dict) -> None:
-        """
-        Get expected action and based on state, calculate production.
-        
-        It can easilly happen that the expected E amount can not be delivered from the solar panel.
-        So solar action is rather just an expectation or need about E amounts.
-        """
+        """Compute solar production from irradiance and write it into actions.
 
-        # solar_action is rather about what is the expected E amount from the controller's
-        # perspective --> update it every time with the real E amount, which is created by
-        # the solar panel, which can be delivered
-        expexted_action = float(np.atleast_1d(actions["solar_action"])[0])
+        Production is fully determined by solar irradiance — there is no
+        policy-controlled input. The result is written into actions['solar_action']
+        as a read-only output for other components.
+        """
 
         # Update irradiance from state if available (set by DataSource)
         if "solar_irradiance" in states:
@@ -117,21 +107,15 @@ class SolarPanel(Infrastructure):
         if self.irradiance_norm == 0.0 and "sim_hour" in states:
             self.irradiance_norm = self._synthetic_irradiance(states)
 
-        # Calculate production
         # Production = irradiance * peak_power
-        potential_production = self.irradiance_norm * self.peak_power_kW
-        
-        real_action: float = -1.0 * potential_production / self.peak_power_kW
-        
-        if real_action > expexted_action:
-            # We could create more E --> give it to the system?
-            # --> no, we do not need that much, but somehow signalise that we can deliver more power from the panel
-            # --> 2d solar action -- 0 if it is the max, 1 if more could be delivered
-            diff = real_action - expexted_action
-            diff *= 0.001
-            real_action += diff
+        self.current_production_kW = self.irradiance_norm * self.peak_power_kW
 
-        actions["solar_action"][0] = real_action
+        # Write normalized production as read-only output (negative = production)
+        solar_action = -self.irradiance_norm
+        if "solar_action" not in actions:
+            actions["solar_action"] = np.array([solar_action], dtype=np.float32)
+        else:
+            actions["solar_action"][0] = solar_action
 
     def _synthetic_irradiance(self, states: Dict) -> float:
         """Generate synthetic irradiance based on time of day.
