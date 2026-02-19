@@ -13,6 +13,7 @@ from ray.rllib.connectors.env_to_module import FlattenObservations
 
 from adv_building_gym import create_on_episode_end_callback
 from adv_building_gym.utils import ResourceAllocation, validate_resource_allocation
+from adv_building_gym.config import config as env_config
 from .env_spaces import get_env_spaces
 
 logger = logging.getLogger(__name__)
@@ -135,6 +136,10 @@ def common_model_config(
         num_envs_per_env_runner=1,
         num_cpus_per_env_runner=num_cpus_per_env_runner,
         num_gpus_per_env_runner=0,
+        # Collect complete episodes before returning to learner.
+        # Without this, off-policy algorithms (SAC) default to 1, causing
+        # training episodes to be reported as length = 1 in callbacks.
+        rollout_fragment_length=env_config.EPISODE_LENGTH,
         # Flatten dict observation space into a single vector for the RL module
         # NOTE VP 2026.01.05. : if other observation space needed for the policy, change the observations in the env.
         # (rather than using a new observation encoder -- that must be learnt as well, it overcomplicates things...)

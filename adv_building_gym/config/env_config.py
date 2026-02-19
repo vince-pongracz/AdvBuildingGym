@@ -9,7 +9,11 @@ from adv_building_gym.devices.statesources import (
     StateSource, BuildingHeatLoss, DesiredUserEnergyNeed, InsideTemperature,
     EnergyPriceDataSource, WeatherDataSource
 )
-from adv_building_gym.rewards import RewardFunction, TempReward, EconomicReward, MinimiseEnergyConsumption_Reward, UserEnergyNeedReward, OperatorEnergyControlReward
+from adv_building_gym.rewards import (
+    RewardFunction, TempReward, EconomicReward, 
+    EVChargingOnTimeReward, MinimiseEnergyConsumption_Reward, 
+    UserEnergyNeedReward, OperatorEnergyControlReward
+)
 
 
 # TODO VP 2026.01.13. : How to learn more days during training? -- solve consecutive days from data sources
@@ -72,11 +76,17 @@ class Config:
             ]
 
         if self.rewards is None:
+            # Find EV charger from infras for EVChargingOnTimeReward
+            ev_charger = next(
+                (infra for infra in self.infras if isinstance(infra, LinearEVCharger)),
+                None
+            )
             self.rewards = [
                 TempReward(weight=1),
                 EconomicReward(weight=1),
                 MinimiseEnergyConsumption_Reward(weight=1),
                 OperatorEnergyControlReward(self.infras, weight=1),
+                EVChargingOnTimeReward(weight=1, ev_charger=ev_charger),
             ]
 
 # default/config instance

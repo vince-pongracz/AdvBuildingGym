@@ -1,0 +1,16 @@
+https://zenodo.org/records/5642902/files/2018_data_1min.zip?download=1
+https://zenodo.org/records/5642902/files/2018_data_spatial.hdf5?download=1
+https://zenodo.org/records/5642902/files/2018_district_heating_grid.hdf5?download=1
+https://zenodo.org/records/5642902/files/2018_weather.hdf5?download=1
+
+https://zenodo.org/records/5642902/files/2019_data_1min.zip?download=1
+https://zenodo.org/records/5642902/files/2019_data_spatial.hdf5?download=1
+https://zenodo.org/records/5642902/files/2019_district_heating_grid.hdf5?download=1
+https://zenodo.org/records/5642902/files/2019_weather.hdf5?download=1
+
+https://zenodo.org/records/5642902/files/2020_data_1min.zip?download=1
+https://zenodo.org/records/5642902/files/2020_data_spatial.hdf5?download=1
+https://zenodo.org/records/5642902/files/2020_district_heating_grid.hdf5?download=1
+https://zenodo.org/records/5642902/files/2020_weather.hdf5?download=1
+
+https://zenodo.org/records/5642902/files/datapackage.json?download=1

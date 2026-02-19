@@ -29,7 +29,7 @@ class LinearEVCharger(Infrastructure):
     _context_params: ClassVar[Set[str]] = {'control_step'}
 
     # Internal state variables - don't serialize
-    _exclude_params: ClassVar[Set[str]] = {'iteration', 'soc', 'ev_connected'}
+    _exclude_params: ClassVar[Set[str]] = {'iteration', 'soc', 'ev_connected', 'charge_to_target_in_hrs'}
 
     def __init__(self,
                  name: str,
@@ -43,6 +43,7 @@ class LinearEVCharger(Infrastructure):
                  history_length: int = 4,
                  start_soc: float = 0.3,
                  target_soc: float = 0.9,
+                 max_charge_time_hrs: float = 24.0,
                  ) -> None:
         """Initialize EV Charger infrastructure.
 
@@ -60,6 +61,7 @@ class LinearEVCharger(Infrastructure):
             history_length: Number of historical SoC values to track
             start_soc: Initial state of charge [0, 1]
             target_soc: Target state of charge [0, 1]
+            max_charge_time_hrs: Maximum charging time in hours (for capping and normalization)
         """
         super().__init__(name, Q_electric_max)
 
@@ -70,11 +72,13 @@ class LinearEVCharger(Infrastructure):
         self.v2g_enabled = v2g_enabled
         self.control_step = control_step
         self.history_length = history_length
+        self.max_charge_time_hrs = max_charge_time_hrs
 
         # State variables
         self.soc = start_soc
         self.target_soc = target_soc
         self.ev_connected = True  # Whether EV is connected to charger
+        self.charge_to_target_in_hrs = 0.0  # Time remaining to reach target SoC
 
         if charger_efficiency <= 0 or charger_efficiency > 1:
             raise ValueError("charger_efficiency must be in (0, 1].")
@@ -110,6 +114,9 @@ class LinearEVCharger(Infrastructure):
             state_spaces["ev_connected"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
         if "ev_soc_hist" not in state_spaces.keys():
             state_spaces["ev_soc_hist"] = Box(low=0, high=1, shape=(self.history_length,), dtype=np.float32)
+        if "ev_charge_to_target_hrs_norm" not in state_spaces.keys():
+            # Normalized: 0 = no time left or disconnected, 1 = max_charge_time_hrs remaining
+            state_spaces["ev_charge_to_target_hrs_norm"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
 
         return state_spaces, action_spaces
 
@@ -126,7 +133,10 @@ class LinearEVCharger(Infrastructure):
         """
         self.ev_connected = connected
 
-        if connected and ev_spec is not None:
+        if not connected:
+            # EV disconnected: reset charge time to 0
+            self.charge_to_target_in_hrs = 0.0
+        elif ev_spec is not None:
             self.max_cap_kWh = ev_spec.max_cap_kWh
             self.max_charging_kW = ev_spec.max_charging_kW
             self.charger_efficiency = ev_spec.charger_efficiency
@@ -134,6 +144,11 @@ class LinearEVCharger(Infrastructure):
             self.v2g_enabled = ev_spec.v2g_enabled
             self.soc = ev_spec.start_soc
             self.target_soc = ev_spec.target_soc
+            # Cap charge_to_target_in_hrs at max_charge_time_hrs
+            self.charge_to_target_in_hrs = min(
+                ev_spec.charge_to_target_in_hrs,
+                self.max_charge_time_hrs
+            )
 
     def exec_action(self, actions: Dict, states: Dict) -> None:
         """Execute charging/discharging action."""
@@ -203,6 +218,15 @@ class LinearEVCharger(Infrastructure):
         states["ev_soc"][0] = np.float32(self.soc)
         states["ev_target_soc"][0] = np.float32(self.target_soc)
         states["ev_connected"][0] = np.float32(1.0 if self.ev_connected else 0.0)
+
+        # Decrement charge_to_target_in_hrs by control_step (convert seconds to hours)
+        if self.ev_connected and self.charge_to_target_in_hrs > 0:
+            time_step_hrs = self.control_step / 3600.0
+            self.charge_to_target_in_hrs = max(0.0, self.charge_to_target_in_hrs - time_step_hrs)
+
+        # Normalize charge_to_target_in_hrs to [0, 1] for state space
+        normalized_time = self.charge_to_target_in_hrs / self.max_charge_time_hrs if self.max_charge_time_hrs > 0 else 0.0
+        states["ev_charge_to_target_hrs_norm"][0] = np.float32(np.clip(normalized_time, 0.0, 1.0))
 
         # Update SoC history (rolling window)
         history = states["ev_soc_hist"]
