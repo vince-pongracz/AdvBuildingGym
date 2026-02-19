@@ -10,39 +10,27 @@ Usage:
     python preproc/explore_hdf5.py
 """
 
-import os
-import sys
 import json
 import logging
+import sys
 from pathlib import Path
 from typing import Any
 
-import numpy as np
 import h5py
-import yaml
+import numpy as np
+
+try:
+    from .utils import load_config, resolve_path
+except ImportError:
+    from utils import load_config, resolve_path
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
-
-def load_config(config_path: str | None = None) -> dict:
-    """Load configuration from YAML file."""
-    if config_path is None:
-        # Default to config.yaml in the same directory as this script
-        script_dir = Path(__file__).parent
-        config_path = str(script_dir / "config.yaml")
-
-    config_path_obj = Path(config_path)
-    if not config_path_obj.exists():
-        raise FileNotFoundError(f"Config file not found: {config_path_obj}")
-
-    with open(config_path_obj, "r", encoding="utf-8") as f:
-        config = yaml.safe_load(f)
-
-    return config
+f_name: str = "config.yaml"
 
 
-def get_dtype_info(dtype: np.dtype) -> dict:
+def get_dtype_info(dtype: np.dtype) -> dict[str, Any]:
     """Get human-readable dtype information."""
     return {
         "name": str(dtype),
@@ -51,9 +39,9 @@ def get_dtype_info(dtype: np.dtype) -> dict:
     }
 
 
-def get_dataset_stats(dataset: h5py.Dataset, max_samples: int = 10) -> dict:
+def get_dataset_stats(dataset: h5py.Dataset, max_samples: int = 10) -> dict[str, Any]:
     """Compute statistics for a dataset."""
-    stats = {
+    stats: dict[str, Any] = {
         "shape": dataset.shape,
         "dtype": get_dtype_info(dataset.dtype),
         "size": dataset.size,
@@ -68,7 +56,8 @@ def get_dataset_stats(dataset: h5py.Dataset, max_samples: int = 10) -> dict:
     if dataset.attrs:
         stats["attributes"] = {k: _convert_to_serializable(v) for k, v in dataset.attrs.items()}
 
-    # Try to compute numerical statistics if applicable
+    # Load data once for both statistics and sampling
+    data: np.ndarray | None = None
     if dataset.size > 0 and dataset.dtype.kind in ("f", "i", "u"):
         try:
             data = dataset[:]
@@ -83,10 +72,12 @@ def get_dataset_stats(dataset: h5py.Dataset, max_samples: int = 10) -> dict:
         except Exception as e:
             stats["statistics"] = {"error": str(e)}
 
-    # Sample values
+    # Sample values (reuse already loaded data if available)
     if dataset.size > 0:
         try:
-            flat = dataset[:].flatten()
+            if data is None:
+                data = dataset[:]
+            flat = data.flatten()
             sample_indices = np.linspace(0, len(flat) - 1, min(max_samples, len(flat)), dtype=int)
             stats["sample_values"] = [_convert_to_serializable(flat[i]) for i in sample_indices]
         except Exception as e:
@@ -112,9 +103,9 @@ def _convert_to_serializable(obj: Any) -> Any:
     return obj
 
 
-def explore_group(group: h5py.Group, max_samples: int = 10, indent: int = 0) -> dict:
+def explore_group(group: h5py.Group, max_samples: int = 10) -> dict[str, Any]:
     """Recursively explore an HDF5 group."""
-    result = {
+    result: dict[str, Any] = {
         "type": "group",
         "name": group.name,
         "num_items": len(group),
@@ -125,7 +116,7 @@ def explore_group(group: h5py.Group, max_samples: int = 10, indent: int = 0) -> 
         result["attributes"] = {k: _convert_to_serializable(v) for k, v in group.attrs.items()}
 
     # Explore children
-    children = {}
+    children: dict[str, Any] = {}
     for key in group.keys():
         item = group[key]
         if isinstance(item, h5py.Dataset):
@@ -134,13 +125,13 @@ def explore_group(group: h5py.Group, max_samples: int = 10, indent: int = 0) -> 
                 **get_dataset_stats(item, max_samples),
             }
         elif isinstance(item, h5py.Group):
-            children[key] = explore_group(item, max_samples, indent + 1)
+            children[key] = explore_group(item, max_samples)
 
     result["children"] = children
     return result
 
 
-def print_structure(structure: dict, indent: int = 0) -> None:
+def print_structure(structure: dict[str, Any], indent: int = 0) -> None:
     """Print the HDF5 structure in a readable format."""
     prefix = "  " * indent
 
@@ -182,7 +173,7 @@ def print_structure(structure: dict, indent: int = 0) -> None:
             print(f"{prefix}  Sample values: {samples}{'...' if len(structure['sample_values']) > 5 else ''}")
 
 
-def explore_hdf5_file(file_path: str, config: dict) -> dict:
+def explore_hdf5_file(file_path: str | Path, config: dict[str, Any]) -> dict[str, Any]:
     """Explore an HDF5 file and return its structure."""
     file_path = Path(file_path)
 
@@ -194,7 +185,7 @@ def explore_hdf5_file(file_path: str, config: dict) -> dict:
 
     with h5py.File(file_path, "r") as f:
         # File-level info
-        result = {
+        result: dict[str, Any] = {
             "file_path": str(file_path.absolute()),
             "file_size_mb": file_path.stat().st_size / (1024 * 1024),
             "hdf5_version": f.libver,
@@ -231,7 +222,7 @@ def main(config_path: str | None = None) -> None:
     """Main entry point."""
     # Load config
     try:
-        config = load_config(config_path)
+        config = load_config(config_path, f_name)
     except FileNotFoundError as e:
         logger.error(str(e))
         sys.exit(1)
@@ -241,24 +232,18 @@ def main(config_path: str | None = None) -> None:
         logger.error("No input_file specified in config.yaml")
         sys.exit(1)
 
-    # Resolve relative paths from project root
-    if not os.path.isabs(input_file):
-        # Try relative to current working directory first
-        if not os.path.exists(input_file):
-            # Try relative to script directory
-            script_dir = Path(__file__).parent
-            project_root = script_dir.parent.parent
-            input_file = project_root / input_file
+    # Resolve relative paths
+    input_file = resolve_path(input_file)
 
-    logger.info(f"Exploring HDF5 file: {input_file}")
+    logger.info("Exploring HDF5 file: %s", input_file)
 
     try:
-        result = explore_hdf5_file(str(input_file), config)
+        result = explore_hdf5_file(input_file, config)
     except FileNotFoundError as e:
         logger.error(str(e))
         sys.exit(1)
     except Exception as e:
-        logger.error(f"Error reading HDF5 file: {e}")
+        logger.error("Error reading HDF5 file: %s", e)
         sys.exit(1)
 
     output_format = config.get("output_format", "console")
@@ -297,7 +282,7 @@ def main(config_path: str | None = None) -> None:
         output_json_path = config.get("output_json_path", "hdf5_report.json")
         with open(output_json_path, "w", encoding="utf-8") as f:
             json.dump(result, f, indent=2, default=str)
-        logger.info(f"JSON report saved to: {output_json_path}")
+        logger.info("JSON report saved to: %s", output_json_path)
 
 
 if __name__ == "__main__":
