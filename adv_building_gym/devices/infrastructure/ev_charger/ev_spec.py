@@ -16,3 +16,4 @@ class EvSpec:
     v2g_enabled: bool
     start_soc: float = 0.05
     target_soc: float = 0.9
+    charge_to_target_in_hrs: float = 8.0

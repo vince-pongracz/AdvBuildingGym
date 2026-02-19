@@ -22,6 +22,7 @@ def make_checkpoint_callback_class(
     checkpoint_frequency: int = 20,
     num_to_keep: int = 1,
     metric: str = "evaluation/env_runners/reward_rate",
+    episode_length: int = 288, # a day in 5 minute timeframes
 ) -> Type["BestModelCheckpointCallback"]:
     """
     Factory function that returns a configured BestModelCheckpointCallback class.
@@ -34,6 +35,10 @@ def make_checkpoint_callback_class(
         checkpoint_frequency: Save checkpoint every N episodes (default: 20)
         num_to_keep: Number of best checkpoints to keep (default: 1)
         metric: Metric name to optimize (default: "evaluation/env_runners/reward_rate")
+        episode_length: Number of timesteps per episode (default: 288).
+            Used to calculate episode count from num_env_steps_sampled_lifetime.
+            This is needed because off-policy algorithms (SAC) don't reliably
+            report num_episodes_lifetime in the result dict.
 
     Returns:
         A BestModelCheckpointCallback subclass with parameters pre-configured
@@ -45,6 +50,7 @@ def make_checkpoint_callback_class(
                 checkpoint_dir="/path/to/checkpoints",
                 checkpoint_frequency=20,
                 metric="evaluation/env_runners/reward_rate",
+                episode_length=288,
             ),
             on_episode_end=my_episode_end_callback,  # Separate callback
         )
@@ -59,6 +65,7 @@ def make_checkpoint_callback_class(
                 checkpoint_frequency=checkpoint_frequency,
                 num_to_keep=num_to_keep,
                 metric=metric,
+                episode_length=episode_length,
             )
 
     return ConfiguredBestModelCheckpointCallback
@@ -79,7 +86,12 @@ class BestModelCheckpointCallback(DefaultCallbacks):
 
     Important: on_train_result runs on the Algorithm actor (main process), while
     on_episode_end runs on EnvRunner actors (workers). State is NOT shared between
-    these instances. We use episode counts from the result dict instead of self-tracking.
+    these instances.
+
+    Episode counting: We use num_env_steps_sampled_lifetime / episode_length to
+    calculate episode count. This is more reliable than num_episodes_lifetime because
+    off-policy algorithms (SAC) don't consistently report episode counts in the
+    result dict, while timestep counts are always accurate.
 
     For episode metrics logging, use config.callbacks() with the on_episode_end parameter:
         config.callbacks(
@@ -92,6 +104,8 @@ class BestModelCheckpointCallback(DefaultCallbacks):
         checkpoint_frequency: Save checkpoint every N episodes (default: 20)
         num_to_keep: Number of best checkpoints to keep (default: 1)
         metric: Metric name to optimize (default: "evaluation/env_runners/reward_rate")
+        episode_length: Number of timesteps per episode (default: 288).
+            Used to calculate episode count from num_env_steps_sampled_lifetime.
     """
 
     def __init__(
@@ -100,12 +114,14 @@ class BestModelCheckpointCallback(DefaultCallbacks):
         checkpoint_frequency: int = 20,
         num_to_keep: int = 1,
         metric: str = "evaluation/env_runners/reward_rate",
+        episode_length: int = 288,
     ):
         super().__init__()
         self.checkpoint_dir = checkpoint_dir
         self.checkpoint_frequency = checkpoint_frequency
         self.num_to_keep = num_to_keep
         self.metric = metric
+        self.episode_length = episode_length
 
         # Internal state tracking (on Algorithm actor only)
         self.best_metric_value: float = -np.inf
@@ -114,9 +130,11 @@ class BestModelCheckpointCallback(DefaultCallbacks):
 
         # Note: Checkpoint directory (self.checkpoint_dir) will be created lazily on first checkpoint save
         logger.info(
-            "BestModelCheckpointCallback initialized: checkpoint_dir=%s, frequency=%d episodes, metric=%s, num_to_keep=%d",
+            "BestModelCheckpointCallback initialized: checkpoint_dir=%s, frequency=%d episodes, "
+            "episode_length=%d timesteps, metric=%s, num_to_keep=%d",
             checkpoint_dir,
             checkpoint_frequency,
+            episode_length,
             metric,
             num_to_keep,
         )
@@ -126,19 +144,17 @@ class BestModelCheckpointCallback(DefaultCallbacks):
     ):
         """
         Called after each training iteration with aggregated metrics.
-        Check if we should save a checkpoint based on episode count from result dict.
+        Check if we should save a checkpoint based on episode count derived from timesteps.
 
-        Note: We get episode count from result dict because on_train_result runs
-        on Algorithm actor, while on_episode_end runs on EnvRunner workers.
-        State is not shared between these different callback instances.
+        Note: We calculate episode count from num_env_steps_sampled_lifetime / episode_length.
+        This is more reliable than num_episodes_lifetime because off-policy algorithms
+        (SAC) don't consistently report episode counts, while timestep counts are
+        always accurate for both on-policy (PPO) and off-policy algorithms.
         """
-        # Get total episode count from result dict (aggregated from all workers)
-        # Use num_episodes_lifetime (cumulative total), NOT num_episodes (per-iteration)
-        env_runners_data = result.get("env_runners", {})
-        episode_count = env_runners_data.get(
-            "num_episodes_lifetime",
-            result.get("episodes_total", result.get("episodes_this_iter", 0))
-        )
+        # Calculate episode count from timesteps (works for both PPO and SAC)
+        # num_env_steps_sampled_lifetime is reliably reported by all algorithms
+        timesteps = result.get("num_env_steps_sampled_lifetime", 0)
+        episode_count = int(timesteps // self.episode_length)
 
         # Check if we should checkpoint based on episode count threshold
         episodes_since_last = episode_count - self.last_checkpoint_episode

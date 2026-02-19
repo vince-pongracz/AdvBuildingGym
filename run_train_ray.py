@@ -211,11 +211,15 @@ def main():
     checkpoint_dir = os.path.abspath(f"{storage_path}/checkpoints_{run_name}")
 
     # Create checkpoint callback class for best model tracking -- easier to hand it over already instantiated, like this
+    # NOTE: episode_length is required to calculate episode count from timesteps.
+    # This is needed because off-policy algorithms (SAC) don't reliably report
+    # num_episodes_lifetime, but num_env_steps_sampled_lifetime is always accurate.
     checkpoint_callback_class = make_checkpoint_callback_class(
         checkpoint_dir=checkpoint_dir,
         checkpoint_frequency=args.checkpoint_frequency_episodes,
         num_to_keep=1,  # Only keep best checkpoint at callback level
         metric=args.metric,
+        episode_length=active_config.EPISODE_LENGTH,
     )
 
     # Build algorithm-specific config
