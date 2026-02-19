@@ -250,12 +250,22 @@ class BestModelCheckpointCallback(BaseCallback):
 
 
 def make_env(rank: int, seed: int):
-    """Factory function for creating environment instances."""
+    """Factory function for creating environment instances.
+
+    Uses factory methods to create fresh component instances for each env,
+    ensuring parallel environments don't share mutable state.
+    """
     def _init() -> gym.Env:
+        # Create fresh instances for this environment using factory methods.
+        # Each env gets its own infras/statesources/rewards with independent state.
+        infras = env_config.create_infras()
+        statesources = env_config.create_statesources()
+        rewards = env_config.create_rewards(infras)
+
         env = AdvBuildingGym(
-            infras=env_config.infras, # type: ignore
-            statesources=env_config.statesources, # type: ignore
-            rewards=env_config.rewards,
+            infras=infras,
+            statesources=statesources,
+            rewards=rewards,
             building_props=env_config.building_props,
         )
         env.reset(seed=seed + rank)

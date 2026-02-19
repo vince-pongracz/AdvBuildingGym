@@ -3,6 +3,10 @@
 # Created: 2026-01-06 | Version: 1.0
 # Description: Submit a SLURM job that evaluates a trained Ray/RLlib model
 
+# TODO VP 2026.02.12. : Compare script with the new train slurm ray script on HPC, because there were some changes as well
+# TODO VP 2026.02.12. : Adjust script according to the new ray eval script and its arguments (e.g. episodes, seed, checkpoint path) -- also check the new logging setup in run_evaluation_ray.py
+# TODO VP 2026.02.12. : Check this script, as it is still provisional and not yet tested on HAICORE
+
 # -----------------------------------------------------------------------------
 # Usage:
 #   sbatch slurm_scripts/slurm_eval_ray.sh [CHECKPOINT_PATH] [EPISODES] [SEED]

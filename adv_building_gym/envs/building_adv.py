@@ -160,13 +160,30 @@ class AdvBuildingGym(gym.Env):
         training=True,
         train_ratio=0.8,
         # Number of steps to look ahead for forecasted values
-        prediction_horizon=12 * 5 * 6,
+        prediction_horizon=8 * 12,  # 8 hours at 5-minute steps
         **kwargs,
     ):
+        """Initialise the building-energy gym environment.
+
+        Args:
+            infras: Infrastructure components (HP, battery, EV charger, etc.)
+                that define controllable action and observation sub-spaces.
+            statesources: External state sources (weather, pricing, schedules)
+                that inject uncontrollable observations into the state.
+            rewards: Reward functions evaluated at each step to produce
+                the scalar reward signal.
+            building_props: Physical and thermal properties of the building.
+            simulation_time: Episode length in seconds (default: 24 h).
+            control_step: Time between control actions in seconds (default: 300 s).
+            schedule_type: Optional schedule identifier for occupancy / usage patterns.
+            render_mode: Gymnasium render mode (currently unused).
+            training: If True, sample from the training data split; otherwise
+                use the held-out evaluation split.
+            train_ratio: Fraction of available data used for training (default: 0.8).
+            prediction_horizon: Number of future time-steps included in
+                forecast observations (default: 360, i.e. 30 h at 300 s steps).
         """
-        Initialize the Gym environment with building parameters and reward structure.
-        """
-        # TODO VP 2026.01.07. : add docsstring
+
         # Setup warning filters for Ray workers (must be called early)
         setup_warning_filters()
 
@@ -230,7 +247,7 @@ class AdvBuildingGym(gym.Env):
         self.train_ratio = train_ratio
         self.max_iteration = int(self.simulation_time / self.control_step)
 
-        # TODO VP 2025.12.09. : inspect this
+        # TODO VP 2025.12.09. : inspect this -- drop it, it is not useful for us for now
         self.temporal_features = TemporalFeatureBuffer(window_size=self.prediction_horizon)
 
         self.state, _ = self.reset()
@@ -285,6 +302,10 @@ class AdvBuildingGym(gym.Env):
         return state
 
     def is_done(self) -> bool:
+        """        
+        :return: True if episode (a day) elapsed
+        :rtype: bool
+        """
         return bool(self.iteration >= self.max_iteration)
 
     def _flat_action_to_dict(self, flat_action: np.ndarray) -> Dict[str, np.ndarray]:
@@ -345,10 +366,21 @@ class AdvBuildingGym(gym.Env):
         # Convert flat action to Dict format for internal infrastructure use
         action = self._flat_action_to_dict(clipped_flat_action)
 
+        # 1. Execute all infrastructure actions
         for infr in self.infras:
             infr.exec_action(action, self.state)
-            infr.update_state(self.state)
 
+        # 2. Advance time: increment iteration, then synchronise all components so
+        #    update_state reads the correct (new) row from time-series data.
+        #    Previously synchronise was called AFTER update_state, causing exogenous
+        #    datasources (price, weather, EV schedule) to lag 2 iterations behind.
+        self.iteration += 1
+        for sync in self.infras + self.statesources:
+            sync.synchronise(self.iteration)
+
+        # 3. Update observable states for the new iteration
+        for infr in self.infras:
+            infr.update_state(self.state)
         for ds in self.statesources:
             ds.update_state(states=self.state)
 
@@ -379,16 +411,9 @@ class AdvBuildingGym(gym.Env):
             rew_val = float(np.asarray(rew_f.get_reward(action, self.state)).item())
             reward += rew_val
 
-        # Sync iterations
-        for sync in self.infras + self.statesources:
-            sync.synchronise(self.iteration)
-
-        # Check if episode should terminate
+        # Check if episode should terminate (iteration already incremented above)
         terminated = self.is_done()
         truncated = False
-
-        if not terminated:
-            self.iteration += 1
 
         info = {
             "action": action,  # Dict format (for compatibility)

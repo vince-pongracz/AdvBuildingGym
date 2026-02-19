@@ -5,12 +5,13 @@ from typing import ClassVar, Set
 import numpy as np
 from gymnasium.spaces import Box
 
-from .base import StateSource
+from ..base import StateSource
 from adv_building_gym.config.utils.serializable import ComponentRegistry
 
 logger = logging.getLogger(__name__)
 
-# TODO VP 2026.01.08. : Search for energy need profile data during a day. Pay attention to weekdays, weekends, etc...
+# TODO VP 2026.01.08. : Search for energy need profile data during a day. Pay attention to weekdays, weekends, etc... 
+# -- it is in the WPuQ datasources, without PV and HP hopefully
 # TODO VP 2026.01.08. : add reward function to this
 
 class DesiredUserEnergyNeed(StateSource):

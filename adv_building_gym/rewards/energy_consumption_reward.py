@@ -23,7 +23,7 @@ class MinimiseEnergyConsumption_Reward(RewardFunction):
                 e_consumption += np.sum(v, axis=0)
 
         e_consumption_max = len(actions)
-        reward = e_consumption / e_consumption_max
+        reward = -1.0 * e_consumption / e_consumption_max if e_consumption_max > 0 else 0.0
 
         return float(self.weight * reward)
 

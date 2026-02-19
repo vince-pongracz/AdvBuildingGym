@@ -133,13 +133,15 @@ def common_model_config(
     # Sampling actions (querying the env, using the policy, sample trajectories) -- no GPU needed
     config.env_runners(
         num_env_runners=num_env_runners,
-        num_envs_per_env_runner=1,
+        num_envs_per_env_runner=1, # NOTE VP 2026.02.11. : Maybe worth running multiple envs on a single ray envrunner node...
         num_cpus_per_env_runner=num_cpus_per_env_runner,
         num_gpus_per_env_runner=0,
         # Collect complete episodes before returning to learner.
         # Without this, off-policy algorithms (SAC) default to 1, causing
         # training episodes to be reported as length = 1 in callbacks.
         rollout_fragment_length=env_config.EPISODE_LENGTH,
+        # TODO VP 2026.02.11. : Look up this when packages present
+        # episode_lookback_horizon=10,
         # Flatten dict observation space into a single vector for the RL module
         # NOTE VP 2026.01.05. : if other observation space needed for the policy, change the observations in the env.
         # (rather than using a new observation encoder -- that must be learnt as well, it overcomplicates things...)
@@ -152,6 +154,8 @@ def common_model_config(
         # True only if `evaluation_num_env_runners` > 0
         evaluation_parallel_to_training=False,
     )
+    # TODO VP 2026.02.11. : Check this out in HAICORE
+    # config.training(gamma=0.995)
 
     config.logger_config = {
         "type": "ray.tune.logger.UnifiedLogger",

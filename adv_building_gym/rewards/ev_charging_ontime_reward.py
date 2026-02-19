@@ -67,7 +67,8 @@ class EVChargingOnTimeReward(RewardFunction):
 
         # No reward if EV not connected
         if ev_connected < 0.5:
-            return 1.0
+            # Neutral reward when EV is not present, as this objective is fulfilled when EV is not present
+            return self.weight * 1.0 
 
         current_soc = states["ev_soc"][0]
         target_soc = states["ev_target_soc"][0]

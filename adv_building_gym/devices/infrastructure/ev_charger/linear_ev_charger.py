@@ -77,7 +77,7 @@ class LinearEVCharger(Infrastructure):
         # State variables
         self.soc = start_soc
         self.target_soc = target_soc
-        self.ev_connected = True  # Whether EV is connected to charger
+        self.ev_connected = False  # Whether EV is connected to charger
         self.charge_to_target_in_hrs = 0.0  # Time remaining to reach target SoC
 
         if charger_efficiency <= 0 or charger_efficiency > 1:
@@ -150,8 +150,43 @@ class LinearEVCharger(Infrastructure):
                 self.max_charge_time_hrs
             )
 
+    def _check_schedule(self, states: Dict) -> None:
+        """Check the shared states dict for EV schedule changes from EVState.
+
+        Reads ``ev_schedule_connected`` (and EV spec fields) written by the
+        EVState source.  When the schedule differs from the current connection
+        state, calls :meth:`set_ev_connected` to apply the transition.
+        """
+        if "ev_schedule_connected" not in states:
+            return  # No EVState in this config
+
+        scheduled_connected = bool(states["ev_schedule_connected"][0] > 0.5)
+
+        if scheduled_connected == self.ev_connected:
+            return  # No change
+
+        if scheduled_connected:
+            # Build EvSpec from schedule fields in states dict
+            ev_spec = EvSpec(
+                max_cap_kWh=float(states["ev_schedule_max_cap_kWh"][0]),
+                max_charging_kW=float(states["ev_schedule_max_charging_kW"][0]),
+                charger_efficiency=float(states["ev_schedule_charger_eff"][0]),
+                discharge_efficiency=float(states["ev_schedule_discharge_eff"][0]),
+                v2g_enabled=bool(states["ev_schedule_v2g"][0] > 0.5),
+                start_soc=float(states["ev_schedule_start_soc"][0]),
+                target_soc=float(states["ev_schedule_target_soc"][0]),
+            )
+            logger.debug("EV schedule: CONNECT (cap=%.1f, soc=%.2f->%.2f)",
+                         ev_spec.max_cap_kWh, ev_spec.start_soc, ev_spec.target_soc)
+            self.set_ev_connected(connected=True, ev_spec=ev_spec)
+        else:
+            logger.debug("EV schedule: DISCONNECT")
+            self.set_ev_connected(connected=False)
+
     def exec_action(self, actions: Dict, states: Dict) -> None:
         """Execute charging/discharging action."""
+        # Check for EV schedule changes before acting
+        self._check_schedule(states)
 
         if not self.ev_connected:
             # EV not connected --> no action

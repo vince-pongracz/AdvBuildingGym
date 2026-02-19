@@ -15,23 +15,29 @@ def adv_building_env_creator(config):
     This function is registered with Ray Tune and called whenever a new
     environment instance is needed (e.g., for env runners, evaluation).
 
+    IMPORTANT: Uses factory methods to create FRESH component instances for each
+    environment. This ensures parallel env_runners don't share mutable state
+    (iteration counters, internal buffers) which would cause state corruption.
+
     Args:
         config: Configuration dict passed by Ray Tune (currently unused,
                 environment config is loaded from config module)
 
     Returns:
-        AdvBuildingGym instance configured with the settings from config module
+        AdvBuildingGym instance with independent component instances
     """
     # Import config here to avoid circular imports
     from ..config import config as env_config
 
-    # NOTE VP 2026.01.13. : Warnings about config fields being None are supressed, 
-    # because Config initionalises them as None by default, 
-    # but fills up later in a post_init step
-    # --> that is why the type:ignore comments below
+    # Create fresh instances for this environment using factory methods.
+    # Each env gets its own infras/statesources/rewards with independent state.
+    infras = env_config.create_infras()
+    statesources = env_config.create_statesources()
+    rewards = env_config.create_rewards(infras)
+
     return AdvBuildingGym(
-        infras=env_config.infras, # type: ignore
-        statesources=env_config.statesources, # type: ignore
-        rewards=env_config.rewards,
+        infras=infras,
+        statesources=statesources,
+        rewards=rewards,
         building_props=env_config.building_props,
     )

@@ -60,6 +60,15 @@ done < ds_links.txt
 or
 `cat ds_links.txt | xargs -n 1 -P 4 curl -L --progress-bar -OJ`
 
+<!-- Add NOTEs:
+TODO VP: 
+SAC: https://spinningup.openai.com/en/latest/algorithms/sac.html
+- test alpha param, controlling exploitation, exploration tradeoff
+
+PPO: https://spinningup.openai.com/en/latest/algorithms/ppo.html
+
+-->
+
 ### Slurm
 
 A bit more detailed help here: https://www.nhr.kit.edu/userdocs/haicore/batch/
@@ -338,4 +347,4 @@ If you use this framework in your research, please consider citing our paper &#1
 ## License
 
 This code is licensed under the **[MIT License](LICENSE)**.
-For any issues or any intention of cooperation, please feel free to contact me at **[goekhan.demirel@kit.edu](goekhan.demirel@kit.edu)**.
+For any issues or any intention of cooperation, please feel free to contact me at **[pongrvin@gmail.com](pongrvin@gmail.com)**.

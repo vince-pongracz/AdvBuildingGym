@@ -11,6 +11,7 @@ Use:
 
 # These don't cause circular imports - import directly
 from .utils import Serializable, ComponentRegistry
+from .training_config import TrainingConfig
 
 
 def __getattr__(name):
@@ -33,4 +34,5 @@ __all__ = [
     "ConfigManager",
     "Serializable",
     "ComponentRegistry",
+    "TrainingConfig",
 ]
