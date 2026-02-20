@@ -1,13 +1,13 @@
 """EV charging progress reward function."""
 
-from typing import TYPE_CHECKING, ClassVar, Dict, Set
+import logging
+from typing import ClassVar, Dict, List, Set
 
 from .base import RewardFunction
 from adv_building_gym.config.utils.serializable import ComponentRegistry
+from adv_building_gym.devices.infrastructure.ev_charger import LinearEVCharger
 
-# Import only for type checkers to avoid circular imports at runtime
-if TYPE_CHECKING:
-    from adv_building_gym.devices.infrastructure.ev_charger import LinearEVCharger
+logger = logging.getLogger(__name__)
 
 
 class EVChargingOnTimeReward(RewardFunction):
@@ -27,24 +27,29 @@ class EVChargingOnTimeReward(RewardFunction):
     - energy_achievable = max_charging_kW * charger_efficiency * remaining_hours
     """
 
-    # Parameters derived from context (charger instance)
-    _context_params: ClassVar[Set[str]] = {'ev_charger'}
+    # infrastructures comes from context (the Config's infras list)
+    _context_params: ClassVar[Set[str]] = {'infrastructures'}
 
     def __init__(self,
+                 infrastructures: List,
                  weight: float,
-                 name: str = "ev_charging_reward",
-                 ev_charger: "LinearEVCharger | None" = None) -> None:
+                 name: str = "ev_charging_reward") -> None:
         """Initialize EVChargingReward.
 
         Args:
+            infrastructures: List of Infrastructure instances; must contain a LinearEVCharger
             weight: Reward weight for multi-objective optimization
             name: Reward function identifier
-            ev_charger: LinearEVCharger instance to extract parameters from
         """
         super().__init__(weight, name)
 
+        # NOTE VP 2026.02.20. : For now it's okay, however if other charger types are added, this will need to be refactored.
+        ev_charger: LinearEVCharger | None = next(
+            (infra for infra in infrastructures if isinstance(infra, LinearEVCharger)),
+            None
+        )
         if ev_charger is None:
-            raise ValueError("ev_charger must be provided to EVChargingReward")
+            raise ValueError("EVChargingOnTimeReward requires a LinearEVCharger in infrastructures")
 
         self.max_charging_kW = ev_charger.max_charging_kW
         self.max_cap_kWh = ev_charger.max_cap_kWh

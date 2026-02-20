@@ -27,7 +27,7 @@ from ray.tune.registry import register_env
 from adv_building_gym.utils import setup_warning_filters
 
 # Trigger registration of the custom Gym IDs
-from adv_building_gym import make_checkpoint_callback_class, ConfigManager
+from adv_building_gym import AdvBuildingGym, make_checkpoint_callback_class, ConfigManager
 from adv_building_gym.config import config as default_config
 from adv_building_gym.envs import adv_building_env_creator
 from adv_building_gym.ray_training import common_model_config, select_model
@@ -147,6 +147,24 @@ def main():
     else:
         active_config = default_config
 
+    # Initialise the singleton component instances exactly once in the main process.
+    # This triggers CSV parsing (e.g. EVState) here, and only here.
+    # Ray worker subprocesses (EnvRunners, SAC actor, Learner) never call this —
+    # they use the factory methods directly via adv_building_env_creator.
+    active_config.init_singletons()
+
+    # Derive action_space from the already-instantiated singleton infras/statesources.
+    # Re-uses existing objects, so no additional CSV parsing occurs.
+    _tmp_env = AdvBuildingGym(
+        infras=active_config.infras,
+        statesources=active_config.statesources,
+        rewards=active_config.rewards,
+        building_props=active_config.building_props,
+    )
+    action_space = _tmp_env.action_space
+    _tmp_env.close()
+    logger.info("Derived action_space from singleton: %s", action_space)
+
     args.config_name = active_config.config_name if args.config_name is None else args.config_name
 
     # Save config to file if specified
@@ -225,6 +243,8 @@ def main():
 
     register_env("AdvBuilding", adv_building_env_creator)
 
+    # TODO VP 2026.02.20. : It is not a nice thing that episode_length is needed in multiple places 
+    # (common_model_config, select_model)
     # Build algorithm-specific config
     algo_config = select_model(
         algorithm=args.algorithm,
@@ -235,7 +255,8 @@ def main():
     algo_config = common_model_config(
         config=algo_config,
         seed=args.seed,
-        env_creator=adv_building_env_creator,
+        action_space=action_space,
+        episode_length=active_config.EPISODE_LENGTH,
         num_cpus=cpus,
         num_gpus=gpus,
         checkpoint_callback_class=checkpoint_callback_class,
@@ -256,9 +277,9 @@ def main():
 
     # Calculate checkpoint frequency in training iterations based on episodes
     # Episode length from env config (288 timesteps per episode)
-    # Training batch size per iteration: train_batch_size_per_learner = 4000 timesteps
+    # Training batch size per iteration: train_batch_size_per_learner = EPISODE_LENGTH * N timesteps
     timesteps_per_episode = active_config.EPISODE_LENGTH  # 288 timesteps
-    timesteps_per_iteration = param_space.get("train_batch_size_per_learner", 4000)
+    timesteps_per_iteration = param_space.get("train_batch_size_per_learner", active_config.EPISODE_LENGTH * active_config.EPISODES_IN_ITERATION)
     checkpoint_freq_iterations = max(1, int((args.checkpoint_frequency_episodes * timesteps_per_episode) / timesteps_per_iteration))
 
     logger.info("Checkpoint configuration:")
@@ -439,3 +460,4 @@ if __name__ == "__main__":
 
 # With specific config name
 # python run_train_ray.py -a sac -s 18 -cn test1 --checkpoint-frequency-episodes 30 --metric reward_rate
+

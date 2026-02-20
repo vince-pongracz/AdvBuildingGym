@@ -7,14 +7,13 @@ including environment setup, resource allocation, and callback configuration.
 
 import datetime
 import logging
-from typing import Any, Callable, List
+from typing import List
 
+from gymnasium.spaces import Space
 from ray.rllib.connectors.env_to_module import FlattenObservations
 
 from adv_building_gym import create_on_episode_end_callback
 from adv_building_gym.utils import ResourceAllocation, validate_resource_allocation
-from adv_building_gym.config import config as env_config
-from .env_spaces import get_env_spaces
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +21,8 @@ logger = logging.getLogger(__name__)
 def common_model_config(
     config,
     seed: int,
-    env_creator: Callable[[dict], Any],
+    action_space: Space,
+    episode_length: int,
     num_cpus: int,
     num_gpus: int,
     # TODO VP 2026.01.13. : Improve checkpoint directory structure
@@ -53,7 +53,8 @@ def common_model_config(
     Args:
         config: Algorithm config object (e.g., PPOConfig instance)
         seed: Random seed for reproducibility
-        env_creator: Factory function that creates environment instances
+        action_space: Pre-built action space (Box) from the environment
+        episode_length: Episode length in timesteps (used for rollout_fragment_length)
         num_cpus: Total CPUs available (from Ray/SLURM)
         num_gpus: Total GPUs available (from Ray/SLURM)
         checkpoint_callback_class: Callback class for checkpoint management
@@ -86,13 +87,11 @@ def common_model_config(
         num_env_runners, num_cpus_per_env_runner, driver_cpus
     )
 
-    # Get observation and action spaces from a temporary env instance
-    # NOTE: We only provide action_space explicitly. The observation_space is
-    # intentionally NOT provided because FlattenObservations connector transforms
-    # the Dict obs space into a flat Box. If we provide the Dict space here,
-    # RLlib's Catalog tries to build an encoder for Dict (unsupported) before
-    # the connector can transform it.
-    _obs_space, action_space = get_env_spaces(env_creator)
+    # action_space is provided by the caller (derived from the singleton's already-created
+    # infras — no extra env construction / CSV parsing needed here).
+    # NOTE: observation_space is intentionally NOT passed to config.environment() because
+    # FlattenObservations transforms the Dict obs space into a flat Box; providing the Dict
+    # space here would cause RLlib's Catalog to fail before the connector can transform it.
     logger.debug("Env action_space: %s (obs_space inferred after FlattenObservations)", action_space)
 
     config = config.api_stack(
@@ -139,7 +138,7 @@ def common_model_config(
         # Collect complete episodes before returning to learner.
         # Without this, off-policy algorithms (SAC) default to 1, causing
         # training episodes to be reported as length = 1 in callbacks.
-        rollout_fragment_length=env_config.EPISODE_LENGTH,
+        rollout_fragment_length=episode_length,
         # TODO VP 2026.02.11. : Look up this when packages present
         # episode_lookback_horizon=10,
         # Flatten dict observation space into a single vector for the RL module
@@ -148,7 +147,12 @@ def common_model_config(
         env_to_module_connector=lambda env, spaces, device: FlattenObservations(),  # type: ignore
     )
     config.evaluation(
-        evaluation_interval=1,  # run evaluation every train() iteration
+        # evaluation_interval=1 ensures `evaluation/env_runners/<metric>` is present in every
+        # iteration result, which is required by tune.TuneConfig(metric=...) — it performs a strict
+        # check and crashes if the metric is absent (as happens with interval > 1 before the first
+        # eval run). Alternative workaround: set os.environ["TUNE_DISABLE_STRICT_METRIC_CHECKING"]
+        # = "1" and keep a higher interval, but that silences all metric validation.
+        evaluation_interval=1,
         evaluation_duration_unit="episodes",
         evaluation_duration=2,  # e.g., 2 episodes
         # True only if `evaluation_num_env_runners` > 0

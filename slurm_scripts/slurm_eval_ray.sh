@@ -1,23 +1,32 @@
 #!/usr/bin/env bash
 # Author: Vince Pongracz
-# Created: 2026-01-06 | Version: 1.0
+# Created: 2026-01-06 | Version: 1.2
 # Description: Submit a SLURM job that evaluates a trained Ray/RLlib model
 
-# TODO VP 2026.02.12. : Compare script with the new train slurm ray script on HPC, because there were some changes as well
 # TODO VP 2026.02.12. : Adjust script according to the new ray eval script and its arguments (e.g. episodes, seed, checkpoint path) -- also check the new logging setup in run_evaluation_ray.py
-# TODO VP 2026.02.12. : Check this script, as it is still provisional and not yet tested on HAICORE
 
 # -----------------------------------------------------------------------------
 # Usage:
-#   sbatch slurm_scripts/slurm_eval_ray.sh [CHECKPOINT_PATH] [EPISODES] [SEED]
+#   sbatch slurm_scripts/slurm_eval_ray.sh [OPTIONS]
+#
+# All arguments are forwarded directly to run_eval_ray.py. Available options:
+#   --algorithm, -a ALGO    Algorithm to evaluate (ppo, sac, ddpg, td3, a2c) [default: ppo]
+#   --config-name, -cn NAME Configuration name (used in checkpoint search path)
+#   --load-config PATH      Path to JSON config file to load
+#   --checkpoint PATH       Path to Ray checkpoint directory (auto-detects best if omitted)
+#   --episodes N            Number of evaluation episodes [default: 10]
+#   --seed N                Random seed [default: 42]
+#   --output-dir PATH       Directory to save evaluation results [default: eval_results]
+#   --no-save               Do not save results to file
 #
 # Examples:
-#   sbatch slurm_scripts/slurm_eval_ray.sh
-#   sbatch slurm_scripts/slurm_eval_ray.sh models/test1/best_ppo/ray/ppo_seed42/seed42_18064_/checkpoint_000000 20 42
+#   sbatch slurm_scripts/slurm_eval_ray.sh --algorithm ppo --episodes 10 --seed 42
+#   sbatch slurm_scripts/slurm_eval_ray.sh --algorithm sac --config-name test1 --episodes 20
+#   sbatch slurm_scripts/slurm_eval_ray.sh --checkpoint models/test1/ray/ppo/best_model_ep100 --episodes 5
+#   sbatch slurm_scripts/slurm_eval_ray.sh --algorithm ppo --load-config configs/my_config.json
 #
-# Default values are set for all arguments so you can submit the job without
-# positional arguments. The script activates the project's Python virtualenv
-# and runs the evaluation script while logging SLURM info.
+# Note: No GPU is requested. run_eval_ray.py runs inference on CPU (sufficient for
+# the small [32,32,32] network) and falls back gracefully when no GPU is present.
 # -----------------------------------------------------------------------------
 
 # Link to SLURM params: https://www.nhr.kit.edu/userdocs/haicore/batch/
@@ -45,49 +54,96 @@ else
   echo "[WARN] Python environment not found at ${PYTHON_ENV}; continuing without activation"
 fi
 
-# Parse positional arguments (defaults use latest checkpoint)
-CHECKPOINT=${1:-}
-EPISODES=${2:-10}
-SEED=${3:-42}
+# Default values (mirror run_eval_ray.py defaults)
+ALGORITHM="ppo"
+EPISODES="10"
+SEED="42"
+CONFIG_NAME=""
+LOAD_CONFIG=""
+CHECKPOINT=""
+OUTPUT_DIR=""
+NO_SAVE=0
+EXTRA_ARGS=()
+
+# Parse named arguments
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --algorithm|-a)
+      ALGORITHM="$2"
+      shift 2
+      ;;
+    --episodes)
+      EPISODES="$2"
+      shift 2
+      ;;
+    --seed)
+      SEED="$2"
+      shift 2
+      ;;
+    --config-name|-cn)
+      CONFIG_NAME="$2"
+      shift 2
+      ;;
+    --load-config)
+      LOAD_CONFIG="$2"
+      shift 2
+      ;;
+    --checkpoint)
+      CHECKPOINT="$2"
+      shift 2
+      ;;
+    --output-dir)
+      OUTPUT_DIR="$2"
+      shift 2
+      ;;
+    --no-save)
+      NO_SAVE=1
+      shift
+      ;;
+    *)
+      EXTRA_ARGS+=("$1")
+      shift
+      ;;
+  esac
+done
 
 echo "=== Starting Ray evaluation job ==="
-if [ -n "$CHECKPOINT" ]; then
-  echo "  Checkpoint : $CHECKPOINT"
-else
-  echo "  Checkpoint : (using latest/default)"
-fi
-echo "  Episodes   : $EPISODES"
-echo "  Seed       : $SEED"
+echo "  Algorithm   : $ALGORITHM"
+echo "  Episodes    : $EPISODES"
+echo "  Seed        : $SEED"
+[ -n "$CHECKPOINT" ]  && echo "  Checkpoint  : $CHECKPOINT"
+[ -n "$CONFIG_NAME" ] && echo "  Config Name : $CONFIG_NAME"
+[ -n "$LOAD_CONFIG" ] && echo "  Load Config : $LOAD_CONFIG"
+[ -n "$OUTPUT_DIR" ]  && echo "  Output Dir  : $OUTPUT_DIR"
+[ "$NO_SAVE" -eq 1 ]  && echo "  Save results: disabled"
+[ ${#EXTRA_ARGS[@]} -gt 0 ] && echo "  Extra Args  : ${EXTRA_ARGS[*]}"
 
 echo "=== SLURM Resource Info ==="
 echo "SLURM_CPUS_PER_TASK : ${SLURM_CPUS_PER_TASK:-}"
 echo "Node                : $(hostname)"
-echo "CUDA_VISIBLE_DEVICES : ${CUDA_VISIBLE_DEVICES:-}"
 
-# Unset LD_LIBRARY_PATH to avoid conflicts at torch / cuDNN
-unset LD_LIBRARY_PATH
+echo "=== Python Info ==="
+python slurm_scripts/util/print_env_info.py
 
-echo "=== GPU Info (nvidia-smi) ==="
-nvidia-smi || true
-
-echo "=== Python / CUDA Info ==="
-python - <<'PY'
-import torch, sys
-print('Python executable :', sys.executable)
-print('Python version    :', sys.version.splitlines()[0])
-print('CUDA available    :', torch.cuda.is_available())
-if torch.cuda.is_available():
-    print('Device name       :', torch.cuda.get_device_name(0))
-    print('CUDA version (torch):', torch.version.cuda)
-    print('CUDNN version     :', torch.backends.cudnn.version())
-PY
+# Disable ANSI color codes and log deduplication in Ray logs
+export RAY_COLOR_PREFIX=0
+export RAY_DEDUP_LOGS=0
+export TERM=dumb
+# Force unbuffered Python output for immediate log visibility
+export PYTHONUNBUFFERED=1
 
 # Build command
-if [ -n "$CHECKPOINT" ]; then
-  CMD=(python run_evaluation_ray.py --checkpoint "$CHECKPOINT" --episodes "$EPISODES" --seed "$SEED")
-else
-  CMD=(python run_evaluation_ray.py --episodes "$EPISODES" --seed "$SEED")
-fi
+CMD=(python -u run_eval_ray.py
+  --algorithm "$ALGORITHM"
+  --episodes "$EPISODES"
+  --seed "$SEED"
+)
+[ -n "$CHECKPOINT" ]  && CMD+=(--checkpoint "$CHECKPOINT")
+[ -n "$CONFIG_NAME" ] && CMD+=(-cn "$CONFIG_NAME")
+[ -n "$LOAD_CONFIG" ] && CMD+=(--load-config "$LOAD_CONFIG")
+[ -n "$OUTPUT_DIR" ]  && CMD+=(--output-dir "$OUTPUT_DIR")
+[ "$NO_SAVE" -eq 1 ]  && CMD+=(--no-save)
+[ ${#EXTRA_ARGS[@]} -gt 0 ] && CMD+=("${EXTRA_ARGS[@]}")
 
 echo "======"
 echo "Running: ${CMD[*]}"
@@ -99,7 +155,7 @@ echo "Evaluation completed successfully."
 # Notes:
 # - Make the script executable:
 #     chmod +x slurm_scripts/slurm_eval_ray.sh
-# - Submit with positional args:
-#     sbatch slurm_scripts/slurm_eval_ray.sh [CHECKPOINT_PATH] [EPISODES] [SEED]
+# - Submit with named arguments:
+#     sbatch slurm_scripts/slurm_eval_ray.sh --algorithm ppo --episodes 10 --seed 42
 # - Output and error logs will be written to `slurm_logs_eval/`.
 # -------------------------------------------------------------------------------

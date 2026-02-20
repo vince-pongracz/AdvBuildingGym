@@ -53,7 +53,14 @@ rollout_fragment_length=env_config.EPISODE_LENGTH,
 
 Without this, off-policy algorithms (SAC) default to `rollout_fragment_length=1`, causing episodes to appear as length 1 in callbacks.
 
+Episodes are from within the same day.
+
+TODO VP: When and how to switch between multiple days?
+
 **Reference:** [RLlib Environments](https://docs.ray.io/en/latest/rllib/package_ref/env.html)
+
+NOTE VP: It is not mandatory to use up the whole day as a single episode. 
+It is maybe more effective, if we split up the day into several shorter trajectories.
 
 ---
 
@@ -63,6 +70,7 @@ A **training iteration** is one call to `algorithm.train()`, orchestrated by Ray
 
 Each iteration:
 1. **Env runners** collect `train_batch_size_per_learner` timesteps from the environment.
+
 TODO VP: More steps should be collected as an episode length... -- because the learner needs more
 
 2. **Learner** performs gradient updates on the collected batch.

@@ -5,13 +5,20 @@ from typing import List, Optional
 
 _DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
 
+# TODO VP 2026.02.20. : Simplyfy env config somehow, too much code here, too little declarative stuff...
+
 from adv_building_gym.envs.utils import BuildingProps
 
-from adv_building_gym.devices.infrastructure import Infrastructure, HP, BatteryTremblay, SolarPanel, LinearEVCharger
+from adv_building_gym.devices.infrastructure import (
+    Infrastructure, HP, BatteryTremblay, 
+    SolarPanel, LinearEVCharger
+)
+
 from adv_building_gym.devices.statesources import (
     StateSource, BuildingHeatLoss, DesiredUserEnergyNeed, EVState, InsideTemperature,
     EnergyPriceDataSource, WeatherDataSource
 )
+
 from adv_building_gym.rewards import (
     RewardFunction, TempReward, EconomicReward, 
     EVChargingOnTimeReward, MinimiseEnergyConsumption_Reward, 
@@ -20,7 +27,6 @@ from adv_building_gym.rewards import (
 
 
 # TODO VP 2026.01.13. : How to learn more days during training? -- solve consecutive days from data sources
-# TODO VP 2026.02.11. : Use shorter state source .csv-s, retrieve data row based on the control step -- if no such step given, keep the previous state value -- works for EV target state source
 
 @dataclass
 class Config:
@@ -36,7 +42,9 @@ class Config:
     config_name: str = "test1"
 
     seed: int = 42
-    EPISODE_LENGTH: int = 288
+
+    EPISODE_LENGTH: int = 288 # a day
+    EPISODES_IN_ITERATION: int = 25
     control_step: int = 300  # seconds (5 minutes)
 
     building_props: BuildingProps = field(default_factory=lambda:
@@ -123,24 +131,34 @@ class Config:
         Returns:
             List of newly created RewardFunction instances.
         """
-        # TODO VP 2026.02.19. : Pass full infras list to EVChargingOnTimeReward and let it find the EV charger itself, instead of passing ev_charger separately
-        ev_charger = next(
-            (infra for infra in infras if isinstance(infra, LinearEVCharger)),
-            None
-        )
         return [
             TempReward(weight=1),
             EconomicReward(infras, weight=1),
             MinimiseEnergyConsumption_Reward(weight=1),
             OperatorEnergyControlReward(infras, weight=1),
-            EVChargingOnTimeReward(weight=1, ev_charger=ev_charger),
+            EVChargingOnTimeReward(infrastructures=infras, weight=1),
         ]
 
     def __post_init__(self):
-        """Initialize cached singleton instances for backward compatibility.
+        """Lightweight post-init — does NOT eagerly call factory methods.
 
-        WARNING: These cached instances should NOT be used for parallel environments.
-        Use create_infras(), create_statesources(), create_rewards() instead.
+        Singleton fields (infras, statesources, rewards) are left as None to
+        avoid unnecessary CSV parsing in every Ray worker subprocess that
+        imports this module.  Call init_singletons() explicitly in the main
+        process where those fields are actually needed.
+        """
+
+    def init_singletons(self) -> None:
+        """Initialise the cached singleton component instances.
+
+        Call this once in the main process after creating / loading a Config,
+        before accessing self.infras / self.statesources / self.rewards.
+        Not needed in Ray worker subprocesses — they call the factory methods
+        (create_infras, create_statesources, create_rewards) directly via
+        adv_building_env_creator.
+
+        WARNING: Do not pass these singleton instances to parallel environments
+        — use the factory methods instead.
         """
         if self.statesources is None:
             self.statesources = self.create_statesources()

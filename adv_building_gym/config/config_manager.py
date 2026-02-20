@@ -1,8 +1,13 @@
 """Config serialization and management utilities."""
 
+from __future__ import annotations
+
 import json
 from pathlib import Path
-from typing import Dict, Any
+from typing import TYPE_CHECKING, Dict, Any
+
+if TYPE_CHECKING:
+    from adv_building_gym.config.env_config import Config
 
 from adv_building_gym.envs.utils import BuildingProps
 
@@ -31,8 +36,9 @@ class ConfigManager:
         """
         config_dict = {
             "config_name": config.config_name,
-            "seed": config.seed,
+            "seed": config.seed,            
             "EPISODE_LENGTH": config.EPISODE_LENGTH,
+            "EPISODES_IN_ITERATION": config.EPISODES_IN_ITERATION,
             "control_step": config.control_step,
             "building_props": {
                 "mC": config.building_props.mC,
@@ -55,7 +61,7 @@ class ConfigManager:
         return config_dict
 
     @staticmethod
-    def from_dict(config_dict: Dict[str, Any]):
+    def from_dict(config_dict: Dict[str, Any]) -> Config:
         """
         Deserialize config from dictionary.
 
@@ -89,6 +95,7 @@ class ConfigManager:
             config_name=config_dict.get("config_name", "loaded_config"),
             seed=seed,
             EPISODE_LENGTH=config_dict.get("EPISODE_LENGTH", 288),
+            EPISODES_IN_ITERATION=config_dict.get("EPISODES_IN_ITERATION", 25),
             control_step=control_step,
             building_props=building_props,
             # Set to empty lists to prevent __post_init__ from creating defaults
@@ -161,7 +168,7 @@ class ConfigManager:
             json.dump(config_dict, f, indent=2)
 
     @staticmethod
-    def load(path: str | Path):
+    def load(path: str | Path) -> Config:
         """
         Load config from JSON file.
 

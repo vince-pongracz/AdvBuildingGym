@@ -9,9 +9,17 @@ Use:
     from adv_building_gym.config import ConfigManager
 """
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 # These don't cause circular imports - import directly
 from .utils import Serializable, ComponentRegistry
 from .training_config import TrainingConfig
+
+if TYPE_CHECKING:
+    from .env_config import Config as Config, config as config
+    from .config_manager import ConfigManager as ConfigManager
 
 
 def __getattr__(name):

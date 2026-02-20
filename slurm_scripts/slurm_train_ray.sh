@@ -174,37 +174,7 @@ echo "=== GPU Info (nvidia-smi) ==="
 nvidia-smi || true
 
 echo "=== Python / CUDA Info ==="
-python - <<'PY'
-import os, sys
-print('Python executable :', sys.executable)
-print('Python version    :', sys.version.splitlines()[0])
-
-# Check CUDA env vars before importing torch
-print('CUDA_VISIBLE_DEVICES:', os.environ.get('CUDA_VISIBLE_DEVICES', '<not set>'))
-print('CUDA_MODULE_LOADING :', os.environ.get('CUDA_MODULE_LOADING', '<not set>'))
-ld_path = os.environ.get('LD_LIBRARY_PATH', '<not set>')
-print('LD_LIBRARY_PATH     :', ld_path[:200] + '...' if len(ld_path) > 200 else ld_path)
-
-import torch
-print('PyTorch version     :', torch.__version__)
-print('CUDA built with     :', torch.version.cuda)
-
-# Try explicit CUDA initialization with better error reporting
-try:
-    if torch.cuda.is_available():
-        print('CUDA available      : True')
-        print('Device count        :', torch.cuda.device_count())
-        # Try to actually initialize CUDA
-        torch.cuda.init()
-        print('CUDA init           : SUCCESS')
-        print('Device name         :', torch.cuda.get_device_name(0))
-        print('CUDNN version       :', torch.backends.cudnn.version())
-    else:
-        print('CUDA available      : False')
-        print('CUDA init failed - torch.cuda.is_available() returned False')
-except Exception as e:
-    print(f'CUDA init FAILED    : {type(e).__name__}: {e}')
-PY
+python slurm_scripts/util/print_env_info.py
 
 # Disable ANSI color codes and log deduplication in Ray logs
 export RAY_COLOR_PREFIX=0

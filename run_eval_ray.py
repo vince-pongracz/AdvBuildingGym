@@ -5,7 +5,6 @@ This script loads a trained Ray/RLlib checkpoint and evaluates it on the environ
 in inference mode, logging episode metrics and performance statistics.
 """
 
-# TODO VP 2026.02.12. : Provisional, try to run it on HAICORE
 
 import os
 import sys
@@ -378,6 +377,9 @@ def main():
         logger.info("Config loaded successfully: %s", active_config.config_name)
     else:
         active_config = default_config
+
+    # Initialise singleton component instances in the main process before use.
+    active_config.init_singletons()
 
     args.config_name = active_config.config_name if args.config_name is None else args.config_name
 
