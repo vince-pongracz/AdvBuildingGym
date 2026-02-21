@@ -31,11 +31,12 @@ from adv_building_gym.rewards import (
 @dataclass
 class Config:
     """
-    Config serialisation -- handled by ConfigManager.
-    Use ConfigManager.save(config, path) to save and ConfigManager.load(path) to load configurations
+    Config serialisation -- by ConfigManager.
+    - Save config: ConfigManager.save(config, path)
+    - Load config: ConfigManager.load(path)
 
-    IMPORTANT: Use the factory methods (create_infras, create_statesources, create_rewards)
-    when creating environment instances to ensure each env gets independent component instances.
+    **IMPORTANT**: Use the factory methods (create_infras, create_statesources, create_rewards)
+    when creating env instances to ensure each env gets independent component instances.
     Direct access to self.infras/statesources/rewards returns shared singletons and should
     only be used for inspection, not for passing to AdvBuildingGym in parallel environments.
     """
@@ -44,7 +45,6 @@ class Config:
     seed: int = 42
 
     EPISODE_LENGTH: int = 288 # a day
-    EPISODES_IN_ITERATION: int = 25
     control_step: int = 300  # seconds (5 minutes)
 
     building_props: BuildingProps = field(default_factory=lambda:

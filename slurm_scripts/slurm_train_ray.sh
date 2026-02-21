@@ -13,7 +13,8 @@
 #   --config_name, -cn NAME   Configuration name for the experiment
 #   --load-config PATH        Path to JSON config file to load
 #   --save-config PATH        Path to save config as JSON
-#   --timesteps N             Total training timesteps [default: 1e6]
+#   --episodes N              Total training episodes [default: 3500]
+#   --timesteps N             (Deprecated, prefer --episodes) Total timesteps
 #   --num-envs N              Number of parallel environments [default: 1]
 #   --seed N                  Random seed [default: 42]
 #   --eval-freq N             Evaluation frequency [default: 20000]
@@ -22,9 +23,9 @@
 #   --checkpoint-frequency-episodes N   Checkpoint frequency in episodes [default: 20]
 #
 # Examples:
-#   sbatch slurm_scripts/slurm_train_ray.sh --algorithm ppo --timesteps 1000000 --seed 42
+#   sbatch slurm_scripts/slurm_train_ray.sh --algorithm ppo --episodes 3500 --seed 42
 #   sbatch slurm_scripts/slurm_train_ray.sh --algorithm sac --load-config configs/my_config.json
-#   sbatch slurm_scripts/slurm_train_ray.sh --algorithm ppo --checkpoint-frequency-episodes 50 --num-envs 4
+#   sbatch slurm_scripts/slurm_train_ray.sh --algorithm ppo --episodes 5000 --checkpoint-frequency-episodes 50
 #
 # The script activates the project's Python virtualenv and runs the training
 # script while logging SLURM and GPU info.
@@ -60,7 +61,8 @@ fi
 
 # Default values (mirror run_train_ray.py defaults)
 ALGORITHM="ppo"
-TIMESTEPS="1000000"
+EPISODES="3500"
+TIMESTEPS=""
 SEED="42"
 METRIC="reward_rate"
 CONFIG_NAME=""
@@ -78,7 +80,12 @@ while [[ $# -gt 0 ]]; do
       ALGORITHM="$2"
       shift 2
       ;;
+    --episodes)
+      EPISODES="$2"
+      shift 2
+      ;;
     --timesteps)
+      # Deprecated: kept for backward compatibility, forwarded to run_train_ray.py
       TIMESTEPS="$2"
       shift 2
       ;;
@@ -128,7 +135,8 @@ done
 
 echo "=== Starting Ray training job ==="
 echo "  Algorithm   : $ALGORITHM"
-echo "  Timesteps   : $TIMESTEPS"
+echo "  Episodes    : $EPISODES"
+[ -n "$TIMESTEPS" ] && echo "  Timesteps   : $TIMESTEPS (deprecated, overridden by --episodes)"
 echo "  Seed        : $SEED"
 echo "  Metric      : $METRIC"
 echo "  Num Envs    : $NUM_ENVS"
@@ -186,13 +194,15 @@ export PYTHONUNBUFFERED=1
 # Build command with all arguments
 CMD=(python -u run_train_ray.py
   --algorithm "$ALGORITHM"
-  --timesteps "$TIMESTEPS"
+  --episodes "$EPISODES"
   --seed "$SEED"
   --metric "$METRIC"
   --num-envs "$NUM_ENVS"
   --eval-freq "$EVAL_FREQ"
   --training
 )
+# Forward deprecated --timesteps only if explicitly provided
+[ -n "$TIMESTEPS" ] && CMD+=(--timesteps "$TIMESTEPS")
 [ -n "$CONFIG_NAME" ] && CMD+=(--config_name "$CONFIG_NAME")
 [ -n "$LOAD_CONFIG" ] && CMD+=(--load-config "$LOAD_CONFIG")
 [ -n "$SAVE_CONFIG" ] && CMD+=(--save-config "$SAVE_CONFIG")
@@ -211,7 +221,7 @@ echo "Training completed successfully."
 # - Make the script executable:
 #     chmod +x slurm_scripts/slurm_train_ray.sh
 # - Submit with named arguments:
-#     sbatch slurm_scripts/slurm_train_ray.sh --algorithm ppo --timesteps 1e6 --seed 42
+#     sbatch slurm_scripts/slurm_train_ray.sh --algorithm ppo --episodes 3500 --seed 42
 # - All arguments from run_train_ray.py are supported with their default values
 # - Available metrics: episode_return_mean, achieved_reward, reward_rate
 # - Output and error logs will be written to `slurm_logs_train/`.

@@ -9,6 +9,7 @@ import os
 import time
 import datetime
 import logging
+from pathlib import Path
 
 import json
 import argparse
@@ -31,6 +32,7 @@ from adv_building_gym import AdvBuildingGym, make_checkpoint_callback_class, Con
 from adv_building_gym.config import config as default_config
 from adv_building_gym.envs import adv_building_env_creator
 from adv_building_gym.ray_training import common_model_config, select_model
+from adv_building_gym.config.training_config import TrainingConfig
 from adv_building_gym.utils import (
     CustomJSONEncoder,
     trial_dirname_creator,
@@ -97,7 +99,17 @@ def main():
         "--save-config", type=str,
         help="Path where to save the config as JSON (e.g., 'configs/my_config.json')"
     )
-    parser.add_argument("--timesteps", type=float, default=1e6) # a million
+    parser.add_argument(
+        "--episodes", type=int, default=None,
+        help="Total training episodes. Primary stopping criterion. "
+             "Converted to timesteps internally (episodes × EPISODE_LENGTH). "
+             "Takes precedence over --timesteps if both are given."
+    )
+    parser.add_argument(
+        "--timesteps", type=float, default=None,
+        help="(Deprecated, prefer --episodes) Total environment timesteps. "
+             "Ignored when --episodes is given. Legacy default: 1e6."
+    )
     parser.add_argument(
         "--num-envs", type=int, default=1, help="Number of parallel environments" # Change env number?
     )
@@ -137,8 +149,6 @@ def main():
     )
     args = parser.parse_args()
 
-    args.timesteps = int(args.timesteps)
-
     # Load config from file if specified, otherwise use default
     if args.load_config:
         logger.info("Loading config from: %s", args.load_config)
@@ -146,6 +156,23 @@ def main():
         logger.info("Config loaded successfully: %s", active_config.config_name)
     else:
         active_config = default_config
+
+    # Resolve stopping criterion: --episodes takes precedence over --timesteps.
+    # Internally, RLlib always stops on num_env_steps_sampled_lifetime (timesteps),
+    # so we convert episodes → timesteps here for a user-friendly interface.
+    if args.episodes is not None:
+        args.timesteps = args.episodes * active_config.EPISODE_LENGTH
+        logger.info("Stopping after %d episodes (%d timesteps)", args.episodes, args.timesteps)
+    elif args.timesteps is not None:
+        args.timesteps = int(args.timesteps)
+        args.episodes = args.timesteps // active_config.EPISODE_LENGTH
+        logger.info("--timesteps is deprecated, prefer --episodes. "
+                     "Stopping after %d timesteps (~%d episodes)", args.timesteps, args.episodes)
+    else:
+        # Neither given — default to 3500 episodes
+        args.episodes = 3500
+        args.timesteps = args.episodes * active_config.EPISODE_LENGTH
+        logger.info("Using default: %d episodes (%d timesteps)", args.episodes, args.timesteps)
 
     # Initialise the singleton component instances exactly once in the main process.
     # This triggers CSV parsing (e.g. EVState) here, and only here.
@@ -243,12 +270,18 @@ def main():
 
     register_env("AdvBuilding", adv_building_env_creator)
 
-    # TODO VP 2026.02.20. : It is not a nice thing that episode_length is needed in multiple places 
+    # Load training hyperparameters (shared across select_model and checkpoint calc)
+    training_config = TrainingConfig.from_json(
+        Path(__file__).resolve().parent / "adv_building_gym" / "config" / "training_config.json"
+    )
+
+    # TODO VP 2026.02.20. : It is not a nice thing that episode_length is needed in multiple places
     # (common_model_config, select_model)
     # Build algorithm-specific config
     algo_config = select_model(
         algorithm=args.algorithm,
         episode_length=active_config.EPISODE_LENGTH,
+        training_config=training_config,
     )
 
     # Apply common RLlib configuration (resource allocation, action space, and callbacks)
@@ -275,11 +308,18 @@ def main():
         # that is why the model dict contains the default values and _model_config the true specification
         json.dump(param_space, f, cls=CustomJSONEncoder, indent=4)
 
-    # Calculate checkpoint frequency in training iterations based on episodes
-    # Episode length from env config (288 timesteps per episode)
-    # Training batch size per iteration: train_batch_size_per_learner = EPISODE_LENGTH * N timesteps
+    # Calculate checkpoint frequency in training iterations based on episodes.
+    # train_batch_size_per_learner drives how many timesteps RLlib processes per
+    # training iteration — but its meaning differs by algorithm:
+    #   PPO  — ppo_episodes_per_iteration × EPISODE_LENGTH (on-policy batch)
+    #   SAC  — sac_replay_batch_size (off-policy replay buffer sample)
+    # We compute it from training_config directly (not from param_space, where
+    # RLlib serializes it under a different key: _train_batch_size_per_learner).
     timesteps_per_episode = active_config.EPISODE_LENGTH  # 288 timesteps
-    timesteps_per_iteration = param_space.get("train_batch_size_per_learner", active_config.EPISODE_LENGTH * active_config.EPISODES_IN_ITERATION)
+    if args.algorithm == "ppo":
+        timesteps_per_iteration = training_config.ppo_episodes_per_iteration * active_config.EPISODE_LENGTH
+    else:
+        timesteps_per_iteration = training_config.sac_replay_batch_size
     checkpoint_freq_iterations = max(1, int((args.checkpoint_frequency_episodes * timesteps_per_episode) / timesteps_per_iteration))
 
     logger.info("Checkpoint configuration:")
@@ -296,9 +336,9 @@ def main():
 
     # Setup stopping criteria and run configuration for the tuner
     # Note: In the new API stack, use 'num_env_steps_sampled_lifetime' instead of 'timesteps_total'
+    # Episodes are converted to timesteps above (--episodes × EPISODE_LENGTH)
     stop_criteria = {
         "num_env_steps_sampled_lifetime": args.timesteps,
-        "training_iteration": 250,
     }
 
     # Configure progress reporter to show training metrics
@@ -452,12 +492,12 @@ if __name__ == "__main__":
 # Usage examples:
 # On slurm: sbatch slurm_scripts/slurm_train_ray.sh
 
-# Default settings (checkpoint every 20 episodes, optimize reward_rate)
-# python run_train_ray.py --algorithm ppo --seed 42 --timesteps 1e6
+# Default settings (3500 episodes, checkpoint every 20 episodes, optimize reward_rate)
+# python run_train_ray.py --algorithm ppo --seed 42 --episodes 3500
 
-# Custom checkpoint frequency and metric
-# python run_train_ray.py --algorithm ppo --seed 42 --timesteps 1e6 --checkpoint-frequency-episodes 50 --metric achieved_reward
+# Custom episode count, checkpoint frequency, and metric
+# python run_train_ray.py --algorithm ppo --seed 42 --episodes 5000 --checkpoint-frequency-episodes 50 --metric achieved_reward
 
-# With specific config name
-# python run_train_ray.py -a sac -s 18 -cn test1 --checkpoint-frequency-episodes 30 --metric reward_rate
+# SAC with specific config name
+# python run_train_ray.py --algorithm sac --seed 18 -cn test1 --episodes 3500 --metric reward_rate
 

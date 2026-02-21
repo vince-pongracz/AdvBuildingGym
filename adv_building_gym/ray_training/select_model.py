@@ -53,17 +53,20 @@ def select_model(
     # Algorithm-specific configuration
     if algorithm == "ppo":
         config = PPOConfig()
-        # NOTE: These values should match SB3 PPO hyperparameters for fair comparison:
-        #   - train_batch_size_per_learner: Total timesteps collected before training update
-        #     SB3 equivalent: n_steps * num_envs = 288 * 4 = 1,152
-        #     We use 4000 here to account for 2 env_runners collecting in parallel
-        #   - minibatch_size: SGD minibatch size for gradient updates (like SB3's batch_size=64)
-        #   - num_epochs: Number of passes over collected data (SB3 default is 10, we use 4)
+        # PPO is on-policy: env runners collect a full batch of experience,
+        # then the learner runs multiple SGD epochs over that batch.
+        #
+        # train_batch_size_per_learner = total timesteps collected per iteration.
+        # We express this in episodes (ppo_episodes_per_iteration) and convert
+        # to timesteps here, so the user thinks in episodes, not raw timesteps.
+        #
+        # minibatch_size = SGD mini-batch within each epoch (subset of the
+        # collected batch).  Smaller than train_batch_size_per_learner.
+        ppo_batch_timesteps = training_config.ppo_episodes_per_iteration * episode_length
         config.training(
             lr=training_config.learning_rate,
-            train_batch_size_per_learner=training_config.batch_size,
-            # Number of epochs per training iteration (typical for PPO)
-            # --> num_epochs * batch_size steps in the env before policy update
+            train_batch_size_per_learner=ppo_batch_timesteps,
+            minibatch_size=training_config.ppo_minibatch_size,
             num_epochs=4,
             use_critic=True,
             use_gae=True,
@@ -73,10 +76,14 @@ def select_model(
 
     elif algorithm == "sac":
         config = SACConfig()
-        # SAC is an off-policy actor-critic algorithm with entropy regularization
-        # NOTE: SAC uses replay buffer instead of on-policy trajectories like PPO
+        # SAC is off-policy: experience is stored in a replay buffer and the
+        # learner samples sac_replay_batch_size transitions per gradient step,
+        # independent of episode boundaries.  This is fundamentally different
+        # from PPO's episode-based batching — the "batch size" here is just how
+        # many transitions are drawn from the buffer, not how much new data is
+        # collected per iteration.
         # New API stack (default in RLlib 2.7+) requires EpisodeReplayBuffer
-        # New API stack requires separate learning rates for actor, critic, and alpha
+        # and separate learning rates for actor, critic, and alpha.
         config.training(
             # NOTE VP 2026.02.11. : Actor critic methods SAC & PPO - blog
             # Link: https://joel-baptista.github.io/phd-weekly-report/posts/ac/
@@ -92,10 +99,10 @@ def select_model(
             initial_alpha=1.0,  # Initial entropy coefficient (auto-tuned)
             target_network_update_freq=4,  # Update target networks every step
             tau=0.005,  # Soft update coefficient for target networks (at Polyak averaging)
-            train_batch_size_per_learner=training_config.batch_size,  # Batch size sampled from replay buffer
+            train_batch_size_per_learner=training_config.sac_replay_batch_size,
             num_steps_sampled_before_learning_starts=learning_starts, # Number of steps to collect before starting learning (to fill up replay buffer)
         )
-    # NOTE VP 2026.02.11. : Maybe add DreamerV3 -- but in that case drop the forecast states
+    # NOTE VP 2026.02.11. : Maybe add DreamerV3 -- but in that case drop the forecasting states
     # DreamerV3 paper link: https://arxiv.org/pdf/2301.04104
     else:
         raise ValueError(f"Unknown algorithm: {algorithm}. Supported: ppo, sac")

@@ -38,7 +38,6 @@ class ConfigManager:
             "config_name": config.config_name,
             "seed": config.seed,            
             "EPISODE_LENGTH": config.EPISODE_LENGTH,
-            "EPISODES_IN_ITERATION": config.EPISODES_IN_ITERATION,
             "control_step": config.control_step,
             "building_props": {
                 "mC": config.building_props.mC,
@@ -95,7 +94,6 @@ class ConfigManager:
             config_name=config_dict.get("config_name", "loaded_config"),
             seed=seed,
             EPISODE_LENGTH=config_dict.get("EPISODE_LENGTH", 288),
-            EPISODES_IN_ITERATION=config_dict.get("EPISODES_IN_ITERATION", 25),
             control_step=control_step,
             building_props=building_props,
             # Set to empty lists to prevent __post_init__ from creating defaults

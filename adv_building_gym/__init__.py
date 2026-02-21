@@ -13,18 +13,30 @@ from .callbacks import (
 )
 
 
-# Register advanced environment -- for stable baselines (SB)
+def _make_adv_building(**kwargs):
+    """Entry-point factory for gym.make('AdvBuilding').
+
+    Calls factory methods at make() time so that components are never
+    captured as None at import time (singletons are lazily initialised).
+    Each gym.make() call gets independent component instances.
+    """
+    from .config import config as env_config
+    infras = env_config.create_infras()
+    statesources = env_config.create_statesources()
+    rewards = env_config.create_rewards(infras)
+    return AdvBuildingGym(
+        infras=infras,
+        statesources=statesources,
+        rewards=rewards,
+        building_props=env_config.building_props,
+    )
+
+
+# Register advanced environment -- for stable baselines (SB3)
 register(
     id="AdvBuilding",
-    entry_point="adv_building_gym.envs:AdvBuildingGym",
+    entry_point=_make_adv_building,
     max_episode_steps=288,
-    kwargs={
-        "infras": config.infras,
-        "statesources": config.statesources,
-        "rewards": config.rewards,
-        "building_props": config.building_props,
-        "render_mode": None,
-    },
 )
 
 # Exported components of the adv_building_gym package

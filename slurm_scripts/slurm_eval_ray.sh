@@ -3,8 +3,6 @@
 # Created: 2026-01-06 | Version: 1.2
 # Description: Submit a SLURM job that evaluates a trained Ray/RLlib model
 
-# TODO VP 2026.02.12. : Adjust script according to the new ray eval script and its arguments (e.g. episodes, seed, checkpoint path) -- also check the new logging setup in run_evaluation_ray.py
-
 # -----------------------------------------------------------------------------
 # Usage:
 #   sbatch slurm_scripts/slurm_eval_ray.sh [OPTIONS]
