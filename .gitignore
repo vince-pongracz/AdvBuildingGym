@@ -64,7 +64,6 @@ data/zenodo/**
 hdf5_report.json
 
 param_space.json
-test1.json
 
 # Plotting outputs
 plotting/out/**

@@ -1,12 +1,10 @@
 
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import List, Optional
-
-_DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
 
 # TODO VP 2026.02.20. : Simplyfy env config somehow, too much code here, too little declarative stuff...
 
+from adv_building_gym.config.data_combinator import DataCombinator
 from adv_building_gym.envs.utils import BuildingProps
 
 from adv_building_gym.devices.infrastructure import (
@@ -25,8 +23,6 @@ from adv_building_gym.rewards import (
     UserEnergyNeedReward, OperatorEnergyControlReward
 )
 
-
-# TODO VP 2026.01.13. : How to learn more days during training? -- solve consecutive days from data sources
 
 @dataclass
 class Config:
@@ -51,6 +47,31 @@ class Config:
         BuildingProps(mC=300, K=20)
     )
 
+    # How to schedule backbone data sources along the training run.
+    # Manage that different configurations are seen during the training
+    # --> Help generalisation
+    # NOTE VP 2026.02.23. : Default data combinator -- just an example
+    data_combinator: Optional[DataCombinator] = field(default_factory=lambda: DataCombinator(
+        scenarios=[
+            {
+                "weather": "data/test1/LLEC_outdoor_temperature_5min_data.csv",
+                "E_price": "data/test1/price_data_2025_1.csv",
+            },
+        ],
+        variable={
+            "ev_schedule": [
+                "data/ev_usage_profiles/ev_0.csv",
+                "data/ev_usage_profiles/ev_1.csv",
+                "data/ev_usage_profiles/ev_2.csv",
+                "data/ev_usage_profiles/ev_3.csv",
+                "data/ev_usage_profiles/ev_4.csv",
+                "data/ev_usage_profiles/ev_5.csv",
+            ],
+        },
+        swap_every_n_episodes=10,
+        mode="cycle",
+    ))
+
     # Cached singleton instances (for backward compatibility and inspection)
     # WARNING: Do not pass these to parallel environments - use factory methods instead
     infras: Optional[List[Infrastructure]] = None
@@ -68,8 +89,8 @@ class Config:
             List of newly created StateSource instances.
         """
         return [
-            EnergyPriceDataSource("E_price", ds_path=str(_DATA_DIR / "price_data_2025.csv")),
-            WeatherDataSource("weather", ds_path=str(_DATA_DIR / "LLEC_outdoor_temperature_5min_data.csv")),
+            EnergyPriceDataSource("E_price"),
+            WeatherDataSource("weather"),
             InsideTemperature("desired_temp_in"),
             DesiredUserEnergyNeed("user_energy_need"),
             BuildingHeatLoss(
@@ -78,7 +99,7 @@ class Config:
                 mC=self.building_props.mC,
                 timestep=self.control_step
             ),
-            EVState("ev_schedule", ds_path=str(_DATA_DIR / "ev_usage_profiles/ev_1.csv")),
+            EVState("ev_schedule"),
         ]
 
     def create_infras(self) -> List[Infrastructure]:

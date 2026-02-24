@@ -1,4 +1,5 @@
 import logging
+from pathlib import Path
 from typing import Any, ClassVar, Dict, Set, Type, TypeVar
 
 import pandas as pd
@@ -7,6 +8,9 @@ from adv_building_gym.utils import EnvSyncInterface
 from adv_building_gym.config.utils.serializable import Serializable, ComponentRegistry
 
 logger = logging.getLogger(__name__)
+
+# Project root directory (three levels up: base.py -> statesources -> devices -> adv_building_gym -> project root)
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 
 T = TypeVar('T', bound='StateSource')
 
@@ -28,13 +32,42 @@ class StateSource(EnvSyncInterface, Serializable):
         super().__init__()
 
         self.name = name
-        self.ds_path = ds_path  # Store path for serialization
+        self.ds_path = ds_path  # Store original path for serialization
         self.control_step = control_step  # Control timestep in seconds
         if ds_path is not None:
-            self.ts = pd.read_csv(ds_path)
+            resolved = Path(ds_path)
+            if not resolved.is_absolute():
+                resolved = _PROJECT_ROOT / resolved
             """Time series"""
+            self.ts = pd.read_csv(resolved)
         else:
             self.ts = None
+
+    def _post_load_data_processing(self) -> None:
+        """Override to re-run post-processing after a new CSV is loaded.
+
+        Called both at the end of __init__ (via subclass constructors) and
+        after reload().  Subclasses that normalise columns, cache scalars, or
+        parse events from the CSV should put that logic here.
+        """
+
+    def reload(self, ds_path: str) -> None:
+        """Load a new time-series file without recreating this StateSource.
+
+        Replaces the underlying DataFrame, re-runs subclass post-processing
+        via _post_load(), and resets the iteration counter so the next episode
+        reads from row 0.
+
+        Relative paths are resolved against the project root so that Ray
+        worker processes (whose CWD may differ) can still find the files.
+        """
+        resolved = Path(ds_path)
+        if not resolved.is_absolute():
+            resolved = _PROJECT_ROOT / resolved
+        self.ds_path = ds_path
+        self.ts = pd.read_csv(resolved)
+        self._post_load_data_processing()
+        logger.info("StateSource '%s' reloaded from %s", self.name, resolved)
 
     def setup_spaces(self,
                      state_spaces,

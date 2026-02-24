@@ -297,6 +297,7 @@ def main():
         rewards=active_config.rewards,
         metrics_base_dir="ep_metrics",
         clip_actions=True,
+        data_combinator=active_config.data_combinator,
     )
 
     # Convert the RLlib config into a Tune param space

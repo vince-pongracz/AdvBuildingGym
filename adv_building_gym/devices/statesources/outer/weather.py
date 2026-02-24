@@ -39,18 +39,22 @@ class WeatherDataSource(StateSource):
 
         if self.ts is not None:
             logger.info("Use data file: %s", ds_path)
-            column_name: str = "temp_amb [°C]"
-            match normalise:
-                case Normalisation.MAX_ABS_SCALING:
-                    self.ts["temp_out_norm"] = self.ts[column_name] / self.ts[column_name].abs().max()
-                case Normalisation.MIN_MAX_SCALING:
-                    self.ts["temp_out_norm"] = (self.ts[column_name] - self.ts[column_name].min()) / (self.ts[column_name].max() - self.ts[column_name].min())
-                case Normalisation.STANDARDISATION:
-                    self.ts["temp_out_norm"] = (self.ts[column_name] - self.ts[column_name].mean()) / self.ts[column_name].std()
-                case None:
-                    self.ts["temp_out_norm"] = self.ts[column_name]
+            self._post_load_data_processing()
         else:
             logger.info("No data file provided, will use synthetic data")
+
+    def _post_load_data_processing(self) -> None:
+        """Normalise the temperature column after CSV load / reload."""
+        column_name: str = "temp_amb [°C]"
+        match self.normalise:
+            case Normalisation.MAX_ABS_SCALING:
+                self.ts["temp_out_norm"] = self.ts[column_name] / self.ts[column_name].abs().max()
+            case Normalisation.MIN_MAX_SCALING:
+                self.ts["temp_out_norm"] = (self.ts[column_name] - self.ts[column_name].min()) / (self.ts[column_name].max() - self.ts[column_name].min())
+            case Normalisation.STANDARDISATION:
+                self.ts["temp_out_norm"] = (self.ts[column_name] - self.ts[column_name].mean()) / self.ts[column_name].std()
+            case None:
+                self.ts["temp_out_norm"] = self.ts[column_name]
 
 
     def setup_spaces(self,

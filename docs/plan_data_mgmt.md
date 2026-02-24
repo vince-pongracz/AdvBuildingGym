@@ -1,10 +1,14 @@
 # Dynamic Data Source Management
 
+> **Status**:
+> - Approaches A, C, and D1: **implemented**.
+> - Approach B and D2: not realised.
+
 ## Problem
 
-The environment currently trains every episode on the same fixed set of CSV time-series
+The environment previously trained every episode on the same fixed set of CSV time-series
 files: one day of weather measurements, one energy-price curve, and one EV usage profile.
-Every `reset()` replays the identical 288-step window, which means the agent sees the same
+Every `reset()` replayed the identical 288-step window, which meant the agent saw the same
 conditions on every episode.
 
 This causes:
@@ -15,63 +19,61 @@ This causes:
 - **No curriculum learning** — difficulty/complexity of the scenario cannot be increased
   over the course of training.
 
-This is the gap already flagged in `adv_building_gym/config/env_config.py` (line 22):
-> `# TODO VP 2026.01.13. : How to learn more days during training? -- solve consecutive days from data sources`
-
 ---
 
 ## Relevant Architecture
 
-### How statesources consume data today
+### How statesources consume data
 
-Each `StateSource` loads its CSV once at construction (`pd.read_csv(ds_path)` in
-`adv_building_gym/devices/statesources/base.py:34`). It then reads rows by index in
+Each `StateSource` loads its CSV at construction (`pd.read_csv(ds_path)` in
+`adv_building_gym/devices/statesources/base.py`). It then reads rows by index in
 `update_state()`:
 ```python
 value = float(self.ts.iloc[int(self.iteration)]["column_name"])
 ```
 
-`self.iteration` is reset to 0 on every `env.reset()` and incremented each `env.step()` —
-so every episode reads exactly the same timestep rows from the different data files.
+`self.iteration` is reset to 0 on every `env.reset()` and incremented each `env.step()`.
 
-Several statesources also perform post-processing after loading the CSV, which must be
-repeated when the file is swapped:
+Statesources that need post-processing after CSV load override `_post_load_data_processing()`:
 
-| StateSource | Post-processing after CSV load |
+| StateSource | `_post_load_data_processing()` implementation |
 |---|---|
-| `WeatherDataSource` | Normalises temperature column to `[-1, 1]` |
-| `EnergyPriceDataSource` | Caches `price_max` scalar |
-| `EVState` | Parses timestamp events into an `_event_lookup` dict |
+| `WeatherDataSource` | Normalises temperature column via `self.normalise` strategy |
+| `EnergyPriceDataSource` | Caches `self.price_max` scalar |
+| `EVState` | Resets runtime state (`_ev_connected`, `_current_spec`, etc.) and calls `_parse_events()` |
 | `InsideTemperature` | Detects column name; normalises to `[-1, 1]` |
+
+The base class provides `reload(ds_path)` which re-reads the CSV, calls
+`_post_load_data_processing()`, and logs the change. Relative paths are resolved against
+`_PROJECT_ROOT` so Ray worker processes (whose CWD may differ) can still find the files.
 
 ### Where data paths are wired
 
-`Config.create_statesources()` in `adv_building_gym/config/env_config.py:53` hard-codes the
-paths. `adv_building_env_creator` in `adv_building_gym/envs/env_creator.py:11` calls this
-factory; the resulting statesources live for the lifetime of that env-runner process.
+`Config.create_statesources()` in `adv_building_gym/config/env_config.py` creates statesources
+**without** a `ds_path` — they start with `self.ts = None`. The `DataCombinator` on `Config`
+provides the actual file paths and pushes them to statesources via `reload()` at episode
+boundaries (Approach A) or training iteration boundaries (Approach D1).
 
-### Available data variants today
+### Available data variants
 
 ```
 data/
-├── LLEC_outdoor_temperature_5min_data.csv       # weather (single day)
-├── LLEC_outdoor_temperature_5min_data_cleaned.csv
-├── price_data_2025.csv                          # energy price (single day)
+├── test1/
+│   ├── LLEC_outdoor_temperature_5min_data.csv   # weather (single day)
+│   └── price_data_2025_1.csv                    # energy price (single day)
 ├── ev_usage_profiles/
+│   ├── ev_0.csv                                  # empty profile (no EV events)
 │   ├── ev_1.csv  …  ev_5.csv                    # 5 distinct EV user profiles
 └── zenodo/
     ├── 2018_weather.hdf5  …  2020_weather.hdf5  # multi-year weather (HDF5)
     └── csvs_2018_data_1min/SFH10.csv …          # 1-min building data
 ```
 
-The EV profiles are the most immediately usable set of variants because they already exist
-in the correct CSV format with matching column names.
-
 ---
 
 ## Proposed Approaches
 
-### Approach A — DataCombinator with Episode-Count Swap *(Recommended)*
+### Approach A — DataCombinator with Episode-Count Swap *(Implemented)*
 
 The environment maintains a **DataCombinator** object and an **episode counter**. Every N
 completed episodes the combinator selects the next variant and reloads only the affected
@@ -122,197 +124,41 @@ DataCombinator(
 A *variant* is a plain `dict[str, str]` mapping `source_name → path`. Only the statesources
 whose names appear in the dict are reloaded; others are untouched.
 
-#### Required code changes
+#### Code changes (implemented)
 
-**1. NEW `adv_building_gym/config/data_combinator.py`**
+**1. `adv_building_gym/config/data_combinator.py`** — DataCombinator dataclass with
+`scenarios`/`variable` axes, `variants` property (Cartesian product), `get_variant()`,
+and `to_dict()`/`from_dict()` serialisation.
 
-```python
-import itertools
-from dataclasses import dataclass, field
-from typing import Literal
-import numpy as np
+**2. `adv_building_gym/devices/statesources/base.py`** — `reload(ds_path)` method and
+`_post_load_data_processing()` template-method hook. Relative paths resolved against
+`_PROJECT_ROOT` (four levels up from `base.py`). Both `__init__` CSV loading and `reload()`
+call the hook so subclasses define post-processing once.
 
-@dataclass
-class DataCombinator:
-    """Schedules CSV data source variants across training episodes.
+**3. Subclass `_post_load_data_processing()` overrides (four files)**
 
-    Separates correlated sources (scenarios) from independent ones (variable):
-
-    Args:
-        scenarios: Explicit variant bundles for correlated sources (e.g. weather + price).
-                   Each entry is a dict[source_name, path]. These are never cross-producted
-                   with each other — they advance as a unit.
-        variable:  Maps source_name → list[paths] for sources independent of everything else
-                   (e.g. EV profiles). Cartesian product is applied across variable axes.
-        swap_every_n_episodes: Advance to the next variant every N episodes.
-        mode: "cycle" (round-robin) or "random".
-
-    Final pool = scenarios × variable_combinations.
-    If scenarios is empty, only variable combinations are used (and vice versa).
-    """
-    scenarios: list[dict[str, str]] = field(default_factory=list)
-    variable: dict[str, list[str]] = field(default_factory=dict)
-    swap_every_n_episodes: int = 1
-    mode: Literal["cycle", "random"] = "cycle"
-
-    @property
-    def variants(self) -> list[dict[str, str]]:
-        # Build variable combinations (Cartesian product of independent axes)
-        if self.variable:
-            keys = list(self.variable.keys())
-            variable_combos: list[dict[str, str]] = [
-                dict(zip(keys, combo))
-                for combo in itertools.product(*(self.variable[k] for k in keys))
-            ]
-        else:
-            variable_combos = [{}]  # neutral element — no independent sources
-
-        # Cross-product: each scenario × each variable combination
-        if self.scenarios:
-            return [{**scenario, **var_combo}
-                    for scenario in self.scenarios
-                    for var_combo in variable_combos]
-        # No scenarios — return variable combinations only (omit the empty-dict case)
-        return variable_combos if self.variable else []
-
-    def get_variant(self, episode_count: int, rng: np.random.Generator | None = None) -> dict[str, str]:
-        pool = self.variants
-        if not pool:
-            return {}
-        if self.mode == "random" and rng is not None:
-            return pool[int(rng.integers(0, len(pool)))]
-        return pool[(episode_count // self.swap_every_n_episodes) % len(pool)]
-
-    def to_dict(self) -> dict:
-        return {"scenarios": self.scenarios,
-                "variable": self.variable,
-                "swap_every_n_episodes": self.swap_every_n_episodes,
-                "mode": self.mode}
-
-    @classmethod
-    def from_dict(cls, d: dict) -> "DataCombinator":
-        return cls(scenarios=d.get("scenarios", []),
-                   variable=d.get("variable", {}),
-                   swap_every_n_episodes=d.get("swap_every_n_episodes", 1),
-                   mode=d.get("mode", "cycle"))
-```
-
-**2. `adv_building_gym/devices/statesources/base.py` — `reload()` + `_post_load()` hook**
-
-The naive approach (`self.ts = pd.read_csv(ds_path)`) is insufficient because subclasses
-perform post-processing (normalization, event parsing, column detection) right after loading.
-Use a template-method hook so each subclass defines processing once:
-
-```python
-def _post_load(self) -> None:
-    """Override to re-run post-processing after a new CSV is loaded."""
-    pass
-
-def reload(self, ds_path: str) -> None:
-    """Load a new time-series file without recreating this StateSource instance."""
-    self.ds_path = ds_path
-    self.ts = pd.read_csv(ds_path)
-    self._post_load()
-    logger.info("StateSource '%s' reloaded from %s", self.name, ds_path)
-```
-
-Also call `self._post_load()` at the end of the existing CSV-loading branch in `__init__`,
-so subclasses only need to override `_post_load()` once.
-
-**3. Subclass `_post_load()` overrides (four files)**
-
-In each statesource extract the post-CSV logic currently in `__init__` into `_post_load()`,
-then replace the original block with `self._post_load()`:
-
-| File | What moves into `_post_load()` |
+| File | What moves into `_post_load_data_processing()` |
 |---|---|
-| `outer/weather.py` | Column normalisation → `self.ts["temp_out_norm"]` |
+| `outer/weather.py` | Column normalisation via `self.normalise` strategy → `self.ts["temp_out_norm"]` |
 | `outer/energy_price.py` | `self.price_max = float(self.ts["price_normalized"].max())` |
-| `outer/ev_state.py` | `self._parse_events()` call |
-| `outer/inside_temperature.py` | Column detection + min-max normalisation |
+| `outer/ev_state.py` | Runtime state reset (`_ev_connected`, `_current_spec`, `_events`, `_event_lookup`) + `_parse_events()` |
+| `outer/inside_temperature.py` | Column detection + min-max normalisation to `[-1, 1]` |
 
-**4. `adv_building_gym/envs/building_adv.py` — episode counter + combinator**
+**4. `adv_building_gym/envs/building_adv.py`** — `data_combinator` constructor parameter,
+`episode_count`, `_rng` attributes, public `apply_datasource_variant(variant)` method,
+Approach A swap in `reset()`, Approach C override via `reset(options=...)`.
 
-New constructor parameter:
-```python
-data_combinator: DataCombinator | None = None,
-```
+**5. `adv_building_gym/config/env_config.py`** — `data_combinator` field on `Config` with
+a default factory containing real data paths (weather + price scenario, 6 EV profiles).
+`create_statesources()` creates sources **without** `ds_path` — the combinator provides
+paths at runtime. The `# TODO VP 2026.01.13.` comment is removed.
 
-New attributes:
-```python
-self.episode_count: int = 0
-self.data_combinator = data_combinator
-self._rng: np.random.Generator | None = None   # seeded in reset()
-```
+**6. `adv_building_gym/config/config_manager.py`** — `DataCombinator` serialised in
+`to_dict()` and deserialised in `from_dict()`.
 
-New private method:
-```python
-def _apply_datasource_variant(self, variant: dict[str, str]) -> None:
-    for ss in self.statesources:
-        if ss.name in variant:
-            ss.reload(variant[ss.name])
-```
+**7. `adv_building_gym/envs/env_creator.py`** — passes `data_combinator` to `AdvBuildingGym`.
 
-Logic inserted at the top of `reset()`, before the iteration/synchronise block:
-```python
-self.episode_count += 1
-if self.data_combinator is not None:
-    variant = self.data_combinator.get_variant(self.episode_count, self._rng)
-    if variant:
-        self._apply_datasource_variant(variant)
-        logger.info("Episode %d: datasource variant %s", self.episode_count, variant)
-```
-
-Seed the RNG when a seed is provided:
-```python
-if seed is not None:
-    self._rng = np.random.default_rng(seed)
-```
-
-**5. `adv_building_gym/config/env_config.py` — `data_combinator` field on `Config`**
-
-```python
-from adv_building_gym.config.data_combinator import DataCombinator
-
-@dataclass
-class Config:
-    ...
-    data_combinator: DataCombinator | None = None
-```
-
-Remove the `# TODO VP 2026.01.13.` comment (addressed by this feature).
-
-**6. `adv_building_gym/config/config_manager.py` — serialise `DataCombinator`**
-
-In `to_dict()`:
-```python
-if config.data_combinator is not None:
-    d["data_combinator"] = config.data_combinator.to_dict()
-```
-
-In `from_dict()`:
-```python
-if "data_combinator" in d:
-    config.data_combinator = DataCombinator.from_dict(d["data_combinator"])
-```
-
-**7. `adv_building_gym/envs/env_creator.py` — pass combinator**
-
-```python
-return AdvBuildingGym(
-    infras=infras,
-    statesources=statesources,
-    rewards=rewards,
-    building_props=env_config.building_props,
-    data_combinator=env_config.data_combinator,
-)
-```
-
-**8. `adv_building_gym/config/__init__.py` — export**
-
-```python
-from .data_combinator import DataCombinator
-```
+**8. `adv_building_gym/config/__init__.py`** — lazy import + `__all__` export for `DataCombinator`.
 
 #### Multi-worker behaviour
 
@@ -365,24 +211,21 @@ Best suited as a follow-up once the CSV preprocessing pipeline is in place.
 
 ---
 
-### Approach C — External Control via `reset(options=...)` *(Extension on top of A)*
+### Approach C — External Control via `reset(options=...)` *(Implemented, extension on top of A)*
 
 Standard Gymnasium allows `env.reset(options={"datasource_variant": {...}})`. An external
 scheduler (Ray callback, curriculum object, or test harness) can inject a specific variant
 before each episode rather than relying on the built-in counter.
 
 ```python
-def reset(self, *, seed=None, options=None):
-    ...
-    # Approach C: external override (additive, evaluated after Approach A swap)
-    if options and "datasource_variant" in options:
-        self._apply_datasource_variant(options["datasource_variant"])
+# In AdvBuildingGym.reset() — evaluated after Approach A swap
+if options and "datasource_variant" in options:
+    self.apply_datasource_variant(options["datasource_variant"])
 ```
 
-This is a one-liner added to `reset()` on top of Approach A. Useful for evaluation
-(always force a fixed test variant) or curriculum learning (external scheduler decides
-difficulty). Since `_apply_datasource_variant` is already defined by Approach A, no
-additional code is needed beyond that one `if` block.
+Useful for evaluation (always force a fixed test variant) or curriculum learning (external
+scheduler decides difficulty). Since `apply_datasource_variant` is already defined by
+Approach A, no additional code is needed beyond that one `if` block.
 
 ---
 
@@ -397,11 +240,11 @@ Two sub-variants exist depending on how deeply the reconfiguration must go.
 
 ---
 
-#### D1 — In-place env mutation via `foreach_env_runner` *(recommended sub-variant)*
+#### D1 — In-place env mutation via `foreach_env_runner` *(Implemented)*
 
 The environment objects already exist inside each Ray actor. The callback reaches into each
 actor through `EnvRunnerGroup.foreach_env_runner()` and calls
-`env._apply_datasource_variant(variant)` directly. No Ray actors are stopped or restarted.
+`env.apply_datasource_variant(variant)` directly. No Ray actors are stopped or restarted.
 
 **When to prefer D1 over Approach A:**
 
@@ -410,80 +253,79 @@ actor through `EnvRunnerGroup.foreach_env_runner()` and calls
 | Swap granularity | Per-episode (per-worker, unsynchronised) | Per-iteration (all workers at once) |
 | Metric alignment | Approximate — different workers are on different episodes | Exact — iteration boundary = swap boundary |
 | Curriculum feedback | Episode counter only | Can read `result` dict (reward_rate, loss, …) |
-| RLlib dependency | None | Requires `RLlibCallback` |
+| RLlib dependency | None | Requires RLlib callback |
 | `data_combinator=None` regression | Zero | Callback simply not registered |
-
-**Key RLlib APIs (confirmed present in installed RLlib version):**
-
-- `algorithm.env_runner_group.foreach_env_runner(func, local_env_runner=True, timeout_seconds=None)` — synchronously calls `func` on every healthy env_runner (local + remote); blocks until all return.
-- `algorithm.eval_env_runner_group` — same API for evaluation workers; may be `None` if evaluation is disabled.
-- Callback hook: `on_train_result(*, algorithm, result, **kwargs)` — fires after every `algorithm.train()` call.
 
 **Implementation — `adv_building_gym/callbacks/data_schedule_callback.py`:**
 
+The D1 callback uses a **function-based factory** (`create_data_schedule_on_train_result`)
+that returns an `on_train_result` function. This integrates cleanly with the existing
+class-based checkpoint callback via `config.callbacks(CheckpointClass, on_train_result=fn)`.
+
 ```python
-import logging
-from ray.rllib.callbacks.callbacks import RLlibCallback
-from adv_building_gym.config.data_combinator import DataCombinator
-
-logger = logging.getLogger(__name__)
-
-class DataScheduleCallback(RLlibCallback):
-    """Pushes a new DataCombinator variant to all env_runners every N training iterations.
-
-    Compatible with Approach A: if the environment also has its own episode counter the two
-    swap schedules are independent and additive.  Set data_combinator=None on the Config
-    (Approach A disabled) and use only this callback if iteration-aligned swapping is desired.
-    """
-
-    def __init__(self, combinator: DataCombinator, swap_every_n_iterations: int = 10) -> None:
-        super().__init__()
-        self.combinator = combinator
-        self.swap_every_n_iterations = swap_every_n_iterations
-
-    def on_train_result(self, *, algorithm, result: dict, **kwargs) -> None:
+def create_data_schedule_on_train_result(
+    combinator: DataCombinator,
+    swap_every_n_iterations: int = 10,
+):
+    def on_train_result(*, algorithm, result: dict, **kwargs) -> None:
         iteration: int = result.get("training_iteration", 0)
-        if iteration % self.swap_every_n_iterations != 0:
+        if iteration % swap_every_n_iterations != 0:
             return
-
-        variant = self.combinator.get_variant(iteration // self.swap_every_n_iterations)
+        variant = combinator.get_variant(iteration // swap_every_n_iterations)
         if not variant:
             return
-
-        def apply(env_runner) -> None:
-            # env_runner.env is the AdvBuildingGym instance (SingleAgentEnvRunner)
-            env_runner.env._apply_datasource_variant(variant)
-
-        algorithm.env_runner_group.foreach_env_runner(
-            apply, local_env_runner=True, timeout_seconds=None
-        )
-        if algorithm.eval_env_runner_group is not None:
-            algorithm.eval_env_runner_group.foreach_env_runner(
-                apply, local_env_runner=True, timeout_seconds=None
-            )
-        logger.info("Iteration %d: all env_runners switched to variant %s", iteration, variant)
+        _push_variant_to_runners(algorithm, variant, iteration)
+    return on_train_result
 ```
 
-**Registration in `run_train_ray.py`:**
+The `_push_variant_to_runners` helper handles both training and evaluation env_runner groups,
+and guards against `env_runner.env is None` (the local driver env_runner may have no env in
+the new API stack).
+
+**Registration — wired through `common_model_config.py`:**
+
+The D1 callback is conditionally registered in `common_model_config()` when
+`data_combinator` is not None. `run_train_ray.py` passes
+`active_config.data_combinator` through.
 
 ```python
-from adv_building_gym.callbacks.data_schedule_callback import DataScheduleCallback
-from adv_building_gym.config.data_combinator import DataCombinator
-
-combinator = DataCombinator(
-    scenarios=[
-        {"weather": "data/weather_summer.csv", "E_price": "data/price_summer.csv"},
-        {"weather": "data/weather_winter.csv", "E_price": "data/price_winter.csv"},
-    ],
-    variable={"ev_schedule": [f"data/ev_usage_profiles/ev_{i}.csv" for i in range(1, 6)]},
-    swap_every_n_iterations=10,
-)
-config.callbacks(DataScheduleCallback, combinator=combinator, swap_every_n_iterations=10)
+# In common_model_config():
+callback_kwargs = {"on_episode_end": on_episode_end_callback}
+if data_combinator is not None:
+    callback_kwargs["on_train_result"] = create_data_schedule_on_train_result(
+        data_combinator, data_swap_every_n_iterations,
+    )
+config.callbacks(checkpoint_callback_class, **callback_kwargs)
 ```
 
-**Note on env access path:** `env_runner.env` is the `AdvBuildingGym` instance when using
-`SingleAgentEnvRunner` (new API stack). If RLlib wraps it in a `VectorEnv` the path would be
-`env_runner.env.envs[0]`; verify with `type(env_runner.env)` at runtime and adjust if needed.
+**Env access path — wrapper chain (verified at runtime):**
+
+RLlib wraps the user environment in multiple layers. The full chain is:
+
+```
+env_runner.env → DictInfoToList → SyncVectorEnv → .envs[i] → TimeLimit → OrderEnforcing → PassiveEnvChecker → AdvBuildingGym
+```
+
+- `env_runner.env` is a `DictInfoToList` (Gymnasium vector wrapper), **not** `AdvBuildingGym`.
+- `.env` on `DictInfoToList` gives the `SyncVectorEnv`.
+- `.envs` on `SyncVectorEnv` is a list of individually-wrapped sub-environments.
+- `.unwrapped` on each sub-env traverses `TimeLimit → OrderEnforcing → PassiveEnvChecker` to reach `AdvBuildingGym`.
+
+The D1 callback navigates this chain:
+```python
+vec_env = getattr(env_runner, "env", None)
+if vec_env is None:
+    return
+sync_vec = getattr(vec_env, "env", vec_env)  # unwrap DictInfoToList
+for sub_env in getattr(sync_vec, "envs", []):
+    sub_env.unwrapped.apply_datasource_variant(variant)
+```
+
+**Lesson learned:** The original plan assumed `env_runner.env` would be the raw
+`AdvBuildingGym` — two successive SLURM runs (`1616771`, `1616939`) revealed
+`DictInfoToList` and then `SyncVectorEnv` wrappers. Using `.unwrapped` on the outermost
+wrapper is insufficient because `SyncVectorEnv` is not a Gymnasium `Wrapper` subclass.
+The correct approach is to explicitly traverse `DictInfoToList → SyncVectorEnv → .envs[i] → .unwrapped`.
 
 ---
 
@@ -549,44 +391,43 @@ dataset-scheduling use case D1 (or Approach A) is sufficient and far cheaper.
 | ✅ | D1 has near-zero overhead (no actor restart) |
 | ✅ | Fully composable with Approach A (both can run simultaneously or independently) |
 | ⚠️ | Requires RLlib callback infrastructure (not usable with SB3 or standalone) |
-| ⚠️ | `env_runner.env` access path must be verified for the installed RLlib version |
+| ⚠️ | `env_runner.env` is wrapped (`DictInfoToList → SyncVectorEnv → sub-envs`) — must traverse chain to reach `AdvBuildingGym` |
 | ⚠️ | D2 requires internal RLlib APIs that may change between RLlib versions |
 
 ---
 
-## Recommended Approach
+## Implementation Summary
 
-Implement **Approach A** (`DataCombinator` + `reload()/_post_load()` + episode counter +
-`data_combinator` field on `Config` + wired through env creator). Empty `variable`/`scenarios`
-→ no reloads → existing behaviour preserved.
+**Approaches A, C, and D1** are implemented. Empty `variable`/`scenarios` → no reloads →
+existing behaviour preserved. `data_combinator=None` on Config disables all swapping.
 
-Add **Approach C** as a one-liner in `reset()` at the same time (trivial cost).
+**Approach B** is deferred until multi-day CSVs are prepared from the zenodo/HDF5 sources.
 
-Add **Approach D1** (`DataScheduleCallback`) as an optional callback that can be registered
-in `run_train_ray.py` when iteration-aligned, coordinated swapping is needed. It reuses
-`DataCombinator` and `_apply_datasource_variant()` from Approach A — no new core logic.
-
-Defer **Approach B** until multi-day CSVs are prepared from the zenodo/HDF5 sources.
-
-Defer **Approach D2** until structural environment changes (observation space, episode
+**Approach D2** is deferred until structural environment changes (observation space, episode
 length) are required.
 
 ### Files touched
 
-| File | Action |
-|---|---|
-| `adv_building_gym/config/data_combinator.py` | **Create** |
-| `adv_building_gym/devices/statesources/base.py` | Add `reload()` + `_post_load()` |
-| `adv_building_gym/devices/statesources/outer/weather.py` | Extract → `_post_load()` |
-| `adv_building_gym/devices/statesources/outer/energy_price.py` | Extract → `_post_load()` |
-| `adv_building_gym/devices/statesources/outer/ev_state.py` | Extract → `_post_load()` |
-| `adv_building_gym/devices/statesources/outer/inside_temperature.py` | Extract → `_post_load()` |
-| `adv_building_gym/envs/building_adv.py` | Episode counter + combinator + Approach C |
-| `adv_building_gym/config/env_config.py` | Add `data_combinator` field |
-| `adv_building_gym/config/config_manager.py` | Serialise `DataCombinator` |
-| `adv_building_gym/envs/env_creator.py` | Pass `data_combinator` |
-| `adv_building_gym/config/__init__.py` | Export `DataCombinator` |
-| `adv_building_gym/callbacks/data_schedule_callback.py` | **Create** (Approach D1, optional) |
+| File | Action | Status |
+|---|---|---|
+| `adv_building_gym/config/data_combinator.py` | **Created** | Done |
+| `adv_building_gym/callbacks/data_schedule_callback.py` | **Created** (D1 callback) | Done |
+| `adv_building_gym/devices/statesources/base.py` | Added `reload()` + `_post_load_data_processing()` | Done |
+| `adv_building_gym/devices/statesources/outer/weather.py` | Extract → `_post_load_data_processing()` | Done |
+| `adv_building_gym/devices/statesources/outer/energy_price.py` | Extract → `_post_load_data_processing()` | Done |
+| `adv_building_gym/devices/statesources/outer/ev_state.py` | Extract → `_post_load_data_processing()` | Done |
+| `adv_building_gym/devices/statesources/outer/inside_temperature.py` | Extract → `_post_load_data_processing()` | Done |
+| `adv_building_gym/envs/building_adv.py` | Episode counter + combinator + Approach A/C | Done |
+| `adv_building_gym/config/env_config.py` | `data_combinator` field with default data | Done |
+| `adv_building_gym/config/config_manager.py` | Serialise/deserialise `DataCombinator` | Done |
+| `adv_building_gym/envs/env_creator.py` | Pass `data_combinator` | Done |
+| `adv_building_gym/config/__init__.py` | Lazy export `DataCombinator` | Done |
+| `adv_building_gym/callbacks/__init__.py` | Export `create_data_schedule_on_train_result` | Done |
+| `adv_building_gym/ray_training/common_model_config.py` | D1 callback wiring | Done |
+| `run_train_ray.py` | Pass `data_combinator` to `common_model_config()` | Done |
+| `configs/test1.json` | **Created** — full config with DataCombinator | Done |
+| `data/ev_usage_profiles/ev_0.csv` | **Created** — empty EV profile (no events) | Done |
+| `.gitignore` | Stopped ignoring `test1.json` | Done |
 
 ---
 
@@ -594,26 +435,27 @@ length) are required.
 
 1. **Smoke test — cycling**: create env with a 2-entry EV combinator
    (`swap_every_n_episodes=2`), run 6 resets, assert `ev_state.ds_path` cycles
-   `ev_1 → ev_1 → ev_2 → ev_2 → ev_1 → ev_1`.
+   `ev_1 → ev_1 → ev_2 → ev_2 → ev_1 → ev_1`. *(Passed during implementation)*
 
 2. **Cartesian product (variable only)**: `DataCombinator(variable={"ev_schedule": [ev1, ev2], "weather": [w1, w2]}).variants`
-   returns exactly 4 dicts covering all combinations.
+   returns exactly 4 dicts covering all combinations. *(Passed during implementation)*
 
-3. **Correlation-safe product**: `DataCombinator(scenarios=[{"weather": w1, "E_price": p1}, {"weather": w2, "E_price": p2}], variable={"ev_schedule": [ev1, ev2, ev3]}).variants`
-   returns 6 dicts (2 scenarios × 3 EV profiles). No variant mixes `w1` with `p2` or `w2` with `p1`.
+3. **Correlation-safe product**: `DataCombinator(scenarios=[...], variable={"ev_schedule": [ev1, ev2, ev3]}).variants`
+   returns 6 dicts (2 scenarios × 3 EV profiles). No variant mixes `w1` with `p2` or `w2` with `p1`. *(Passed during implementation)*
 
-4. **No regression**: `data_combinator=None` → identical behaviour to current code.
+4. **No regression**: `data_combinator=None` → identical behaviour to previous code. *(Passed during implementation)*
 
 5. **Approach C override**: `env.reset(options={"datasource_variant": {"ev_schedule": ev3}})`;
    assert `ev_state.ds_path == ev3` regardless of episode counter.
 
 6. **Serialisation roundtrip**: `ConfigManager.save(config)` / `ConfigManager.load(path)`;
-   assert `config.data_combinator.scenarios`, `.variable`, and `swap_every_n_episodes` are preserved.
+   assert `config.data_combinator.scenarios`, `.variable`, and `swap_every_n_episodes` are preserved. *(Passed during implementation)*
 
-7. **Training integration (Approach A)**: `python run_train_ray.py --algorithm ppo --timesteps 5e4` with
+7. **Training integration (Approach A)**: `python run_train_ray.py --algorithm ppo --episodes 100` with
    EV combinator enabled; inspect `ep_metrics/` — EV-related reward contributions should
    vary across episodes matching the profile swap schedule.
 
-8. **Approach D1 callback**: register `DataScheduleCallback` with `swap_every_n_iterations=1`
-   on a short run; after iteration 1 assert all env_runners report the expected `ev_state.ds_path`
-   via `algorithm.env_runner_group.foreach_env_runner(lambda r: r.env.statesources[-1].ds_path)`.
+8. **Approach D1 callback**: run a short training with `data_swap_every_n_iterations=1`;
+   after iteration 1 assert all env_runners report the expected `ev_state.ds_path`.
+   Note: to inspect sub-envs from outside, traverse the wrapper chain:
+   `env_runner.env.env.envs[0].unwrapped.statesources[-1].ds_path`.

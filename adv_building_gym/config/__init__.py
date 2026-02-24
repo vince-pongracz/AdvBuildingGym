@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 
 
 def __getattr__(name):
-    """Lazy import for Config, config, and ConfigManager to avoid circular imports."""
+    """Lazy import for Config, config, ConfigManager, and DataCombinator to avoid circular imports."""
     if name == "Config":
         from .env_config import Config
         return Config
@@ -33,6 +33,9 @@ def __getattr__(name):
     elif name == "ConfigManager":
         from .config_manager import ConfigManager
         return ConfigManager
+    elif name == "DataCombinator":
+        from .data_combinator import DataCombinator
+        return DataCombinator
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
@@ -40,6 +43,7 @@ __all__ = [
     "Config",
     "config",
     "ConfigManager",
+    "DataCombinator",
     "Serializable",
     "ComponentRegistry",
     "TrainingConfig",

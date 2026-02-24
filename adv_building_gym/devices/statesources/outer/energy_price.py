@@ -18,12 +18,16 @@ class EnergyPriceDataSource(StateSource):
 
     def __init__(self, name: str, ds_path: str | None = None) -> None:
         super().__init__(name, ds_path)
-        
+
         if self.ts is not None:
             logger.info("Use data file: %s", ds_path)
-            self.price_max = float(self.ts["price_normalized"].max())
+            self._post_load_data_processing()
         else:
             self.price_max = 1.0
+
+    def _post_load_data_processing(self) -> None:
+        """Cache the maximum price scalar after CSV load / reload."""
+        self.price_max = float(self.ts["price_normalized"].max())
         
     def setup_spaces(self,
                      state_spaces,

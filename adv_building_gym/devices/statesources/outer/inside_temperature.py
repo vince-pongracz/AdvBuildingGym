@@ -23,25 +23,28 @@ class InsideTemperature(StateSource):
 
         if self.ts is not None:
             logger.info("Use data file: %s", ds_path)
-            # Normalize temperature setpoint if CSV data is provided
-            # Expected column: "desired_temp_in [°C]" or similar
-            if "desired_temp_in [°C]" in self.ts.columns:
-                column_name = "desired_temp_in [°C]"
-            elif "desired_temp_in" in self.ts.columns:
-                column_name = "desired_temp_in"
-            else:
-                logger.warning("No 'desired_temp_in' column found in CSV, will use synthetic data")
-                self.ts = None
-                return
-
-            # Normalize to [-1, 1] range (assuming typical range: 15-30°C)
-            temp_min = self.ts[column_name].min()
-            temp_max = self.ts[column_name].max()
-            self.ts["desired_temp_in_norm"] = (self.ts[column_name] - temp_min) / (temp_max - temp_min) # scale onto [0, 1]
-            self.ts["desired_temp_in_norm"] = 2 * self.ts["desired_temp_in_norm"] # scale to [0, 2]
-            self.ts["desired_temp_in_norm"] = self.ts["desired_temp_in_norm"] - 1 # push to [-1, 1]
+            self._post_load_data_processing()
         else:
             logger.warning("No data file provided, will use synthetic data")
+
+    def _post_load_data_processing(self) -> None:
+        """Detect temperature column and normalise to [-1, 1] after CSV load / reload."""
+        # Expected column: "desired_temp_in [°C]" or similar
+        if "desired_temp_in [°C]" in self.ts.columns:
+            column_name = "desired_temp_in [°C]"
+        elif "desired_temp_in" in self.ts.columns:
+            column_name = "desired_temp_in"
+        else:
+            logger.warning("No 'desired_temp_in' column found in CSV, will use synthetic data")
+            self.ts = None
+            return
+
+        # Normalize to [-1, 1] range (assuming typical range: 15-30°C)
+        temp_min = self.ts[column_name].min()
+        temp_max = self.ts[column_name].max()
+        self.ts["desired_temp_in_norm"] = (self.ts[column_name] - temp_min) / (temp_max - temp_min)  # scale onto [0, 1]
+        self.ts["desired_temp_in_norm"] = 2 * self.ts["desired_temp_in_norm"]  # scale to [0, 2]
+        self.ts["desired_temp_in_norm"] = self.ts["desired_temp_in_norm"] - 1  # push to [-1, 1]
 
     def setup_spaces(self,
                      state_spaces: OrderedDict,

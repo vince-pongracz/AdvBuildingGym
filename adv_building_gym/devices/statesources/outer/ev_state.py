@@ -72,7 +72,15 @@ class EVState(StateSource):
         self._event_lookup: Dict[int, Tuple[bool, Optional[EvSpec]]] = {}
 
         if self.ts is not None:
-            self._parse_events()
+            self._post_load_data_processing()
+
+    def _post_load_data_processing(self) -> None:
+        """Parse events and reset runtime state after CSV load / reload."""
+        self._ev_connected = False
+        self._current_spec = None
+        self._events = []
+        self._event_lookup = {}
+        self._parse_events()
 
     def _parse_events(self) -> None:
         """Parse the CSV DataFrame into a sorted event list."""

@@ -9,6 +9,7 @@ from gymnasium.spaces import Dict as SDict
 import numpy as np
 import pandas as pd
 
+from adv_building_gym.config.data_combinator import DataCombinator
 from adv_building_gym.devices.statesources import StateSource
 from adv_building_gym.rewards import RewardFunction
 from adv_building_gym.devices.infrastructure import Infrastructure
@@ -161,6 +162,7 @@ class AdvBuildingGym(gym.Env):
         train_ratio=0.8,
         # Number of steps to look ahead for forecasted values
         prediction_horizon=8 * 12,  # 8 hours at 5-minute steps
+        data_combinator: DataCombinator | None = None,
         **kwargs,
     ):
         """Initialise the building-energy gym environment.
@@ -192,6 +194,10 @@ class AdvBuildingGym(gym.Env):
 
         self.iteration = 0
         self.cum_E_kWh = 0.0  # Cumulative net energy in kWh (tracked in info, not observation)
+        
+        self.episode_count: int = 0
+        self.data_combinator = data_combinator
+        self._rng: np.random.Generator | None = None
 
         observation_space = OrderedDict()
         action_space = OrderedDict()
@@ -263,10 +269,37 @@ class AdvBuildingGym(gym.Env):
     def get_action_space(self):
         return self.action_space
     
+    def apply_datasource_variant(self, variant: dict[str, str]) -> None:
+        """Reload statesources whose names appear in *variant*.
+
+        Args:
+            variant: Mapping of statesource name -> new CSV file path.
+                     Only matching statesources are reloaded; others are untouched.
+        """
+        for state_src in self.statesources:
+            if state_src.name in variant:
+                state_src.reload(variant[state_src.name])
+
     def reset(self, *, seed: int | None = None, options: Dict[str, Any] | None = None):
         if seed is None:
             seed = np.random.randint(0, 10000)  # global RNG
         super().reset(seed=seed, options=options)
+
+        # Seed the deterministic RNG for DataCombinator random mode
+        if seed is not None:
+            self._rng = np.random.default_rng(seed)
+
+        # Approach A: episode-count-based datasource variant swap
+        self.episode_count += 1
+        if self.data_combinator is not None:
+            variant = self.data_combinator.get_variant(self.episode_count, self._rng)
+            if variant:
+                self.apply_datasource_variant(variant)
+                logger.info("Episode %d: datasource variant %s", self.episode_count, variant)
+
+        # Approach C: external override via reset(options={"datasource_variant": {...}})
+        if options and "datasource_variant" in options:
+            self.apply_datasource_variant(options["datasource_variant"])
 
         self.iteration = 0
         self.cum_E_kWh = 0.0  # Reset cumulative energy on episode reset
@@ -308,6 +341,7 @@ class AdvBuildingGym(gym.Env):
         """
         return bool(self.iteration >= self.max_iteration)
 
+    # TODO VP 2026.02.23. : This should be rather refactored with rllib connectors and pipelines, so the env only accepts and returns dicts, and the mapping from flat action vector to dict is done in the pipeline, not in the env directly... -- this mapping is rather the task of the Rllib, not the env's
     def _flat_action_to_dict(self, flat_action: np.ndarray) -> Dict[str, np.ndarray]:
         """Convert flat action array to Dict format for infrastructure use.
 

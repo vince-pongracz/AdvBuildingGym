@@ -40,4 +40,5 @@ def adv_building_env_creator(config):
         statesources=statesources,
         rewards=rewards,
         building_props=env_config.building_props,
+        data_combinator=env_config.data_combinator,
     )
