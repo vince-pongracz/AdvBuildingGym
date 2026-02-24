@@ -16,6 +16,7 @@ from adv_building_gym.devices.infrastructure import Infrastructure
 
 from adv_building_gym.utils.temporal_features import TemporalFeatureBuffer
 from adv_building_gym.utils.warning_filters import setup_warning_filters
+from adv_building_gym.envs.data_variant import DataVariantProvider
 from adv_building_gym.envs.utils import BuildingProps
 
 # Logging configuration
@@ -31,7 +32,7 @@ logger = logging.getLogger(__name__)
 # In this case, SB could not really work anymore, because of the dict spaces... but RLlib could work with custom pipelines...
 # Link: https://docs.ray.io/en/latest/rllib/env-to-module-connector.html#env-to-module-pipeline-docs
 
-class AdvBuildingGym(gym.Env):
+class AdvBuildingGym(gym.Env, DataVariantProvider):
     """
     AdvBuildingGym
 
@@ -269,7 +270,7 @@ class AdvBuildingGym(gym.Env):
     def get_action_space(self):
         return self.action_space
     
-    def apply_datasource_variant(self, variant: dict[str, str]) -> None:
+    def apply_data_variant(self, variant: dict[str, str]) -> None:
         """Reload statesources whose names appear in *variant*.
 
         Args:
@@ -294,12 +295,12 @@ class AdvBuildingGym(gym.Env):
         if self.data_combinator is not None:
             variant = self.data_combinator.get_variant(self.episode_count, self._rng)
             if variant:
-                self.apply_datasource_variant(variant)
+                self.apply_data_variant(variant)
                 logger.info("Episode %d: datasource variant %s", self.episode_count, variant)
 
-        # Approach C: external override via reset(options={"datasource_variant": {...}})
-        if options and "datasource_variant" in options:
-            self.apply_datasource_variant(options["datasource_variant"])
+        # Approach C: external override via reset(options={"data_variant": {...}})
+        if options and "data_variant" in options:
+            self.apply_data_variant(options["data_variant"])
 
         self.iteration = 0
         self.cum_E_kWh = 0.0  # Reset cumulative energy on episode reset

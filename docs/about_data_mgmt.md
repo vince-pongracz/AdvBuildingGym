@@ -62,7 +62,7 @@ data/
 │   ├── LLEC_outdoor_temperature_5min_data.csv   # weather (single day)
 │   └── price_data_2025_1.csv                    # energy price (single day)
 ├── ev_usage_profiles/
-│   ├── ev_0.csv                                  # empty profile (no EV events)
+│   ├── ev_0.csv                                 # empty profile (no EV events)
 │   ├── ev_1.csv  …  ev_5.csv                    # 5 distinct EV user profiles
 └── zenodo/
     ├── 2018_weather.hdf5  …  2020_weather.hdf5  # multi-year weather (HDF5)
@@ -145,13 +145,13 @@ call the hook so subclasses define post-processing once.
 | `outer/inside_temperature.py` | Column detection + min-max normalisation to `[-1, 1]` |
 
 **4. `adv_building_gym/envs/building_adv.py`** — `data_combinator` constructor parameter,
-`episode_count`, `_rng` attributes, public `apply_datasource_variant(variant)` method,
+`episode_count`, `_rng` attributes, public `apply_data_variant(variant)` method,
 Approach A swap in `reset()`, Approach C override via `reset(options=...)`.
 
 **5. `adv_building_gym/config/env_config.py`** — `data_combinator` field on `Config` with
 a default factory containing real data paths (weather + price scenario, 6 EV profiles).
 `create_statesources()` creates sources **without** `ds_path` — the combinator provides
-paths at runtime. The `# TODO VP 2026.01.13.` comment is removed.
+paths at runtime.
 
 **6. `adv_building_gym/config/config_manager.py`** — `DataCombinator` serialised in
 `to_dict()` and deserialised in `from_dict()`.
@@ -213,18 +213,18 @@ Best suited as a follow-up once the CSV preprocessing pipeline is in place.
 
 ### Approach C — External Control via `reset(options=...)` *(Implemented, extension on top of A)*
 
-Standard Gymnasium allows `env.reset(options={"datasource_variant": {...}})`. An external
+Standard Gymnasium allows `env.reset(options={"data_variant": {...}})`. An external
 scheduler (Ray callback, curriculum object, or test harness) can inject a specific variant
 before each episode rather than relying on the built-in counter.
 
 ```python
 # In AdvBuildingGym.reset() — evaluated after Approach A swap
-if options and "datasource_variant" in options:
-    self.apply_datasource_variant(options["datasource_variant"])
+if options and "data_variant" in options:
+    self.apply_data_variant(options["data_variant"])
 ```
 
 Useful for evaluation (always force a fixed test variant) or curriculum learning (external
-scheduler decides difficulty). Since `apply_datasource_variant` is already defined by
+scheduler decides difficulty). Since `apply_data_variant` is already defined by
 Approach A, no additional code is needed beyond that one `if` block.
 
 ---
@@ -244,7 +244,7 @@ Two sub-variants exist depending on how deeply the reconfiguration must go.
 
 The environment objects already exist inside each Ray actor. The callback reaches into each
 actor through `EnvRunnerGroup.foreach_env_runner()` and calls
-`env.apply_datasource_variant(variant)` directly. No Ray actors are stopped or restarted.
+`env.apply_data_variant(variant)` directly. No Ray actors are stopped or restarted.
 
 **When to prefer D1 over Approach A:**
 
@@ -318,7 +318,7 @@ if vec_env is None:
     return
 sync_vec = getattr(vec_env, "env", vec_env)  # unwrap DictInfoToList
 for sub_env in getattr(sync_vec, "envs", []):
-    sub_env.unwrapped.apply_datasource_variant(variant)
+    sub_env.unwrapped.apply_data_variant(variant)
 ```
 
 **Lesson learned:** The original plan assumed `env_runner.env` would be the raw
@@ -445,7 +445,7 @@ length) are required.
 
 4. **No regression**: `data_combinator=None` → identical behaviour to previous code. *(Passed during implementation)*
 
-5. **Approach C override**: `env.reset(options={"datasource_variant": {"ev_schedule": ev3}})`;
+5. **Approach C override**: `env.reset(options={"data_variant": {"ev_schedule": ev3}})`;
    assert `ev_state.ds_path == ev3` regardless of episode counter.
 
 6. **Serialisation roundtrip**: `ConfigManager.save(config)` / `ConfigManager.load(path)`;

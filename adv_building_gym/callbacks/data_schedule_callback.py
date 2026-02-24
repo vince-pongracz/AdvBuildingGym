@@ -16,6 +16,7 @@ function that can be passed directly as a keyword argument to
 import logging
 
 from adv_building_gym.config.data_combinator import DataCombinator
+from adv_building_gym.envs.data_variant import DataVariantProvider
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +67,9 @@ def _push_variant_to_runners(algorithm, variant: dict[str, str], iteration: int)
         # SyncVectorEnv.envs is the list of (possibly wrapped) Gymnasium envs.
         sync_vec = getattr(vec_env, "env", vec_env)
         for sub_env in getattr(sync_vec, "envs", []):
-            sub_env.unwrapped.apply_datasource_variant(variant)
+            unwrapped = sub_env.unwrapped
+            if isinstance(unwrapped, DataVariantProvider):
+                unwrapped.apply_data_variant(variant)
 
     algorithm.env_runner_group.foreach_env_runner(
         apply, local_env_runner=True, timeout_seconds=None
