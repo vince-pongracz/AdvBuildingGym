@@ -1,4 +1,4 @@
-"""Iteration-aligned datasource variant scheduling via RLlib callback (Approach D1).
+"""Iteration-aligned data variant scheduling via RLlib callback (Approach D1).
 
 Pushes a new DataCombinator variant to all env_runners at training iteration
 boundaries, ensuring all workers change dataset simultaneously.
@@ -55,7 +55,7 @@ def create_data_schedule_on_train_result(
 
 
 def _push_variant_to_runners(algorithm, variant: dict[str, str], iteration: int) -> None:
-    """Apply a datasource variant to all env_runners (training + evaluation)."""
+    """Apply a data variant to all env_runners (training + evaluation)."""
 
     def apply(env_runner) -> None:
         # env_runner.env is wrapped: DictInfoToList -> SyncVectorEnv -> [TimeLimit -> ... -> AdvBuildingGym]

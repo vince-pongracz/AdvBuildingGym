@@ -16,6 +16,8 @@
 #   --seed N                Random seed [default: 42]
 #   --output-dir PATH       Directory to save evaluation results [default: eval_results]
 #   --no-save               Do not save results to file
+#   --log-trajectories      Save per-step trajectory JSON per episode [default: on]
+#   --no-log-trajectories   Disable trajectory logging
 #
 # Examples:
 #   sbatch slurm_scripts/slurm_eval_ray.sh --algorithm ppo --episodes 10 --seed 42
@@ -61,6 +63,7 @@ LOAD_CONFIG=""
 CHECKPOINT=""
 OUTPUT_DIR=""
 NO_SAVE=0
+LOG_TRAJECTORIES=""
 EXTRA_ARGS=()
 
 # Parse named arguments
@@ -98,6 +101,14 @@ while [[ $# -gt 0 ]]; do
       NO_SAVE=1
       shift
       ;;
+    --log-trajectories)
+      LOG_TRAJECTORIES="yes"
+      shift
+      ;;
+    --no-log-trajectories)
+      LOG_TRAJECTORIES="no"
+      shift
+      ;;
     *)
       EXTRA_ARGS+=("$1")
       shift
@@ -114,6 +125,8 @@ echo "  Seed        : $SEED"
 [ -n "$LOAD_CONFIG" ] && echo "  Load Config : $LOAD_CONFIG"
 [ -n "$OUTPUT_DIR" ]  && echo "  Output Dir  : $OUTPUT_DIR"
 [ "$NO_SAVE" -eq 1 ]  && echo "  Save results: disabled"
+[ "$LOG_TRAJECTORIES" = "yes" ] && echo "  Log Trajectories: enabled"
+[ "$LOG_TRAJECTORIES" = "no" ]  && echo "  Log Trajectories: disabled"
 [ ${#EXTRA_ARGS[@]} -gt 0 ] && echo "  Extra Args  : ${EXTRA_ARGS[*]}"
 
 echo "=== SLURM Resource Info ==="
@@ -141,6 +154,8 @@ CMD=(python -u run_eval_ray.py
 [ -n "$LOAD_CONFIG" ] && CMD+=(--load-config "$LOAD_CONFIG")
 [ -n "$OUTPUT_DIR" ]  && CMD+=(--output-dir "$OUTPUT_DIR")
 [ "$NO_SAVE" -eq 1 ]  && CMD+=(--no-save)
+[ "$LOG_TRAJECTORIES" = "yes" ] && CMD+=(--log-trajectories)
+[ "$LOG_TRAJECTORIES" = "no" ]  && CMD+=(--no-log-trajectories)
 [ ${#EXTRA_ARGS[@]} -gt 0 ] && CMD+=("${EXTRA_ARGS[@]}")
 
 echo "======"

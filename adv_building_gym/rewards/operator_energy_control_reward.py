@@ -9,60 +9,60 @@ logger = logging.getLogger(__name__)
 
 
 class OperatorEnergyControlReward(RewardFunction):
-    """
-    Reward function for respecting grid operator energy consumption limits.
+    """Reward function for respecting grid operator energy consumption limits.
 
-    This reward encourages the agent to keep total grid power consumption below
-    the operator-specified limit (operator_energy_max). The reward is scaled
-    based on how far the actual consumption is from the limit:
-    - Full reward (1.0) when consumption is at 0
-    - Zero reward (0.0) when consumption equals the limit
-    - Negative penalty when consumption exceeds the limit
+    Three-zone reward based on consumption ratio (grid_power / operator_limit):
 
-    Linear reward calculation:
-        reward = (operator_energy_max - grid_power_kW) / operator_energy_max
+    - Below 90% of limit: full reward (1.0)
+    - 90%-100% of limit: exponential decay from 1.0 towards 0
+      using exp(-5 * (ratio - 0.9) / 0.1), where the scale factor 5
+      gives exp(-5) ~ 0.007 at the limit boundary
+    - Above limit: harsh_penalty (default -10.0)
     """
 
     # infrastructures comes from context (the Config's infras list)
     _context_params: ClassVar[Set[str]] = {'infrastructures'}
+
+    # Scale factor for the exponential decay in the transition zone.
+    # exp(-5) ~ 0.007, so reward nearly reaches 0 right at the limit.
+    _DECAY_SCALE: float = 5.0
 
     def __init__(self,
                  infrastructures: List,
                  weight: float,
                  max_power_kW: float = 10.0,
                  name: str = "operator_energy_control_reward",
-                 harsh_penalty: float = -10.0
+                 harsh_penalty: float = -10.0,
+                 soft_threshold_pct: float = 0.9,
                  ) -> None:
-        """
-        Initialize OperatorEnergyControlReward.
+        """Initialize OperatorEnergyControlReward.
 
         Args:
-            infrastructures: List of Infrastructure objects to query for power consumption
-            weight: Reward weight (scaling factor)
-            max_power_kW: Maximum power limit in kW for denormalization (default: 10.0 kW)
-            name: Reward function name
+            infrastructures: List of Infrastructure objects to query for power consumption.
+            weight: Reward weight (scaling factor).
+            max_power_kW: Maximum power in kW for denormalization (default: 10.0 kW).
+            name: Reward function name.
+            harsh_penalty: Flat penalty when consumption exceeds the operator limit.
+            soft_threshold_pct: Fraction of operator limit below which reward is 1.0
+                (default 0.9 = 90%). Must be in (0, 1).
         """
         super().__init__(weight, name)
         self.infrastructures = infrastructures
         self.max_power_kW = max_power_kW
         self.harsh_penalty = harsh_penalty
+        if not 0.0 < soft_threshold_pct < 1.0:
+            raise ValueError("soft_threshold_pct must be in (0, 1)")
+        self.soft_threshold_pct = soft_threshold_pct
 
     def get_reward(self, actions, states) -> float:
-        """
-        Calculate reward based on grid power consumption vs operator limit.
-
-        This method:
-        1. Calculates total grid power by calling get_electric_consumption() on all infrastructures
-        2. Stores grid_power_kW in states for observability
-        3. Compares against operator_energy_max limit
-        4. Returns scaled reward
+        """Calculate reward based on grid power consumption vs operator limit.
 
         Args:
-            actions: Dictionary of actions taken by infrastructures
-            states: Dictionary containing "operator_energy_max" (normalized limit [0, 1])
+            actions: Dictionary of actions taken by infrastructures.
+            states: Dictionary containing "operator_energy_max" (normalized limit [0, 1]).
 
         Returns:
-            Scaled reward value
+            Weighted reward value.
         """
         # Calculate total grid E consumption by summing all infrastructure consumption
         grid_power_kW = 0.0
@@ -79,20 +79,27 @@ class OperatorEnergyControlReward(RewardFunction):
         # Denormalize to actual kW
         operator_limit_kW = operator_limit_norm * self.max_power_kW
 
-        # Calculate scaled distance-based reward
-        # reward = 1.0 when grid_power = 0
-        # reward = 0.0 when grid_power = operator_limit
-        # reward < 0.0 when grid_power > operator_limit (penalty)
-        if operator_limit_kW > 0:
-            reward = (operator_limit_kW - grid_power_kW) / operator_limit_kW
-        else:
+        if operator_limit_kW <= 0:
             # If limit is 0, any consumption is a violation
-            reward = -1.0 if grid_power_kW > 0 else 0.0
+            reward = self.harsh_penalty if grid_power_kW > 0 else 1.0
+            return float(self.weight * reward)
 
-        # Clip to reasonable range to avoid extreme penalties
-        clipped_reward = np.clip(reward, self.harsh_penalty, 1.0)
+        ratio = grid_power_kW / operator_limit_kW
 
-        return float(self.weight * clipped_reward)
+        if ratio <= self.soft_threshold_pct:
+            # Below soft threshold: full reward
+            reward = 1.0
+        elif ratio <= 1.0:
+            # Transition zone: exponential decay from 1.0 towards 0
+            # At soft_threshold_pct: t=0 -> exp(0) = 1.0
+            # At 1.0:               t=1 -> exp(-5) ~ 0.007
+            t = (ratio - self.soft_threshold_pct) / (1.0 - self.soft_threshold_pct)
+            reward = float(np.exp(-self._DECAY_SCALE * t))
+        else:
+            # Above operator limit: harsh penalty
+            reward = self.harsh_penalty
+
+        return float(self.weight * reward)
 
 
 # Register OperatorEnergyControlReward with the component registry

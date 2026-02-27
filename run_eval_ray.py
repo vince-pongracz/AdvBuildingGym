@@ -23,7 +23,7 @@ from ray.rllib.algorithms import Algorithm
 
 from adv_building_gym import AdvBuildingGym, ConfigManager
 from adv_building_gym.config import config as default_config
-from adv_building_gym.utils import CustomJSONEncoder, setup_warning_filters
+from adv_building_gym.utils import CustomJSONEncoder, TrajectoryCollector, setup_warning_filters
 
 # Apply warning filters
 setup_warning_filters()
@@ -145,6 +145,7 @@ def evaluate_ray_model(
     seed: int = 42,
     save_results: bool = True,
     output_dir: str = "eval_results",
+    log_trajectories: bool = True,
 ):
     """
     Evaluate a Ray/RLlib trained model on AdvBuildingGym.
@@ -156,6 +157,7 @@ def evaluate_ray_model(
         seed: Random seed for reproducibility
         save_results: Whether to save results to file
         output_dir: Directory to save evaluation results
+        log_trajectories: Whether to save per-step trajectory JSON per episode
 
     Returns:
         dict: Evaluation statistics
@@ -203,9 +205,14 @@ def evaluate_ray_model(
         training=False,  # Evaluation mode
     )
 
-    # Pre-compute max reward per step consistent with episode_callbacks.py
-    # max_reward_per_step = sum of reward weights (assumes base max is 1.0 per reward)
-    max_reward_per_step = sum(r.weight for r in active_config.rewards)
+    # Enable full state logging in info dicts for trajectory collection
+    if log_trajectories:
+        env.log_full_info = True
+
+    # Set up trajectory collector
+    collector = TrajectoryCollector(env) if log_trajectories else None
+
+    max_reward_per_step = sum(r.weight * r.max_reward for r in active_config.rewards)
 
     # Evaluation loop
     episode_stats = []
@@ -216,20 +223,33 @@ def evaluate_ray_model(
         logger.info("=" * 50)
         logger.info("Episode %d/%d", ep + 1, num_episodes)
 
-        obs, info = env.reset(seed=seed + ep)
+        obs, reset_info = env.reset(seed=seed + ep)
         done = False
         episode_reward = 0.0
         episode_length = 0
         episode_rewards = []
 
+        if collector is not None:
+            collector.reset()
+            collector.on_reset(reset_info)
+
         while not done:
             # Compute action using the policy (inference mode)
-            action = algo.compute_single_action(obs, explore=False)
+            raw_action = algo.compute_single_action(obs, explore=False)
 
             # Step environment
-            # TODO VP 2026.02.12. : Preserve step_info
-            next_obs, reward, terminated, truncated, step_info = env.step(action)
+            next_obs, reward, terminated, truncated, step_info = env.step(raw_action)
             done = terminated or truncated
+
+            if collector is not None:
+                collector.on_step(
+                    step=episode_length,
+                    obs=obs,
+                    action=raw_action,
+                    reward=reward,
+                    info=step_info,
+                    raw_policy_action=raw_action,
+                )
 
             episode_reward += reward
             episode_length += 1
@@ -251,6 +271,20 @@ def evaluate_ray_model(
             "reward_rate": float(reward_rate),
             "seed": seed + ep,
         }
+
+        # Save per-episode trajectory JSON
+        if collector is not None and save_results:
+            collector.on_episode_end(
+                episode_id=ep,
+                seed=seed + ep,
+                metadata={
+                    "config_name": active_config.config_name,
+                    "checkpoint_path": checkpoint_path,
+                    "algorithm": algo.__class__.__name__,
+                },
+            )
+            traj_file = os.path.join(output_dir, f"{ep}_trajectory.json")
+            collector.save_json(traj_file)
 
         episode_stats.append(ep_stats)
         all_rewards.append(episode_reward)
@@ -367,6 +401,12 @@ def main():
         action="store_true",
         help="Don't save results to file"
     )
+    parser.add_argument(
+        "--log-trajectories",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Save per-step trajectory JSON per episode (default: True)"
+    )
 
     args = parser.parse_args()
 
@@ -425,6 +465,7 @@ def main():
             seed=args.seed,
             save_results=not args.no_save,
             output_dir=args.output_dir,
+            log_trajectories=args.log_trajectories,
         )
 
         logger.info("Evaluation completed successfully!")

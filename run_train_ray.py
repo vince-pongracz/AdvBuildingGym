@@ -147,6 +147,13 @@ def main():
         default=20,
         help="Checkpoint frequency in number of episodes (will be converted to training iterations)",
     )
+    parser.add_argument(
+        "--log-trajectories",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Save per-step trajectory JSON per episode (default: False)"
+    )
+    
     args = parser.parse_args()
 
     # Load config from file if specified, otherwise use default
@@ -260,6 +267,7 @@ def main():
     # NOTE: episode_length is required to calculate episode count from timesteps.
     # This is needed because off-policy algorithms (SAC) don't reliably report
     # num_episodes_lifetime, but num_env_steps_sampled_lifetime is always accurate.
+    # NOTE VP 2026.02.24. : Callback is here because it needs checkpoint_dir and run_name, these are CLI argument dependent.
     checkpoint_callback_class = make_checkpoint_callback_class(
         checkpoint_dir=checkpoint_dir,
         checkpoint_frequency=args.checkpoint_frequency_episodes,
@@ -268,7 +276,10 @@ def main():
         episode_length=active_config.EPISODE_LENGTH,
     )
 
-    register_env("AdvBuilding", adv_building_env_creator)
+    env_creator_config = {
+        "log_full_info": args.log_trajectories,  # Log full state info in env info dict when trajectory logging is enabled
+    }
+    register_env("AdvBuilding", lambda cfg: adv_building_env_creator({**env_creator_config, **cfg}))
 
     # Load training hyperparameters (shared across select_model and checkpoint calc)
     training_config = TrainingConfig.from_json(
@@ -298,6 +309,7 @@ def main():
         metrics_base_dir="ep_metrics",
         clip_actions=True,
         data_combinator=active_config.data_combinator,
+        log_trajectories=args.log_trajectories
     )
 
     # Convert the RLlib config into a Tune param space

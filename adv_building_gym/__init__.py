@@ -8,7 +8,8 @@ from .envs import AdvBuildingGym
 from .controllers import FuzzyController, MPCController, PIController, PIDController
 from .config import config, ConfigManager
 from .callbacks import (
-    create_on_episode_end_callback,
+    make_episode_metrics_callback_class,
+    make_trajectory_logging_callback_class,
     make_checkpoint_callback_class,
 )
 
@@ -48,6 +49,7 @@ __all__ = [
     "MPCController",
     "PIController",
     "PIDController",
-    "create_on_episode_end_callback",
+    "make_episode_metrics_callback_class",
+    "make_trajectory_logging_callback_class",
     "make_checkpoint_callback_class",
 ]

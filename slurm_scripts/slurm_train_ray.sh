@@ -21,6 +21,8 @@
 #   --training                Use training split of price data (always enabled)
 #   --metric METRIC           Metric to optimize (episode_return_mean, achieved_reward, reward_rate) [default: reward_rate]
 #   --checkpoint-frequency-episodes N   Checkpoint frequency in episodes [default: 20]
+#   --log-trajectories              Save per-step trajectory JSON during eval episodes [default: off]
+#   --no-log-trajectories           Disable trajectory logging (default)
 #
 # Examples:
 #   sbatch slurm_scripts/slurm_train_ray.sh --algorithm ppo --episodes 3500 --seed 42
@@ -71,6 +73,7 @@ SAVE_CONFIG=""
 NUM_ENVS="1"
 EVAL_FREQ="20000"
 CHECKPOINT_FREQ=""
+LOG_TRAJECTORIES=""
 EXTRA_ARGS=()
 
 # Parse named arguments
@@ -121,6 +124,14 @@ while [[ $# -gt 0 ]]; do
       CHECKPOINT_FREQ="$2"
       shift 2
       ;;
+    --log-trajectories)
+      LOG_TRAJECTORIES="yes"
+      shift
+      ;;
+    --no-log-trajectories)
+      LOG_TRAJECTORIES="no"
+      shift
+      ;;
     --training)
       # Ignored since we always add --training
       shift
@@ -145,6 +156,8 @@ echo "  Eval Freq   : $EVAL_FREQ"
 [ -n "$LOAD_CONFIG" ] && echo "  Load Config : $LOAD_CONFIG"
 [ -n "$SAVE_CONFIG" ] && echo "  Save Config : $SAVE_CONFIG"
 [ -n "$CHECKPOINT_FREQ" ] && echo "  Checkpoint Freq: $CHECKPOINT_FREQ episodes"
+[ "$LOG_TRAJECTORIES" = "yes" ] && echo "  Log Trajectories: enabled"
+[ "$LOG_TRAJECTORIES" = "no" ]  && echo "  Log Trajectories: disabled"
 [ ${#EXTRA_ARGS[@]} -gt 0 ] && echo "  Extra Args  : ${EXTRA_ARGS[*]}"
 
 echo "=== SLURM Resource Info ==="
@@ -207,6 +220,8 @@ CMD=(python -u run_train_ray.py
 [ -n "$LOAD_CONFIG" ] && CMD+=(--load-config "$LOAD_CONFIG")
 [ -n "$SAVE_CONFIG" ] && CMD+=(--save-config "$SAVE_CONFIG")
 [ -n "$CHECKPOINT_FREQ" ] && CMD+=(--checkpoint-frequency-episodes "$CHECKPOINT_FREQ")
+[ "$LOG_TRAJECTORIES" = "yes" ] && CMD+=(--log-trajectories)
+[ "$LOG_TRAJECTORIES" = "no" ]  && CMD+=(--no-log-trajectories)
 # Append any extra/unknown arguments
 [ ${#EXTRA_ARGS[@]} -gt 0 ] && CMD+=("${EXTRA_ARGS[@]}")
 

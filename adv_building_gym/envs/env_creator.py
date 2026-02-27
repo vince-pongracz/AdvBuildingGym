@@ -8,7 +8,7 @@ AdvBuildingGym environment instances with the configured settings.
 from .building_adv import AdvBuildingGym
 
 
-def adv_building_env_creator(config):
+def adv_building_env_creator(config: dict) -> AdvBuildingGym:
     """
     Factory function for Ray Tune to create AdvBuildingGym instances.
 
@@ -41,4 +41,7 @@ def adv_building_env_creator(config):
         rewards=rewards,
         building_props=env_config.building_props,
         data_combinator=env_config.data_combinator,
+        # Pass log_full_info from config if available
+        # TODO VP 2026.02.24. : Clean up log_full info and trajectory logging, this is a bit hacky
+        log_full_info=config.get("log_full_info", False)
     )

@@ -6,6 +6,8 @@ from .json_encoder import CustomJSONEncoder
 from .ray_utils import trial_dirname_creator
 from .resource_check_util import ResourceAllocation, validate_resource_allocation
 from .warning_filters import setup_warning_filters
+from .trajectory_utils import extract_trajectory_from_infos
+from .trajectory_collector import TrajectoryCollector
 
 __all__ = [
     "EnvSyncInterface",
@@ -15,4 +17,6 @@ __all__ = [
     "ResourceAllocation",
     "validate_resource_allocation",
     "setup_warning_filters",
+    "extract_trajectory_from_infos",
+    "TrajectoryCollector",
 ]

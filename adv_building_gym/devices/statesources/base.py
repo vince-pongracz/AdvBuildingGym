@@ -67,7 +67,7 @@ class StateSource(EnvSyncInterface, Serializable):
         self.ds_path = ds_path
         self.ts = pd.read_csv(resolved)
         self._post_load_data_processing()
-        logger.info("StateSource '%s' reloaded from %s", self.name, resolved)
+        logger.debug("StateSource '%s' reloaded from %s", self.name, resolved)
 
     def setup_spaces(self,
                      state_spaces,

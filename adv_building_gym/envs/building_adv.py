@@ -164,6 +164,7 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         # Number of steps to look ahead for forecasted values
         prediction_horizon=8 * 12,  # 8 hours at 5-minute steps
         data_combinator: DataCombinator | None = None,
+        log_full_info: bool = False,
         **kwargs,
     ):
         """Initialise the building-energy gym environment.
@@ -254,6 +255,10 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         self.train_ratio = train_ratio
         self.max_iteration = int(self.simulation_time / self.control_step)
 
+        # When True, step()/reset() include a deep copy of the full named state
+        # dict in info["state"]. Expensive in memory — enable for evaluation only.
+        self.log_full_info: bool = log_full_info
+
         # TODO VP 2025.12.09. : inspect this -- drop it, it is not useful for us for now
         self.temporal_features = TemporalFeatureBuffer(window_size=self.prediction_horizon)
 
@@ -290,17 +295,19 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         if seed is not None:
             self._rng = np.random.default_rng(seed)
 
-        # Approach A: episode-count-based datasource variant swap
+        # Approach A: episode-count-based data variant swap
         self.episode_count += 1
         if self.data_combinator is not None:
             variant = self.data_combinator.get_variant(self.episode_count, self._rng)
             if variant:
                 self.apply_data_variant(variant)
-                logger.info("Episode %d: datasource variant %s", self.episode_count, variant)
+                logger.info("Episode %d: data variant %s", self.episode_count, variant)
 
         # Approach C: external override via reset(options={"data_variant": {...}})
         if options and "data_variant" in options:
-            self.apply_data_variant(options["data_variant"])
+            variant = options["data_variant"]
+            self.apply_data_variant(variant)
+            logger.info("Episode %d: data variant %s", self.episode_count, variant)
 
         self.iteration = 0
         self.cum_E_kWh = 0.0  # Reset cumulative energy on episode reset
@@ -324,6 +331,8 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
             infr.update_state(self.state)
 
         info = {"seed": seed}
+        if self.log_full_info:
+            info["state"] = {k: np.array(v, copy=True) for k, v in self.state.items()}
         return self.state, info
 
     def _get_observation(self) -> dict:
@@ -440,10 +449,12 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         energy_kWh = total_power_kW * (self.control_step / 3600)  # kW * hours = kWh
         self.cum_E_kWh += energy_kWh
 
-        # Calculate reward
+        # Calculate reward with per-function breakdown
         reward: float = 0
+        reward_breakdown = {}
         for rew_f in self.reward_funcs:
             rew_val = float(np.asarray(rew_f.get_reward(action, self.state)).item())
+            reward_breakdown[rew_f.name] = rew_val
             reward += rew_val
 
         # Check if episode should terminate (iteration already incremented above)
@@ -451,12 +462,14 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         truncated = False
 
         info = {
-            "action": action,  # Dict format (for compatibility)
-            "clipped_action": clipped_flat_action,  # Flat clipped action for logging
+            "action": action,  # Dict format (clipped)
             "reward": reward,
-            "state": {k: np.array(v, copy=True) for k, v in self.state.items()},
+            "reward_breakdown": reward_breakdown,
             "cum_E_kWh": self.cum_E_kWh,  # Cumulative net energy (positive=consumption, negative=production)
+            "step_power_kW": total_power_kW,  # Instantaneous net power at this step
         }
+        if self.log_full_info:
+            info["state"] = {k: np.array(v, copy=True) for k, v in self.state.items()}
 
         return self.state, reward, terminated, truncated, info
 

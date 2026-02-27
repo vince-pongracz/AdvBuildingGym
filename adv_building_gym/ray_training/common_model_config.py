@@ -12,8 +12,12 @@ from typing import List
 from gymnasium.spaces import Space
 from ray.rllib.connectors.env_to_module import FlattenObservations
 
-from adv_building_gym import create_on_episode_end_callback
-from adv_building_gym.callbacks import create_data_schedule_on_train_result
+
+from adv_building_gym.callbacks import (
+    create_data_schedule_on_train_result,
+    make_episode_metrics_callback_class,
+    make_trajectory_logging_callback_class,
+)
 from adv_building_gym.config.data_combinator import DataCombinator
 from adv_building_gym.utils import ResourceAllocation, validate_resource_allocation
 
@@ -35,7 +39,8 @@ def common_model_config(
     metrics_base_dir: str = "ep_metrics",
     clip_actions: bool = True,
     data_combinator: DataCombinator | None = None,
-    data_swap_every_n_iterations: int = 10,
+    data_swap_every_n_iterations: int = 15,
+    log_trajectories: bool = False,
 ):
     """
     Apply common RLlib configuration to an algorithm config.
@@ -51,7 +56,7 @@ def common_model_config(
     - Env runner resources and connectors
     - Evaluation settings
     - Logger configuration
-    - Callbacks (creates on_episode_end_callback)
+    - Callbacks (EpisodeMetricsCallback, TrajectoryLoggingCallback, checkpoint)
     - Resource validation
 
     Args:
@@ -71,6 +76,8 @@ def common_model_config(
         data_swap_every_n_iterations: How often (in training iterations) the D1
             callback pushes a new variant to all env_runners. Only used when
             data_combinator is not None.
+        log_trajectories: When True, save full per-step trajectory JSON
+            during evaluation episodes (via episode callback).
 
     Returns:
         Configured algorithm config
@@ -179,24 +186,33 @@ def common_model_config(
         ],
     }
 
-    # Create episode end callback for metrics logging
+    # Create callback classes for episode metrics and (optionally) trajectory logging.
+    # Each factory returns a configured RLlibCallback subclass.
+    # Link: https://docs.ray.io/en/latest/rllib/rllib-callback.html
     exec_date = datetime.datetime.now()
-    on_episode_end_callback = create_on_episode_end_callback(
+
+    episode_metrics_class = make_episode_metrics_callback_class(
         env_id=env_id,
         rewards=rewards,
-        metrics_base_dir=metrics_base_dir,
-        exec_date=exec_date
+        metrics_base_dir=f"{metrics_base_dir}/metrics",
+        exec_date=exec_date,
     )
 
-    # Configure callbacks:
-    # - on_episode_end: Logs episode metrics (reward_rate, achieved_reward, etc.)
-    # - on_train_result (optional): Iteration-aligned datasource variant swapping (Approach D1)
-    # - Checkpoint callback: Saves best model based on metric every N episodes
-    #
-    # RLlib calls on_episode_end callbacks first, then callback class methods -- ensures metrics are logged before checkpoint decisions are made.
-    callback_kwargs = {
-        "on_episode_end": on_episode_end_callback,
-    }
+    # Assemble the callbacks_class list: checkpoint + metrics (always), trajectory (optional)
+    callback_classes = [checkpoint_callback_class, episode_metrics_class]
+    if log_trajectories:
+        trajectory_class = make_trajectory_logging_callback_class(
+            rewards=rewards,
+            metrics_base_dir=f"{metrics_base_dir}/trajectories",
+            exec_date=exec_date,
+        )
+        callback_classes.append(trajectory_class)
+        logger.info("Trajectory logging enabled: per-step trajectory JSON will be saved for each episode.")
+
+    # on_train_result callable for iteration-aligned data variant scheduling (Approach D1)
+    callback_kwargs = {}
+    # TODO VP 2026.02.24. : Data Combinator is not optional, there always should be at least a single variant (even if it is just the default one without swapping). 
+    # Refactor to remove the None case and simplify the code.
     if data_combinator is not None:
         callback_kwargs["on_train_result"] = create_data_schedule_on_train_result(
             data_combinator, data_swap_every_n_iterations,
@@ -205,9 +221,10 @@ def common_model_config(
             "DataScheduleCallback enabled: swap every %d iterations, %d variants",
             data_swap_every_n_iterations, len(data_combinator.variants),
         )
-    # NOTE VP 2026.02.21. : ** operator unpacks the callback_kwargs dict into keyword arguments.
-    # This allows to pass multiple callbacks (on_episode_end, on_train_result).
-    config.callbacks(checkpoint_callback_class, **callback_kwargs)
+
+    # Register all callback classes + optional callable-based callbacks.
+    # RLlib executes subclass callbacks in list order, then callables.
+    config.callbacks(callbacks_class=callback_classes, **callback_kwargs)
 
     # Validate resource allocation against SLURM constraints
     driver_cpus = 1
