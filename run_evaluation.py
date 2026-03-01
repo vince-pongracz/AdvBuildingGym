@@ -373,14 +373,14 @@ def main():
     parser.add_argument(
         "--energy_price_path",
         type=str,
-        default="data/price_data_2025.csv",
+        default="data/e_price/price_data_2025_norm.csv",
         help="Path to normalized energy price CSV.",
     )
     parser.add_argument(
         "--outdoor_temperature_path",
         type=str,
         default=None,
-        help='Optional path to outdoor temperature CSV file (e.g., "data/LLEC_outdoor_temperature_5min_data.csv"). If not provided, a synthetic temperature profile is used.',
+        help='Optional path to outdoor temperature CSV file (e.g., "data/weather/LLEC_outdoor_temperature_5min_data.csv"). If not provided, a synthetic temperature profile is used.',
     )
     parser.add_argument(
         "--obs_variant",
@@ -485,20 +485,20 @@ if __name__ == "__main__":
     =======================
     1. Evaluate Controller (temperature only)
     =======================
-    python run_evaluation.py --algorithms "PI Control" --reward_mode temperature --obs_variant T01 --outdoor_temperature_path "data/LLEC_outdoor_temperature_5min_data.csv"           # 251.98 in 0.99s
-    python run_evaluation.py --algorithms "PID Control" --reward_mode temperature --obs_variant T01 --outdoor_temperature_path "data/LLEC_outdoor_temperature_5min_data.csv"          # 251.98 in 0.88s
-    python run_evaluation.py --algorithms "Fuzzy Control" --reward_mode temperature --obs_variant T01 --outdoor_temperature_path "data/LLEC_outdoor_temperature_5min_data.csv"        # 225.69 in 1.07s
-    python run_evaluation.py --algorithms "Perfect MPC Control" --reward_mode temperature --obs_variant T01 --outdoor_temperature_path "data/LLEC_outdoor_temperature_5min_data.csv"  # 280.51 in 396.77s
-    python run_evaluation.py --algorithms "MPC Control" --reward_mode temperature --obs_variant T01 --outdoor_temperature_path "data/LLEC_outdoor_temperature_5min_data.csv"          # 266.90 in 396.20s
-    python run_evaluation.py --algorithms ppo --reward_mode temperature --obs_variant T01 --prefer_best --outdoor_temperature_path "data/LLEC_outdoor_temperature_5min_data.csv"      # 263.62 in 2.09s
-    python run_evaluation.py --algorithms sac --reward_mode temperature --obs_variant T01 --prefer_best --outdoor_temperature_path "data/LLEC_outdoor_temperature_5min_data.csv"      # 262.32 in 3.05s
+    python run_evaluation.py --algorithms "PI Control" --reward_mode temperature --obs_variant T01 --outdoor_temperature_path "data/weather/LLEC_outdoor_temperature_5min_data.csv"           # 251.98 in 0.99s
+    python run_evaluation.py --algorithms "PID Control" --reward_mode temperature --obs_variant T01 --outdoor_temperature_path "data/weather/LLEC_outdoor_temperature_5min_data.csv"          # 251.98 in 0.88s
+    python run_evaluation.py --algorithms "Fuzzy Control" --reward_mode temperature --obs_variant T01 --outdoor_temperature_path "data/weather/LLEC_outdoor_temperature_5min_data.csv"        # 225.69 in 1.07s
+    python run_evaluation.py --algorithms "Perfect MPC Control" --reward_mode temperature --obs_variant T01 --outdoor_temperature_path "data/weather/LLEC_outdoor_temperature_5min_data.csv"  # 280.51 in 396.77s
+    python run_evaluation.py --algorithms "MPC Control" --reward_mode temperature --obs_variant T01 --outdoor_temperature_path "data/weather/LLEC_outdoor_temperature_5min_data.csv"          # 266.90 in 396.20s
+    python run_evaluation.py --algorithms ppo --reward_mode temperature --obs_variant T01 --prefer_best --outdoor_temperature_path "data/weather/LLEC_outdoor_temperature_5min_data.csv"      # 263.62 in 2.09s
+    python run_evaluation.py --algorithms sac --reward_mode temperature --obs_variant T01 --prefer_best --outdoor_temperature_path "data/weather/LLEC_outdoor_temperature_5min_data.csv"      # 262.32 in 3.05s
     """
 
     """
     RL Workshop
     =======================
-    python run_evaluation.py --algorithms ppo --reward_mode temperature --obs_variant T01 --outdoor_temperature_path "data/LLEC_outdoor_temperature_5min_data.csv" --model_seed 18  # 268.01 in 2.12s
-    python run_evaluation.py --algorithms "PI Control" --reward_mode temperature --obs_variant T01 --outdoor_temperature_path "data/LLEC_outdoor_temperature_5min_data.csv"         # 251.98 in 0.90s
-    python run_evaluation.py --algorithms "PID Control" --reward_mode temperature --obs_variant T01 --outdoor_temperature_path "data/LLEC_outdoor_temperature_5min_data.csv"        # 251.98 in 0.88s
-    python run_evaluation.py --algorithms "Fuzzy Control" --reward_mode temperature --obs_variant T01 --outdoor_temperature_path "data/LLEC_outdoor_temperature_5min_data.csv"      # 225.69 in 0.93s
+    python run_evaluation.py --algorithms ppo --reward_mode temperature --obs_variant T01 --outdoor_temperature_path "data/weather/LLEC_outdoor_temperature_5min_data.csv" --model_seed 18  # 268.01 in 2.12s
+    python run_evaluation.py --algorithms "PI Control" --reward_mode temperature --obs_variant T01 --outdoor_temperature_path "data/weather/LLEC_outdoor_temperature_5min_data.csv"         # 251.98 in 0.90s
+    python run_evaluation.py --algorithms "PID Control" --reward_mode temperature --obs_variant T01 --outdoor_temperature_path "data/weather/LLEC_outdoor_temperature_5min_data.csv"        # 251.98 in 0.88s
+    python run_evaluation.py --algorithms "Fuzzy Control" --reward_mode temperature --obs_variant T01 --outdoor_temperature_path "data/weather/LLEC_outdoor_temperature_5min_data.csv"      # 225.69 in 0.93s
     """

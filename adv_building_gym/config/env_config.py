@@ -54,8 +54,16 @@ class Config:
     data_combinator: DataCombinator = field(default_factory=lambda: DataCombinator(
         scenarios=[
             {
-                "weather": "data/test1/LLEC_outdoor_temperature_5min_data.csv",
-                "E_price": "data/test1/price_data_2025_1.csv",
+                "weather": "data/weather/LLEC_outdoor_temperature_5min_data.csv",
+                "E_price": "data/e_price/price_data_2025_norm.csv",
+            },
+            {
+                "weather": "data/weather/LLEC_outdoor_temperature_5min_data.csv",
+                "E_price": "data/e_price/price_data_2026_norm.csv",
+            },
+            {
+                "weather": "data/weather/LLEC_outdoor_temperature_5min_data.csv",
+                "E_price": "data/e_price/price_data_2023_norm_aug_seed42.csv",
             },
         ],
         variable={

@@ -58,15 +58,20 @@ boundaries (Approach A) or training iteration boundaries (Approach D1).
 
 ```
 data/
-├── test1/
+├── eval1/
 │   ├── LLEC_outdoor_temperature_5min_data.csv   # weather (single day)
 │   └── price_data_2025_1.csv                    # energy price (single day)
+├── e_price/
+│   ├── <YEAR>_prices.csv                        # raw hourly aWATTar fetch
+│   └── price_data_<YEAR>_norm.csv               # preprocessed 5-min normalized
+├── weather/
+│   ├── LLEC_outdoor_temperature_5min_data.csv   # outdoor temperature (multi-day)
+│   └── zenodo/
+│       ├── 2018_weather.hdf5  …  2020_weather.hdf5  # multi-year weather (HDF5)
+│       └── csvs_2018_data_1min/SFH10.csv …          # 1-min building data
 ├── ev_usage_profiles/
 │   ├── ev_0.csv                                 # empty profile (no EV events)
-│   ├── ev_1.csv  …  ev_5.csv                    # 5 distinct EV user profiles
-└── zenodo/
-    ├── 2018_weather.hdf5  …  2020_weather.hdf5  # multi-year weather (HDF5)
-    └── csvs_2018_data_1min/SFH10.csv …          # 1-min building data
+│   └── ev_1.csv  …  ev_5.csv                    # 5 distinct EV user profiles
 ```
 
 ---

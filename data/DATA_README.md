@@ -18,34 +18,36 @@ normalized CSV files that the `EnergyPrice` statesource can consume directly.
 
 #### Step 1: Fetch raw prices
 
-Script: `preproc/awattar_fetch.py`
+Script: `preproc/e_price/awattar_fetch.py`
 
 Fetches hourly EPEX Spot prices for a given year from the aWATTar API and saves
 them as CSV. Change the `YEAR` constant in the script to select the target year.
 
 ```bash
-python preproc/awattar_fetch.py
+python preproc/e_price/awattar_fetch.py
 ```
 
-Output: `data/<YEAR>_prices.csv`
+Output: `data/e_price/<YEAR>_prices.csv`
 Columns: `start_timestamp, end_timestamp, marketprice, unit, marketprice_eur_per_kwh`
 
 #### Step 2: Preprocess and normalize
 
-Script: `preproc/awattar_price_preproc.py`
+Script: `preproc/e_price/awattar_price_preproc.py`
+
+TODO VP: how to allow the access of script from the root directory only calling awattar_price_preproc.py -- without the path before the script.
 
 Converts hourly data to 5-minute resolution (forward-fill), converts units from
 Eur/MWh to ct/kWh, and applies absolute-max normalization to [-1, 1].
 
 ```bash
-python preproc/awattar_price_preproc.py data/<YEAR>_prices.csv
-# Output: data/price_data_<YEAR>_norm.csv
+python preproc/e_price/awattar_price_preproc.py data/e_price/<YEAR>_prices.csv
+# Output: data/e_price/price_data_<YEAR>_norm.csv
 
 # Or with explicit output path:
-python preproc/awattar_price_preproc.py data/<YEAR>_prices.csv -o data/custom_output.csv
+python preproc/e_price/awattar_price_preproc.py data/e_price/<YEAR>_prices.csv -o data/e_price/custom_output.csv
 ```
 
-Output: `data/price_data_<YEAR>_norm.csv`
+Output: `data/e_price/price_data_<YEAR>_norm.csv`
 Columns: `start, baseprice, unit, hour, price_normalized`
 
 - `baseprice`: price in ct/kWh
@@ -57,13 +59,15 @@ Columns: `start, baseprice, unit, hour, price_normalized`
 
 ```bash
 # Edit YEAR in awattar_fetch.py for each year, then run:
-python preproc/awattar_fetch.py   # repeat for 2023, 2024, 2025, 2026
+python preproc/e_price/awattar_fetch.py   # repeat for 2023, 2024, 2025, 2026
+
+TODO VP: add -y --year CLI argument for the script
 
 # Preprocess all fetched files:
-python preproc/awattar_price_preproc.py data/2023_prices.csv
-python preproc/awattar_price_preproc.py data/2024_prices.csv
-python preproc/awattar_price_preproc.py data/2025_prices.csv
-python preproc/awattar_price_preproc.py data/2026_prices.csv
+python preproc/e_price/awattar_price_preproc.py data/e_price/2023_prices.csv
+python preproc/e_price/awattar_price_preproc.py data/e_price/2024_prices.csv
+python preproc/e_price/awattar_price_preproc.py data/e_price/2025_prices.csv
+python preproc/e_price/awattar_price_preproc.py data/e_price/2026_prices.csv
 ```
 
 ### Current Data Files
@@ -78,7 +82,7 @@ python preproc/awattar_price_preproc.py data/2026_prices.csv
 
 ### Visualization
 
-Use `preproc/plot_price.ipynb` to inspect and plot the preprocessed price data.
+Use `preproc/e_price/plot_price.ipynb` to inspect and plot the preprocessed price data.
 
 ---
 
@@ -97,6 +101,7 @@ Only hourly -- interpolation in between (?)
 
 API for day ahead energy prices, 15min resolution:
 https://api.energy-charts.info/#/prices/day_ahead_price_price_get
+--> Scripts are fetching these data as well
 
 Global day ahead electricity price dataset:
 Link: https://ieee-dataport.org/documents/global-day-ahead-electricity-price-dataset

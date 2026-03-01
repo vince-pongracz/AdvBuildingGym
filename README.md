@@ -238,10 +238,10 @@ Before training, electricity price data must be fetched and preprocessed. See [d
 
 ```bash
 # 1. Fetch raw hourly prices (edit YEAR in script first)
-python preproc/awattar_fetch.py
+python preproc/e_price/awattar_fetch.py
 
 # 2. Preprocess to 5-min resolution normalized CSV
-python preproc/awattar_price_preproc.py data/<YEAR>_prices.csv
+python preproc/e_price/awattar_price_preproc.py data/e_price/<YEAR>_prices.csv
 ```
 
 ## 3.Training and Evaluation
@@ -271,7 +271,7 @@ Two reward modes and multiple observation variants are supported for flexible ev
 | `--seed`              | int   | `42`                         | Any integer                                     | Random seed for reproducibility.                             |
 | `--eval-freq`         | int   | `5000`                       | >= 1                                            | Evaluation frequency (in timesteps).                         |
 | `--reward_mode`       | str   | `"temperature"`              | `temperature`, `combined`                       | Reward mode: temperature (single-reward) or combined (multi-reward). |
-| `--energy-price-path` | str   | `"data/price_data_2025.csv"` | Valid CSV path                                  | Path to normalized energy price CSV file.                    |
+| `--energy-price-path` | str   | `"data/e_price/price_data_2025_norm.csv"` | Valid CSV path                                  | Path to normalized energy price CSV file.                    |
 | `--training`          | flag  | `False`                      | `False`, `True`                                 | Use training data for energy prices (default: `TOU Prices`). |
 | `--obs_variant`       | str   | `T01`                        | `T01`,`T02`.`T03`,`T04`,`C01`,`C02`.`C03`,`C04` | Select observation variant (see detailed list below).        |
 
@@ -315,8 +315,8 @@ These include:
 | `--model_seed`  | int  | `42`                                                                                                | Any integer                                            | Seed number used during training for selecting the correct model file.                                                                                                                                                                  |
 | `--mpc_horizon` | int  | `72`                                                                                                | >= 1 (typically multiples of 12)                       | Prediction horizon for MPC (in 5-minute steps, e.g., 12 = 1 hour).                                                                                                                               |
 | `--reward_mode` | str  | `"temperature"`                                                                                     | `temperature`, `combined`                              | Reward mode: temperature or combined (multi-objective).                                                                                                                                      |
-| `--energy_price_path` | str  | `"data/price_data_2025.csv"`                                                                  | `data/price_data_2025.csv`                             | Path to normalized energy price CSV.                                                                                                                                      |
-| `--outdoor_temperature_path` | str  | `"data/LLEC_outdoor_temperature_5min_data.csv"`                                        | `data/LLEC_outdoor_temperature_5min_data.csv`          | If not provided, a synthetic temperature profile is used.                                                                                                                                      |
+| `--energy_price_path` | str  | `"data/e_price/price_data_2025_norm.csv"`                                                     | `data/e_price/price_data_2025_norm.csv`                | Path to normalized energy price CSV.                                                                                                                                      |
+| `--outdoor_temperature_path` | str  | `"data/weather/LLEC_outdoor_temperature_5min_data.csv"`                                | `data/weather/LLEC_outdoor_temperature_5min_data.csv`  | If not provided, a synthetic temperature profile is used.                                                                                                                                      |
 | `--obs_variant` | str  | `T01`                                                                                               | `T01`,`T02`.`T03`,`T04`,`C01`,`C02`.`C03`,`C04`        | Select observation variant (see detailed list below).                                                                                                                                             |
 | `--prefer_best` | flag | `False`                                                                                             | `False`,`True`                                         | If set, prefers loading `best_model.zip` instead of `<algorithm>_model_seed<seed>.zip` (e.g., `ppo_model_seed42.zip`) during evaluation. Supported algorithms: `ppo`, `sac`, `ddpg`,`td3`, `a2c`. |
 

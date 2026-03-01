@@ -60,8 +60,8 @@
   "data_combinator": {
     "scenarios": [
       {
-        "weather": "data/test1/LLEC_outdoor_temperature_5min_data.csv",
-        "E_price": "data/test1/price_data_2025_1.csv"
+        "weather": "data/eval1/LLEC_outdoor_temperature_5min_data.csv",
+        "E_price": "data/e_price/price_data_2025_1.csv"
       }
     ],
     "variable": {
