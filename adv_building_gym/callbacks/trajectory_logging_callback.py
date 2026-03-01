@@ -128,11 +128,9 @@ def make_trajectory_logging_callback_class(
                 initial_info = infos[0] if infos else None
                 step_infos = infos[1:] if len(infos) > 1 else infos
 
-                control_step = getattr(env, "control_step", 300)
                 trajectory = extract_trajectory_from_infos(
                     step_infos,
                     initial_info=initial_info,
-                    control_step=control_step,
                 )
 
                 # Add raw policy actions as columnar data

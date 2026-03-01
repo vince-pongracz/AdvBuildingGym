@@ -55,9 +55,9 @@ class DesiredUserEnergyNeed(StateSource):
     def update_state(self, states) -> None:
         """Update desired energy need state based on current iteration."""
         if self.ts is not None:
-            if self.iteration < len(self.ts):
+            if self.effective_index < len(self.ts):
                 # TODO VP 2026.01.14. : Update with actual column name from CSV
-                # desired_energy = float(self.ts.iloc[int(self.iteration)]["energy_need_normalized"])
+                # desired_energy = float(self.ts.iloc[self.effective_index]["energy_need_normalized"])
                 desired_energy = 0.0  # Placeholder
             else:
                 # desired_energy = float(self.ts.iloc[-1]["energy_need_normalized"])

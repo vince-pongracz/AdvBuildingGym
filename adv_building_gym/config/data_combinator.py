@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from typing import Literal
 
 import numpy as np
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +25,11 @@ class DataCombinator:
                    (e.g. EV profiles). Cartesian product is applied across variable axes.
         swap_every_n_episodes: Advance to the next variant every N episodes.
         mode: "cycle" (round-robin) or "random".
+        day: Controls which day of the CSV data each episode starts at.
+             - ``"random"`` (default): sample a uniformly random day each episode.
+             - ``"each"``: walk through days sequentially, advancing every episode.
+             - A date string (e.g. ``"2025-03-15"``): pin every episode to that
+               specific calendar day.
 
     Final pool = scenarios x variable_combinations.
     If scenarios is empty, only variable combinations are used (and vice versa).
@@ -33,6 +39,8 @@ class DataCombinator:
     variable: dict[str, list[str]] = field(default_factory=dict)
     swap_every_n_episodes: int = 1
     mode: Literal["cycle", "random"] = "cycle"
+    day: str = "random"
+    _day_date = None  # Cached parsed date for day mode
 
     @property
     def variants(self) -> list[dict[str, str]]:
@@ -52,7 +60,6 @@ class DataCombinator:
         # Cross-product: each scenario x each variable combination
         if self.scenarios:
             return [
-                # ** operator unpacks a dictionary into keyword arguments -- we merge the scenario dict and variable combo dict
                 {**scenario, **var_combo}
                 for scenario in self.scenarios
                 for var_combo in variable_combos
@@ -76,15 +83,83 @@ class DataCombinator:
         pool = self.variants
         if not pool:
             return {}
+        idx = self._variant_pool_index(episode_count, rng)
+        return pool[idx]
+
+    def _variant_pool_index(
+        self, episode_count: int, rng: np.random.Generator | None = None
+    ) -> int:
+        """Return the pool index for the given episode count."""
+        pool = self.variants
         if self.mode == "random" and rng is not None:
-            return pool[int(rng.integers(0, len(pool)))]
-        return pool[(episode_count // self.swap_every_n_episodes) % len(pool)]
+            return int(rng.integers(0, len(pool)))
+        return (episode_count // self.swap_every_n_episodes) % len(pool)
+
+    def get_day_offset(
+        self,
+        episode_count: int,
+        max_days: int,
+        steps_per_day: int,
+        data_start_year: int | None = None,
+        rng: np.random.Generator | None = None,
+    ) -> tuple[int, str]:
+        """Compute the row offset for the day selection of the current episode.
+
+        Day selection happens every episode, independent of variant swapping:
+
+        - ``"random"``: sample a uniformly random day each episode.
+        - ``"each"``: walk through days sequentially (episode 1 → day 0,
+          episode 2 → day 1, …), wrapping around when all days are exhausted.
+        - A date string (e.g. ``"2025-03-15"``): pin every episode to that day.
+
+        Args:
+            episode_count: Current episode number.
+            max_days: Number of complete days available in the data.
+            steps_per_day: Rows per day (e.g. 288 for 5-min steps).
+            data_start_year: Year the data begins (derived from the CSV).
+                Falls back to the current year if None.
+            rng: NumPy Generator for random day selection.
+
+        Returns:
+            (row_offset, day_mode) where row_offset is the starting row and
+            day_mode is the ``day`` value for logging.
+        """
+        if self.day == "random":
+            if rng is not None:
+                day_index = int(rng.integers(0, max_days))
+            else:
+                day_index = 0
+        elif self.day == "each":
+            day_index = episode_count % max_days
+        else:
+            # Interpret as a date string — find the matching day index
+            day_index = self._date_to_day_index(self.day)
+
+        year = data_start_year if data_start_year is not None else pd.Timestamp.now().year
+        jan1 = pd.Timestamp(year=year, month=1, day=1)
+        self._day_date = jan1 + pd.Timedelta(days=day_index)
+
+        row_offset = day_index * steps_per_day
+        return row_offset, self.day
+
+    def get_day_date(self) -> str | None:
+        """Return the date string of the most recently selected day, or None."""
+        if self._day_date is not None:
+            return self._day_date.strftime("%Y-%m-%d")
+        return None
+
+    @staticmethod
+    def _date_to_day_index(date_str: str) -> int:
+        """Convert a date string like '2025-03-15' to a day-of-year index (0-based)."""
+        date = pd.Timestamp(date_str)
+        return date.day_of_year - 1
 
     def to_dict(self) -> dict:
         """Serialize to a JSON-compatible dictionary."""
         return {
             "swap_every_n_episodes": self.swap_every_n_episodes,
             "mode": self.mode,
+            "day": self.day,
             "scenarios": self.scenarios,
             "variable": self.variable,
         }
@@ -95,6 +170,7 @@ class DataCombinator:
         return cls(
             swap_every_n_episodes=d.get("swap_every_n_episodes", 1),
             mode=d.get("mode", "cycle"),
+            day=d.get("day", "random"),
             scenarios=d.get("scenarios", []),
             variable=d.get("variable", {}),
         )

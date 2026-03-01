@@ -41,7 +41,7 @@ class Config:
     seed: int = 42
 
     EPISODE_LENGTH: int = 288 # a day
-    control_step: int = 300  # seconds (5 minutes)
+    CONTROL_STEP: int = 300  # seconds (5 minutes)
 
     building_props: BuildingProps = field(default_factory=lambda:
         BuildingProps(mC=300, K=20)
@@ -51,7 +51,7 @@ class Config:
     # Manage that different configurations are seen during the training
     # --> Help generalisation
     # NOTE VP 2026.02.23. : Default data combinator -- just an example
-    data_combinator: Optional[DataCombinator] = field(default_factory=lambda: DataCombinator(
+    data_combinator: DataCombinator = field(default_factory=lambda: DataCombinator(
         scenarios=[
             {
                 "weather": "data/test1/LLEC_outdoor_temperature_5min_data.csv",
@@ -97,7 +97,7 @@ class Config:
                 name="building_heat_loss",
                 K=self.building_props.K,
                 mC=self.building_props.mC,
-                timestep=self.control_step
+                timestep=self.CONTROL_STEP
             ),
             EVState("ev_schedule"),
         ]
@@ -120,22 +120,22 @@ class Config:
                 mC=self.building_props.mC,
                 cop_heat=3.0,
                 cop_cool=2.5,
-                control_step=self.control_step
+                control_step=self.CONTROL_STEP
             ),
-            BatteryTremblay("battery", control_step=self.control_step),
+            BatteryTremblay("battery", control_step=self.CONTROL_STEP),
             LinearEVCharger(
                 "ev_charger",
                 Q_electric_max=7.0,
                 max_cap_kWh=60.0,
                 max_charging_kW=7.0,
-                control_step=self.control_step
+                control_step=self.CONTROL_STEP
             ),
             SolarPanel(
                 "solar",
                 Q_electric_max=5.0,
                 peak_power_kW=5.0,
                 seed=self.seed,
-                control_step=self.control_step
+                control_step=self.CONTROL_STEP
             ),
         ]
 

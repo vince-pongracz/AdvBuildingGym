@@ -22,7 +22,7 @@ class StateSource(EnvSyncInterface, Serializable):
     _context_params: ClassVar[Set[str]] = {'control_step'}
 
     # Internal state - never serialize (ts is loaded from ds_path)
-    _exclude_params: ClassVar[Set[str]] = {'iteration', 'ts'}
+    _exclude_params: ClassVar[Set[str]] = {'iteration', 'row_offset', 'ts'}
 
     def __init__(self,
                  name: str,

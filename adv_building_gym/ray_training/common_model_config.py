@@ -38,7 +38,7 @@ def common_model_config(
     rewards: List,
     metrics_base_dir: str = "ep_metrics",
     clip_actions: bool = True,
-    data_combinator: DataCombinator | None = None,
+    data_combinator: DataCombinator = DataCombinator(),
     data_swap_every_n_iterations: int = 15,
     log_trajectories: bool = False,
 ):
@@ -71,11 +71,12 @@ def common_model_config(
         rewards: List of reward functions used in the environment
         metrics_base_dir: Base directory for episode metrics (default: "ep_metrics")
         clip_actions: Whether to clip actions to action space bounds
-        data_combinator: Optional DataCombinator for iteration-aligned variant
-            scheduling via DataScheduleCallback (Approach D1). None = disabled.
+        data_combinator: DataCombinator for iteration-aligned variant
+            scheduling via DataScheduleCallback (Approach D1). An empty
+            DataCombinator() acts as a no-op (no variant swapping).
         data_swap_every_n_iterations: How often (in training iterations) the D1
-            callback pushes a new variant to all env_runners. Only used when
-            data_combinator is not None.
+            callback pushes a new variant to all env_runners. Only effective when
+            data_combinator has variants configured.
         log_trajectories: When True, save full per-step trajectory JSON
             during evaluation episodes (via episode callback).
 
@@ -161,6 +162,8 @@ def common_model_config(
         # NOTE VP 2026.01.05. : if other observation space needed for the policy, change the observations in the env.
         # (rather than using a new observation encoder -- that must be learnt as well, it overcomplicates things...)
         env_to_module_connector=lambda env, spaces, device: FlattenObservations(),  # type: ignore
+        # TODO VP 2026.02.28. : Check this out
+        # module_to_env_connector=None,  # Use default (no transformation needed for actions
     )
     config.evaluation(
         # evaluation_interval=1 ensures `evaluation/env_runners/<metric>` is present in every
@@ -174,7 +177,7 @@ def common_model_config(
         # True only if `evaluation_num_env_runners` > 0
         evaluation_parallel_to_training=False,
     )
-    # TODO VP 2026.02.11. : Check this out in HAICORE
+    # TODO VP 2026.02.11. : Check this out in HPC
     # config.training(gamma=0.995)
 
     config.logger_config = {
@@ -210,17 +213,17 @@ def common_model_config(
         logger.info("Trajectory logging enabled: per-step trajectory JSON will be saved for each episode.")
 
     # on_train_result callable for iteration-aligned data variant scheduling (Approach D1)
-    callback_kwargs = {}
-    # TODO VP 2026.02.24. : Data Combinator is not optional, there always should be at least a single variant (even if it is just the default one without swapping). 
-    # Refactor to remove the None case and simplify the code.
-    if data_combinator is not None:
-        callback_kwargs["on_train_result"] = create_data_schedule_on_train_result(
+    # DataCombinator is always present; an empty one (no variants) is a safe no-op
+    # because create_data_schedule_on_train_result early-returns when variant is empty.
+    callback_kwargs = {
+        "on_train_result": create_data_schedule_on_train_result(
             data_combinator, data_swap_every_n_iterations,
-        )
-        logger.info(
-            "DataScheduleCallback enabled: swap every %d iterations, %d variants",
-            data_swap_every_n_iterations, len(data_combinator.variants),
-        )
+        ),
+    }
+    logger.info(
+        "DataScheduleCallback: swap every %d iterations, %d variants",
+        data_swap_every_n_iterations, len(data_combinator.variants),
+    )
 
     # Register all callback classes + optional callable-based callbacks.
     # RLlib executes subclass callbacks in list order, then callables.

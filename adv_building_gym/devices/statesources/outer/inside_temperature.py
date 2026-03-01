@@ -66,8 +66,8 @@ class InsideTemperature(StateSource):
     def update_state(self, states) -> None:
         """Update desired temperature state based on current iteration."""
         if self.ts is not None:
-            if self.iteration < len(self.ts):
-                desired_temp_in_norm = float(self.ts.iloc[int(self.iteration)]["desired_temp_in_norm"])
+            if self.effective_index < len(self.ts):
+                desired_temp_in_norm = float(self.ts.iloc[self.effective_index]["desired_temp_in_norm"])
             else:
                 desired_temp_in_norm = float(self.ts.iloc[-1]["desired_temp_in_norm"])
         else:

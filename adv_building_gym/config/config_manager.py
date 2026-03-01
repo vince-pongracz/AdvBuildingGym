@@ -22,7 +22,7 @@ class ConfigManager:
     """
 
     @staticmethod
-    def to_dict(config) -> Dict[str, Any]:
+    def to_dict(config: Config) -> Dict[str, Any]:
         """
         Serialize config to dictionary.
 
@@ -39,7 +39,7 @@ class ConfigManager:
             "config_name": config.config_name,
             "seed": config.seed,            
             "EPISODE_LENGTH": config.EPISODE_LENGTH,
-            "control_step": config.control_step,
+            "control_step": config.CONTROL_STEP,
             "building_props": {
                 "mC": config.building_props.mC,
                 "K": config.building_props.K,
@@ -47,8 +47,7 @@ class ConfigManager:
         }
 
         # Serialize DataCombinator
-        if config.data_combinator is not None:
-            config_dict["data_combinator"] = config.data_combinator.to_dict()
+        config_dict["data_combinator"] = config.data_combinator.to_dict()
 
         # Serialize infrastructures using their to_dict() method
         if config.infras is not None:
@@ -99,7 +98,7 @@ class ConfigManager:
             config_name=config_dict.get("config_name", "loaded_config"),
             seed=seed,
             EPISODE_LENGTH=config_dict.get("EPISODE_LENGTH", 288),
-            control_step=control_step,
+            CONTROL_STEP=control_step,
             building_props=building_props,
             # Set to empty lists to prevent __post_init__ from creating defaults
             infras=[],
@@ -107,9 +106,10 @@ class ConfigManager:
             rewards=[],
         )
 
-        # Deserialize DataCombinator
-        if "data_combinator" in config_dict:
-            config.data_combinator = DataCombinator.from_dict(config_dict["data_combinator"])
+        # Deserialize DataCombinator (empty DataCombinator is a no-op fallback)
+        config.data_combinator = DataCombinator.from_dict(
+            config_dict.get("data_combinator", {})
+        )
 
         # Build context for infrastructure deserialization
         infra_context = {

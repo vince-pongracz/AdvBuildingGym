@@ -49,8 +49,8 @@ class EnergyPriceDataSource(StateSource):
 
     def update_state(self, states) -> None:
         if self.ts is not None:
-            if self.iteration < len(self.ts):
-                energy_price = float(self.ts.iloc[int(self.iteration)]["price_normalized"])
+            if self.effective_index < len(self.ts):
+                energy_price = float(self.ts.iloc[self.effective_index]["price_normalized"])
             else:
                 energy_price = float(self.ts.iloc[-1]["price_normalized"])
         else:

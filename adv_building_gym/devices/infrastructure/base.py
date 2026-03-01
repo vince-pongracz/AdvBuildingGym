@@ -16,7 +16,7 @@ class Infrastructure(EnvSyncInterface, Serializable):
     _context_params: ClassVar[Set[str]] = set()
 
     # Internal state - never serialize
-    _exclude_params: ClassVar[Set[str]] = {'iteration'}
+    _exclude_params: ClassVar[Set[str]] = {'iteration', 'row_offset'}
 
     def __init__(self,
                  name: str,

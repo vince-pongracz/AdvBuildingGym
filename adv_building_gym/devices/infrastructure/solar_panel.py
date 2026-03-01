@@ -10,7 +10,7 @@ from adv_building_gym.config.utils.serializable import ComponentRegistry
 logger = logging.getLogger(__name__)
 
 # TODO VP 2026.01.20. : Get solar irradiation data -- at climate/weather data
-# TODO VP 2026.02.17. : Addnal parameters for solar panel modeling.
+# TODO VP 2026.02.17. : Add parameters for solar panel modeling.
 # E.g. temperature effects, panel orientation, inverter efficiency, etc.
 # For now it's kept simple with a direct mapping from irradiance to production.
 

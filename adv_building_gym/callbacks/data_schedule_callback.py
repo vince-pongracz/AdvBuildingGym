@@ -4,9 +4,9 @@ Pushes a new DataCombinator variant to all env_runners at training iteration
 boundaries, ensuring all workers change dataset simultaneously.
 
 Compatible with Approach A: if the environment also has its own episode counter
-the two swap schedules are independent and additive.  Set data_combinator=None
-on the Config (Approach A disabled) and use only this callback if
-iteration-aligned swapping is desired.
+the two swap schedules are independent and additive.  Use an empty
+DataCombinator() on the Config (Approach A disabled) and use only this
+callback if iteration-aligned swapping is desired.
 
 ``create_data_schedule_on_train_result(...)`` returns an ``on_train_result``
 function that can be passed directly as a keyword argument to

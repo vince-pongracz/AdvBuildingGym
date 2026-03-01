@@ -74,8 +74,8 @@ class WeatherDataSource(StateSource):
 
     def update_state(self, states) -> None:
         if self.ts is not None:
-            if self.iteration < len(self.ts):
-                temp_out_norm = float(self.ts.iloc[int(self.iteration)]["temp_out_norm"])
+            if self.effective_index < len(self.ts):
+                temp_out_norm = float(self.ts.iloc[self.effective_index]["temp_out_norm"])
             else:
                 temp_out_norm = float(self.ts.iloc[-1]["temp_out_norm"])
         else:

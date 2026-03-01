@@ -19,6 +19,8 @@ from adv_building_gym.utils.warning_filters import setup_warning_filters
 from adv_building_gym.envs.data_variant import DataVariantProvider
 from adv_building_gym.envs.utils import BuildingProps
 
+from adv_building_gym.config.env_config import config as env_config
+
 # Logging configuration
 logging.basicConfig(
     level=logging.INFO,
@@ -45,7 +47,7 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
     functions compute objective values from the current action and state.
     Core behavior
     - The environment advances in fixed discrete control steps (control_step, seconds)
-        until simulation_time is reached or the episode is otherwise terminated.
+        until max_iterations reached or the episode is otherwise terminated.
     - Observations are assembled from datasources (and any internal bookkeeping)
         into a dictionary-based observation (SDict).
     - Actions are provided as a dictionary mapping infrastructure identifiers to
@@ -68,8 +70,6 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
             each step. Each reward function is queried via get_reward(action, state).
     - building_props: BuildingProps
             Static description of building parameters used by infras/datasources/rewards.
-    - simulation_time: int (seconds, default 24*60*60)
-            Total simulation duration.
     - control_step: int (seconds, default 300)
             Duration of a single control step / time advancement between calls to step.
     - schedule_type: optional
@@ -113,8 +113,7 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
             - Aggregates rewards by summing get_reward(action, state) from each
                 RewardFunction in self.reward_funcs.
             - Increments the internal "iteration" counter.
-            - terminated is True when the maximum number of iterations (simulation_time /
-                control_step) is reached; truncated is always False in the current
+            - terminated is True when the maximum number of iterations is reached; truncated is always False in the current
                 implementation.
             - info contains keys: "action", "reward", "state", and "E_HP_el_Wh" (alias
                 for cumulative energy key) among any additional diagnostic entries.
@@ -155,15 +154,14 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         statesources: list[StateSource],
         rewards: list[RewardFunction],
         building_props: BuildingProps,
-        simulation_time=24 * 60 * 60,
-        control_step=300,
+        control_step=env_config.CONTROL_STEP,
         schedule_type=None,
         render_mode=None,
         training=True,
         train_ratio=0.8,
         # Number of steps to look ahead for forecasted values
         prediction_horizon=8 * 12,  # 8 hours at 5-minute steps
-        data_combinator: DataCombinator | None = None,
+        data_combinator: DataCombinator = DataCombinator(),
         log_full_info: bool = False,
         **kwargs,
     ):
@@ -177,7 +175,6 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
             rewards: Reward functions evaluated at each step to produce
                 the scalar reward signal.
             building_props: Physical and thermal properties of the building.
-            simulation_time: Episode length in seconds (default: 24 h).
             control_step: Time between control actions in seconds (default: 300 s).
             schedule_type: Optional schedule identifier for occupancy / usage patterns.
             render_mode: Gymnasium render mode (currently unused).
@@ -200,6 +197,8 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         self.episode_count: int = 0
         self.data_combinator = data_combinator
         self._rng: np.random.Generator | None = None
+        self._episode_date: str = ""
+        self._episode_day_mode: str = "none"
 
         observation_space = OrderedDict()
         action_space = OrderedDict()
@@ -248,12 +247,13 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         )
 
         self.building_props = building_props
-        self.simulation_time = simulation_time
+        # NOTE VP 2026.02.28. : Simulation time is in seconds
+        self.simulation_time = env_config.CONTROL_STEP * env_config.EPISODE_LENGTH
         self.prediction_horizon = prediction_horizon
         self.control_step = control_step
         self.training = training
         self.train_ratio = train_ratio
-        self.max_iteration = int(self.simulation_time / self.control_step)
+        self.max_iteration = env_config.EPISODE_LENGTH
 
         # When True, step()/reset() include a deep copy of the full named state
         # dict in info["state"]. Expensive in memory — enable for evaluation only.
@@ -286,6 +286,15 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
             if state_src.name in variant:
                 state_src.reload(variant[state_src.name])
 
+    def _resolve_episode_date(self, row_offset: int) -> str:
+        """Derive a date string from the row offset using the first statesource with a 'start' column."""
+        for src in self.statesources:
+            if src.ts is not None and "start" in src.ts.columns and row_offset < len(src.ts):
+                return str(pd.to_datetime(src.ts.iloc[row_offset]["start"]).date())
+        # Fallback: day-of-year index
+        steps_per_day = int(86400 / self.control_step)
+        return f"day-{row_offset // steps_per_day}"
+
     def reset(self, *, seed: int | None = None, options: Dict[str, Any] | None = None):
         if seed is None:
             seed = np.random.randint(0, 10000)  # global RNG
@@ -295,25 +304,54 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         if seed is not None:
             self._rng = np.random.default_rng(seed)
 
+        # ======== Data variant selection logic ========
         # Approach A: episode-count-based data variant swap
         self.episode_count += 1
-        if self.data_combinator is not None:
-            variant = self.data_combinator.get_variant(self.episode_count, self._rng)
-            if variant:
-                self.apply_data_variant(variant)
-                logger.info("Episode %d: data variant %s", self.episode_count, variant)
+        variant = self.data_combinator.get_variant(self.episode_count, self._rng)
+        if variant:
+            self.apply_data_variant(variant)
 
         # Approach C: external override via reset(options={"data_variant": {...}})
         if options and "data_variant" in options:
             variant = options["data_variant"]
             self.apply_data_variant(variant)
-            logger.info("Episode %d: data variant %s", self.episode_count, variant)
 
+        # Compute day offset from DataCombinator (must run before logging so get_day_date() is set)
+        steps_per_day = env_config.EPISODE_LENGTH  # Assuming 1 day per episode; adjust if multiple days per episode
+        row_offset = 0
+        # Determine max available days and data start year from the first statesource with data
+        max_days = 1
+        data_start_year = None
+        for src in self.statesources:
+            if src.ts is not None and len(src.ts) >= steps_per_day:
+                max_days = len(src.ts) // steps_per_day
+                # Extract year from the first date-like column
+                for col in ("start", "start_timestamp", "date", "datetime"):
+                    if col in src.ts.columns:
+                        data_start_year = pd.Timestamp(src.ts[col].iloc[0]).year
+                        break
+                break
+        row_offset, self._episode_day_mode = self.data_combinator.get_day_offset(
+            self.episode_count, max_days, steps_per_day, data_start_year, self._rng,
+        )
+        self._episode_date = self._resolve_episode_date(row_offset)
+
+        if variant:
+            logger.info("Episode %d, date %s: data variant %s", self.episode_count, self.data_combinator.get_day_date(), variant)
+
+        # Allow external override via reset options
+        if options and "row_offset" in options:
+            row_offset = int(options["row_offset"])
+            self._episode_date = self._resolve_episode_date(row_offset)
+            self._episode_day_mode = "manual"
+
+        # ======== Reset state and synchronise datasources/infras ========
         self.iteration = 0
         self.cum_E_kWh = 0.0  # Reset cumulative energy on episode reset
         for sync in self.infras + self.statesources:
-            sync.synchronise(self.iteration)
+            sync.synchronise(self.iteration, row_offset)
 
+        # ======== Initialise state dict with zeros (matching observation space dtypes) ========
         for k, v in self.state.items():
             if isinstance(v, np.ndarray):
                 # Initialize with zeros using the correct dtype (float32)
@@ -321,7 +359,7 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
             else:
                 logger.debug("Unidentified type: %s", type(v))
 
-        # Update state from statesources to populate initial observations
+        # ======== Update state from statesources to populate initial observations ========
         # This ensures observations are within bounds after reset
         for ds in self.statesources:
             ds.update_state(states=self.state)
@@ -330,9 +368,15 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         for infr in self.infras:
             infr.update_state(self.state)
 
-        info = {"seed": seed}
+        # ======= Pass initial state to info ========
+        info = {
+            "seed": seed,
+            "episode_date": self._episode_date,
+            "episode_day_mode": self._episode_day_mode,
+        }
         if self.log_full_info:
             info["state"] = {k: np.array(v, copy=True) for k, v in self.state.items()}
+
         return self.state, info
 
     def _get_observation(self) -> dict:
@@ -467,6 +511,7 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
             "reward_breakdown": reward_breakdown,
             "cum_E_kWh": self.cum_E_kWh,  # Cumulative net energy (positive=consumption, negative=production)
             "step_power_kW": total_power_kW,  # Instantaneous net power at this step
+            "episode_date": self._episode_date,
         }
         if self.log_full_info:
             info["state"] = {k: np.array(v, copy=True) for k, v in self.state.items()}

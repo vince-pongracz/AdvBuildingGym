@@ -94,8 +94,8 @@ class OperatorEnergyControl(StateSource):
         """Update operator energy limit state based on current iteration."""
 
         if self.ts is not None:
-            if self.iteration < len(self.ts):
-                operator_energy_max_norm = float(self.ts.iloc[int(self.iteration)]["operator_energy_max_norm"])
+            if self.effective_index < len(self.ts):
+                operator_energy_max_norm = float(self.ts.iloc[self.effective_index]["operator_energy_max_norm"])
             else:
                 operator_energy_max_norm = float(self.ts.iloc[-1]["operator_energy_max_norm"])
         else:

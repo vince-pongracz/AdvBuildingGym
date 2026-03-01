@@ -232,6 +232,18 @@ After registering the kernel, restart Jupyter so the `Python (llec_env)` kernel 
 
 </details>
 
+## Data Preprocessing
+
+Before training, electricity price data must be fetched and preprocessed. See [data/DATA_README.md](data/DATA_README.md) for the full pipeline (fetching from aWATTar API, converting to 5-min resolution, normalization). Quick reference:
+
+```bash
+# 1. Fetch raw hourly prices (edit YEAR in script first)
+python preproc/awattar_fetch.py
+
+# 2. Preprocess to 5-min resolution normalized CSV
+python preproc/awattar_price_preproc.py data/<YEAR>_prices.csv
+```
+
 ## 3.Training and Evaluation
 
 <details>
