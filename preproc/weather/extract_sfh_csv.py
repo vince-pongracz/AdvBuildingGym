@@ -21,15 +21,16 @@ import pandas as pd
 
 try:
     from .preproc_types import SFHExtractionStats
-    from ..utils import ensure_datetime_index, load_config, resolve_path
+    from ..utils import ensure_datetime_index, resolve_path
 except ImportError:
+    import sys as _sys
+    _sys.path.insert(0, str(Path(__file__).resolve().parent))
+    _sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     from preproc_types import SFHExtractionStats
-    from utils import ensure_datetime_index, load_config, resolve_path
+    from utils import ensure_datetime_index, resolve_path
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
-
-f_name: str = "config.yaml"
 
 
 def get_tot_columns(df: pd.DataFrame) -> list[str]:
@@ -160,8 +161,8 @@ def main() -> None:
         "--input",
         "-i",
         type=str,
-        default=None,
-        help=f"Path to HDF5 input file (default: from {f_name} or data/weather/zenodo/2018_data_1min.hdf5)",
+        default="data/weather/zenodo/2018_data_1min.hdf5",
+        help="Path to HDF5 input file (default: data/weather/zenodo/2018_data_1min.hdf5)",
     )
     parser.add_argument(
         "--output",
@@ -177,30 +178,10 @@ def main() -> None:
         default="NO_PV",
         help="HDF5 group to extract (default: NO_PV)",
     )
-    parser.add_argument(
-        "--config",
-        "-c",
-        type=str,
-        default=None,
-        help=f"Path to {f_name} (optional)",
-    )
     args = parser.parse_args()
 
-    # Determine input file
-    input_file = args.input
-    if input_file is None:
-        # Try to load from config
-        try:
-            config = load_config(args.config, f_name)
-            input_file = config.get("input_file")
-        except FileNotFoundError as e:
-            logger.debug("Config file not found, using defaults: %s", e)
-
-    if input_file is None:
-        input_file = "data/weather/zenodo/2018_data_1min.hdf5"
-
     # Resolve relative paths
-    input_file_path = resolve_path(input_file)
+    input_file_path = resolve_path(args.input)
 
     # Generate output directory name from input filename
     raw_input_fname = input_file_path.stem

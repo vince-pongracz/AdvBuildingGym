@@ -23,7 +23,7 @@ YEAR: int = 2023
 START_DATE: str = f"{YEAR}-01-01T00:00:00Z"
 END_DATE: str = f"{YEAR}-12-31T23:59:59Z"
 
-OUTPUT_PATH: str = f"data/e_price/{YEAR}_prices.csv"
+OUTPUT_PATH: str = f"data/e_price/awattar/{YEAR}_prices.csv"
 
 
 def _to_epoch_ms(iso_date: str) -> int:
@@ -53,12 +53,19 @@ def fetch_market_data(start_date: str, end_date: str, api_url: str = API_URL) ->
         datetime.fromtimestamp(end_ms / 1000, tz=timezone.utc).isoformat(),
     )
 
-    response = requests.get(
-        api_url,
-        params={"start": start_ms, "end": end_ms},
-        timeout=30,
-    )
-    response.raise_for_status()
+    try:
+        response = requests.get(
+            api_url,
+            params={"start": start_ms, "end": end_ms},
+            timeout=30,
+        )
+        response.raise_for_status()
+    except requests.exceptions.RequestException as exc:
+        logger.warning(
+            "Fetch failed for %s to %s: %s — returning empty DataFrame",
+            start_date, end_date, exc,
+        )
+        return pd.DataFrame()
 
     data = response.json().get("data", [])
     logger.info("Received %d records", len(data))

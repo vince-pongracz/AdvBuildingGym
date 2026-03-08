@@ -23,10 +23,13 @@ import pandas as pd
 
 try:
     from .preproc_types import WeatherExtractionStats
-    from ..utils import ensure_datetime_index, load_config, resolve_path
+    from ..utils import ensure_datetime_index, resolve_path
 except ImportError:
+    import sys as _sys
+    _sys.path.insert(0, str(Path(__file__).resolve().parent))
+    _sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     from preproc_types import WeatherExtractionStats
-    from utils import ensure_datetime_index, load_config, resolve_path
+    from utils import ensure_datetime_index, resolve_path
 
 # Suppress NaturalNameWarning from PyTables when reading HDF5 files
 # The warning is about column names with colons (e.g., 'TEMPERATURE:TOTAL')
@@ -35,8 +38,6 @@ warnings.filterwarnings("ignore", category=Warning, module="tables.path")
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
-
-f_name: str = "config.yaml"
 
 
 def clean_column_name(key: str) -> str:
@@ -69,7 +70,7 @@ def clean_column_name(key: str) -> str:
 def extract_weather_data(
     hdf5_path: str | Path,
     output_dir: str | Path,
-    timestamp_unit: str = "ns",
+    timestamp_unit: str = "s",
 ) -> WeatherExtractionStats:
     """
     Extract weather data from HDF5 file and save as a merged CSV file.
@@ -210,8 +211,8 @@ def main() -> None:
         "--input",
         "-i",
         type=str,
-        default=None,
-        help=f"Path to HDF5 input file (default: from {f_name})",
+        default="data/weather/zenodo/2018_weather.hdf5",
+        help="Path to HDF5 input file (default: data/weather/zenodo/2018_weather.hdf5)",
     )
     parser.add_argument(
         "--output",
@@ -219,13 +220,6 @@ def main() -> None:
         type=str,
         default="data/weather/zenodo/csvs_weather",
         help="Output directory for CSV file (default: data/weather/zenodo/csvs_weather)",
-    )
-    parser.add_argument(
-        "--config",
-        "-c",
-        type=str,
-        default=None,
-        help=f"Path to {f_name} (optional)",
     )
     parser.add_argument(
         "--timestamp-unit",
@@ -237,22 +231,8 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    # Determine input file
-    input_file = args.input
-    if input_file is None:
-        # Try to load from config
-        try:
-            config = load_config(args.config, f_name)
-            input_file = config.get("input_file")
-        except FileNotFoundError as e:
-            logger.debug("Config file not found, using defaults: %s", e)
-
-        # Default to 2018_weather.hdf5 if not specified or if it's not a weather file
-        if input_file is None or "weather" not in input_file.lower():
-            input_file = "data/weather/zenodo/2018_weather.hdf5"
-
     # Resolve relative paths
-    input_file_path = resolve_path(input_file)
+    input_file_path = resolve_path(args.input)
 
     logger.info("Input file: %s", input_file_path)
     logger.info("Output directory: %s", args.output)

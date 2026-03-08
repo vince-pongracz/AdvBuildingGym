@@ -78,3 +78,5 @@ param_space.json
 
 # Plotting outputs
 plotting/out/**
+
+eval_results/**

@@ -22,19 +22,19 @@ logger = logging.getLogger(__name__)
 
 API_URL: str = "https://api.energy-charts.info/price"
 
-# The API returns at most ~one year per request. For multi-year fetches we
-# chunk by month to stay well within limits and get progress feedback.
-CHUNK_DAYS: int = 31
+# The API handles up to ~one year per request. We use half-year chunks
+# to stay well within limits while minimising the number of HTTP calls.
+CHUNK_DAYS: int = 183
 
 YEAR: int = 2023
 BZN: str = "DE-LU"
 START_DATE: str = f"{YEAR}-01-01"
 END_DATE: str = f"{YEAR}-12-31"
 
-OUTPUT_PATH: str = f"data/e_price/{YEAR}_15m_prices.csv"
+OUTPUT_PATH: str = f"data/e_price/e_charts/{YEAR}_15m_prices.csv"
 
 
-def fetch_price_chunk(
+def _fetch_chunk(
     start: str,
     end: str,
     bzn: str = BZN,
@@ -44,7 +44,7 @@ def fetch_price_chunk(
 
     Args:
         start: Start date as ISO 8601 date string (e.g. "2023-01-01").
-        end: End date as ISO 8601 date string (e.g. "2023-01-31").
+        end: End date as ISO 8601 date string (e.g. "2023-06-30").
         bzn: Bidding zone identifier (default: DE-LU).
         api_url: Energy Charts API endpoint URL.
 
@@ -57,7 +57,7 @@ def fetch_price_chunk(
     response = requests.get(
         api_url,
         params={"bzn": bzn, "start": start, "end": end},
-        timeout=30,
+        timeout=60,
     )
     response.raise_for_status()
 
@@ -91,10 +91,7 @@ def fetch_market_data(
     bzn: str = BZN,
     api_url: str = API_URL,
 ) -> pd.DataFrame:
-    """Fetch day-ahead prices, chunked by month.
-
-    Splits the date range into chunks to avoid oversized responses and
-    provide progress feedback.
+    """Fetch day-ahead prices in half-year chunks.
 
     Args:
         start_date: Start date (e.g. "2023-01-01").
@@ -115,9 +112,17 @@ def fetch_market_data(
         chunk_end = min(chunk_start + timedelta(days=CHUNK_DAYS - 1), end)
         logger.info("Fetching %s to %s (bzn=%s)", chunk_start, chunk_end, bzn)
 
-        df_chunk = fetch_price_chunk(
-            str(chunk_start), str(chunk_end), bzn=bzn, api_url=api_url,
-        )
+        try:
+            df_chunk = _fetch_chunk(
+                str(chunk_start), str(chunk_end), bzn=bzn, api_url=api_url,
+            )
+        except requests.exceptions.RequestException as exc:
+            logger.warning(
+                "Fetch failed for %s to %s (bzn=%s): %s — skipping chunk",
+                chunk_start, chunk_end, bzn, exc,
+            )
+            chunk_start = chunk_end + timedelta(days=1)
+            continue
         if not df_chunk.empty:
             chunks.append(df_chunk)
 
@@ -165,12 +170,12 @@ if __name__ == "__main__":
 
     if not prices_df.empty:
         prices_df.to_csv(OUTPUT_PATH, index=False)
-        
+
         logger.info("Sample of fetched data:")
         logger.info("=" * 80)
         logger.info(prices_df.head(10))
         logger.info("=" * 80)
-        
+
         logger.info("Saved %d records to %s", len(prices_df), OUTPUT_PATH)
     else:
         logger.error("No data fetched, CSV not written")

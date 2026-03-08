@@ -19,15 +19,28 @@ from typing import Any
 import h5py
 import numpy as np
 
+import yaml
+
 try:
-    from ..utils import load_config, resolve_path
+    from ..utils import resolve_path
 except ImportError:
-    from utils import load_config, resolve_path
+    from utils import resolve_path
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
-f_name: str = "config.yaml"
+_CONFIG_FILENAME: str = "config.yaml"
+
+
+def _load_config(config_path: str | Path | None) -> dict[str, Any]:
+    """Load YAML config for HDF5 exploration."""
+    if config_path is None:
+        config_path = Path(__file__).parent / _CONFIG_FILENAME
+    config_path = Path(config_path)
+    if not config_path.exists():
+        raise FileNotFoundError(f"Config file not found: {config_path}")
+    with open(config_path, "r", encoding="utf-8") as f:
+        return yaml.safe_load(f)
 
 
 def get_dtype_info(dtype: np.dtype) -> dict[str, Any]:
@@ -222,7 +235,7 @@ def main(config_path: str | None = None) -> None:
     """Main entry point."""
     # Load config
     try:
-        config = load_config(config_path, f_name)
+        config = _load_config(config_path)
     except FileNotFoundError as e:
         logger.error(str(e))
         sys.exit(1)
