@@ -43,8 +43,8 @@
 #SBATCH --time=00:10:00
 # Exclude nodes with known GPU issues (add problematic nodes here)
 #SBATCH --exclude=haicn1704
-#SBATCH --output=slurm_logs_train/slurm-train-ray-%j.out
-#SBATCH --error=slurm_logs_train/slurm-train-ray-%j.err
+#SBATCH --output=slurm_logs/train/slurm-train-ray-%j.out
+#SBATCH --error=slurm_logs/train/slurm-train-ray-%j.err
 #SBATCH --job-name=ray-train-%j
 
 set -euo pipefail
@@ -239,5 +239,5 @@ echo "Training completed successfully."
 #     sbatch slurm_scripts/slurm_train_ray.sh --algorithm ppo --episodes 3500 --seed 42
 # - All arguments from run_train_ray.py are supported with their default values
 # - Available metrics: episode_return_mean, achieved_reward, reward_rate
-# - Output and error logs will be written to `slurm_logs_train/`.
+# - Output and error logs will be written to `slurm_logs/train/`.
 # -------------------------------------------------------------------------------

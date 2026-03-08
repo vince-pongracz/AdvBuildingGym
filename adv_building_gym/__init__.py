@@ -12,6 +12,7 @@ from .callbacks import (
     make_trajectory_logging_callback_class,
     make_checkpoint_callback_class,
 )
+from .evaluation import evaluate_model, EvalResults
 
 
 def _make_adv_building(**kwargs):
@@ -52,4 +53,6 @@ __all__ = [
     "make_episode_metrics_callback_class",
     "make_trajectory_logging_callback_class",
     "make_checkpoint_callback_class",
+    "evaluate_model",
+    "EvalResults",
 ]

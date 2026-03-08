@@ -27,10 +27,12 @@ models/il_agent/
 .idea/
 
 # SLURM output logs (optional, for HPC clusters)
-**slurm_logs_eval/**.out
-**slurm_logs_eval/**.err
-**slurm_logs_train/**.err
-**slurm_logs_train/**.out
+**/slurm_logs/eval/**.out
+**/slurm_logs/eval/**.err
+**/slurm_logs/train/**.err
+**/slurm_logs/train/**.out
+**/slurm_logs/data_setup/**.err
+**/slurm_logs/data_setup/**.out
 
 # Environment and runtime
 .env

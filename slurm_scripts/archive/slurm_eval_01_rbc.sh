@@ -10,8 +10,8 @@
 #SBATCH --ntasks=1
 #SBATCH --gres=gpu:0
 #SBATCH --time=04:00:00
-#SBATCH --output=slurm_logs_eval/slurm-eval-rbc-%j.out
-#SBATCH --error=slurm_logs_eval/slurm-eval-rbc-%j.err
+#SBATCH --output=slurm_logs/eval/slurm-eval-rbc-%j.out
+#SBATCH --error=slurm_logs/eval/slurm-eval-rbc-%j.err
 
 # Rule-based evaluation: PI, PID, Fuzzy only (no MPC)
 
@@ -70,5 +70,5 @@ echo "PI, PID, Fuzzy evaluations completed."
 # - To submit the job to SLURM:
 #     sbatch slurm_script/slurm_eval_01_rbc.sh
 #
-# - Output and error logs will be written to: slurm_logs_eval/slurm-eval-rbc-<jobid>.out/.err
+# - Output and error logs will be written to: slurm_logs/eval/slurm-eval-rbc-<jobid>.out/.err
 # -------------------------------------------------------------------------------

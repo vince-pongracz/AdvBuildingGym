@@ -143,8 +143,10 @@ LLECBuildingGym/                              # Root directory of the project
 │   ├── plot_fig04_price_data.ipynb           # Plots dynamic energy prices for Figure 04
 │   ├── plot_fig05_indoor_temp_setpoint.ipynb # Plots dynamic indoor temp setpoints for Figure 05
 │   └── preprocess_outdoor_temperature.ipynb  # Prepares outdoor temperature time series
-├── slurm_logs_eval/                          # SLURM logs from evaluation jobs
-├── slurm_logs_train/                         # SLURM logs from training jobs
+├── slurm_logs/
+│   ├── eval/                                 # SLURM logs from evaluation jobs
+│   └── train/                                # SLURM logs from training jobs
+│   └── data_setup/                           # SLURM logs from data setup jobs
 ├── slurm_script/                             # SLURM job submission scripts
 ├── results/                                  # Evaluation logs and result CSVs
 ├── .gitignore                                # Ignore in version control
@@ -234,15 +236,24 @@ After registering the kernel, restart Jupyter so the `Python (llec_env)` kernel 
 
 ## Data Preprocessing
 
-Before training, electricity price data must be fetched and preprocessed. See [data/DATA_README.md](data/DATA_README.md) for the full pipeline (fetching from aWATTar API, converting to 5-min resolution, normalization). Quick reference:
+Before training, set up data with the unified setup script.
+By default it runs **both** pipelines: electricity prices and weather/Zenodo.
 
 ```bash
-# 1. Fetch raw hourly prices (edit YEAR in script first)
-python preproc/e_price/awattar_fetch.py
+# Recommended: full setup (price + weather)
+python preproc/data_setup.py
 
-# 2. Preprocess to 5-min resolution normalized CSV
-python preproc/e_price/awattar_price_preproc.py data/e_price/<YEAR>_prices.csv
+# Price-focused run only (disable weather pipeline)
+python preproc/data_setup.py --skip-weather --years 2023 2024 2025 2026
+
+# If raw prices already exist locally, skip API calls
+python preproc/data_setup.py --skip-weather --years 2025 --skip-price-fetch --raw-price-files data/e_price/2025_prices.csv
+
+# Weather-focused run only (disable price pipeline)
+python preproc/data_setup.py --skip-prices --skip-zenodo-download
 ```
+
+See [data/DATA_README.md](data/DATA_README.md) for all options and manual fallback commands.
 
 ## 3.Training and Evaluation
 

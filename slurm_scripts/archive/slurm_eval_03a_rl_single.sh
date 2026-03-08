@@ -10,8 +10,8 @@
 #SBATCH --ntasks=1
 #SBATCH --gres=gpu:1
 #SBATCH --time=24:00:00
-#SBATCH --output=slurm_logs_eval/slurm-%x-%j.out
-#SBATCH --error=slurm_logs_eval/slurm-%x-%j.err
+#SBATCH --output=slurm_logs/eval/slurm-%x-%j.out
+#SBATCH --error=slurm_logs/eval/slurm-%x-%j.err
 
 set -euo pipefail
 

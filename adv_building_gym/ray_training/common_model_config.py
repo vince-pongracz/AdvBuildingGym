@@ -9,9 +9,7 @@ import datetime
 import logging
 from typing import List
 
-from gymnasium.spaces import Space
 from ray.rllib.connectors.env_to_module import FlattenObservations
-
 
 from adv_building_gym.callbacks import (
     create_data_schedule_on_train_result,
@@ -27,7 +25,6 @@ logger = logging.getLogger(__name__)
 def common_model_config(
     config,
     seed: int,
-    action_space: Space,
     episode_length: int,
     num_cpus: int,
     num_gpus: int,
@@ -62,7 +59,7 @@ def common_model_config(
     Args:
         config: Algorithm config object (e.g., PPOConfig instance)
         seed: Random seed for reproducibility
-        action_space: Pre-built action space (Box) from the environment
+        action_space: Flat Box action space for the RL module
         episode_length: Episode length in timesteps (used for rollout_fragment_length)
         num_cpus: Total CPUs available (from Ray/SLURM)
         num_gpus: Total GPUs available (from Ray/SLURM)
@@ -104,12 +101,10 @@ def common_model_config(
         num_env_runners, num_cpus_per_env_runner, driver_cpus
     )
 
-    # action_space is provided by the caller (derived from the singleton's already-created
-    # infras — no extra env construction / CSV parsing needed here).
-    # NOTE: observation_space is intentionally NOT passed to config.environment() because
-    # FlattenObservations transforms the Dict obs space into a flat Box; providing the Dict
-    # space here would cause RLlib's Catalog to fail before the connector can transform it.
-    logger.debug("Env action_space: %s (obs_space inferred after FlattenObservations)", action_space)
+    # action_space (flat Box) is provided explicitly so the RL module / Catalog
+    # sees a flat vector, not the env's native Dict.  observation_space is
+    # intentionally omitted — FlattenObservations transforms it automatically.
+    # Link: https://docs.ray.io/en/latest/rllib/env-to-module-connector.html
 
     config = config.api_stack(
         enable_rl_module_and_learner=True,
@@ -117,8 +112,6 @@ def common_model_config(
     )
     config.environment(
         env="AdvBuilding",
-        # observation_space intentionally omitted - inferred after FlattenObservations
-        action_space=action_space,
         normalize_actions=True,
         clip_actions=clip_actions,
     )
@@ -158,12 +151,12 @@ def common_model_config(
         rollout_fragment_length=episode_length,
         # TODO VP 2026.02.11. : Look up this when packages present
         # episode_lookback_horizon=10,
-        # Flatten dict observation space into a single vector for the RL module
-        # NOTE VP 2026.01.05. : if other observation space needed for the policy, change the observations in the env.
-        # (rather than using a new observation encoder -- that must be learnt as well, it overcomplicates things...)
+        # Flatten dict observation space into a single vector for the RL module.
+        # NOTE: Action space flattening is handled by the env itself
+        # (AdvBuildingGym exposes a flat Box and converts via _flat_action_to_dict).
+        # RLlib's SingleAgentEnvRunner.get_spaces() reads action_space directly
+        # from env.single_action_space, ignoring env-to-module connector output.
         env_to_module_connector=lambda env, spaces, device: FlattenObservations(),  # type: ignore
-        # TODO VP 2026.02.28. : Check this out
-        # module_to_env_connector=None,  # Use default (no transformation needed for actions
     )
     config.evaluation(
         # evaluation_interval=1 ensures `evaluation/env_runners/<metric>` is present in every

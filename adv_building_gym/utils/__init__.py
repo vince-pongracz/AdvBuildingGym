@@ -8,6 +8,11 @@ from .resource_check_util import ResourceAllocation, validate_resource_allocatio
 from .warning_filters import setup_warning_filters
 from .trajectory_utils import extract_trajectory_from_infos
 from .trajectory_collector import TrajectoryCollector
+from .checkpoint_finder import (
+    find_best_checkpoint,
+    find_latest_checkpoint,
+    resolve_checkpoint_path,
+)
 
 __all__ = [
     "EnvSyncInterface",
@@ -19,4 +24,7 @@ __all__ = [
     "setup_warning_filters",
     "extract_trajectory_from_infos",
     "TrajectoryCollector",
+    "find_best_checkpoint",
+    "find_latest_checkpoint",
+    "resolve_checkpoint_path",
 ]

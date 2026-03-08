@@ -31,8 +31,8 @@
 #SBATCH --partition=normal
 #SBATCH --gres=gpu:4g.20gb:1
 #SBATCH --time=72:00:00
-#SBATCH --output=slurm_logs_train/slurm-train-%j.out
-#SBATCH --error=slurm_logs_train/slurm-train-%j.err
+#SBATCH --output=slurm_logs/train/slurm-train-%j.out
+#SBATCH --error=slurm_logs/train/slurm-train-%j.err
 #SBATCH --job-name=rl-train-%j
 #SBATCH --cpus-per-task=38
 
@@ -126,6 +126,6 @@ echo "Training completed successfully."
 #     sbatch slurm_script/slurm_train_01a_rl_single.sh ppo 4 temperature T03
 #
 # - Output and error logs:
-#     slurm_logs_train/slurm-train-<jobid>.out
-#     slurm_logs_train/slurm-train-<jobid>.err
+#     slurm_logs/train/slurm-train-<jobid>.out
+#     slurm_logs/train/slurm-train-<jobid>.err
 # -------------------------------------------------------------------------------

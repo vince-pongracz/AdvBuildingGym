@@ -72,6 +72,9 @@ class OperatorEnergyControlReward(RewardFunction):
         # Store in state for observability (e.g., logging, other reward functions)
         # TODO VP 2026.01.14. : Store it in info instead?
         # states["grid_power_kW"] = np.array([grid_power_kW], dtype=np.float32)
+        
+        # TODO VP 2026.03.01. : Check out negative reward values in the logs, investigate if they are expected (e.g., due to harsh penalty) or if there is a bug in the reward calculation.
+        # e.g: "Achieved Reward: -286.20, Reward Rate: -0.1988" --> What?
 
         # Get normalized operator limit from state [0, 1]
         operator_limit_norm = float(states.get("operator_energy_max", np.array([1.0]))[0])

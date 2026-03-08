@@ -24,8 +24,8 @@
 #SBATCH --cpus-per-task=4
 #SBATCH --gres=gpu:full:1
 #SBATCH --time=00:15:00
-#SBATCH --output=slurm_logs_train/slurm-train-sb-%j.out
-#SBATCH --error=slurm_logs_train/slurm-train-sb-%j.err
+#SBATCH --output=slurm_logs/train/slurm-train-sb-%j.out
+#SBATCH --error=slurm_logs/train/slurm-train-sb-%j.err
 #SBATCH --job-name=sb-train-%j
 
 set -euo pipefail
@@ -99,5 +99,5 @@ echo "Training completed successfully."
 #     chmod +x slurm_script/slurm_train_sb.sh
 # - Submit with:
 #     sbatch slurm_script/slurm_train_sb.sh [ALGORITHM] [NUM_ENVS] [TIMESTEPS] [SEED] [CONFIG_NAME]
-# - Output and error logs will be written to `slurm_logs_train/`.
+# - Output and error logs will be written to `slurm_logs/train/`.
 # -------------------------------------------------------------------------------

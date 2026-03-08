@@ -29,10 +29,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# TODO VP 2026.01.12. : Use Env-to-module and module-to-Env pipelines and keep the dict state and action spaces in the env...
-# So the mapping from action vector to dict and vice versa is done in the pipelines, not in the env directly... -- this mapping is rather the task of the Rllib, not the env's
-# In this case, SB could not really work anymore, because of the dict spaces... but RLlib could work with custom pipelines...
-# Link: https://docs.ray.io/en/latest/rllib/env-to-module-connector.html#env-to-module-pipeline-docs
 
 class AdvBuildingGym(gym.Env, DataVariantProvider):
     """
@@ -214,18 +210,19 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
 
         self.reward_funcs = rewards
 
-        # Calculate total action dimension (sum of all action space shapes)
-        # This must match the flattened action vector built in step()
-        total_action_dim = sum(int(np.prod(space.shape)) for space in action_space.values())
+        # Add per-key prev_action entries to the observation space so that
+        # each infrastructure's previous action is a named observation.
+        # FlattenObservations (RLlib connector) handles flattening for the RL module.
+        for key, space in action_space.items():
+            obs_key = f"prev_{key}"
+            observation_space[obs_key] = spaces.Box(
+                low=np.full(space.shape, -1.0, dtype=np.float32),
+                high=np.full(space.shape, 1.0, dtype=np.float32),
+                shape=space.shape,
+                dtype=np.float32,
+            )
 
-        observation_space["prev_action"] = spaces.Box(
-            low=np.full((total_action_dim,), -1.0, dtype=np.float32),
-            high=np.full((total_action_dim,), 1.0, dtype=np.float32),
-            shape=(total_action_dim,),
-            dtype=np.float32,
-        )
-
-        # Assign spaces, but it only goes like this...
+        # Assign spaces
         self.observation_space = SDict(observation_space)
         self.state = OrderedDict()
         for state_name, state_space in observation_space.items():
@@ -235,10 +232,12 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         # Store the original Dict action space for internal use
         self._dict_action_space = SDict(action_space)
 
-        # Flatten Dict action space to Box for compatibility with RLlib's
-        # vectorized environments (SyncVectorEnv). Dict action spaces cause
-        # IndexError in gymnasium's _iterate_dict when used with vectorization.
-        # Note: total_action_dim already calculated above for prev_action space
+        # Flatten Dict action space to Box for compatibility with RLlib.
+        # RLlib's SingleAgentEnvRunner.get_spaces() reads env.action_space
+        # directly and passes it to the RLModule/Catalog, which only accepts
+        # Box or Discrete (e.g. SAC rejects Dict).  The flat<->dict conversion
+        # is done internally via _flat_action_to_dict().
+        total_action_dim = sum(int(np.prod(space.shape)) for space in action_space.values())
         self.action_space = spaces.Box(
             low=-1.0,
             high=1.0,
@@ -395,7 +394,6 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         """
         return bool(self.iteration >= self.max_iteration)
 
-    # TODO VP 2026.02.23. : This should be rather refactored with rllib connectors and pipelines, so the env only accepts and returns dicts, and the mapping from flat action vector to dict is done in the pipeline, not in the env directly... -- this mapping is rather the task of the Rllib, not the env's
     def _flat_action_to_dict(self, flat_action: np.ndarray) -> Dict[str, np.ndarray]:
         """Convert flat action array to Dict format for infrastructure use.
 
@@ -404,8 +402,6 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         - 2D array with batch dim: [[a1, a2]] -> flatten
         - Nested structures -> flatten
         """
-        logger.debug(f"Flat action dim: {flat_action.shape}")
-
         # Convert to numpy array and flatten to 1D
         flat_action = np.asarray(flat_action, dtype=np.float32).flatten()
 
@@ -443,15 +439,14 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
             action (np.array): Flat action array in [-1, 1] with shape (total_action_dim,).
 
         Returns:
-            observation (np.array): The next observation.
+            observation (dict): The next observation.
             reward (float): The computed reward signal.
             terminated (bool): True if the episode has ended, else False.
             truncated (bool): False in this environment.
             info (dict): Additional information data.
         """
-        # Clip actions and store for logging
+        # Clip actions and convert flat action to Dict format
         clipped_flat_action = np.clip(action, -1, 1)
-        # Convert flat action to Dict format for internal infrastructure use
         action = self._flat_action_to_dict(clipped_flat_action)
 
         # 1. Execute all infrastructure actions
@@ -472,20 +467,16 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         for ds in self.statesources:
             ds.update_state(states=self.state)
 
-        # Track last executed action for observability (flattened order matches action_space_keys)
-        prev_action_vec = []
+        # Track last executed action for observability (per-key observation entries)
         for key in self.action_space_keys:
+            obs_key = f"prev_{key}"
             act_val = action.get(key)
             if act_val is not None:
-                # Flatten multi-dimensional actions (e.g., HP_action is 2D)
-                act_array = np.atleast_1d(act_val).flatten()
-                prev_action_vec.extend(act_array)
+                self.state[obs_key] = np.asarray(act_val, dtype=np.float32)
             else:
-                # Default to 0 if action not present
-                space = self._dict_action_space.spaces[key]
-                action_dim = int(np.prod(space.shape)) if space.shape else 1
-                prev_action_vec.extend([0.0] * action_dim)
-        self.state["prev_action"] = np.array(prev_action_vec, dtype=np.float32)
+                self.state[obs_key] = np.zeros(
+                    self._dict_action_space.spaces[key].shape, dtype=np.float32,
+                )
 
         # Accumulate net energy consumption from all infrastructures
         # Positive = consumption from grid, Negative = production to grid

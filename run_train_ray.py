@@ -28,7 +28,7 @@ from ray.tune.registry import register_env
 from adv_building_gym.utils import setup_warning_filters
 
 # Trigger registration of the custom Gym IDs
-from adv_building_gym import AdvBuildingGym, make_checkpoint_callback_class, ConfigManager
+from adv_building_gym import make_checkpoint_callback_class, ConfigManager
 from adv_building_gym.config import config as default_config
 from adv_building_gym.envs import adv_building_env_creator
 from adv_building_gym.ray_training import common_model_config, select_model
@@ -174,7 +174,7 @@ def main():
         args.timesteps = int(args.timesteps)
         args.episodes = args.timesteps // active_config.EPISODE_LENGTH
         logger.info("--timesteps is deprecated, prefer --episodes. "
-                     "Stopping after %d timesteps (~%d episodes)", args.timesteps, args.episodes)
+                    "Stopping after %d timesteps (~%d episodes)", args.timesteps, args.episodes)
     else:
         # Neither given — default to 3500 episodes
         args.episodes = 3500
@@ -187,17 +187,18 @@ def main():
     # they use the factory methods directly via adv_building_env_creator.
     active_config.init_singletons()
 
-    # Derive action_space from the already-instantiated singleton infras/statesources.
-    # Re-uses existing objects, so no additional CSV parsing occurs.
-    _tmp_env = AdvBuildingGym(
-        infras=active_config.infras,
-        statesources=active_config.statesources,
-        rewards=active_config.rewards,
-        building_props=active_config.building_props,
-    )
-    action_space = _tmp_env.action_space
-    _tmp_env.close()
-    logger.info("Derived action_space from singleton: %s", action_space)
+    # Derive the flat action space for the RL module.
+    # The env exposes a Dict action space natively; the RL module needs a
+    # flat Box.  Compute total_action_dim from the singleton infras.
+    from collections import OrderedDict
+    from gymnasium.spaces import Box
+    import numpy as np
+    _action_od = OrderedDict()
+    for infr in active_config.infras:
+        infr.setup_spaces(OrderedDict(), _action_od)
+    total_action_dim = sum(int(np.prod(s.shape)) for s in _action_od.values())
+    action_space = Box(low=-1.0, high=1.0, shape=(total_action_dim,), dtype=np.float32)
+    logger.info("Derived flat action_space: %s (from %d infra keys)", action_space, len(_action_od))
 
     args.config_name = active_config.config_name if args.config_name is None else args.config_name
 
@@ -299,7 +300,6 @@ def main():
     algo_config = common_model_config(
         config=algo_config,
         seed=args.seed,
-        action_space=action_space,
         episode_length=active_config.EPISODE_LENGTH,
         num_cpus=cpus,
         num_gpus=gpus,
