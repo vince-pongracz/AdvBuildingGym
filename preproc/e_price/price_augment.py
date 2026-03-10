@@ -29,14 +29,16 @@ def augment_prices(
     output_path: str,
     noise_std: float = DEFAULT_NOISE_STD,
     seed: int | None = None,
+    normalize: bool = False,
 ) -> None:
-    """Add Gaussian noise to preprocessed price data and renormalize.
+    """Add Gaussian noise to preprocessed price data.
 
     Args:
         input_path: Path to preprocessed price CSV (5-min resolution, ct/kWh).
         output_path: Path for the augmented output CSV.
         noise_std: Standard deviation of the Gaussian noise in ct/kWh.
         seed: Random seed for reproducibility (None = non-deterministic).
+        normalize: If True, recompute price_normalized column after augmentation.
     """
     df = pd.read_csv(input_path)
     logger.info("Loaded %d records from %s", len(df), input_path)
@@ -47,19 +49,21 @@ def augment_prices(
     noise = rng.normal(loc=0.0, scale=noise_std, size=len(df)).astype(np.float64)
     df["baseprice"] = df["baseprice"] + noise
 
-    # Renormalize: absolute-max normalization, sign-preserving, range [-1, 1]
-    abs_max = df["baseprice"].abs().max()
-    if abs_max > 0:
-        df["price_normalized"] = df["baseprice"] / abs_max
-    else:
-        logger.warning("All prices zero after augmentation, setting normalized to 0.0")
-        df["price_normalized"] = 0.0
-
     price_min = df["baseprice"].min()
     price_max = df["baseprice"].max()
 
-    # Preserve column order
-    df = df[["start", "baseprice", "unit", "hour", "price_normalized"]]
+    if normalize:
+        # Renormalize: absolute-max normalization, sign-preserving, range [-1, 1]
+        abs_max = df["baseprice"].abs().max()
+        if abs_max > 0:
+            df["price_normalized"] = df["baseprice"] / abs_max
+        else:
+            logger.warning("All prices zero after augmentation, setting normalized to 0.0")
+            df["price_normalized"] = 0.0
+        df = df[["start", "baseprice", "unit", "hour", "price_normalized"]]
+    else:
+        # Drop price_normalized if it was present in the input
+        df = df[["start", "baseprice", "unit", "hour"]]
 
     df.to_csv(output_path, index=False)
     logger.info(
@@ -92,14 +96,18 @@ if __name__ == "__main__":
         default=SEED,
         help=f"Random seed for reproducibility (default: {SEED})",
     )
+    parser.add_argument(
+        "--normalize",
+        action="store_true",
+        help="Recompute price_normalized column after augmentation",
+    )
     args = parser.parse_args()
 
     output_path = args.output
     if output_path is None:
-        # Replace '_norm' suffix with '_aug', or append '_aug' before extension
         if "_norm" in args.input:
             output_path = args.input.replace("_norm", f"_norm_aug_seed{SEED}")
         else:
             output_path = re.sub(r"\.csv$", "_aug.csv", args.input)
 
-    augment_prices(args.input, output_path, noise_std=args.noise_std, seed=args.seed)
+    augment_prices(args.input, output_path, noise_std=args.noise_std, seed=args.seed, normalize=args.normalize)

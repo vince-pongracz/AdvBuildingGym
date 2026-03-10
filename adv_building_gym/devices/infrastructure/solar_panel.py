@@ -9,7 +9,6 @@ from adv_building_gym.config.utils.serializable import ComponentRegistry
 
 logger = logging.getLogger(__name__)
 
-# TODO VP 2026.01.20. : Get solar irradiation data -- at climate/weather data
 # TODO VP 2026.02.17. : Add parameters for solar panel modeling.
 # E.g. temperature effects, panel orientation, inverter efficiency, etc.
 # For now it's kept simple with a direct mapping from irradiance to production.
@@ -39,12 +38,12 @@ class SolarPanel(Infrastructure):
     }
 
     def __init__(self,
-                 name: str,
-                 Q_electric_max: float,
-                 peak_power_kW: float,
-                 seed: int,
-                 control_step: int = 300,
-                 ) -> None:
+                name: str,
+                Q_electric_max: float,
+                peak_power_kW: float,
+                seed: int,
+                control_step: int = 300
+                ) -> None:
         """Initialize Solar Panel infrastructure.
 
         Args:
@@ -55,11 +54,6 @@ class SolarPanel(Infrastructure):
             control_step: Control timestep in seconds (stored for future use)
         """
         super().__init__(name, Q_electric_max)
-        
-        # TODO VP 2026.01.24. : add at the weather data the irradiance angles 
-        # as well and the cloudiness factor -- 
-        # if it's cloudy, the sun is not that strong to 
-        # produce as much energy as without clouds
 
         # NOTE VP 2026.01.24. : Inverter efficiency is not considered, 
         # peak power means peak output power, produced by the solar panel
@@ -73,18 +67,17 @@ class SolarPanel(Infrastructure):
 
 
     def setup_spaces(self,
-                     state_spaces,
-                     action_spaces
-                     ):
+                    state_spaces,
+                    action_spaces):
         """Setup observation and action spaces for solar panel.
 
         Solar panel has no policy-controlled action space — production is
         fully determined by solar irradiance. Only state space is registered.
         """
 
-        if "solar_irradiance" not in state_spaces.keys():
+        if "solar_irradiance_norm" not in state_spaces.keys():
             # Normalized irradiance [0, 1]
-            state_spaces["solar_irradiance"] = Box(
+            state_spaces["solar_irradiance_norm"] = Box(
                 low=0, high=1, shape=(1,), dtype=np.float32
             )
 
@@ -100,8 +93,8 @@ class SolarPanel(Infrastructure):
         """
 
         # Update irradiance from state if available (set by DataSource)
-        if "solar_irradiance" in states:
-            self.irradiance_norm = float(states["solar_irradiance"][0])
+        if "solar_irradiance_norm" in states:
+            self.irradiance_norm = float(states["solar_irradiance_norm"][0])
 
         # If no external irradiance, use synthetic time-based profile
         if self.irradiance_norm == 0.0 and "sim_hour" in states:

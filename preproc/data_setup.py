@@ -1,15 +1,17 @@
 """Unified data setup script for AdvBuildingGym.
 
-By default, this script runs both pipelines:
+By default, this script runs all three pipelines:
 1) electricity price fetch + preprocessing (+ optional augmentation)
 2) weather/Zenodo fetch + preprocessing
+3) DWD CDC weather download + preprocessing
 
 Examples:
     python preproc/data_setup.py
-    python preproc/data_setup.py --skip-weather
+    python preproc/data_setup.py --skip-weather --skip-dwd
     python preproc/data_setup.py --skip-prices --steps zenodo-extract weather-csv
-    python preproc/data_setup.py --skip-weather --years 2025 --skip-price-fetch --raw-price-files data/e_price/2025_prices.csv
-    python preproc/data_setup.py --skip-weather --years 2023 --skip-price-fetch --raw-price-files data/e_price/2023_prices.csv --augment
+    python preproc/data_setup.py --skip-weather --skip-dwd --years 2025 --skip-price-fetch --raw-price-files data/e_price/2025_prices.csv
+    python preproc/data_setup.py --skip-prices --skip-weather --steps dwd-fetch dwd-preprocess
+    python preproc/data_setup.py --skip-prices --skip-weather --dwd-station-id 04177 --dwd-upsample-method duplicate
 """
 
 from __future__ import annotations
@@ -24,7 +26,7 @@ _PROJECT_ROOT_STR = str(Path(__file__).resolve().parents[1])
 if _PROJECT_ROOT_STR not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT_STR)
 
-from preproc.pipelines import run_price_pipeline, run_weather_pipeline
+from preproc.pipelines import run_dwd_pipeline, run_price_pipeline, run_weather_pipeline
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +34,8 @@ DEFAULT_YEARS: list[int] = list(range(2017, 2027))
 
 ALL_PRICE_STEPS: set[str] = {"price-fetch", "price-preproc"}
 ALL_WEATHER_STEPS: set[str] = {"zenodo-download", "zenodo-extract", "weather-csv", "sfh-csv"}
-ALL_STEPS: set[str] = ALL_PRICE_STEPS | ALL_WEATHER_STEPS
+ALL_DWD_STEPS: set[str] = {"dwd-fetch", "dwd-preprocess"}
+ALL_STEPS: set[str] = ALL_PRICE_STEPS | ALL_WEATHER_STEPS | ALL_DWD_STEPS
 
 
 def _parse_args() -> argparse.Namespace:
@@ -47,9 +50,10 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--price-source",
+        nargs="+",
         choices=["awattar", "energy-charts"],
-        default="energy-charts",
-        help="Price data source (default: awattar)",
+        default=["awattar", "energy-charts"],
+        help="Price data source(s) to fetch and preprocess (default: both)",
     )
     parser.add_argument(
         "--energy-charts-bzn",
@@ -100,6 +104,28 @@ def _parse_args() -> argparse.Namespace:
     )
 
     parser.add_argument(
+        "--skip-dwd",
+        action="store_true",
+        help="Skip the entire DWD weather pipeline",
+    )
+    parser.add_argument(
+        "--dwd-station-id",
+        default="04177",
+        help="DWD station ID (default: 04177 = Rheinstetten)",
+    )
+    parser.add_argument(
+        "--dwd-output-dir",
+        default="data/weather/dwd",
+        help="Directory for DWD downloaded and preprocessed data",
+    )
+    parser.add_argument(
+        "--dwd-upsample-method",
+        choices=["average", "duplicate"],
+        default="average",
+        help="Upsample method for DWD 10-min to 5-min (default: average)",
+    )
+
+    parser.add_argument(
         "--weather-hdf5",
         nargs="*",
         default=None,
@@ -146,6 +172,12 @@ def _parse_args() -> argparse.Namespace:
     )
 
     parser.add_argument(
+        "--normalize",
+        action="store_true",
+        help="Enable normalization in preprocessing (price and DWD weather pipelines)",
+    )
+
+    parser.add_argument(
         "--augment",
         action="store_true",
         help="Run price augmentation after preprocessing",
@@ -173,6 +205,14 @@ def _parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def _log_settings(args: argparse.Namespace) -> None:
+    """Log all parsed CLI settings before pipeline execution."""
+    settings = vars(args)
+    max_key_len = max(len(k) for k in settings)
+    lines = [f"  {k:<{max_key_len}} = {v!r}" for k, v in sorted(settings.items())]
+    logger.info("Data setup settings:\n%s", "\n".join(lines))
+
+
 def main() -> None:
     args = _parse_args()
 
@@ -181,15 +221,33 @@ def main() -> None:
         format="%(asctime)s %(levelname)s %(message)s",
     )
 
-    if args.skip_prices and args.skip_weather:
-        raise ValueError("Nothing to do: both --skip-prices and --skip-weather were set")
+    _log_settings(args)
+
+    if args.skip_prices and args.skip_weather and args.skip_dwd:
+        raise ValueError(
+            "Nothing to do: --skip-prices, --skip-weather, and --skip-dwd were all set"
+        )
 
     raw_price_files, preprocessed_price_files = run_price_pipeline(args)
-    run_weather_pipeline(args)
+    weather_stats = run_weather_pipeline(args)
+    dwd_stats = run_dwd_pipeline(args)
 
+    logger.info("====================")
     logger.info("Data setup complete.")
-    logger.info("Raw price files: %d", len(raw_price_files))
-    logger.info("Preprocessed price files: %d", len(preprocessed_price_files))
+    logger.info("--- Price pipeline ---")
+    logger.info("  Raw price files: %d", len(raw_price_files))
+    logger.info("  Preprocessed price files: %d", len(preprocessed_price_files))
+    logger.info("--- Zenodo weather pipeline ---")
+    logger.info("  Files downloaded: %d", weather_stats["downloaded"])
+    logger.info("  Archives extracted: %d", weather_stats["extracted"])
+    logger.info("  Weather CSVs produced: %d", weather_stats["weather_csvs"])
+    logger.info("  SFH CSVs produced: %d", weather_stats["sfh_csvs"])
+    logger.info("--- DWD pipeline ---")
+    logger.info("  Data types fetched: %d", dwd_stats["data_types"])
+    logger.info("  Merged rows (10-min): %d", dwd_stats["merged_rows"])
+    logger.info("  Years processed: %d", dwd_stats["years"])
+    logger.info("====================")
+    logger.info("Data setup finished!")
 
 
 if __name__ == "__main__":

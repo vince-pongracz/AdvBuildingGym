@@ -15,7 +15,7 @@ function that can be passed directly as a keyword argument to
 
 import logging
 
-from adv_building_gym.config.data_combinator import DataCombinator
+from adv_building_gym.data_combinator import DataCombinator
 from adv_building_gym.envs.data_variant import DataVariantProvider
 
 logger = logging.getLogger(__name__)

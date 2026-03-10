@@ -39,6 +39,24 @@ warnings.filterwarnings("ignore", category=Warning, module="tables.path")
 logging.basicConfig(level=logging.INFO, format="%(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
+# Rename WPuQ/Zenodo column names to match environment statesource conventions
+COLUMN_RENAMES: dict[str, str] = {
+    "temperature": "temp_amb",
+    "relative_humidity": "rel_humidity",
+    "solar_irradiance": "direct_sun_shine",
+    "wind_direction": "wind_dir",
+    "wind_speed": "avg_wind_speed",
+}
+
+# Columns to drop (not used by the environment)
+COLUMNS_TO_DROP: list[str] = [
+    "atmospheric_pressure",
+    "precipitation_rate",
+    "probability_of_precipitation",
+    "apparent_temperature",
+    "wind_gust_speed",
+]
+
 
 def clean_column_name(key: str) -> str:
     """
@@ -172,7 +190,6 @@ def extract_weather_data(
         df_merged = pd.concat(dataframes, axis=1, join="inner")
 
         stats["rows_before_dropna"] = len(df_merged)
-        stats["columns"] = list(df_merged.columns)
 
         # Drop rows with any NaN
         df_merged = df_merged.dropna()
@@ -185,6 +202,17 @@ def extract_weather_data(
             rows_dropped,
             len(df_merged.columns),
         )
+
+        # Rename columns to match environment statesource conventions
+        df_merged.rename(columns=COLUMN_RENAMES, inplace=True)
+
+        # Drop columns not needed by the environment
+        cols_to_drop = [c for c in COLUMNS_TO_DROP if c in df_merged.columns]
+        if cols_to_drop:
+            df_merged.drop(columns=cols_to_drop, inplace=True)
+            logger.info("Dropped columns: %s", cols_to_drop)
+
+        stats["columns"] = list(df_merged.columns)
 
         # Set index name
         df_merged.index.name = "timestamp"

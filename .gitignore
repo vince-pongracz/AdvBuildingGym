@@ -62,11 +62,15 @@ logs/**
 # Weather data is large, so we ignore the entire folder except for the ds_links.txt file which contains the Zenodo links to the original data sources.
 data/weather/zenodo/**
 !data/weather/zenodo/ds_links.txt
-data/weather/LLEC_**
-data/weather/10min**
-data/weather/produkt_zehn**
+data/weather/**/LLEC_**
+data/weather/**/10min**
+data/weather/**/produkt_zehn**
+data/weather/dwd/downloaded/**
+data/weather/dwd/preprocessed/**
 # Energy price data -- ignore all, scripts are there for fetching and preprocessing the data.
 data/e_price/**
+
+**rapidapi_key.yaml**
 
 # Data eval dir
 data/eval1/**

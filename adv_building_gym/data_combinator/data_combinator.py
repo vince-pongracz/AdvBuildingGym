@@ -37,13 +37,21 @@ class DataCombinator:
 
     scenarios: list[dict[str, str]] = field(default_factory=list)
     variable: dict[str, list[str]] = field(default_factory=dict)
-    swap_every_n_episodes: int = 1
+    swap_every_n_episodes: int = 5
     mode: Literal["cycle", "random"] = "cycle"
     day: str = "random"
     _day_date = None  # Cached parsed date for day mode
+    _variants: list[dict[str, str]] = field(default=None, init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        self._variants = self._build_variants()
 
     @property
     def variants(self) -> list[dict[str, str]]:
+        """Return the cached variant pool."""
+        return self._variants
+
+    def _build_variants(self) -> list[dict[str, str]]:
         """Build the full variant pool from scenarios x variable combinations."""
         # Build variable combinations (Cartesian product of independent axes)
         if self.variable:
@@ -59,13 +67,21 @@ class DataCombinator:
 
         # Cross-product: each scenario x each variable combination
         if self.scenarios:
-            return [
+            pool = [
                 {**scenario, **var_combo}
                 for scenario in self.scenarios
                 for var_combo in variable_combos
             ]
-        # No scenarios -- return variable combinations only (omit the empty-dict case)
-        return variable_combos if self.variable else []
+        else:
+            # No scenarios -- return variable combinations only (omit the empty-dict case)
+            pool = variable_combos if self.variable else []
+
+        logger.info(
+            "Generated %d variant(s) (%d scenario(s) x %d variable combo(s), swap every %d episode(s), mode=%s, day=%s)",
+            len(pool), len(self.scenarios), len(variable_combos),
+            self.swap_every_n_episodes, self.mode, self.day,
+        )
+        return pool
 
     def get_variant(
         self, episode_count: int, rng: np.random.Generator | None = None
@@ -168,7 +184,7 @@ class DataCombinator:
     def from_dict(cls, d: dict) -> "DataCombinator":
         """Reconstruct a DataCombinator from a dictionary."""
         return cls(
-            swap_every_n_episodes=d.get("swap_every_n_episodes", 1),
+            swap_every_n_episodes=d.get("swap_every_n_episodes", 5),
             mode=d.get("mode", "cycle"),
             day=d.get("day", "random"),
             scenarios=d.get("scenarios", []),

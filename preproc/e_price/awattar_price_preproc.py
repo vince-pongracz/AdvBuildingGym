@@ -8,7 +8,7 @@ Input format (aWATTar fetch output):
     start_timestamp, end_timestamp, marketprice, unit, marketprice_eur_per_kwh
 
 Output format (environment-compatible):
-    start, baseprice, unit, hour, price_normalized
+    start, baseprice, unit, hour[, price_normalized]
 """
 
 # NOTE VP 2026.02.28. : Usage: python preproc/e_price/awattar_price_preproc.py data/e_price/2023_prices.csv [-o data/e_price/2023_prices_preproc.csv]
@@ -24,12 +24,13 @@ RESAMPLE_INTERVAL: str = "5min"
 OUTPUT_UNIT: str = "ct/kWh"
 
 
-def preprocess_prices(input_path: str, output_path: str) -> None:
+def preprocess_prices(input_path: str, output_path: str, normalize: bool = False) -> None:
     """Convert aWATTar hourly price data to 5-min resolution environment format.
 
     Args:
         input_path: Path to fetched aWATTar CSV (hourly, Eur/MWh).
         output_path: Path for the preprocessed output CSV.
+        normalize: If True, add a price_normalized column (abs-max, [-1, 1]).
     """
     df = pd.read_csv(input_path, parse_dates=["start_timestamp", "end_timestamp"])
     logger.info("Loaded %d hourly records from %s", len(df), input_path)
@@ -80,26 +81,28 @@ def preprocess_prices(input_path: str, output_path: str) -> None:
     # at hour boundaries where the index crosses but the ffilled hour value lags)
     df["hour"] = df["start"].dt.hour
 
-    # Absolute max normalization: divide by max(|price|) so sign is preserved
-    # Negative prices stay negative, positive stay positive, range is [-1, 1]
     price_min = df["baseprice"].min()
     price_max = df["baseprice"].max()
-    abs_max = df["baseprice"].abs().max()
-    if abs_max > 0:
-        df["price_normalized"] = df["baseprice"] / abs_max
-    else:
-        logger.warning("All prices zero, setting normalized to 0.0")
-        df["price_normalized"] = 0.0
 
     df["unit"] = OUTPUT_UNIT
 
-    # Select and order columns to match target format
-    df = df[["start", "baseprice", "unit", "hour", "price_normalized"]]
+    if normalize:
+        # Absolute max normalization: divide by max(|price|) so sign is preserved
+        # Negative prices stay negative, positive stay positive, range is [-1, 1]
+        abs_max = df["baseprice"].abs().max()
+        if abs_max > 0:
+            df["price_normalized"] = df["baseprice"] / abs_max
+        else:
+            logger.warning("All prices zero, setting normalized to 0.0")
+            df["price_normalized"] = 0.0
+        df = df[["start", "baseprice", "unit", "hour", "price_normalized"]]
+    else:
+        df = df[["start", "baseprice", "unit", "hour"]]
 
     df.to_csv(output_path, index=False)
     logger.info(
-        "Saved %d records to %s (price range: %.2f–%.2f %s)",
-        len(df), output_path, price_min, price_max, OUTPUT_UNIT,
+        "Saved %d records to %s (price range: %.2f–%.2f %s, normalized: %s)",
+        len(df), output_path, price_min, price_max, OUTPUT_UNIT, normalize,
     )
 
 
@@ -111,15 +114,20 @@ if __name__ == "__main__":
     parser.add_argument(
         "-o", "--output",
         default=None,
-        help="Output CSV path (default: data/e_price/price_data_<year>_norm.csv)",
+        help="Output CSV path (default: data/e_price/price_data_<year>.csv)",
+    )
+    parser.add_argument(
+        "--normalize",
+        action="store_true",
+        help="Add price_normalized column (abs-max normalization to [-1, 1])",
     )
     args = parser.parse_args()
 
     output_path = args.output
     if output_path is None:
-        # Derive year from input filename or data
         df_peek = pd.read_csv(args.input, nrows=1, parse_dates=["start_timestamp"])
         year = df_peek["start_timestamp"].iloc[0].year
-        output_path = f"data/e_price/price_data_{year}_norm.csv"
+        suffix = "_norm" if args.normalize else ""
+        output_path = f"data/e_price/price_data_{year}{suffix}.csv"
 
-    preprocess_prices(args.input, output_path)
+    preprocess_prices(args.input, output_path, normalize=args.normalize)

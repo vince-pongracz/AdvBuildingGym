@@ -14,6 +14,8 @@ from preproc.e_price.energy_charts_fetch import (
     fetch_market_data as fetch_energy_charts_market_data,
 )
 from preproc.e_price.price_augment import augment_prices
+from preproc.weather.dwd.dwd_fetch import fetch_all as dwd_fetch_all
+from preproc.weather.dwd.dwd_preprocess import preprocess as dwd_preprocess
 from preproc.weather.extract_sfh_csv import extract_sfh_data
 from preproc.weather.extract_weather_csv import extract_weather_data
 
@@ -91,7 +93,7 @@ def _fetch_price_data_for_year(
     return output_path
 
 
-def _preprocess_price_file(raw_price_file: Path) -> Path:
+def _preprocess_price_file(raw_price_file: Path, normalize: bool = False) -> Path:
     """Run awattar_price_preproc.py logic on one raw input file.
 
     Output is written to the same directory as the raw file.
@@ -100,8 +102,9 @@ def _preprocess_price_file(raw_price_file: Path) -> Path:
         raise FileNotFoundError(f"Raw price file not found: {raw_price_file}")
 
     year = parse_year_from_filename(raw_price_file)
-    output_path = raw_price_file.parent / f"price_data_{year}_norm.csv"
-    preprocess_prices(str(raw_price_file), str(output_path))
+    suffix = "_norm" if normalize else ""
+    output_path = raw_price_file.parent / f"price_data_{year}{suffix}.csv"
+    preprocess_prices(str(raw_price_file), str(output_path), normalize=normalize)
     logger.info("Saved preprocessed price data to %s", output_path)
     return output_path
 
@@ -110,6 +113,7 @@ def _augment_price_file(
     preprocessed_file: Path,
     noise_std: float,
     seed: int | None,
+    normalize: bool = False,
 ) -> Path:
     """Run price augmentation on one preprocessed file.
 
@@ -117,39 +121,38 @@ def _augment_price_file(
     """
     year = parse_year_from_filename(preprocessed_file)
     output_path = preprocessed_file.parent / f"price_data_{year}_aug.csv"
-    augment_prices(str(preprocessed_file), str(output_path), noise_std=noise_std, seed=seed)
+    augment_prices(str(preprocessed_file), str(output_path), noise_std=noise_std, seed=seed, normalize=normalize)
     logger.info("Saved augmented price data to %s", output_path)
     return output_path
 
 
-def run_price_pipeline(args: argparse.Namespace) -> tuple[list[Path], list[Path]]:
-    """Run fetch + preprocess pipeline for electricity prices."""
-    if args.skip_prices:
-        logger.info("Skipping price pipeline (--skip-prices).")
-        return [], []
-
-    active_steps = set(args.steps)
+def _run_price_pipeline_for_source(
+    source: str,
+    args: argparse.Namespace,
+    active_steps: set[str],
+) -> tuple[list[Path], list[Path]]:
+    """Run fetch + preprocess for a single price source."""
     price_output_dir = resolve_setup_path(args.price_output_dir)
     raw_price_files: list[Path] = []
 
-    source_dir = _source_dir(price_output_dir, args.price_source)
+    source_dir = _source_dir(price_output_dir, source)
 
     if "price-fetch" not in active_steps or args.skip_price_fetch:
         if args.raw_price_files:
             raw_price_files = [resolve_setup_path(path) for path in args.raw_price_files]
         else:
-            suffix = "_prices.csv" if args.price_source == "awattar" else "_15m_prices.csv"
+            suffix = "_prices.csv" if source == "awattar" else "_15m_prices.csv"
             raw_price_files = [source_dir / f"{year}{suffix}" for year in args.years]
 
         missing_files = [path for path in raw_price_files if not path.exists()]
         if missing_files:
             missing_str = "\n".join(str(path) for path in missing_files)
-            raise FileNotFoundError(f"Missing raw price files:\n{missing_str}")
+            raise FileNotFoundError(f"Missing raw price files ({source}):\n{missing_str}")
     else:
         for year in args.years:
             raw_file = _fetch_price_data_for_year(
                 year=year,
-                source=args.price_source,
+                source=source,
                 output_dir=price_output_dir,
                 energy_charts_bzn=args.energy_charts_bzn,
             )
@@ -157,27 +160,56 @@ def run_price_pipeline(args: argparse.Namespace) -> tuple[list[Path], list[Path]
                 raw_price_files.append(raw_file)
 
         if not raw_price_files:
-            logger.warning("No price data fetched for any year — skipping preprocessing.")
+            logger.warning("No price data fetched for any year (source=%s) — skipping preprocessing.", source)
             return [], []
 
     preprocessed_files: list[Path] = []
     if "price-preproc" not in active_steps:
-        logger.info("Skipping price preprocessing (price-preproc not in --steps).")
+        logger.info("Skipping price preprocessing for %s (price-preproc not in --steps).", source)
     else:
+        normalize = getattr(args, "normalize", False)
         for raw_file in raw_price_files:
-            preprocessed_file = _preprocess_price_file(raw_file)
+            preprocessed_file = _preprocess_price_file(raw_file, normalize=normalize)
             preprocessed_files.append(preprocessed_file)
 
         if args.augment and preprocessed_files:
-            logger.info("Running price augmentation (noise_std=%.3f).", args.augment_noise_std)
+            logger.info("Running price augmentation for %s (noise_std=%.3f).", source, args.augment_noise_std)
             for preprocessed_file in preprocessed_files:
                 _augment_price_file(
                     preprocessed_file,
                     noise_std=args.augment_noise_std,
                     seed=args.augment_seed,
+                    normalize=normalize,
                 )
 
     return raw_price_files, preprocessed_files
+
+
+def run_price_pipeline(args: argparse.Namespace) -> tuple[list[Path], list[Path]]:
+    """Run fetch + preprocess pipeline for electricity prices.
+
+    Supports multiple price sources (e.g. awattar and energy-charts).
+    args.price_source can be a single string or a list of strings.
+    """
+    if args.skip_prices:
+        logger.info("Skipping price pipeline (--skip-prices).")
+        return [], []
+
+    active_steps = set(args.steps)
+
+    # Normalise price_source to a list for uniform handling
+    sources = args.price_source if isinstance(args.price_source, list) else [args.price_source]
+
+    all_raw: list[Path] = []
+    all_preprocessed: list[Path] = []
+
+    for source in sources:
+        logger.info("Running price pipeline for source: %s", source)
+        raw, preprocessed = _run_price_pipeline_for_source(source, args, active_steps)
+        all_raw.extend(raw)
+        all_preprocessed.extend(preprocessed)
+
+    return all_raw, all_preprocessed
 
 
 def _discover_hdf5(zenodo_dir: Path, pattern: str, explicit: list[str] | None) -> list[Path]:
@@ -190,11 +222,16 @@ def _discover_hdf5(zenodo_dir: Path, pattern: str, explicit: list[str] | None) -
     return found
 
 
-def run_weather_pipeline(args: argparse.Namespace) -> None:
-    """Run Zenodo download and weather preprocessing pipeline."""
+def run_weather_pipeline(args: argparse.Namespace) -> dict[str, int]:
+    """Run Zenodo download and weather preprocessing pipeline.
+
+    Returns:
+        Dict with counts: downloaded, extracted, weather_csvs, sfh_csvs.
+    """
+    stats = {"downloaded": 0, "extracted": 0, "weather_csvs": 0, "sfh_csvs": 0}
     if args.skip_weather:
         logger.info("Skipping weather pipeline (--skip-weather).")
-        return
+        return stats
 
     active_steps = set(args.steps)
     zenodo_dir = resolve_setup_path(args.zenodo_dir)
@@ -229,6 +266,7 @@ def run_weather_pipeline(args: argparse.Namespace) -> None:
                     output_dir=weather_csv_dir,
                     timestamp_unit=args.weather_timestamp_unit,
                 )
+                stats["weather_csvs"] += 1
             except Exception as exc:
                 logger.warning("Weather extraction failed for %s: %s — skipping", hdf5_path.name, exc)
 
@@ -250,11 +288,97 @@ def run_weather_pipeline(args: argparse.Namespace) -> None:
                     output_dir=sfh_csv_dir,
                     group=args.sfh_group,
                 )
+                stats["sfh_csvs"] += 1
             except Exception as exc:
                 logger.warning("SFH extraction failed for %s: %s — skipping", hdf5_path.name, exc)
+
+    stats["downloaded"] = download_count
+    stats["extracted"] = extract_count
 
     logger.info(
         "Weather pipeline summary: %d downloaded, %d extracted",
         download_count,
         extract_count,
     )
+
+    return stats
+
+
+def run_dwd_pipeline(args: argparse.Namespace) -> dict[str, int]:
+    """Run DWD weather data download and preprocessing pipeline.
+
+    Steps:
+      1. dwd-fetch: Download raw 10-min data from DWD CDC open-data server
+      2. dwd-preprocess: Merge, upsample to 5-min, split by year (optionally normalise)
+
+    Returns:
+        Dict with counts: data_types, merged_rows, years.
+    """
+    stats = {"data_types": 0, "merged_rows": 0, "years": 0}
+    if args.skip_dwd:
+        logger.info("Skipping DWD pipeline (--skip-dwd).")
+        return stats
+
+    active_steps = set(args.steps)
+    station_id = args.dwd_station_id
+    dwd_output_dir = resolve_setup_path(args.dwd_output_dir)
+
+    dataframes: dict | None = None
+
+    if "dwd-fetch" not in active_steps:
+        logger.info("Skipping DWD fetch (dwd-fetch not in --steps).")
+    else:
+        from preproc.weather.dwd.dwd_fetch import DOWNLOAD_DIR as default_download_dir
+
+        download_dir = dwd_output_dir / "downloaded"
+        download_dir.mkdir(parents=True, exist_ok=True)
+        logger.info("Fetching DWD data for station %s → %s", station_id, download_dir)
+        try:
+            dataframes = dwd_fetch_all(station_id=station_id, output_dir=download_dir)
+        except Exception as exc:
+            logger.error("DWD fetch failed: %s", exc)
+            return
+
+        if not dataframes:
+            logger.warning("No DWD data fetched — skipping preprocessing.")
+            return stats
+
+        stats["data_types"] = len(dataframes)
+        logger.info("DWD fetch complete: %d data type(s)", len(dataframes))
+
+    if "dwd-preprocess" not in active_steps:
+        logger.info("Skipping DWD preprocessing (dwd-preprocess not in --steps).")
+        return stats
+
+    if dataframes is None:
+        # Fetch was skipped — run it now to get dataframes for preprocessing
+        download_dir = dwd_output_dir / "downloaded"
+        logger.info("Running DWD fetch (needed for preprocessing) for station %s", station_id)
+        try:
+            dataframes = dwd_fetch_all(station_id=station_id, output_dir=download_dir)
+        except Exception as exc:
+            logger.error("DWD fetch failed: %s", exc)
+            return
+
+        if not dataframes:
+            logger.warning("No DWD data fetched — cannot preprocess.")
+            return stats
+
+    preprocess_dir = dwd_output_dir / "preprocessed"
+    logger.info("Preprocessing DWD data → %s", preprocess_dir)
+    normalize = getattr(args, "normalize", False)
+    merged = dwd_preprocess(
+        dataframes,
+        output_dir=preprocess_dir,
+        station_id=station_id,
+        upsample_method=args.dwd_upsample_method,
+        normalize=normalize,
+    )
+    if merged is not None:
+        stats["merged_rows"] = len(merged)
+        stats["years"] = merged["timestamp"].dt.year.nunique()
+        logger.info("DWD preprocessing complete: %d rows", len(merged))
+    else:
+        logger.error("DWD preprocessing produced no data.")
+
+    return stats

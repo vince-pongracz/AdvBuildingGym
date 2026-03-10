@@ -4,7 +4,7 @@ from typing import List, Optional
 
 # TODO VP 2026.02.20. : Simplyfy env config somehow, too much code here, too little declarative stuff...
 
-from adv_building_gym.config.data_combinator import DataCombinator
+from adv_building_gym.data_combinator import DataCombinator
 from adv_building_gym.envs.utils import BuildingProps
 
 from adv_building_gym.devices.infrastructure import (
@@ -53,18 +53,24 @@ class Config:
     # NOTE VP 2026.02.23. : Default data combinator -- just an example
     data_combinator: DataCombinator = field(default_factory=lambda: DataCombinator(
         scenarios=[
-            {
-                "weather": "data/weather/LLEC_outdoor_temperature_5min_data.csv",
-                "E_price": "data/e_price/price_data_2025_norm.csv",
-            },
-            {
-                "weather": "data/weather/LLEC_outdoor_temperature_5min_data.csv",
-                "E_price": "data/e_price/price_data_2026_norm.csv",
-            },
-            {
-                "weather": "data/weather/LLEC_outdoor_temperature_5min_data.csv",
-                "E_price": "data/e_price/price_data_2023_norm_aug_seed42.csv",
-            },
+            # NOTE VP 2026.03.09. : Station ID = 04177 -- Rheinstetten
+            # DWD weather + awattar e_price (2018-2024)
+            *[
+                {
+                    "weather": f"data/weather/dwd/preprocessed/{y}_merged_04177.csv",
+                    "E_price": f"data/e_price/awattar/price_data_{y}.csv",
+                }
+                for y in range(2018, 2025)
+            ],
+            # DWD weather + e_charts e_price (2018-2024)
+            *[
+                {
+                    "weather": f"data/weather/dwd/preprocessed/{y}_merged_04177.csv",
+                    "E_price": f"data/e_price/e_charts/price_data_{y}.csv",
+                }
+                for y in range(2018, 2025)
+            ],
+            
         ],
         variable={
             "ev_schedule": [

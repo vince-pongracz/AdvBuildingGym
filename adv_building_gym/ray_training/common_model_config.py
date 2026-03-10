@@ -16,7 +16,7 @@ from adv_building_gym.callbacks import (
     make_episode_metrics_callback_class,
     make_trajectory_logging_callback_class,
 )
-from adv_building_gym.config.data_combinator import DataCombinator
+from adv_building_gym.data_combinator import DataCombinator
 from adv_building_gym.utils import ResourceAllocation, validate_resource_allocation
 
 logger = logging.getLogger(__name__)
@@ -35,7 +35,7 @@ def common_model_config(
     rewards: List,
     metrics_base_dir: str = "ep_metrics",
     clip_actions: bool = True,
-    data_combinator: DataCombinator = DataCombinator(),
+    data_combinator: DataCombinator | None = None,
     data_swap_every_n_iterations: int = 15,
     log_trajectories: bool = False,
 ):
@@ -80,6 +80,9 @@ def common_model_config(
     Returns:
         Configured algorithm config
     """
+    if data_combinator is None:
+        data_combinator = DataCombinator()
+
     # Resource allocation:
     # - Learners: one per GPU, each gets 1 GPU and 1 CPU
     # - Driver: 1 CPU (taken from env_runners pool)

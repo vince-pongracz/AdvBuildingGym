@@ -13,6 +13,7 @@ from .checkpoint_finder import (
     find_latest_checkpoint,
     resolve_checkpoint_path,
 )
+from .normalisation import Normalisation, normalise_series
 
 __all__ = [
     "EnvSyncInterface",
@@ -27,4 +28,6 @@ __all__ = [
     "find_best_checkpoint",
     "find_latest_checkpoint",
     "resolve_checkpoint_path",
+    "Normalisation",
+    "normalise_series",
 ]

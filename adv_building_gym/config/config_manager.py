@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Dict, Any
 if TYPE_CHECKING:
     from adv_building_gym.config.env_config import Config
 
-from adv_building_gym.config.data_combinator import DataCombinator
+from adv_building_gym.data_combinator import DataCombinator
 from adv_building_gym.envs.utils import BuildingProps
 
 

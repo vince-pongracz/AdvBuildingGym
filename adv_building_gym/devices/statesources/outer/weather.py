@@ -1,25 +1,15 @@
 import logging
 from collections import OrderedDict
-from enum import Enum
 from typing import ClassVar, Set
 
 import numpy as np
 from gymnasium.spaces import Box
 
-# TODO VP 2026.01.07. : change scaling implementation, use sklearn classes and functions for that -- not really important, low priority task
-from sklearn import preprocessing
-
 from ..base import StateSource
 from adv_building_gym.config.utils.serializable import ComponentRegistry
+from adv_building_gym.utils.normalisation import Normalisation, normalise_series
 
 logger = logging.getLogger(__name__)
-
-
-class Normalisation(Enum):
-    """Normalisation types"""
-    MAX_ABS_SCALING = "max_abs"
-    MIN_MAX_SCALING = "min_max"
-    STANDARDISATION = "std"
 
 
 class WeatherDataSource(StateSource):
@@ -32,10 +22,7 @@ class WeatherDataSource(StateSource):
                  normalise: Normalisation | str | None = Normalisation.MAX_ABS_SCALING) -> None:
         super().__init__(name, ds_path)
 
-        # Convert string to enum if needed (for deserialization)
-        if isinstance(normalise, str):
-            normalise = Normalisation(normalise)
-        self.normalise = normalise  # Store for serialization
+        self.normalise = Normalisation.init(normalise)  # Store for serialization
 
         if self.ts is not None:
             logger.info("Use data file: %s", ds_path)
@@ -44,17 +31,20 @@ class WeatherDataSource(StateSource):
             logger.info("No data file provided, will use synthetic data")
 
     def _post_load_data_processing(self) -> None:
-        """Normalise the temperature column after CSV load / reload."""
-        column_name: str = "temp_amb [°C]"
-        match self.normalise:
-            case Normalisation.MAX_ABS_SCALING:
-                self.ts["temp_out_norm"] = self.ts[column_name] / self.ts[column_name].abs().max()
-            case Normalisation.MIN_MAX_SCALING:
-                self.ts["temp_out_norm"] = (self.ts[column_name] - self.ts[column_name].min()) / (self.ts[column_name].max() - self.ts[column_name].min())
-            case Normalisation.STANDARDISATION:
-                self.ts["temp_out_norm"] = (self.ts[column_name] - self.ts[column_name].mean()) / self.ts[column_name].std()
-            case None:
-                self.ts["temp_out_norm"] = self.ts[column_name]
+        """Normalise weather columns after CSV load / reload."""
+        # Zenodo CSVs have direct_sun_shine only (global irradiance); create sun_shine alias
+        if "sun_shine" not in self.ts.columns and "direct_sun_shine" in self.ts.columns:
+            self.ts["sun_shine"] = self.ts["direct_sun_shine"]
+
+        cols = {
+            "temp_amb": "temp_out_norm",
+            "sun_shine": "solar_irradiance_norm",
+            "avg_wind_speed": "avg_wind_speed_norm",
+        }
+
+        for raw_col, norm_col in cols.items():
+            if raw_col in self.ts.columns:
+                self.ts[norm_col] = normalise_series(self.ts[raw_col], self.normalise)
 
 
     def setup_spaces(self,
@@ -63,6 +53,10 @@ class WeatherDataSource(StateSource):
                      ) -> tuple[OrderedDict, OrderedDict]:
         if "temp_out_norm" not in state_spaces.keys():
             state_spaces["temp_out_norm"] = Box(low=-1, high=1, shape=(1,), dtype=np.float32)
+        if "solar_irradiance_norm" not in state_spaces.keys():
+            state_spaces["solar_irradiance_norm"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
+        if "avg_wind_speed_norm" not in state_spaces.keys():
+            state_spaces["avg_wind_speed_norm"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
 
         if "sim_hour" not in state_spaces.keys():
             state_spaces["sim_hour"] = Box(low=np.full((1,), 0, dtype=np.float32),
@@ -74,10 +68,10 @@ class WeatherDataSource(StateSource):
 
     def update_state(self, states) -> None:
         if self.ts is not None:
-            if self.effective_index < len(self.ts):
-                temp_out_norm = float(self.ts.iloc[self.effective_index]["temp_out_norm"])
-            else:
-                temp_out_norm = float(self.ts.iloc[-1]["temp_out_norm"])
+            row = self.ts.iloc[min(self.effective_index, len(self.ts) - 1)]
+            temp_out_norm = float(row["temp_out_norm"])
+            solar_irradiance_norm = float(row.get("solar_irradiance_norm", 0.0))
+            avg_wind_speed_norm = float(row.get("avg_wind_speed_norm", 0.0))
         else:
             current_sim_hour = states.get("sim_hour", np.zeros(shape=(1,), dtype=np.float32))[0]
             # Apply a simple time-based temperature profile if no CSV data is provided
@@ -99,10 +93,14 @@ class WeatherDataSource(StateSource):
                 temp_out_norm = 0.1
             else:
                 temp_out_norm = 0.3
+            # NOTE VP 2026.03.10. : Maybe add synthetic data to the other variables as well
+            solar_irradiance_norm = 0.0
+            avg_wind_speed_norm = 0.0
 
         # Ensure float32 dtype for all updates
-        temp_out_norm = np.float32(temp_out_norm)
-        states["temp_out_norm"][0] = temp_out_norm
+        states["temp_out_norm"][0] = np.float32(temp_out_norm)
+        states["solar_irradiance_norm"][0] = np.float32(solar_irradiance_norm)
+        states["avg_wind_speed_norm"][0] = np.float32(avg_wind_speed_norm)
 
     def _get_serialize_value(self, param_name: str, value):
         """Handle enum serialization for normalise parameter."""

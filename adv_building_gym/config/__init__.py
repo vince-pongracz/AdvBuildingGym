@@ -34,7 +34,7 @@ def __getattr__(name):
         from .config_manager import ConfigManager
         return ConfigManager
     elif name == "DataCombinator":
-        from .data_combinator import DataCombinator
+        from adv_building_gym.data_combinator import DataCombinator
         return DataCombinator
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 

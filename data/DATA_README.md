@@ -157,9 +157,26 @@ Use `preproc/e_price/plot_price.ipynb` to inspect and plot the preprocessed pric
 
 ## Weather data
 
-Zenodo: https://zenodo.org/records/5642902
+### Zenodo: https://zenodo.org/records/5642902
 
-DWD: ...
+Paper: Dataset on electrical single-family house and heat pump load profiles in Germany
+
+Link: https://www.nature.com/articles/s41597-022-01156-1#Tab3
+
+"Weather data
+We obtain weather data such as outdoor air temperature, wind speed, relative humidity and solar global radiation from the weather service wetter-online17 for the location Hamelin. We request the current weather data in intervals of 5 min from the weather service via a HTTP REST API and store it on the database server. The year 2018 has irregular intervals of 1 min to 1 hour."
+
+Weather data in WPuQ: https://wo.wetteronline.de/
+
+API docs wetteronline: https://wetteronline.readthedocs.io/en/latest/
+
+--> WetterOnline -- rather leave it
+
+### DWD
+
+
+
+Station map: https://www.dwd.de/DE/fachnutzer/landwirtschaft/appl/stationskarte/_node.html
 
 ### Weather/Zenodo pipeline via unified script
 

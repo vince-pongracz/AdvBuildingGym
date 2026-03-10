@@ -9,7 +9,7 @@ from gymnasium.spaces import Dict as SDict
 import numpy as np
 import pandas as pd
 
-from adv_building_gym.config.data_combinator import DataCombinator
+from adv_building_gym.data_combinator import DataCombinator
 from adv_building_gym.devices.statesources import StateSource
 from adv_building_gym.rewards import RewardFunction
 from adv_building_gym.devices.infrastructure import Infrastructure
@@ -157,7 +157,7 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         train_ratio=0.8,
         # Number of steps to look ahead for forecasted values
         prediction_horizon=8 * 12,  # 8 hours at 5-minute steps
-        data_combinator: DataCombinator = DataCombinator(),
+        data_combinator: DataCombinator | None = None,
         log_full_info: bool = False,
         **kwargs,
     ):
@@ -191,7 +191,7 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         self.cum_E_kWh = 0.0  # Cumulative net energy in kWh (tracked in info, not observation)
         
         self.episode_count: int = 0
-        self.data_combinator = data_combinator
+        self.data_combinator = data_combinator if data_combinator is not None else DataCombinator()
         self._rng: np.random.Generator | None = None
         self._episode_date: str = ""
         self._episode_day_mode: str = "none"
