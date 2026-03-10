@@ -76,6 +76,10 @@ class DataCombinator:
             # No scenarios -- return variable combinations only (omit the empty-dict case)
             pool = variable_combos if self.variable else []
 
+        from adv_building_gym.config import config
+        rng = np.random.default_rng(seed=config.seed)
+        rng.shuffle(pool)
+
         logger.info(
             "Generated %d variant(s) (%d scenario(s) x %d variable combo(s), swap every %d episode(s), mode=%s, day=%s)",
             len(pool), len(self.scenarios), len(variable_combos),

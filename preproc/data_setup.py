@@ -26,7 +26,7 @@ _PROJECT_ROOT_STR = str(Path(__file__).resolve().parents[1])
 if _PROJECT_ROOT_STR not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT_STR)
 
-from preproc.pipelines import run_dwd_pipeline, run_price_pipeline, run_weather_pipeline
+from preproc.pipelines import run_augmentation, run_dwd_pipeline, run_price_pipeline, run_weather_pipeline
 
 logger = logging.getLogger(__name__)
 
@@ -180,19 +180,8 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--augment",
         action="store_true",
-        help="Run price augmentation after preprocessing",
-    )
-    parser.add_argument(
-        "--augment-noise-std",
-        type=float,
-        default=0.3,
-        help="Gaussian noise std for price augmentation in ct/kWh (default: 0.3)",
-    )
-    parser.add_argument(
-        "--augment-seed",
-        type=int,
-        default=None,
-        help="Random seed for price augmentation (default: non-deterministic)",
+        help="Run data augmentation (Gaussian noise) on yearly price and weather CSVs after all pipelines. "
+             "Noise parameters are configured in preproc/augment_config.yaml.",
     )
 
     parser.add_argument(
@@ -230,7 +219,10 @@ def main() -> None:
 
     raw_price_files, preprocessed_price_files = run_price_pipeline(args)
     weather_stats = run_weather_pipeline(args)
-    dwd_stats = run_dwd_pipeline(args)
+    dwd_stats, dwd_yearly_csvs = run_dwd_pipeline(args)
+
+    # Augmentation is the final step, applied to yearly CSVs from all pipelines
+    aug_stats = run_augmentation(args, preprocessed_price_files, dwd_yearly_csvs)
 
     logger.info("====================")
     logger.info("Data setup complete.")
@@ -246,6 +238,9 @@ def main() -> None:
     logger.info("  Data types fetched: %d", dwd_stats["data_types"])
     logger.info("  Merged rows (10-min): %d", dwd_stats["merged_rows"])
     logger.info("  Years processed: %d", dwd_stats["years"])
+    logger.info("--- Augmentation ---")
+    logger.info("  Price files augmented: %d", aug_stats["price"])
+    logger.info("  Weather files augmented: %d", aug_stats["weather"])
     logger.info("====================")
     logger.info("Data setup finished!")
 

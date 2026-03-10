@@ -5,7 +5,7 @@ Preprocessing module for data exploration and transformation.
 from .e_price.awattar_fetch import fetch_market_data as fetch_awattar_market_data
 from .e_price.awattar_price_preproc import preprocess_prices
 from .e_price.energy_charts_fetch import fetch_market_data as fetch_energy_charts_market_data
-from .e_price.price_augment import augment_prices
+from .augment import augment_prices
 from .weather.explore_hdf5 import explore_hdf5_file
 from .weather.extract_sfh_csv import extract_sfh_data
 from .weather.extract_weather_csv import extract_weather_data

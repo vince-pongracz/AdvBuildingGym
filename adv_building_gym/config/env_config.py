@@ -1,11 +1,15 @@
 
+import logging
 from dataclasses import dataclass, field
 from typing import List, Optional
 
 # TODO VP 2026.02.20. : Simplyfy env config somehow, too much code here, too little declarative stuff...
 
+from adv_building_gym.config.utils import discover_augmented_scenarios
 from adv_building_gym.data_combinator import DataCombinator
 from adv_building_gym.envs.utils import BuildingProps
+
+logger = logging.getLogger(__name__)
 
 from adv_building_gym.devices.infrastructure import (
     Infrastructure, HP, BatteryTremblay, 
@@ -22,6 +26,10 @@ from adv_building_gym.rewards import (
     EVChargingOnTimeReward, MinimiseEnergyConsumption_Reward, 
     UserEnergyNeedReward, OperatorEnergyControlReward
 )
+
+
+_years_range = range(2018, 2025)
+
 
 
 @dataclass
@@ -60,7 +68,7 @@ class Config:
                     "weather": f"data/weather/dwd/preprocessed/{y}_merged_04177.csv",
                     "E_price": f"data/e_price/awattar/price_data_{y}.csv",
                 }
-                for y in range(2018, 2025)
+                for y in _years_range
             ],
             # DWD weather + e_charts e_price (2018-2024)
             *[
@@ -68,9 +76,10 @@ class Config:
                     "weather": f"data/weather/dwd/preprocessed/{y}_merged_04177.csv",
                     "E_price": f"data/e_price/e_charts/price_data_{y}.csv",
                 }
-                for y in range(2018, 2025)
+                for y in _years_range
             ],
-            
+            # Augmented scenarios discovered at init time (if augmented CSVs exist)
+            *discover_augmented_scenarios(years=_years_range),
         ],
         variable={
             "ev_schedule": [

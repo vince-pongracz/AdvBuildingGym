@@ -24,13 +24,15 @@ RESAMPLE_INTERVAL: str = "5min"
 OUTPUT_UNIT: str = "ct/kWh"
 
 
-def preprocess_prices(input_path: str, output_path: str, normalize: bool = False) -> None:
+def preprocess_prices(input_path: str, output_path: str, normalize: bool = False,
+                      year: int | None = None) -> None:
     """Convert aWATTar hourly price data to 5-min resolution environment format.
 
     Args:
         input_path: Path to fetched aWATTar CSV (hourly, Eur/MWh).
         output_path: Path for the preprocessed output CSV.
         normalize: If True, add a price_normalized column (abs-max, [-1, 1]).
+        year: If given, drop rows whose timestamp falls outside this calendar year.
     """
     df = pd.read_csv(input_path, parse_dates=["start_timestamp", "end_timestamp"])
     logger.info("Loaded %d hourly records from %s", len(df), input_path)
@@ -81,6 +83,15 @@ def preprocess_prices(input_path: str, output_path: str, normalize: bool = False
     # at hour boundaries where the index crosses but the ffilled hour value lags)
     df["hour"] = df["start"].dt.hour
 
+    # Drop rows outside the nominal year (e.g. energy-charts API may return the
+    # last hour of the previous year due to UTC/local-time boundary overlap)
+    if year is not None:
+        before = len(df)
+        df = df[df["start"].dt.year == year].reset_index(drop=True)
+        dropped = before - len(df)
+        if dropped:
+            logger.info("Dropped %d row(s) outside year %d", dropped, year)
+
     price_min = df["baseprice"].min()
     price_max = df["baseprice"].max()
 
@@ -123,11 +134,14 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
+    # Detect year from first record (used for output filename and filtering)
+    df_peek = pd.read_csv(args.input, nrows=2, parse_dates=["start_timestamp"])
+    # Use the last of the peeked rows to avoid off-by-one at year boundary
+    year = df_peek["start_timestamp"].iloc[-1].year
+
     output_path = args.output
     if output_path is None:
-        df_peek = pd.read_csv(args.input, nrows=1, parse_dates=["start_timestamp"])
-        year = df_peek["start_timestamp"].iloc[0].year
         suffix = "_norm" if args.normalize else ""
         output_path = f"data/e_price/price_data_{year}{suffix}.csv"
 
-    preprocess_prices(args.input, output_path, normalize=args.normalize)
+    preprocess_prices(args.input, output_path, normalize=args.normalize, year=year)
