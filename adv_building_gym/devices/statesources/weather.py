@@ -18,6 +18,8 @@ class WeatherDataSource(StateSource):
     # normalise is an enum, need special handling for serialization
     _exclude_params: ClassVar[Set[str]] = {'iteration', 'ts'}
 
+    # TODO VP 2026.03.11. : Refactor data bindings -- rather load data always after StateSource created, it does not matter in ctor time what is the underlying data set
+
     def __init__(self, name: str, ds_path: str | None = None,
                 normalise: Normalisation | str | None = Normalisation.ABS_MIN_MAX_SCALING) -> None:
         super().__init__(name, ds_path)
@@ -39,7 +41,7 @@ class WeatherDataSource(StateSource):
             for k, v in cols.items():
                 self.ts[v] = normalise_series(self.ts[k], normalise)
         else:
-            logger.info("No data file provided, will use synthetic data")
+            logger.debug("No initial data file, data source will be assigned by DataCombinator")
 
     def setup_spaces(self, 
                     state_spaces: OrderedDict, 

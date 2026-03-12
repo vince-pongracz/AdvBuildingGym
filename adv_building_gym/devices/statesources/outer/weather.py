@@ -23,12 +23,14 @@ class WeatherDataSource(StateSource):
         super().__init__(name, ds_path)
 
         self.normalise = Normalisation.init(normalise)  # Store for serialization
+        self.temp_out_raw: float = 0.0  # Raw outdoor temperature (°C)
+        self.temp_abs_max: float = 1.0  # Scale factor for denormalising temperatures
 
         if self.ts is not None:
             logger.info("Use data file: %s", ds_path)
             self._post_load_data_processing()
         else:
-            logger.info("No data file provided, will use synthetic data")
+            logger.debug("No initial data file for '%s', data source will be assigned by DataCombinator", name)
 
     def _post_load_data_processing(self) -> None:
         """Normalise weather columns after CSV load / reload."""
@@ -45,6 +47,12 @@ class WeatherDataSource(StateSource):
         for raw_col, norm_col in cols.items():
             if raw_col in self.ts.columns:
                 self.ts[norm_col] = normalise_series(self.ts[raw_col], self.normalise)
+
+        # Store scale factor for denormalising temperature values
+        if "temp_amb" in self.ts.columns:
+            self.temp_abs_max = float(self.ts["temp_amb"].abs().max())
+        else:
+            self.temp_abs_max = 1.0
 
 
     def setup_spaces(self,
@@ -70,6 +78,7 @@ class WeatherDataSource(StateSource):
         if self.ts is not None:
             row = self.ts.iloc[min(self.effective_index, len(self.ts) - 1)]
             temp_out_norm = float(row["temp_out_norm"])
+            self.temp_out_raw = float(row["temp_amb"])
             solar_irradiance_norm = float(row.get("solar_irradiance_norm", 0.0))
             avg_wind_speed_norm = float(row.get("avg_wind_speed_norm", 0.0))
         else:

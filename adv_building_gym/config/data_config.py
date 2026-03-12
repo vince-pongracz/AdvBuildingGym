@@ -1,0 +1,84 @@
+"""Load DataCombinator configuration from YAML.
+
+Separates data scheduling concerns (which CSV files, which years, augmented data)
+from environment topology (infras, rewards, statesources) defined in env_config.py.
+"""
+
+import logging
+from pathlib import Path
+
+import yaml
+
+from adv_building_gym.config.utils import discover_augmented_scenarios
+from adv_building_gym.data_combinator import DataCombinator
+
+logger = logging.getLogger(__name__)
+
+DEFAULT_YAML_PATH = Path(__file__).resolve().parents[2] / "configs" / "data_combinator_config.yaml"
+
+
+def load_data_combinator(
+    yaml_path: str | Path | None = None,
+    seed_override: int | None = None,
+) -> DataCombinator:
+    """Build a DataCombinator from a YAML config file.
+
+    Args:
+        yaml_path: Path to the YAML config. Defaults to
+            ``configs/data_combinator_config.yaml`` in the project root.
+        seed_override: If provided, overrides the seed in the YAML file.
+
+    Returns:
+        A fully constructed DataCombinator with scenarios expanded from
+        the year/source templates defined in the YAML.
+    """
+    yaml_path = Path(yaml_path) if yaml_path is not None else DEFAULT_YAML_PATH
+
+    if not yaml_path.exists():
+        logger.error("Data combinator YAML config not found: %s", yaml_path)
+        raise FileNotFoundError(f"Data combinator YAML config not found: {yaml_path}")
+
+    with open(yaml_path, "r") as f:
+        cfg = yaml.safe_load(f)
+
+    seed = seed_override if seed_override is not None else cfg["seed"]
+    shuffle = cfg["shuffle"]
+    years = cfg["years"]
+    include_augmented = cfg["include_augmented"]
+
+    # Build scenario list from templates x years
+    scenarios: list[dict[str, str]] = []
+    for source_template in cfg["scenario_sources"]:
+        for year in years:
+            scenario = {
+                name: pattern.format(year=year)
+                for name, pattern in source_template.items()
+            }
+            scenarios.append(scenario)
+
+    # Auto-discover augmented scenarios
+    if include_augmented:
+        aug_cfg = cfg["augmented_paths"]
+        augmented = discover_augmented_scenarios(
+            years=range(min(years), max(years) + 1),
+            weather_dir=aug_cfg["weather_dir"],
+            price_dirs=aug_cfg["price_dirs"],
+        )
+        scenarios.extend(augmented)
+
+    variable = cfg["variable"]
+
+    logger.info(
+        "Loaded data combinator from %s: %d scenario templates, years %s, augmented=%s",
+        yaml_path.name, len(scenarios), years, include_augmented,
+    )
+
+    return DataCombinator(
+        scenarios=scenarios,
+        variable=variable,
+        swap_every_n_episodes=cfg["swap_every_n_episodes"],
+        mode=cfg["mode"],
+        day=cfg["day"],
+        seed=seed,
+        shuffle=shuffle,
+    )

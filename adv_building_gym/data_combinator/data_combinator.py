@@ -40,6 +40,8 @@ class DataCombinator:
     swap_every_n_episodes: int = 5
     mode: Literal["cycle", "random"] = "cycle"
     day: str = "random"
+    seed: int = 42
+    shuffle: bool = True
     _day_date = None  # Cached parsed date for day mode
     _variants: list[dict[str, str]] = field(default=None, init=False, repr=False)
 
@@ -76,9 +78,9 @@ class DataCombinator:
             # No scenarios -- return variable combinations only (omit the empty-dict case)
             pool = variable_combos if self.variable else []
 
-        from adv_building_gym.config import config
-        rng = np.random.default_rng(seed=config.seed)
-        rng.shuffle(pool)
+        if self.shuffle:
+            rng = np.random.default_rng(seed=self.seed)
+            rng.shuffle(pool)
 
         logger.info(
             "Generated %d variant(s) (%d scenario(s) x %d variable combo(s), swap every %d episode(s), mode=%s, day=%s)",
@@ -180,6 +182,8 @@ class DataCombinator:
             "swap_every_n_episodes": self.swap_every_n_episodes,
             "mode": self.mode,
             "day": self.day,
+            "seed": self.seed,
+            "shuffle": self.shuffle,
             "scenarios": self.scenarios,
             "variable": self.variable,
         }
@@ -191,6 +195,8 @@ class DataCombinator:
             swap_every_n_episodes=d.get("swap_every_n_episodes", 5),
             mode=d.get("mode", "cycle"),
             day=d.get("day", "random"),
+            seed=d.get("seed", 42),
+            shuffle=d.get("shuffle", True),
             scenarios=d.get("scenarios", []),
             variable=d.get("variable", {}),
         )

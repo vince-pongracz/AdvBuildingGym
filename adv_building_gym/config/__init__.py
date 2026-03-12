@@ -8,6 +8,7 @@ Use:
     from adv_building_gym.config import config
     from adv_building_gym.config import ConfigManager
 """
+# TODO VP 2026.03.10. : Is this lazyness still needed at the imports?
 
 from __future__ import annotations
 
@@ -36,6 +37,9 @@ def __getattr__(name):
     elif name == "DataCombinator":
         from adv_building_gym.data_combinator import DataCombinator
         return DataCombinator
+    elif name == "load_data_combinator":
+        from .data_config import load_data_combinator
+        return load_data_combinator
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
@@ -44,6 +48,7 @@ __all__ = [
     "config",
     "ConfigManager",
     "DataCombinator",
+    "load_data_combinator",
     "Serializable",
     "ComponentRegistry",
     "TrainingConfig",

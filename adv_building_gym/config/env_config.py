@@ -4,9 +4,6 @@ from dataclasses import dataclass, field
 from typing import List, Optional
 
 # TODO VP 2026.02.20. : Simplyfy env config somehow, too much code here, too little declarative stuff...
-
-from adv_building_gym.config.utils import discover_augmented_scenarios
-from adv_building_gym.data_combinator import DataCombinator
 from adv_building_gym.envs.utils import BuildingProps
 
 logger = logging.getLogger(__name__)
@@ -26,9 +23,6 @@ from adv_building_gym.rewards import (
     EVChargingOnTimeReward, MinimiseEnergyConsumption_Reward, 
     UserEnergyNeedReward, OperatorEnergyControlReward
 )
-
-
-_years_range = range(2018, 2025)
 
 
 
@@ -54,46 +48,6 @@ class Config:
     building_props: BuildingProps = field(default_factory=lambda:
         BuildingProps(mC=300, K=20)
     )
-
-    # How to schedule backbone data sources along the training run.
-    # Manage that different configurations are seen during the training
-    # --> Help generalisation
-    # NOTE VP 2026.02.23. : Default data combinator -- just an example
-    data_combinator: DataCombinator = field(default_factory=lambda: DataCombinator(
-        scenarios=[
-            # NOTE VP 2026.03.09. : Station ID = 04177 -- Rheinstetten
-            # DWD weather + awattar e_price (2018-2024)
-            *[
-                {
-                    "weather": f"data/weather/dwd/preprocessed/{y}_merged_04177.csv",
-                    "E_price": f"data/e_price/awattar/price_data_{y}.csv",
-                }
-                for y in _years_range
-            ],
-            # DWD weather + e_charts e_price (2018-2024)
-            *[
-                {
-                    "weather": f"data/weather/dwd/preprocessed/{y}_merged_04177.csv",
-                    "E_price": f"data/e_price/e_charts/price_data_{y}.csv",
-                }
-                for y in _years_range
-            ],
-            # Augmented scenarios discovered at init time (if augmented CSVs exist)
-            *discover_augmented_scenarios(years=_years_range),
-        ],
-        variable={
-            "ev_schedule": [
-                "data/ev_usage_profiles/ev_0.csv",
-                "data/ev_usage_profiles/ev_1.csv",
-                "data/ev_usage_profiles/ev_2.csv",
-                "data/ev_usage_profiles/ev_3.csv",
-                "data/ev_usage_profiles/ev_4.csv",
-                "data/ev_usage_profiles/ev_5.csv",
-            ],
-        },
-        swap_every_n_episodes=10,
-        mode="cycle",
-    ))
 
     # Cached singleton instances (for backward compatibility and inspection)
     # WARNING: Do not pass these to parallel environments - use factory methods instead

@@ -76,6 +76,7 @@ CHECKPOINT_FREQ=""
 LOG_TRAJECTORIES=""
 EXTRA_ARGS=()
 
+# TODO VP: refactor params here, py script knows the defaults
 # Parse named arguments
 while [[ $# -gt 0 ]]; do
   case $1 in

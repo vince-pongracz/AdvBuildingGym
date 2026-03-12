@@ -68,7 +68,8 @@ class EnergyPriceDataSource(StateSource):
                 energy_price = 0.75
 
         states["E_price"][0] = np.float32(energy_price)
-        states["E_price_max"][0] = np.float32(self.price_max)
+        # E_price is already normalised, so the normalised max is 1.0
+        states["E_price_max"][0] = np.float32(1.0)
 
     def _get_serialize_value(self, param_name: str, value):
         """Handle enum serialization for normalise parameter."""

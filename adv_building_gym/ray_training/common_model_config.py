@@ -115,7 +115,6 @@ def common_model_config(
     )
     config.environment(
         env="AdvBuilding",
-        normalize_actions=True,
         clip_actions=clip_actions,
     )
     config.debugging(

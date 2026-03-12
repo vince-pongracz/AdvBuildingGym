@@ -29,7 +29,8 @@ from adv_building_gym.utils import setup_warning_filters
 
 # Trigger registration of the custom Gym IDs
 from adv_building_gym import make_checkpoint_callback_class, ConfigManager
-from adv_building_gym.config import config as default_config
+from adv_building_gym.config import config as default_config, load_data_combinator
+from adv_building_gym.config.data_config import DEFAULT_YAML_PATH
 from adv_building_gym.envs import adv_building_env_creator
 from adv_building_gym.ray_training import common_model_config, select_model
 from adv_building_gym.config.training_config import TrainingConfig
@@ -153,7 +154,11 @@ def main():
         default=False,
         help="Save per-step trajectory JSON per episode (default: False)"
     )
-    
+    parser.add_argument(
+        "--data-config", type=str, default=str(DEFAULT_YAML_PATH),
+        help="Path to data combinator YAML config (default: %(default)s)"
+    )
+
     args = parser.parse_args()
 
     # Load config from file if specified, otherwise use default
@@ -163,6 +168,12 @@ def main():
         logger.info("Config loaded successfully: %s", active_config.config_name)
     else:
         active_config = default_config
+
+    # Load data combinator from YAML (separate from env config)
+    data_combinator = load_data_combinator(
+        yaml_path=args.data_config,
+        seed_override=args.seed,
+    )
 
     # Resolve stopping criterion: --episodes takes precedence over --timesteps.
     # Internally, RLlib always stops on num_env_steps_sampled_lifetime (timesteps),
@@ -278,7 +289,8 @@ def main():
     )
 
     env_creator_config = {
-        "log_full_info": args.log_trajectories,  # Log full state info in env info dict when trajectory logging is enabled
+        "log_full_info": args.log_trajectories,
+        "data_combinator": data_combinator,
     }
     register_env("AdvBuilding", lambda cfg: adv_building_env_creator({**env_creator_config, **cfg}))
 
@@ -308,7 +320,7 @@ def main():
         rewards=active_config.rewards,
         metrics_base_dir="ep_metrics",
         clip_actions=True,
-        data_combinator=active_config.data_combinator,
+        data_combinator=data_combinator,
         log_trajectories=args.log_trajectories
     )
 

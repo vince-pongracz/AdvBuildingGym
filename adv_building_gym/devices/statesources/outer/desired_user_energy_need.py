@@ -33,7 +33,7 @@ class DesiredUserEnergyNeed(StateSource):
             # TODO VP: Add column name and normalization logic if needed
             # Example: self.energy_need_max = float(self.ts["energy_need"].max())
         else:
-            logger.info("No data file provided, will use synthetic data")
+            logger.debug("No initial data file for '%s', using synthetic energy need profile", name)
 
     def setup_spaces(self,
                      state_spaces: OrderedDict,

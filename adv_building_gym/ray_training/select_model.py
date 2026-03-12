@@ -101,6 +101,10 @@ def select_model(
             tau=0.005,  # Soft update coefficient for target networks (at Polyak averaging)
             train_batch_size_per_learner=training_config.sac_replay_batch_size,
             num_steps_sampled_before_learning_starts=learning_starts, # Number of steps to collect before starting learning (to fill up replay buffer)
+            # Gradient clipping prevents NaN/Inf in the policy network when
+            # reward signals have large magnitude (e.g. harsh penalties).
+            # Without this, SAC can crash with "normal expects all elements of std >= 0.0".
+            grad_clip=1.0,
         )
     # NOTE VP 2026.02.11. : Maybe add DreamerV3 -- but in that case drop the forecasting states
     # DreamerV3 paper link: https://arxiv.org/pdf/2301.04104
@@ -115,7 +119,9 @@ def select_model(
         # TODO VP 2026.01.12. : Use transformer model for better learning, it is a time series after all -- but does it really matter here?
         model_config=DefaultModelConfig(
             fcnet_activation='relu',
-            fcnet_hiddens=[32, 32, 32],
+            # NOTE VP 2026.03.10. : What is the NN structure which is needed to learn this task complexity?
+            fcnet_hiddens=[256, 256],
+            # [256, 256, 256]
             # Use LSTM to exploit temporal dependencies
             # use_lstm=True,
             # lstm_cell_size=5,

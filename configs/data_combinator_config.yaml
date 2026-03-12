@@ -1,0 +1,46 @@
+# Data combinator configuration
+# Defines which data sources are used for training scenario scheduling.
+# This is separate from the environment config (env_config.py) which defines
+# the environment topology (infras, rewards, statesources).
+
+seed: 42
+shuffle: true
+
+# Variant cycling settings
+swap_every_n_episodes: 10
+mode: cycle       # "cycle" (round-robin) or "random"
+day: random       # "random", "each", or a date string like "2025-03-15"
+
+# Years to include in scenario generation
+years: [2018, 2019, 2020, 2021, 2022, 2023, 2024]
+
+# Whether to auto-discover and include augmented data files
+include_augmented: true
+
+# Scenario source definitions
+# Each entry under "sources" defines a correlated group of data files.
+# The Cartesian product of all sources across all years forms the scenario pool.
+# Each source maps a statesource name to a directory + filename pattern.
+# The pattern must contain {year} which is replaced with each year.
+scenario_sources:
+  - weather: data/weather/dwd/preprocessed/{year}_merged_04177.csv
+    E_price: data/e_price/awattar/price_data_{year}.csv
+  - weather: data/weather/dwd/preprocessed/{year}_merged_04177.csv
+    E_price: data/e_price/e_charts/price_data_{year}.csv
+
+# Augmented data discovery paths (used when include_augmented is true)
+augmented_paths:
+  weather_dir: data/weather/dwd/preprocessed
+  price_dirs:
+    awattar: data/e_price/awattar
+    e_charts: data/e_price/e_charts
+
+# Independent variable sources (Cartesian product applied across these)
+variable:
+  ev_schedule:
+    - data/ev_usage_profiles/ev_0.csv
+    - data/ev_usage_profiles/ev_1.csv
+    - data/ev_usage_profiles/ev_2.csv
+    - data/ev_usage_profiles/ev_3.csv
+    - data/ev_usage_profiles/ev_4.csv
+    - data/ev_usage_profiles/ev_5.csv

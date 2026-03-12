@@ -21,6 +21,13 @@ Data link: https://zenodo.org/records/5642902
 
 <!-- TODO VP: add it to the repo setup description... -->
 
+TODO VP: Idea 2. The "Mixture of Experts" or Hierarchical Approach
+You can have a single agent that switches between different policies based on the state.
+
+How it works: You define a multi-agent setup where one "Manager" policy selects which "Worker" policy to use. Even though it's technically a single entity in the game, RLlib treats it as a coordination task between multiple policies.
+
+Use case: An agent that has a "Combat Policy" and a "Navigation Policy."
+
 Script to download data from zenedo:
 ```bash
 while IFS= read -r link; do

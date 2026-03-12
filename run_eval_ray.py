@@ -68,6 +68,20 @@ def parse_args() -> argparse.Namespace:
         default=True,
         help="Save per-step trajectory JSON per episode (default: True)",
     )
+    # TODO VP 2026.03.11. : Check this out again -- run it
+    parser.add_argument(
+        "--data-config", type=str, default=None,
+        help="Path to data combinator YAML config (e.g. configs/eval_data_combinator_config.yaml)",
+    )
+    parser.add_argument(
+        "--data-mode", type=str, default=None,
+        choices=["cycle", "random"],
+        help="Override variant selection mode (cycle=round-robin, random)",
+    )
+    parser.add_argument(
+        "--data-day", type=str, default=None,
+        help="Override day mode: 'each', 'random', or a date string like '2022-07-15'",
+    )
     return parser.parse_args()
 
 
@@ -92,6 +106,21 @@ def main() -> None:
         else active_config.config_name
     )
 
+    # Build DataCombinator from YAML if specified
+    data_combinator = None
+    if args.data_config:
+        from adv_building_gym.config.data_config import load_data_combinator
+
+        data_combinator = load_data_combinator(args.data_config, seed_override=args.seed)
+        if args.data_mode is not None:
+            data_combinator.mode = args.data_mode
+        if args.data_day is not None:
+            data_combinator.day = args.data_day
+        logger.info(
+            "DataCombinator: %d variants, mode=%s, day=%s",
+            len(data_combinator.variants), data_combinator.mode, data_combinator.day,
+        )
+
     logger.info("Parsed arguments: %s", vars(args))
 
     # Resolve checkpoint path (auto-discovers if not provided)
@@ -112,6 +141,7 @@ def main() -> None:
             log_trajectories=args.log_trajectories,
             algorithm_hint=args.algorithm,
             timeout_seconds=300,
+            data_combinator=data_combinator,
         )
         logger.info("Evaluation completed successfully!")
     except Exception as e:

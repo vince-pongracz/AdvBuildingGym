@@ -60,7 +60,7 @@ class OperatorEnergyControl(StateSource):
             # Clip to [0, 1] in case CSV has values exceeding max_power_kW
             self.ts["operator_energy_max_norm"] = self.ts["operator_energy_max_norm"].clip(0.0, 1.0)
         else:
-            logger.warning("No data file provided, will use synthetic data")
+            logger.debug("No initial data file for '%s', using synthetic operator limits", name)
 
     def setup_spaces(self,
                      state_spaces: OrderedDict,

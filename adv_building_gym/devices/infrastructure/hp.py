@@ -87,17 +87,25 @@ class HP(Infrastructure):
             # Cooling mode: remove heat from building (negative q_hp)
             cop = self.cop_cool
             q_hp = -energy * self.Q_electric_max * cop  # heat removed from building
+            mode = 0.0
         elif mode > 0.6:
             # Heating mode: add heat to building (positive q_hp)
             cop = self.cop_heat
             q_hp = energy * self.Q_electric_max * cop  # heat added to building
+            mode = 1.0
         else:
             # No action zone [0.4, 0.6]
             q_hp = 0.0
             # Set also the energy part to 0 in this case -- at rewards it is useful to have the real actions
             actions["HP_action"][0] = 0.0
+            actions["HP_action"][1] = 0.5
             self.temp_in_norm_change = 0.0
             return
+
+        # Write back discretized mode so downstream consumers (info["action"],
+        # prev_HP_action, rewards) see the effective 0/0.5/1 value, not the
+        # raw continuous policy output.
+        actions["HP_action"][1] = np.float32(mode)
 
         # TODO VP 2026.01.20. : Add forecasting window (and thus MPC) for the states and the
         # actions as well in the config, generally window size is 0.
@@ -144,6 +152,7 @@ class HP(Infrastructure):
 
             # Update action with the reduced energy (preserve mode)
             actions["HP_action"][0] = np.float32(actual_energy)
+            actions["HP_action"][1] = np.float32(mode)
 
             # Store the actual temperature change
             self.temp_in_norm_change = actual_dTemp

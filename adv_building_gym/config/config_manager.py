@@ -9,7 +9,6 @@ from typing import TYPE_CHECKING, Dict, Any
 if TYPE_CHECKING:
     from adv_building_gym.config.env_config import Config
 
-from adv_building_gym.data_combinator import DataCombinator
 from adv_building_gym.envs.utils import BuildingProps
 
 
@@ -45,9 +44,6 @@ class ConfigManager:
                 "K": config.building_props.K,
             },
         }
-
-        # Serialize DataCombinator
-        config_dict["data_combinator"] = config.data_combinator.to_dict()
 
         # Serialize infrastructures using their to_dict() method
         if config.infras is not None:
@@ -104,11 +100,6 @@ class ConfigManager:
             infras=[],
             statesources=[],
             rewards=[],
-        )
-
-        # Deserialize DataCombinator (empty DataCombinator is a no-op fallback)
-        config.data_combinator = DataCombinator.from_dict(
-            config_dict.get("data_combinator", {})
         )
 
         # Build context for infrastructure deserialization

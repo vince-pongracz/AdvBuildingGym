@@ -12,6 +12,7 @@ import time
 import numpy as np
 import ray
 
+from adv_building_gym.data_combinator import DataCombinator
 from adv_building_gym.envs import AdvBuildingGym
 from adv_building_gym.ray_training.rl_module_inference import (
     flatten_observation,
@@ -39,6 +40,7 @@ def evaluate_model(
     log_trajectories: bool = True,
     algorithm_hint: str | None = None,
     timeout_seconds: int = 300,
+    data_combinator: DataCombinator | None = None,
 ) -> EvalResults:
     """Evaluate a Ray/RLlib trained model on AdvBuildingGym.
 
@@ -57,6 +59,7 @@ def evaluate_model(
         log_trajectories: Whether to save per-step trajectory JSON.
         algorithm_hint: Algorithm name for metadata (informational only).
         timeout_seconds: Maximum wall-clock seconds before aborting.
+        data_combinator: Optional DataCombinator for variant scheduling.
 
     Returns:
         ``EvalResults`` with per-episode stats and summary.
@@ -93,6 +96,7 @@ def evaluate_model(
         rewards=active_config.rewards,
         building_props=active_config.building_props,
         training=False,
+        data_combinator=data_combinator,
     )
 
     if log_trajectories:
@@ -119,6 +123,12 @@ def evaluate_model(
             logger.info("Episode %d/%d", ep + 1, num_episodes)
 
             obs, reset_info = env.reset(seed=seed + ep)
+            ep_data_variant = reset_info.get("data_variant")
+            ep_episode_date = reset_info.get("episode_date")
+            if ep_data_variant:
+                logger.info(
+                    "  Variant: %s | Date: %s", ep_data_variant, ep_episode_date,
+                )
             done = False
             episode_reward = 0.0
             episode_length = 0
@@ -132,16 +142,9 @@ def evaluate_model(
                 flat_obs = flatten_observation(obs)
                 raw_action = infer_action(rl_module, flat_obs)
 
-                logger.info(
-                    "Episode %d: Action computed: %s", ep + 1, raw_action,
-                )
-
                 next_obs, reward, terminated, truncated, step_info = env.step(
                     raw_action,
                 )
-                done = terminated or truncated
-                if done:    
-                    logger.info("Episode %d: DONE -- reward=%s", ep + 1, reward)
 
                 if collector is not None:
                     collector.on_step(
@@ -157,6 +160,10 @@ def evaluate_model(
                 episode_length += 1
                 episode_rewards.append(reward)
                 obs = next_obs
+                
+                done = terminated or truncated
+                if done:
+                    logger.info("Episode %d: DONE -- reward=%s", ep + 1, episode_reward)
 
             if episode_length >= MAX_STEPS_PER_EPISODE:
                 logger.warning(
@@ -180,6 +187,8 @@ def evaluate_model(
                 max_achievable_reward=float(max_achievable_reward),
                 reward_rate=float(reward_rate),
                 seed=seed + ep,
+                data_variant=ep_data_variant,
+                episode_date=ep_episode_date,
             )
 
             if collector is not None and save_results:

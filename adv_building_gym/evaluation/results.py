@@ -29,10 +29,12 @@ class EpisodeStats:
     max_achievable_reward: float
     reward_rate: float
     seed: int
+    data_variant: dict[str, str] | None = None
+    episode_date: str | None = None
 
     def to_dict(self) -> dict:
         """Return a plain dict (JSON-serialisable)."""
-        return {
+        d = {
             "episode": self.episode,
             "length": self.length,
             "total_reward": self.total_reward,
@@ -41,6 +43,11 @@ class EpisodeStats:
             "reward_rate": self.reward_rate,
             "seed": self.seed,
         }
+        if self.data_variant is not None:
+            d["data_variant"] = self.data_variant
+        if self.episode_date is not None:
+            d["episode_date"] = self.episode_date
+        return d
 
 
 @dataclass

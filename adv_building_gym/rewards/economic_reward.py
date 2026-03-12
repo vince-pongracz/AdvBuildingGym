@@ -32,10 +32,8 @@ class EconomicReward(RewardFunction):
         self.max_power_kW = sum(infra.Q_electric_max for infra in infrastructures)
 
     def get_reward(self, actions, states) -> float:
+        # E_price is already normalised to [-1, 1], no need to divide by price_max
         current_energy_price = float(states["E_price"][0])
-        energy_price_max = float(states["E_price_max"][0])
-        if energy_price_max <= 0:
-            energy_price_max = 1.0
 
         # Sum actual kW across all infrastructure (positive = grid import, negative = export)
         net_power_kW = sum(
@@ -46,9 +44,7 @@ class EconomicReward(RewardFunction):
             return 0.0
 
         # Negative sign: consumption → negative reward (cost); production → positive reward (income)
-        reward_economic: float = -net_power_kW * current_energy_price / (
-            self.max_power_kW * energy_price_max
-        )
+        reward_economic: float = -net_power_kW * current_energy_price / self.max_power_kW
         return float(self.weight * reward_economic)
 
 

@@ -20,31 +20,34 @@ class InsideTemperature(StateSource):
 
     def __init__(self, name: str, ds_path: str | None = None) -> None:
         super().__init__(name, ds_path)
+        self.desired_temp_in_raw: float = 0.0  # Raw desired temperature (°C)
 
         if self.ts is not None:
             logger.info("Use data file: %s", ds_path)
             self._post_load_data_processing()
         else:
-            logger.warning("No data file provided, will use synthetic data")
+            logger.debug("No initial data file for '%s', using synthetic temperature profile", name)
 
     def _post_load_data_processing(self) -> None:
         """Detect temperature column and normalise to [-1, 1] after CSV load / reload."""
         # Expected column: "desired_temp_in [°C]" or similar
         if "desired_temp_in [°C]" in self.ts.columns:
-            column_name = "desired_temp_in [°C]"
+            self._raw_column = "desired_temp_in [°C]"
         elif "desired_temp_in" in self.ts.columns:
-            column_name = "desired_temp_in"
+            self._raw_column = "desired_temp_in"
         else:
             logger.warning("No 'desired_temp_in' column found in CSV, will use synthetic data")
             self.ts = None
             return
 
-        # Normalize to [-1, 1] range (assuming typical range: 15-30°C)
-        temp_min = self.ts[column_name].min()
-        temp_max = self.ts[column_name].max()
-        self.ts["desired_temp_in_norm"] = (self.ts[column_name] - temp_min) / (temp_max - temp_min)  # scale onto [0, 1]
-        self.ts["desired_temp_in_norm"] = 2 * self.ts["desired_temp_in_norm"]  # scale to [0, 2]
-        self.ts["desired_temp_in_norm"] = self.ts["desired_temp_in_norm"] - 1  # push to [-1, 1]
+        # TODO VP 2026.03.10. : Crete a time series for this -- for the 4 seasons
+        if self.ts is not None:
+            # Normalize to [-1, 1] range (assuming typical range: 15-30°C)
+            temp_min = self.ts[self._raw_column].min()
+            temp_max = self.ts[self._raw_column].max()
+            self.ts["desired_temp_in_norm"] = (self.ts[self._raw_column] - temp_min) / (temp_max - temp_min)  # scale onto [0, 1]
+            self.ts["desired_temp_in_norm"] = 2 * self.ts["desired_temp_in_norm"]  # scale to [0, 2]
+            self.ts["desired_temp_in_norm"] = self.ts["desired_temp_in_norm"] - 1  # push to [-1, 1]
 
     def setup_spaces(self,
                      state_spaces: OrderedDict,
@@ -66,10 +69,10 @@ class InsideTemperature(StateSource):
     def update_state(self, states) -> None:
         """Update desired temperature state based on current iteration."""
         if self.ts is not None:
-            if self.effective_index < len(self.ts):
-                desired_temp_in_norm = float(self.ts.iloc[self.effective_index]["desired_temp_in_norm"])
-            else:
-                desired_temp_in_norm = float(self.ts.iloc[-1]["desired_temp_in_norm"])
+            idx = min(self.effective_index, len(self.ts) - 1)
+            row = self.ts.iloc[idx]
+            desired_temp_in_norm = float(row["desired_temp_in_norm"])
+            self.desired_temp_in_raw = float(row[self._raw_column])
         else:
             current_sim_hour = states.get("sim_hour", np.zeros(shape=(1,), dtype=np.float32))[0]
             # Apply a simple time-based temperature setpoint profile

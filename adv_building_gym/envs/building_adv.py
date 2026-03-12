@@ -285,6 +285,7 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
             if state_src.name in variant:
                 state_src.reload(variant[state_src.name])
 
+    # TODO VP 2026.03.10. : This does not belong strictly to the env...
     def _resolve_episode_date(self, row_offset: int) -> str:
         """Derive a date string from the row offset using the first statesource with a 'start' column."""
         for src in self.statesources:
@@ -372,6 +373,7 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
             "seed": seed,
             "episode_date": self._episode_date,
             "episode_day_mode": self._episode_day_mode,
+            "data_variant": variant if variant else None,
         }
         if self.log_full_info:
             info["state"] = {k: np.array(v, copy=True) for k, v in self.state.items()}
@@ -503,11 +505,56 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
             "cum_E_kWh": self.cum_E_kWh,  # Cumulative net energy (positive=consumption, negative=production)
             "step_power_kW": total_power_kW,  # Instantaneous net power at this step
             "episode_date": self._episode_date,
+            # TODO VP 2026.03.10. : E_price_max_raw calc should be in _get_raw_state_values
+            "E_price_max_raw": self._get_raw_price_max(),
+            **self._get_raw_state_values(),
         }
         if self.log_full_info:
             info["state"] = {k: np.array(v, copy=True) for k, v in self.state.items()}
 
         return self.state, reward, terminated, truncated, info
+
+    # TODO VP 2026.03.10. : Rework environment that it accepts data series, in state sources things are normalised, but 
+    # original values are stored as well in the info dict -- to show real data later in the plots
+
+    def _get_raw_price_max(self) -> float:
+        """Return the raw (unnormalised) maximum energy price from the data."""
+        from adv_building_gym.devices.statesources.outer.energy_price import (
+            EnergyPriceDataSource,
+        )
+        for src in self.statesources:
+            if isinstance(src, EnergyPriceDataSource):
+                return float(src.price_max)
+        return 1.0
+
+    def _get_raw_state_values(self) -> dict[str, float]:
+        """Collect raw (unnormalised) values from all state sources.
+
+        Each state source may expose ``*_raw`` attributes that hold the
+        original physical values before normalisation.  This method
+        iterates over all sources, picks up every attribute ending in
+        ``_raw``, and also derives ``temp_in_raw`` from the normalised
+        indoor temperature using the weather scale factor.
+        """
+        raw: dict[str, float] = {}
+        temp_abs_max = 1.0
+
+        for src in self.statesources + self.infras:
+            # Collect any attribute ending in '_raw' exposed by a component
+            for attr_name in dir(src):
+                if attr_name.endswith("_raw") and not attr_name.startswith("_"):
+                    raw[attr_name] = float(getattr(src, attr_name))
+            # Cache weather scale factor for temp_in_raw derivation
+            if hasattr(src, "temp_abs_max"):
+                temp_abs_max = float(src.temp_abs_max)
+
+        # temp_in_norm is a simulated value using the same scale as
+        # temp_out_norm (MAX_ABS_SCALING with temp_abs_max)
+        temp_in_norm = float(self.state.get("temp_in_norm", 
+                                            np.zeros(1, dtype=np.float32),)[0])
+        raw["temp_in_raw"] = temp_in_norm * temp_abs_max
+
+        return raw
 
     def render(self):
         """Render the environment."""

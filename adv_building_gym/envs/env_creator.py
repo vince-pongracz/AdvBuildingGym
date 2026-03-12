@@ -20,8 +20,10 @@ def adv_building_env_creator(config: dict) -> AdvBuildingGym:
     (iteration counters, internal buffers) which would cause state corruption.
 
     Args:
-        config: Configuration dict passed by Ray Tune (currently unused,
-                environment config is loaded from config module)
+        config: Configuration dict passed by Ray Tune. Supports:
+            - ``data_combinator``: Pre-built DataCombinator instance to share
+              across environments (loaded from YAML by the training entrypoint).
+            - ``log_full_info``: Whether to log full state info.
 
     Returns:
         AdvBuildingGym instance with independent component instances
@@ -40,8 +42,7 @@ def adv_building_env_creator(config: dict) -> AdvBuildingGym:
         statesources=statesources,
         rewards=rewards,
         building_props=env_config.building_props,
-        data_combinator=env_config.data_combinator,
-        # Pass log_full_info from config if available
+        data_combinator=config.get("data_combinator"),
         # TODO VP 2026.02.24. : Clean up log_full info and trajectory logging, this is a bit hacky
         log_full_info=config.get("log_full_info", False)
     )
