@@ -61,105 +61,13 @@ else
   echo "[WARN] Python environment not found at ${PYTHON_ENV}; continuing without activation"
 fi
 
-# Default values (mirror run_train_ray.py defaults)
-ALGORITHM="ppo"
-EPISODES="3500"
-TIMESTEPS=""
-SEED="42"
-METRIC="reward_rate"
-CONFIG_NAME=""
-LOAD_CONFIG=""
-SAVE_CONFIG=""
-NUM_ENVS="1"
-EVAL_FREQ="20000"
-CHECKPOINT_FREQ=""
-LOG_TRAJECTORIES=""
-EXTRA_ARGS=()
-
-# TODO VP: refactor params here, py script knows the defaults
-# Parse named arguments
-while [[ $# -gt 0 ]]; do
-  case $1 in
-    --algorithm|-a)
-      ALGORITHM="$2"
-      shift 2
-      ;;
-    --episodes)
-      EPISODES="$2"
-      shift 2
-      ;;
-    --timesteps)
-      # Deprecated: kept for backward compatibility, forwarded to run_train_ray.py
-      TIMESTEPS="$2"
-      shift 2
-      ;;
-    --seed|-s)
-      SEED="$2"
-      shift 2
-      ;;
-    --metric)
-      METRIC="$2"
-      shift 2
-      ;;
-    --config_name|-cn)
-      CONFIG_NAME="$2"
-      shift 2
-      ;;
-    --load-config)
-      LOAD_CONFIG="$2"
-      shift 2
-      ;;
-    --save-config)
-      SAVE_CONFIG="$2"
-      shift 2
-      ;;
-    --num-envs)
-      NUM_ENVS="$2"
-      shift 2
-      ;;
-    --eval-freq)
-      EVAL_FREQ="$2"
-      shift 2
-      ;;
-    --checkpoint-frequency-episodes)
-      CHECKPOINT_FREQ="$2"
-      shift 2
-      ;;
-    --log-trajectories)
-      LOG_TRAJECTORIES="yes"
-      shift
-      ;;
-    --no-log-trajectories)
-      LOG_TRAJECTORIES="no"
-      shift
-      ;;
-    --training)
-      # Ignored since we always add --training
-      shift
-      ;;
-    *)
-      # Pass through any unknown arguments
-      EXTRA_ARGS+=("$1")
-      shift
-      ;;
-  esac
-done
+# All arguments are forwarded directly to run_train_ray.py which owns the
+# defaults (algorithm, episodes, seed, metric, etc.) via argparse.
+# The only flag this script always injects is --training.
+SCRIPT_ARGS=("$@")
 
 echo "=== Starting Ray training job ==="
-echo "  Algorithm   : $ALGORITHM"
-echo "  Episodes    : $EPISODES"
-[ -n "$TIMESTEPS" ] && echo "  Timesteps   : $TIMESTEPS (deprecated, overridden by --episodes)"
-echo "  Seed        : $SEED"
-echo "  Metric      : $METRIC"
-echo "  Num Envs    : $NUM_ENVS"
-echo "  Eval Freq   : $EVAL_FREQ"
-[ -n "$CONFIG_NAME" ] && echo "  Config Name : $CONFIG_NAME"
-[ -n "$LOAD_CONFIG" ] && echo "  Load Config : $LOAD_CONFIG"
-[ -n "$SAVE_CONFIG" ] && echo "  Save Config : $SAVE_CONFIG"
-[ -n "$CHECKPOINT_FREQ" ] && echo "  Checkpoint Freq: $CHECKPOINT_FREQ episodes"
-[ "$LOG_TRAJECTORIES" = "yes" ] && echo "  Log Trajectories: enabled"
-[ "$LOG_TRAJECTORIES" = "no" ]  && echo "  Log Trajectories: disabled"
-[ ${#EXTRA_ARGS[@]} -gt 0 ] && echo "  Extra Args  : ${EXTRA_ARGS[*]}"
+echo "  Args: ${SCRIPT_ARGS[*]:-(none, using run_train_ray.py defaults)}"
 
 echo "=== SLURM Resource Info ==="
 echo "SLURM_CPUS_PER_TASK : ${SLURM_CPUS_PER_TASK:-}"
@@ -205,26 +113,8 @@ export TERM=dumb
 # Force unbuffered Python output for immediate log visibility
 export PYTHONUNBUFFERED=1
 
-# Build command with all arguments
-CMD=(python -u run_train_ray.py
-  --algorithm "$ALGORITHM"
-  --episodes "$EPISODES"
-  --seed "$SEED"
-  --metric "$METRIC"
-  --num-envs "$NUM_ENVS"
-  --eval-freq "$EVAL_FREQ"
-  --training
-)
-# Forward deprecated --timesteps only if explicitly provided
-[ -n "$TIMESTEPS" ] && CMD+=(--timesteps "$TIMESTEPS")
-[ -n "$CONFIG_NAME" ] && CMD+=(--config_name "$CONFIG_NAME")
-[ -n "$LOAD_CONFIG" ] && CMD+=(--load-config "$LOAD_CONFIG")
-[ -n "$SAVE_CONFIG" ] && CMD+=(--save-config "$SAVE_CONFIG")
-[ -n "$CHECKPOINT_FREQ" ] && CMD+=(--checkpoint-frequency-episodes "$CHECKPOINT_FREQ")
-[ "$LOG_TRAJECTORIES" = "yes" ] && CMD+=(--log-trajectories)
-[ "$LOG_TRAJECTORIES" = "no" ]  && CMD+=(--no-log-trajectories)
-# Append any extra/unknown arguments
-[ ${#EXTRA_ARGS[@]} -gt 0 ] && CMD+=("${EXTRA_ARGS[@]}")
+# Build command: always inject --training, forward everything else as-is
+CMD=(python -u run_train_ray.py --training "${SCRIPT_ARGS[@]}")
 
 echo "======"
 echo "Running: ${CMD[*]}"

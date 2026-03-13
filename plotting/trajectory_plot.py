@@ -27,7 +27,8 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 _DEFAULT_OUTPUT_ROOT = _REPO_ROOT / "plotting" / "out"
 _DEFAULT_METRICS_ROOT = _REPO_ROOT / "ep_metrics" / "trajectories"
 
-# TODO VP 2026.03.10. : Split this up, refactor, relocate action, reward, state, energy plottings into standalone files, add plotting util for find_latest_hdf5
+
+# TODO VP 2026.03.12. : Use float64 everywhere -- for training, for actions, etc... -- more precision is key
 
 # ---------------------------------------------------------------------------
 # Auto-discovery

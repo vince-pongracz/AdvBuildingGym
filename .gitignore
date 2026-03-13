@@ -1,3 +1,5 @@
+# TODO VP: clean up the gitignore -- remove such paths which are not even here, etc...
+
 .ipynb_checkpoints/
 # Bytecode and cache
 __pycache__/
@@ -33,6 +35,8 @@ models/il_agent/
 **/slurm_logs/train/**.out
 **/slurm_logs/data_setup/**.err
 **/slurm_logs/data_setup/**.out
+**/slurm_logs/plotting/**.err
+**/slurm_logs/plotting/**.out
 
 # Environment and runtime
 .env

@@ -2,13 +2,18 @@
 
 This module provides configuration data structures and serialization utilities.
 
-Note: Config and config are imported lazily to avoid circular imports.
+Lazy imports are required for Config, config, ConfigManager, DataCombinator,
+and load_data_combinator to break the circular dependency chain:
+  config/__init__ → env_config → devices/rewards → config.utils.serializable
+Device and reward base classes import from adv_building_gym.config.utils.serializable,
+which triggers config/__init__.py. If env_config were eagerly imported here, it would
+try to import devices before config/__init__.py finishes initializing.
+
 Use:
     from adv_building_gym.config import Config
     from adv_building_gym.config import config
     from adv_building_gym.config import ConfigManager
 """
-# TODO VP 2026.03.10. : Is this lazyness still needed at the imports?
 
 from __future__ import annotations
 

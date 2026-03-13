@@ -10,6 +10,8 @@ See docs/about_traj_hdf5_export.md for the HDF5 file structure.
 Link: https://docs.ray.io/en/latest/rllib/rllib-callback.html
 """
 
+# TODO VP 2026.03.12. : add callback readme, add this link to that: https://docs.ray.io/en/latest/rllib/rllib-callback.html#rllib-callback-docs
+
 import os
 import json
 import logging

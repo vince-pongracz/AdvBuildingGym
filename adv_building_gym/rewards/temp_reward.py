@@ -14,7 +14,7 @@ class TempReward(RewardFunction):
     def __init__(self, weight: float,
                  name: str = "temp_reward",
                  diff_threshold: float = 0.02,
-                 wrong_direction_penalty: float = 0.5) -> None:
+                 wrong_direction_penalty: float = 0.0) -> None:
         """
         Initialize TempReward.
         Args:
@@ -60,13 +60,10 @@ class TempReward(RewardFunction):
             if energy > 0:
                 if temp_error > 0 and mode > 0.6:
                     # Heating when already too hot
-                    reward -= self.wrong_direction_penalty
+                    reward = self.wrong_direction_penalty
                 elif temp_error < 0 and mode < 0.4:
                     # Cooling when already too cold
-                    reward -= self.wrong_direction_penalty
-                # Add clamping
-                if reward < 0.0:
-                    reward = 0.0
+                    reward = self.wrong_direction_penalty
 
         return self.weight * reward
 
