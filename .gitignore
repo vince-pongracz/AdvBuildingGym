@@ -1,6 +1,3 @@
-# TODO VP: clean up the gitignore -- remove such paths which are not even here, etc...
-
-.ipynb_checkpoints/
 # Bytecode and cache
 __pycache__/
 *.py[cod]
@@ -15,20 +12,11 @@ dist/
 # Jupyter Notebook checkpoints
 .ipynb_checkpoints/
 
-# Archived notebooks (custom)
-notebooks_archive/
-
-# Ignore imitation learning folder (top level)
-imitation_learning/
-
-# Ignore specific subfolder in models
-models/il_agent/
-
-# VSCode / PyCharm project files (optional)
+# VSCode / PyCharm project files
 .vscode/
 .idea/
 
-# SLURM output logs (optional, for HPC clusters)
+# SLURM output logs
 **/slurm_logs/eval/**.out
 **/slurm_logs/eval/**.err
 **/slurm_logs/train/**.err
@@ -43,12 +31,6 @@ models/il_agent/
 .venv
 *.log
 .DS_Store
-*.pyc
-__pycache__/
-plot-paper/workshop_animation.ipynb
-results/
-models/temperature/T01/ppo_model_seed18.zip
-adv_env
 
 # Temporary files
 result_**.json

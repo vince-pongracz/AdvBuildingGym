@@ -1,0 +1,63 @@
+# Configuration for the data day-plot script.
+# Paths are relative to the repository root.
+#
+# Each source section (weather, price) contains named dataset entries and a
+# top-level "use" key that selects which dataset to load.
+
+weather:
+  use: dwd  # select one of the keys below
+
+  dwd:
+    # DWD preprocessed weather data (5-min resolution, per-year files).
+    # Columns: timestamp, avg_wind_speed, wind_dir, direct_sun_shine,
+    #          diff_sun_shine, temp_amb, rel_humidity, sun_shine
+    dir: data/weather/dwd/preprocessed
+    file_pattern: "{year}_merged_04177.csv"
+    timestamp_col: timestamp
+
+  zenodo:
+    # Zenodo weather dataset (Braunschweig district heating study).
+    # Outdoor weather data extracted from HDF5, per-year files.
+    # Columns: timestamp, rel_humidity, direct_sun_shine, temp_amb,
+    #          wind_dir, avg_wind_speed
+    dir: data/weather/zenodo/csvs_weather
+    file_pattern: "{year}_weather.csv"
+    timestamp_col: timestamp
+
+price:
+  use: awattar  # select one of the keys below
+
+  awattar:
+    # aWATTar preprocessed price data (5-min resolution, per-year files).
+    # Columns: start, baseprice, unit, hour
+    dir: data/e_price/awattar
+    file_pattern: "price_data_{year}.csv"
+    timestamp_col: start
+
+  e_charts:
+    # Energy-Charts 5-min interpolated price data (per-year files).
+    # Same column format as aWATTar preprocessed.
+    # Columns: start, baseprice, unit, hour
+    dir: data/e_price/e_charts
+    file_pattern: "price_data_{year}.csv"
+    timestamp_col: start
+
+  test1:
+    # test1 scenario price data (single pre-built scenario file).
+    # Includes pre-computed price_normalized column.
+    # Columns: start, baseprice, unit, hour, price_normalized
+    dir: data/test1
+    file_pattern: "price_data_2025_1.csv"
+    timestamp_col: start
+
+ev:
+  # EV usage profile data (per-vehicle files, ev_0 through ev_5).
+  # Columns: start, max_cap_kWh, max_charging_kW, charger_efficiency,
+  #          discharge_efficiency, v2g_enabled, start_soc, target_soc,
+  #          target_soc_reach_duration_h
+  # dir: data/ev_usage_profiles
+  # file_pattern: "ev_{id}.csv"
+  # timestamp_col: start
+
+output:
+  dir: plotting/out/data_plots

@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import plotly.graph_objects as go
 
-from .utils import COLORS, EpisodeData, apply_day_xaxis, style_figure
+from plotting.utils import COLORS, EpisodeData, apply_day_xaxis, style_figure
 
 
-def plot_rewards(episode: EpisodeData) -> go.Figure:
+def plot_rewards(episode: EpisodeData) -> list[go.Figure]:
     """Stacked area for reward components, bold line for total reward."""
     time = episode.time_minutes
     breakdown = episode.reward_breakdown
@@ -52,4 +52,4 @@ def plot_rewards(episode: EpisodeData) -> go.Figure:
         yaxis_title="Reward",
         height=450,
     )
-    return style_figure(fig)
+    return [style_figure(fig)]

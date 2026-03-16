@@ -120,9 +120,10 @@ def evaluate_model(
         MAX_STEPS_PER_EPISODE = 1000
         for ep in range(num_episodes):
             logger.info("=" * 50)
-            logger.info("Episode %d/%d", ep + 1, num_episodes)
+            episode_seed = seed + ep
+            logger.info("Episode %d/%d (seed: %d)", ep + 1, num_episodes, episode_seed)
 
-            obs, reset_info = env.reset(seed=seed + ep)
+            obs, reset_info = env.reset(seed=episode_seed)
             ep_data_variant = reset_info.get("data_variant")
             ep_episode_date = reset_info.get("episode_date")
             if ep_data_variant:
@@ -186,7 +187,7 @@ def evaluate_model(
                 achieved_reward=achieved_reward,
                 max_achievable_reward=float(max_achievable_reward),
                 reward_rate=float(reward_rate),
-                seed=seed + ep,
+                seed=episode_seed,
                 data_variant=ep_data_variant,
                 episode_date=ep_episode_date,
             )
@@ -194,7 +195,7 @@ def evaluate_model(
             if collector is not None and save_results:
                 collector.on_episode_end(
                     episode_id=ep,
-                    seed=seed + ep,
+                    seed=episode_seed,
                     metadata={
                         "config_name": active_config.config_name,
                         "checkpoint_path": checkpoint_path,
@@ -213,6 +214,7 @@ def evaluate_model(
             logger.info("  Achieved Reward: %.2f", achieved_reward)
             logger.info("  Max Achievable: %.2f", max_achievable_reward)
             logger.info("  Reward Rate: %.4f", reward_rate)
+            logger.info("  Seed: %d", episode_seed)
 
     except TimeoutError as e:
         logger.error(

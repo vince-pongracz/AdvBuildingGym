@@ -68,7 +68,7 @@ or
 `cat ds_links.txt | xargs -n 1 -P 4 curl -L --progress-bar -OJ`
 
 <!-- Add NOTEs:
-TODO VP: 
+TODO VP: SAC and PPO notes
 SAC: https://spinningup.openai.com/en/latest/algorithms/sac.html
 - test alpha param, controlling exploitation, exploration tradeoff
 

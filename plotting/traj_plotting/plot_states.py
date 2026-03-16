@@ -7,43 +7,37 @@ import logging
 import numpy as np
 import plotly.graph_objects as go
 
-from .utils import COLORS, EpisodeData, apply_day_xaxis, style_figure
+from plotting.utils import COLORS, EpisodeData, apply_day_xaxis, load_plot_config, style_figure
 
 logger = logging.getLogger(__name__)
-
-# State keys to exclude from plotting (constants or non-informative)
-_SKIP_KEYS = {"E_price_max"}
-
-# Groups of keys that share one plot
-_GROUPED_KEYS: list[list[str]] = [
-    ["battery_pct", "battery_target_pct"],
-    ["temp_in_norm", "desired_temp_in_norm"],
-    ["ev_schedule_charger_eff", "ev_schedule_discharge_eff"],
-    ["ev_schedule_start_soc", "ev_schedule_target_soc"],
-]
 
 
 def plot_states(episode: EpisodeData) -> list[go.Figure]:
     """One independent plot per state variable (or group of variables).
 
-    Keys listed in ``_GROUPED_KEYS`` are merged into a single plot.
+    Keys listed in ``grouped_keys`` (from ``plot_config.yaml``) are merged
+    into a single plot.
     Returns a list of figures to be rendered sequentially in one HTML file.
     """
+    plot_config = load_plot_config().get("states", {})
+    skip_keys: set[str] = set(plot_config.get("skip_keys", []))
+    grouped_keys: list[list[str]] = plot_config.get("grouped_keys", [])
+
     states = episode.states
     time = episode.time_minutes
     suffix = episode.title_suffix()
     time_hhmm = episode.time_hhmm
 
     # Build ordered list of plot specs.  Each entry is a list of keys.
-    grouped_flat = {k for group in _GROUPED_KEYS for k in group}
+    grouped_flat = {k for group in grouped_keys for k in group}
     plot_specs: list[list[str]] = []
 
     seen_groups: set[int] = set()
     for key, val in states.items():
-        if key in _SKIP_KEYS or val.ndim != 1:
+        if key in skip_keys or val.ndim != 1:
             continue
         if key in grouped_flat:
-            for gi, group in enumerate(_GROUPED_KEYS):
+            for gi, group in enumerate(grouped_keys):
                 if key in group and gi not in seen_groups:
                     present = [k for k in group if k in states]
                     missing = [k for k in group if k not in states]
@@ -60,7 +54,7 @@ def plot_states(episode: EpisodeData) -> list[go.Figure]:
 
     # Multi-dim keys (2-D with few columns)
     for key, val in states.items():
-        if key in _SKIP_KEYS or key in grouped_flat:
+        if key in skip_keys or key in grouped_flat:
             continue
         if val.ndim == 2 and val.shape[1] <= 4:
             plot_specs.append([key])
@@ -70,11 +64,11 @@ def plot_states(episode: EpisodeData) -> list[go.Figure]:
         return []
 
     figures: list[go.Figure] = []
-    trace_idx = 0
     for keys in plot_specs:
         fig = go.Figure()
         title = " + ".join(keys)
         all_data: list[np.ndarray] = []
+        trace_idx = 0
 
         for key in keys:
             if key not in states:

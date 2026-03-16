@@ -7,14 +7,9 @@ import logging
 import numpy as np
 import plotly.graph_objects as go
 
-from .utils import COLORS, EpisodeData, apply_day_xaxis, style_figure
+from plotting.utils import COLORS, EpisodeData, apply_day_xaxis, load_plot_config, style_figure
 
 logger = logging.getLogger(__name__)
-
-# Dimension labels for multi-dim actions
-_DIM_LABELS: dict[str, list[str]] = {
-    "HP_action": ["energy", "mode"],
-}
 
 
 def plot_actions(episode: EpisodeData) -> list[go.Figure]:
@@ -33,11 +28,13 @@ def plot_actions(episode: EpisodeData) -> list[go.Figure]:
         logger.warning("No action variables found.")
         return []
 
+    dim_labels: dict[str, list[str]] = load_plot_config().get("actions", {}).get("dim_labels", {})
+
     # Build flat list of (label, 1-D data)
     traces: list[tuple[str, np.ndarray]] = []
     for key, arr in actions.items():
         if arr.ndim == 2 and arr.shape[1] > 1:
-            labels = _DIM_LABELS.get(key, [])
+            labels = dim_labels.get(key, [])
             for col_idx in range(arr.shape[1]):
                 dim_name = (
                     labels[col_idx] if col_idx < len(labels) else str(col_idx)

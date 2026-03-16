@@ -1,0 +1,30 @@
+# Domain-specific plotting configuration.
+#
+# Extend this file when adding new state sources, infrastructure, or actions
+# instead of editing Python plot modules.
+
+states:
+  # State keys excluded from plotting (constants or non-informative values)
+  skip_keys:
+    - E_price_max
+    - sim_hour
+
+  # Groups of state keys that share a single plot.
+  # Each entry is a list of keys rendered together.
+  grouped_keys:
+    - [battery_pct, battery_target_pct]
+    - [temp_in_norm, desired_temp_in_norm, temp_out_norm]
+    - [ev_schedule_charger_eff, ev_schedule_discharge_eff]
+    - [ev_schedule_start_soc, ev_schedule_target_soc]
+    - [ev_soc, ev_target_soc]
+
+
+actions:
+  # Human-readable dimension labels for multi-dimensional actions.
+  # Keys that are not listed here fall back to numeric indices (0, 1, …).
+  dim_labels:
+    HP_action: [energy, mode]
+
+output:
+  # Relative to repository root
+  dir: plotting/out/traj_plots

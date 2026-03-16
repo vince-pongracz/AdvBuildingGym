@@ -1,6 +1,7 @@
 """Rewards module for building environment reward functions."""
 
 from .base import RewardFunction
+from .action_smoothness_reward import ActionSmoothnessReward
 from .economic_reward import EconomicReward
 from .energy_consumption_reward import MinimiseEnergyConsumption_Reward
 from .ev_charging_ontime_reward import EVChargingOnTimeReward
@@ -10,10 +11,11 @@ from .user_energy_need_reward import UserEnergyNeedReward
 
 __all__ = [
     "RewardFunction",
+    "ActionSmoothnessReward",
     "EconomicReward",
     "EVChargingOnTimeReward",
     "MinimiseEnergyConsumption_Reward",
     "OperatorEnergyControlReward",
     "TempReward",
-    "UserEnergyNeedReward"
+    "UserEnergyNeedReward",
 ]

@@ -7,20 +7,20 @@ HDF5 evaluation files produced by the `TrajectoryLoggingCallback`.
 
 ```bash
 # Plot the latest available ep_metrics (auto-discovers most recent trajectories.hdf5):
-python -m plotting.trajectory_plot
+python -m plotting
 
 # Plot a specific HDF5 file:
-python -m plotting.trajectory_plot \
+python -m plotting \
     --hdf5 ep_metrics/trajectories/20260310_141900/trajectories.hdf5
 
 # Plot a specific episode:
-python -m plotting.trajectory_plot --episode be574d
+python -m plotting --episode be574d
 
 # Select by a different metric:
-python -m plotting.trajectory_plot --select-by achieved_reward
+python -m plotting --select-by achieved_reward
 
 # Only produce PNG:
-python -m plotting.trajectory_plot --format png
+python -m plotting --format png
 ```
 
 Output is saved to `plotting/out/{episode_id}/` by default.
@@ -28,7 +28,7 @@ Output is saved to `plotting/out/{episode_id}/` by default.
 ## CLI reference
 
 ```
-python -m plotting.trajectory_plot --help
+python -m plotting --help
 ```
 
 | Flag              | Default                          | Description                                                     |
@@ -57,6 +57,13 @@ Use `--select-by` to change the selection metric:
 
 Use `--episode <id>` to bypass auto-selection and plot a specific episode.
 
+## Plot configuration
+
+Domain-specific plotting settings (state groupings, skip keys, action
+dimension labels) live in `plotting/plot_config.yaml`. Edit that file
+when adding new state sources or infrastructure instead of touching
+Python plot modules.
+
 ## Figures
 
 The script generates four separate figure groups per episode:
@@ -66,15 +73,16 @@ The script generates four separate figure groups per episode:
 One plot per state variable (or group of related variables) over a 24-hour
 day. Scalar state variables (1-D) each get their own figure. Related
 variables (e.g. `temp_in_norm` + `desired_temp_in_norm`) are grouped into
-a single figure. Multi-dimensional variables with up to 4 columns are
-plotted with one trace per column; larger buffers are skipped.
+a single figure as configured in `plot_config.yaml`. Multi-dimensional
+variables with up to 4 columns are plotted with one trace per column;
+larger buffers are skipped.
 
 ### 2. Actions (`{episode_id}_actions`)
 
 One plot per action dimension. Multi-dimensional actions (e.g. `HP_action`
 with `[energy, mode]`) are expanded so each dimension gets its own figure
-with labelled names. Scalar actions (`battery_action`, `solar_action`)
-are single traces.
+with labelled names from `plot_config.yaml`. Scalar actions
+(`battery_action`, `solar_action`) are single traces.
 
 ### 3. Rewards (`{episode_id}_rewards`)
 
@@ -113,8 +121,9 @@ from plotting import load_episode, plot_states, generate_all_plots
 
 # Load and inspect data (selects best reward_rate by default)
 episode = load_episode("trajectories.hdf5")
-print(episode["meta"])            # {'episode_id': '...', 'seed': 42, 'length': 288}
-print(list(episode["states"]))    # ['temp_in_norm', 'E_price', ...]
+print(episode.episode_id)         # 'be574d'
+print(episode.seed)               # 42
+print(list(episode.states))       # ['temp_in_norm', 'E_price', ...]
 
 # Load by a specific metric
 episode = load_episode("trajectories.hdf5", select_by="achieved_reward")
@@ -153,7 +162,6 @@ HTML files are placed directly under the episode directory. Static image
 formats (`svg`, `png`, `pdf`) go into a subdirectory named after the format
 (e.g. `svgs/`, `pngs/`).
 
-TODO VP: bar charts in energy plot chart should plot each infra energy part -- but that should be logged by the trajectory logger as well.
 TODO VP: seaborn plots needed as well
 
 ## Dependencies

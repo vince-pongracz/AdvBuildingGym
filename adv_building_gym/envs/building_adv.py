@@ -83,7 +83,7 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
     Observation and action spaces
     - The environment builds an observation_space (SDict) and action_space (SDict)
         by aggregating spaces declared by every Infrastructure and DataSource. The
-        env also supplies a "prev_action" entry (Box in [-1, 1]).
+        env also supplies per-key action history windows (``prev_{key}_hist``).
     - Observations returned by reset() and step() are Python dicts matching the
         observation_space keys. The environment does not return a flattened vector
         by default.
@@ -150,7 +150,7 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         statesources: list[StateSource],
         rewards: list[RewardFunction],
         building_props: BuildingProps,
-        control_step=env_config.CONTROL_STEP,
+        control_step: int | None = None,
         schedule_type=None,
         render_mode=None,
         training=True,
@@ -159,6 +159,7 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         prediction_horizon=8 * 12,  # 8 hours at 5-minute steps
         data_combinator: DataCombinator | None = None,
         log_full_info: bool = False,
+        action_history_length: int | None = None,
         **kwargs,
     ):
         """Initialise the building-energy gym environment.
@@ -210,15 +211,28 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
 
         self.reward_funcs = rewards
 
-        # Add per-key prev_action entries to the observation space so that
-        # each infrastructure's previous action is a named observation.
+        # sim_hour: normalised simulation hour [0, 1] derived from the current
+        # step within the episode.  0.0 = start of day, 1.0 = end of day.
+        # Managed directly by the environment (not a StateSource).
+        observation_space["sim_hour"] = spaces.Box(
+            low=0.0, high=1.0, shape=(1,), dtype=np.float32,
+        )
+
+        # Add per-key action history windows to the observation space.
+        # Each entry ``prev_{key}_hist`` has shape ``(action_history_length, *action_shape)``
+        # and stores a rolling window of the N most recent executed actions
+        # (oldest first, newest last).  The agent can use this to reason about
+        # action smoothness and the ActionSmoothnessReward reads the latest
+        # entry to compute the change penalty.
         # FlattenObservations (RLlib connector) handles flattening for the RL module.
+        self.action_history_length = action_history_length if action_history_length is not None else env_config.ACTION_HISTORY_LENGTH
         for key, space in action_space.items():
-            obs_key = f"prev_{key}"
+            hist_shape = (self.action_history_length, *space.shape)
+            obs_key = f"prev_{key}_hist"
             observation_space[obs_key] = spaces.Box(
-                low=np.full(space.shape, -1.0, dtype=np.float32),
-                high=np.full(space.shape, 1.0, dtype=np.float32),
-                shape=space.shape,
+                low=-1.0,
+                high=1.0,
+                shape=hist_shape,
                 dtype=np.float32,
             )
 
@@ -249,7 +263,7 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         # NOTE VP 2026.02.28. : Simulation time is in seconds
         self.simulation_time = env_config.CONTROL_STEP * env_config.EPISODE_LENGTH
         self.prediction_horizon = prediction_horizon
-        self.control_step = control_step
+        self.control_step = control_step if control_step is not None else env_config.CONTROL_STEP
         self.training = training
         self.train_ratio = train_ratio
         self.max_iteration = env_config.EPISODE_LENGTH
@@ -359,6 +373,9 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
             else:
                 logger.debug("Unidentified type: %s", type(v))
 
+        # Set sim_hour for step 0 (start of episode)
+        self.state["sim_hour"][0] = np.float32(0.0)
+
         # ======== Update state from statesources to populate initial observations ========
         # This ensures observations are within bounds after reset
         for ds in self.statesources:
@@ -460,6 +477,9 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         #    Previously synchronise was called AFTER update_state, causing exogenous
         #    datasources (price, weather, EV schedule) to lag 2 iterations behind.
         self.iteration += 1
+        # Update normalised simulation hour: fraction of episode elapsed
+        self.state["sim_hour"][0] = np.float32(self.iteration / self.max_iteration)
+
         for sync in self.infras + self.statesources:
             sync.synchronise(self.iteration)
 
@@ -469,20 +489,13 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         for ds in self.statesources:
             ds.update_state(states=self.state)
 
-        # Track last executed action for observability (per-key observation entries)
-        for key in self.action_space_keys:
-            obs_key = f"prev_{key}"
-            act_val = action.get(key)
-            if act_val is not None:
-                self.state[obs_key] = np.asarray(act_val, dtype=np.float32)
-            else:
-                self.state[obs_key] = np.zeros(
-                    self._dict_action_space.spaces[key].shape, dtype=np.float32,
-                )
-
         # Accumulate net energy consumption from all infrastructures
         # Positive = consumption from grid, Negative = production to grid
-        total_power_kW = sum(infra.get_electric_consumption(action) for infra in self.infras)
+        power_breakdown = {
+            infra.name: infra.get_electric_consumption(action)
+            for infra in self.infras
+        }
+        total_power_kW = sum(power_breakdown.values())
         energy_kWh = total_power_kW * (self.control_step / 3600)  # kW * hours = kWh
         self.cum_E_kWh += energy_kWh
 
@@ -494,6 +507,20 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
             reward_breakdown[rew_f.name] = rew_val
             reward += rew_val
 
+        # Track executed actions in a rolling history window (oldest first, newest last).
+        # Must happen AFTER reward computation so that ActionSmoothnessReward can
+        # compare the current action against the previous one stored in history[-1].
+        for key in self.action_space_keys:
+            obs_key = f"prev_{key}_hist"
+            history = self.state[obs_key]
+            # Shift rows up (drop oldest) and insert latest action at the end
+            history[:-1] = history[1:]
+            act_val = action.get(key)
+            if act_val is not None:
+                history[-1] = np.asarray(act_val, dtype=np.float32)
+            else:
+                history[-1] = 0.0
+
         # Check if episode should terminate (iteration already incremented above)
         terminated = self.is_done()
         truncated = False
@@ -504,9 +531,8 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
             "reward_breakdown": reward_breakdown,
             "cum_E_kWh": self.cum_E_kWh,  # Cumulative net energy (positive=consumption, negative=production)
             "step_power_kW": total_power_kW,  # Instantaneous net power at this step
+            "power_breakdown": power_breakdown,  # Per-infrastructure power (kW)
             "episode_date": self._episode_date,
-            # TODO VP 2026.03.10. : E_price_max_raw calc should be in _get_raw_state_values
-            "E_price_max_raw": self._get_raw_price_max(),
             **self._get_raw_state_values(),
         }
         if self.log_full_info:
@@ -516,16 +542,6 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
 
     # TODO VP 2026.03.10. : Rework environment that it accepts data series, in state sources things are normalised, but 
     # original values are stored as well in the info dict -- to show real data later in the plots
-
-    def _get_raw_price_max(self) -> float:
-        """Return the raw (unnormalised) maximum energy price from the data."""
-        from adv_building_gym.devices.statesources.outer.energy_price import (
-            EnergyPriceDataSource,
-        )
-        for src in self.statesources:
-            if isinstance(src, EnergyPriceDataSource):
-                return float(src.price_max)
-        return 1.0
 
     def _get_raw_state_values(self) -> dict[str, float]:
         """Collect raw (unnormalised) values from all state sources.

@@ -8,6 +8,7 @@ T = TypeVar('T', bound='RewardFunction')
 class RewardFunction(Serializable):
     """Base class for reward functions."""
 
+    # TODO VP 2026.03.14. : Are these params needed when they are default empty sets?
     # Parameters derived from context
     _context_params: ClassVar[Set[str]] = set()
 
@@ -16,6 +17,8 @@ class RewardFunction(Serializable):
 
     # Maximum raw (unweighted) reward this function can return per step.
     # Subclasses whose raw output exceeds 1.0 must override this.
+    # TODO VP 2026.03.14. : Refactor this as a instance property / field. 
+    # For each reward, max_reward and min_reward should be defined...
     max_reward: float = 1.0
 
     def __init__(self, weight: float, name: str = "default") -> None:

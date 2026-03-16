@@ -19,8 +19,8 @@ from adv_building_gym.devices.statesources import (
 )
 
 from adv_building_gym.rewards import (
-    RewardFunction, TempReward, EconomicReward, 
-    EVChargingOnTimeReward, MinimiseEnergyConsumption_Reward, 
+    RewardFunction, ActionSmoothnessReward, TempReward, EconomicReward,
+    EVChargingOnTimeReward, MinimiseEnergyConsumption_Reward,
     UserEnergyNeedReward, OperatorEnergyControlReward
 )
 
@@ -44,6 +44,7 @@ class Config:
 
     EPISODE_LENGTH: int = 288 # a day
     CONTROL_STEP: int = 300  # seconds (5 minutes)
+    ACTION_HISTORY_LENGTH: int = 4  # rolling window of past actions exposed in observations
 
     building_props: BuildingProps = field(default_factory=lambda:
         BuildingProps(mC=300, K=20)
@@ -135,6 +136,7 @@ class Config:
             MinimiseEnergyConsumption_Reward(weight=1),
             OperatorEnergyControlReward(infras, weight=1),
             EVChargingOnTimeReward(infrastructures=infras, weight=1),
+            ActionSmoothnessReward(weight=0.5),
         ]
 
     def __post_init__(self):

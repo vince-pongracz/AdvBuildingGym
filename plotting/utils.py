@@ -6,16 +6,17 @@ import logging
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 import h5py
 import numpy as np
 import plotly.graph_objects as go
+import yaml
 
 logger = logging.getLogger(__name__)
 
-# Default output root relative to the repository
-_REPO_ROOT = Path(__file__).resolve().parents[2]
-_DEFAULT_OUTPUT_ROOT = _REPO_ROOT / "plotting" / "out"
+# Repository root (used for resolving relative paths in config)
+_REPO_ROOT = Path(__file__).resolve().parents[1]
 _DEFAULT_METRICS_ROOT = _REPO_ROOT / "ep_metrics" / "trajectories"
 
 # Colour palette shared across all plot modules
@@ -23,6 +24,30 @@ COLORS = [
     "#636EFA", "#EF553B", "#00CC96", "#AB63FA", "#FFA15A",
     "#19D3F3", "#FF6692", "#B6E880", "#FF97FF", "#FECB52",
 ]
+
+# ---------------------------------------------------------------------------
+# Plot configuration (loaded from plot_config.yaml)
+# ---------------------------------------------------------------------------
+
+_PLOT_CONFIG_PATH = Path(__file__).resolve().parent / "config" / "plot_config.yaml"
+_plot_config_cache: dict[str, Any] | None = None
+
+
+def load_plot_config() -> dict[str, Any]:
+    """Load and cache ``plotting/config/plot_config.yaml``."""
+    global _plot_config_cache
+    if _plot_config_cache is None:
+        with open(_PLOT_CONFIG_PATH, encoding="utf-8") as fh:
+            _plot_config_cache = yaml.safe_load(fh)
+        logger.debug("Loaded plot config from %s", _PLOT_CONFIG_PATH)
+    return _plot_config_cache
+
+
+def get_output_root() -> Path:
+    """Return the trajectory output directory from plot_config.yaml."""
+    cfg = load_plot_config()
+    rel = cfg.get("output", {}).get("dir", "plotting/out/traj")
+    return _REPO_ROOT / rel
 
 
 # ---------------------------------------------------------------------------
@@ -64,6 +89,9 @@ class EpisodeData:
 
     # Cumulative energy per timestep (kWh)
     cum_E_kWh: np.ndarray = field(default_factory=lambda: np.empty(0, dtype=np.float32))
+
+    # Per-infrastructure power breakdown  {infra_name: 1-D ndarray (kW)}
+    power_breakdown: dict[str, np.ndarray] = field(default_factory=dict)
 
     # -- convenience helpers ------------------------------------------------
 
@@ -202,6 +230,12 @@ def load_episode(
             else np.zeros_like(steps)
         )
 
+        # Per-infrastructure power breakdown
+        power_breakdown: dict[str, np.ndarray] = {}
+        if "power_breakdown" in traj:
+            for key in traj["power_breakdown"]:
+                power_breakdown[key] = traj["power_breakdown"][key][:]
+
     return EpisodeData(
         episode_id=episode_id,
         seed=seed,
@@ -214,6 +248,7 @@ def load_episode(
         reward_breakdown=reward_breakdown,
         step_power_kW=power,
         cum_E_kWh=cum_e,
+        power_breakdown=power_breakdown,
     )
 
 
@@ -268,13 +303,23 @@ def style_figure(fig: go.Figure) -> go.Figure:
     return fig
 
 
-def write_figure_list_html(figures: list[go.Figure], filepath: str) -> None:
+def write_figure_list_html(
+    figures: list[go.Figure],
+    filepath: str,
+    footnote: str = "",
+) -> None:
     """Write a list of independent figures into a single HTML file."""
     parts: list[str] = [
-        "<html><head><meta charset='utf-8'/></head><body>",
+        "<html><head><meta charset='utf-8'/>"
+        "</head><body>",
     ]
-    for fig in figures:
-        parts.append(fig.to_html(full_html=False, include_plotlyjs="cdn"))
+    # First figure embeds the bundled Plotly.js so the version always matches
+    # the binary-encoded arrays that Plotly Python generates.
+    for i, fig in enumerate(figures):
+        include_js = True if i == 0 else False
+        parts.append(fig.to_html(full_html=False, include_plotlyjs=include_js))
+    if footnote:
+        parts.append(footnote)
     parts.append("</body></html>")
     with open(filepath, "w", encoding="utf-8") as f:
         f.write("\n".join(parts))

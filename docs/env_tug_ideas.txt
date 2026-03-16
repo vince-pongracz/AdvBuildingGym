@@ -1,0 +1,376 @@
+Based on the plots and trajectories, it seems like the actions are too rough, 
+ once an action is really negative, in the next time step it's really positive  
+-- the policy tugs the infrastructure elements and thus the states. Suggest     
+ideas to fix it.                                                                
+
+This is a classic action oscillation / bang-bang control problem in RL. Here 
+are the main approaches, roughly ordered from easiest to most involved:
+
+  1. Action Smoothing Penalty (reward-based)
+
+  Add a reward term that penalizes large changes between consecutive actions:
+
+  penalty = -weight * |a_t - a_{t-1}|
+
+  This is the most common fix. You'd create a new RewardFunction subclass that
+  tracks the previous action and penalizes the L1 or L2 difference. Minimal code
+   change, easy to tune via weight.
+
+  2. Exponential Moving Average (EMA) Action Filter
+
+  Instead of applying a_t directly, apply a_filtered = α * a_t + (1-α) * a_{t-1}
+   in _flat_action_to_dict or within each Infrastructure.exec_action. This
+  mechanically limits how fast actions can change. The agent can still request
+  extreme swings, but the filter smooths them out. Downside: the agent doesn't
+  "know" about the filter unless you also feed a_{t-1} into observations.
+
+  3. Action Rate Limiting (clamp the delta)
+
+  Clip |a_t - a_{t-1}| to a maximum Δ_max per timestep. Similar to EMA but with
+  a hard bound. Again, feeding a_{t-1} as an observation helps the policy learn
+  within the constraint.
+
+  4. Add Previous Action to Observations
+
+  Regardless of which smoothing method you pick, feeding a_{t-1} into the
+  observation space gives the policy the information it needs to self-regulate.
+  Without it, the policy has no memory of what it did last step, making
+  oscillation almost inevitable.
+
+  5. Temporal Action Repeat / Sticky Actions
+
+  Execute each action for N timesteps instead of 1. This effectively increases
+  the control step from 5 min to e.g. 15 min, reducing oscillation frequency.
+  Simple but reduces control granularity.
+
+  6. SAC Entropy Tuning
+
+  If using SAC, high entropy encourages exploration of extreme actions. Lowering
+   initial_alpha or setting a lower target_entropy can reduce this. For PPO,
+  increasing the KL penalty or reducing the clip ratio has a similar calming
+  effect.
+
+  ---
+  My recommendation: Start with (4) + (1) — add a_{t-1} to observations and add
+  an action-change penalty reward. These are orthogonal, easy to implement, and
+  directly address the root cause (no action memory + no smoothness incentive).
+  Want me to implement them?
+
+❯ Research these suggestions, analyse them and come back with refined           
+suggestions. What are the drawbacks and benefits of each ot them?               
+
+Let me research both the codebase context and the literature on each approach.
+
+2 agents finished (ctrl+o to expand)
+   ├─ Agent (Research action smoothing in RL) · 18 tool uses · 32.6k tokens
+   │  ⎿  Done
+   └─ Explore (Analyze codebase action handling) · 27 tool uses · 69.3k tokens
+      ⎿  Done
+
+Here's the refined analysis, incorporating both literature research and your
+  codebase specifics.
+
+  ---
+  Important finding: a_{t-1} is already in observations
+
+  Your env already adds prev_HP_action, prev_battery_action, etc. to the
+  observation space (building_adv.py:216-223). So approach #4 is already done —
+  the policy can see its previous actions but has no incentive to stay close to
+  them.
+
+  ---
+  Refined Approach Analysis
+
+  1. Action Change Penalty (Reward-based)
+
+  How: New RewardFunction penalizing ||a_t - a_{t-1}||^p.
+
+  ┌───────────┬──────────────────────────────────────────────────────────────┐
+  │           │                                                              │
+  ├───────────┼──────────────────────────────────────────────────────────────┤
+  │           │ Simple to implement as another RewardFunction subclass.      │
+  │ Benefits  │ Agent-aware — it learns when smoothness matters vs. when     │
+  │           │ rapid response is needed (e.g., price spike). Works with     │
+  │           │ both PPO and SAC.                                            │
+  ├───────────┼──────────────────────────────────────────────────────────────┤
+  │           │ Adds another weight to your already 5-objective reward sum.  │
+  │ Drawbacks │ Changes the optimal policy (not potential-based shaping). If │
+  │           │  λ too high → sluggish response to disturbances. Interacts   │
+  │           │ with SAC's entropy bonus, making tuning harder.              │
+  ├───────────┼──────────────────────────────────────────────────────────────┤
+  │ Verdict   │ Strong candidate. Fits your existing architecture perfectly  │
+  │           │ (just another RewardFunction). Start with L2, small weight.  │
+  └───────────┴──────────────────────────────────────────────────────────────┘
+
+  A recent paper directly relevant to your domain (arxiv 2601.02061, NeurIPS
+  2025 UrbanAI Workshop) found that 3rd-order (jerk) penalties outperform
+  1st-order for building HVAC, reducing equipment switching by 60%. This would
+  require tracking a_{t-1}, a_{t-2}, a_{t-3} and penalizing the 3rd finite
+  difference. More complex but potentially much more effective.
+
+  2. EMA Action Filter
+
+  How: a_filtered = α·a_t + (1-α)·a_{t-1} applied before execution.
+
+  Column 1: Benefits
+  Column 2: Guaranteed smooth output. Trivial to implement as a wrapper.
+  ────────────────────────────────────────
+  Column 1: Drawbacks
+  Column 2: The agent doesn't know about it. It outputs a_t but the environment
+    executes a_filtered. This corrupts Q-values (SAC learns wrong action→outcome
+
+    mappings) and importance sampling ratios (PPO). Introduces lag — agent
+  learns
+     to over-command to compensate, potentially making things worse. Suppresses
+    SAC exploration.
+  ────────────────────────────────────────
+  Column 1: Verdict
+  Column 2: Avoid during training. Useful only at deployment time on a trained
+    policy. The agent-environment mismatch is a fundamental problem, not a
+  tuning
+     issue.
+
+  3. Action Rate Limiting / Delta Actions
+
+  Two sub-variants:
+
+  3a. Clip deltas post-hoc: Same problems as EMA — agent unaware of the
+  constraint.
+
+  3b. Redefine action space as deltas: Agent outputs Δa ∈ [-Δ_max, +Δ_max],
+  executed as a_t = a_{t-1} + Δa.
+
+  Column 1: Benefits
+  Column 2: Hard smoothness guarantee. Agent is fully aware of the constraint.
+    Physically meaningful — maps to actuator slew rates (a heat pump can't ramp
+    0→100% in 5 min).
+  ────────────────────────────────────────
+  Column 1: Drawbacks
+  Column 2: Changes action semantics — the agent must learn that output =
+  change,
+     not absolute setpoint, which can slow early learning. Needs careful Δ_max
+    tuning: too small → can't reach target in time; too large → no smoothing.
+    Your HP action has mode (discrete-ish) + energy (continuous) — delta
+    semantics are awkward for the mode dimension. Path-dependent: reaching a
+    target state now takes multiple steps.
+  ────────────────────────────────────────
+  Column 1: Verdict
+  Column 2: Interesting but invasive. Requires changes to _flat_action_to_dict,
+    all exec_action methods, and careful thought about the HP mode dimension.
+    Better suited if you want hard physical constraints.
+
+  4. Previous Action in Observations — Already Done
+
+  Already implemented. No additional action needed, but confirms that the policy
+   has the information to be smooth — it just lacks the incentive.
+
+  5. Action Repeat / Sticky Actions
+
+  How: Execute each action for N consecutive timesteps (e.g., N=3 → decide every
+   15 min instead of 5 min).
+
+  Column 1: Benefits
+  Column 2: Eliminates high-frequency oscillation by construction. Faster
+    training (fewer decisions per episode, shorter effective horizon).
+    Well-established technique (Atari frame skip).
+  ────────────────────────────────────────
+  Column 1: Drawbacks
+  Column 2: Loses reactivity. A price spike or sudden occupancy change during
+  the
+     N-step window goes unaddressed for up to N×5 min. Your 5-min control  step
+    is already fairly coarse for thermal dynamics — going to 15 min  may be too
+    coarse for tight temperature bands. Not adaptive: the agent can't decide
+    "this situation needs faster control." Reward accumulation semantics matter
+    (sum vs. mean).
+  ────────────────────────────────────────
+  Column 1: Verdict
+  Column 2: Too blunt for your setup. The 5-min timestep with 24h episodes (288
+    steps) is already a reasonable decision frequency. Better to keep the
+    granularity and add smoothness incentives. Could revisit if you find  5-min
+    is genuinely too fast.
+
+  6. Entropy / Exploration Tuning
+
+  How: Lower SAC initial_alpha or target_entropy; reduce PPO clip ratio.
+
+  Column 1: Benefits
+  Column 2: No code changes — just hyperparameters.
+  ────────────────────────────────────────
+  Column 1: Drawbacks
+  Column 2: Does not address the root cause. A deterministic policy can still
+    oscillate: [-1, +1, -1, +1, ...] with zero variance is maximally
+    deterministic and maximally oscillatory. Reducing exploration too early
+    causes premature convergence. This controls policy  stochasticity, not
+  action
+     smoothness — related but distinct concepts.
+  ────────────────────────────────────────
+  Column 1: Verdict
+  Column 2: Not a primary fix. Fine-tuning entropy may help marginally but won't
+
+    solve the fundamental issue. Worth adjusting after implementing a real
+    smoothness mechanism.
+
+  ---
+  Additional Approaches from Literature
+
+  7. CAPS: Policy Regularization (Mysore et al., ICRA 2021)
+
+  arxiv 2012.06644
+
+  Adds regularization to the policy loss, not the reward:
+  - Temporal: L_T = ||π(s_t) - π(s_{t+1})||² — nearby states → similar actions
+  - Spatial: L_S = ||π(s) - π(s')||² where s' is a perturbed state
+
+  ┌───────────┬──────────────────────────────────────────────────────────────┐
+  │           │                                                              │
+  ├───────────┼──────────────────────────────────────────────────────────────┤
+  │           │ Doesn't change the MDP reward — the policy learns the        │
+  │ Benefits  │ original task but with a smooth mapping. Reported ~80%       │
+  │           │ reduction in power consumption on real quadrotors.           │
+  ├───────────┼──────────────────────────────────────────────────────────────┤
+  │           │ Requires modifying the RL algorithm's loss function, which   │
+  │ Drawbacks │ means custom RLlib RLModule code. Not a simple plug-in like  │
+  │           │ a reward function. Two new hyperparameters (λ_T, λ_S).       │
+  │           │ Computing π(s_{t+1}) or π(s') requires extra forward passes. │
+  ├───────────┼──────────────────────────────────────────────────────────────┤
+  │           │ Most principled approach, but higher implementation effort   │
+  │ Verdict   │ with RLlib's new API stack. Worth it if reward-based         │
+  │           │ penalties prove insufficient.                                │
+  └───────────┴──────────────────────────────────────────────────────────────┘
+
+  8. Higher-Order Penalties (2nd/3rd order)
+
+  arxiv 2601.02061
+
+  Penalize acceleration (a_t - 2a_{t-1} + a_{t-2}) or jerk (a_t - 3a_{t-1} + 
+  3a_{t-2} - a_{t-3}).
+
+  ┌───────────┬──────────────────────────────────────────────────────────────┐
+  │           │                                                              │
+  ├───────────┼──────────────────────────────────────────────────────────────┤
+  │           │ Directly targets the zigzag pattern (1st-order penalty       │
+  │ Benefits  │ allows smooth ramps but also allows alternation if           │
+  │           │ individual steps are small). Building energy domain-specific │
+  │           │  validation.                                                 │
+  ├───────────┼──────────────────────────────────────────────────────────────┤
+  │ Drawbacks │ Needs 2-3 steps of action history in the observation. More   │
+  │           │ complex reward computation.                                  │
+  ├───────────┼──────────────────────────────────────────────────────────────┤
+  │ Verdict   │ Strong candidate given the domain match. Can be implemented  │
+  │           │ alongside 1st-order penalty.                                 │
+  └───────────┴──────────────────────────────────────────────────────────────┘
+
+  ---
+  Recommendation: Phased Approach
+
+  Phase 1 (minimal effort, test impact):
+  - Add a 1st-order action change penalty as a new RewardFunction (L2 norm,
+  weight ~0.3-0.5). This fits your architecture with zero changes outside a new
+  reward class + config registration. Run a few seeds and compare trajectories.
+
+  Phase 2 (if Phase 1 helps but isn't enough):
+  - Upgrade to 2nd-order (acceleration) penalty — penalizes the zigzag pattern
+  specifically. Requires adding prev_prev_* actions to observations.
+
+  Phase 3 (if reward shaping distorts learning too much):
+  - Implement CAPS-style policy regularization via custom RLModule. This keeps
+  the reward clean and regularizes the policy directly.
+
+  Want me to implement Phase 1?
+
+✻ Sautéed for 5m 3s
+
+❯ Is this (policy can see its previous actions but has no incentive to stay     
+close to them.) really the case in the actual config and with PPO / SAC? How to 
+ overcome the agent-environment mismatch?                                       
+
+Let me check the actual config and how previous actions are used.
+
+Searched for 1 pattern, read 2 files (ctrl+o to expand)
+
+Good — so yes, prev_* actions are in the observation and populated every step.
+   Now let me check whether any reward function actually uses them.
+
+Searched for 1 pattern (ctrl+o to expand)
+
+Confirmed: no reward function references prev_* at all. The previous actions
+  flow into the observation but nothing in the reward signal incentivizes
+  smoothness.
+
+  ---
+  Does the agent actually use prev_* in practice?
+
+  Having a_{t-1} in the observation is necessary but not sufficient. Here's why:
+
+  With PPO: The policy network sees [..., prev_HP_action, prev_battery_action, 
+  ...] as input features. But since no reward signal correlates with |a_t - 
+  a_{t-1}|, there is no gradient signal pushing the network weights to connect
+  the prev_* inputs to the output in a smoothness-promoting way. The network can
+   learn to use them (e.g., if staying close to the previous action happens to
+  correlate with higher reward through some indirect mechanism), but it has no
+  direct reason to. In practice, neural networks tend to ignore input features
+  that don't contribute to the loss.
+
+  With SAC: Same reasoning, plus the entropy bonus actively encourages diverse
+  action sampling — working against action consistency. SAC's objective is max 
+  E[Σ r_t + α·H(π)]. The entropy term rewards stochasticity, which is the
+  opposite of smoothness.
+
+  So the statement holds: the policy can see a_{t-1} but has zero incentive to 
+  stay close to it.
+
+  ---
+  On the Agent-Environment Mismatch (EMA / post-hoc clipping)
+
+  The core issue with approaches like EMA or post-hoc delta clipping:
+
+  Agent outputs: a_t = 0.8
+  Filter applies: a_executed = 0.3 * 0.8 + 0.7 * (-0.5) = -0.11
+  Environment transitions based on: -0.11
+  Agent's Q-function learns: Q(s, 0.8) → r(from -0.11)   ← WRONG mapping
+
+  For SAC: The replay buffer stores (s_t, a_t=0.8, r_t, s_{t+1}) but r_t and
+  s_{t+1} resulted from a_executed=-0.11. The critic learns a corrupted
+  Q-function. The actor then optimizes against this corrupted critic.
+
+  For PPO: The log-probability log π(a_t|s_t) is computed for a_t=0.8, but the
+  advantage estimate is based on returns from executing -0.11. The importance
+  sampling ratio in the clipped surrogate is correct for the intended action,
+  not the executed action. This corrupts the policy gradient.
+
+  How to overcome it — two principled approaches:
+
+  Option A: Make the filter part of the MDP (delta-action formulation)
+
+  Redefine the action space so the agent outputs deltas:
+  # Agent outputs delta ∈ [-Δ_max, +Δ_max]
+  a_executed_t = a_{t-1} + delta_t
+
+  Now the agent knows it controls the change. a_{t-1} is in the observation
+  (already the case), the action semantics are explicit, and there is no 
+  mismatch — what the agent outputs is what gets stored in the replay buffer and
+   what the environment executes. Both PPO and SAC work correctly.
+
+  The downside (as discussed) is that this changes action semantics and is
+  invasive to implement, especially for the HP mode dimension.
+
+  Option B: Keep absolute actions, add smoothness to the reward
+
+  This is the simpler path. The MDP is well-defined — the agent outputs absolute
+   actions, the environment executes exactly those actions, and the reward
+  includes a penalty for large changes. No mismatch. Both PPO and SAC see the
+  true action-to-outcome mapping.
+
+  The prev_* observations are already there, so the agent has the information.
+  The missing piece is purely the reward term.
+
+  ---
+  Bottom line: The mismatch problem only exists if you apply a filter outside
+  the agent's knowledge. The two clean solutions are:
+  1. Reward penalty (easiest for your setup — no mismatch, just a new
+  RewardFunction)
+  2. Delta-action formulation (more principled but invasive — changes action
+  space semantics)
+
+  Both avoid the mismatch entirely. EMA/post-hoc clipping should only be used at
+   deployment time on a trained policy, never during training.

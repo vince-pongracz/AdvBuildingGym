@@ -71,6 +71,11 @@ class EnergyPriceDataSource(StateSource):
         # E_price is already normalised, so the normalised max is 1.0
         states["E_price_max"][0] = np.float32(1.0)
 
+    @property
+    def E_price_max_raw(self) -> float:
+        """Raw (unnormalised) maximum energy price."""
+        return float(self.price_max)
+
     def _get_serialize_value(self, param_name: str, value):
         """Handle enum serialization for normalise parameter."""
         if param_name == 'normalise' and isinstance(value, Normalisation):

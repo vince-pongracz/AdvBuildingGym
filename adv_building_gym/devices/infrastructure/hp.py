@@ -150,6 +150,9 @@ class HP(Infrastructure):
                 # => energy = q_hp / (Q_electric_max * cop)
                 actual_energy = actual_q_hp / (self.Q_electric_max * cop) if (self.Q_electric_max * cop) > 0 else 0.0
 
+            # Clamp to valid range — HP can only consume energy, never produce
+            actual_energy = np.clip(actual_energy, 0.0, 1.0)
+
             # Update action with the reduced energy (preserve mode)
             actions["HP_action"][0] = np.float32(actual_energy)
             actions["HP_action"][1] = np.float32(mode)

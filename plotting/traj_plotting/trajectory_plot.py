@@ -4,11 +4,13 @@ Generates four separate figures (states, actions, rewards, energy) for the
 episode with the best achieved reward or a user-specified episode ID.
 
 Usage:
-    python -m plotting.src.trajectory_plot [--hdf5 <path>] [--episode <id>]
+    python -m plotting.traj_plotting.trajectory_plot [--hdf5 <path>] [--episode <id>]
 
 When ``--hdf5`` is omitted the script auto-discovers the latest
 ``trajectories.hdf5`` under ``ep_metrics/trajectories/``.
 """
+
+# TODO VP 2026.03.16. : Just as an idea -- Reward the reward smoothness?
 
 from __future__ import annotations
 
@@ -18,10 +20,10 @@ import os
 
 import plotly.graph_objects as go
 
-from .utils import (
-    _DEFAULT_OUTPUT_ROOT,
+from plotting.utils import (
     ensure_chrome_for_kaleido,
     find_latest_hdf5,
+    get_output_root,
     load_episode,
     write_figure_list_html,
 )
@@ -68,17 +70,19 @@ def generate_all_plots(
     ep_id = episode.episode_id
 
     if output_dir is None:
-        output_dir = str(_DEFAULT_OUTPUT_ROOT / ep_id)
+        output_dir = str(get_output_root() / ep_id)
     os.makedirs(output_dir, exist_ok=True)
 
-    # States and actions return lists of figures; rewards and energy are single
-    multi_figures: dict[str, list[go.Figure]] = {
+    all_figures: dict[str, list[go.Figure]] = {
         "states": plot_states(episode),
         "actions": plot_actions(episode),
-    }
-    single_figures: dict[str, go.Figure] = {
         "rewards": plot_rewards(episode),
         "energy": plot_energy(episode),
+    }
+
+    # Per-figure-group footnotes rendered as separate HTML divs below the plots
+    html_footnotes: dict[str, str] = {
+        "energy": ENERGY_SIGN_CONVENTION_HTML,
     }
 
     saved: list[str] = []
@@ -97,43 +101,22 @@ def generate_all_plots(
             fmt_dir = os.path.join(output_dir, f"{fmt}s")
             os.makedirs(fmt_dir, exist_ok=True)
 
-        for name, figs in multi_figures.items():
+        for name, figs in all_figures.items():
             if fmt == "html":
                 filepath = os.path.join(fmt_dir, f"{ep_id}_{name}.html")
-                write_figure_list_html(figs, filepath)
+                footnote = html_footnotes.get(name, "")
+                write_figure_list_html(figs, filepath, footnote=footnote)
+                logger.info("Saved: %s", filepath)
+                saved.append(filepath)
             else:
                 for i, fig in enumerate(figs):
-                    filepath = os.path.join(fmt_dir, f"{ep_id}_{name}_{i}.{fmt}")
+                    suffix = f"_{i}" if len(figs) > 1 else ""
+                    filepath = os.path.join(
+                        fmt_dir, f"{ep_id}_{name}{suffix}.{fmt}",
+                    )
                     fig.write_image(filepath, width=1600, height=400)
                     logger.info("Saved: %s", filepath)
                     saved.append(filepath)
-                continue
-            logger.info("Saved: %s", filepath)
-            saved.append(filepath)
-
-        # Per-figure footnotes rendered as separate HTML divs below the plot
-        html_footnotes: dict[str, str] = {
-            "energy": ENERGY_SIGN_CONVENTION_HTML,
-        }
-
-        for name, fig in single_figures.items():
-            filepath = os.path.join(fmt_dir, f"{ep_id}_{name}.{fmt}")
-            if fmt == "html":
-                footnote = html_footnotes.get(name, "")
-                if footnote:
-                    plot_div = fig.to_html(full_html=False, include_plotlyjs="cdn")
-                    with open(filepath, "w", encoding="utf-8") as fh:
-                        fh.write(
-                            "<html><head><meta charset='utf-8'/></head><body>\n"
-                            f"{plot_div}\n{footnote}\n"
-                            "</body></html>"
-                        )
-                else:
-                    fig.write_html(filepath)
-            else:
-                fig.write_image(filepath, width=1600, height=400)
-            logger.info("Saved: %s", filepath)
-            saved.append(filepath)
 
     return saved
 
@@ -194,6 +177,8 @@ def main() -> None:
     for p in paths:
         print(f"Saved: {p}")
 
+
+# TODO VP 2026.03.12. : Use float64 everywhere -- for training, for actions, etc... -- more precision is key
 
 if __name__ == "__main__":
     main()

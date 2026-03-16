@@ -30,7 +30,8 @@ def extract_trajectory_from_infos(
         Keys include "step", "state" (nested dict keyed by original state
         names — scalars as flat lists, vectors preserved as lists of lists),
         "action" (nested dict, same convention), "reward",
-        "reward_breakdown" (nested dict), "cum_E_kWh", "step_power_kW".
+        "reward_breakdown" (nested dict), "cum_E_kWh", "step_power_kW",
+        and optionally "power_breakdown" (nested dict keyed by infra name).
     """
     if not infos:
         return {}
@@ -46,6 +47,11 @@ def extract_trajectory_from_infos(
     reward_names: list[str] = []
     if "reward_breakdown" in first:
         reward_names = list(first["reward_breakdown"].keys())
+
+    # Discover per-infrastructure power breakdown keys
+    power_names: list[str] = []
+    if "power_breakdown" in first:
+        power_names = list(first["power_breakdown"].keys())
 
     # Build initial-conditions row (step 0) from reset info
     initial_row: dict | None = None
@@ -65,6 +71,9 @@ def extract_trajectory_from_infos(
         # Zero reward breakdown
         if reward_names:
             initial_row["reward_breakdown"] = {name: 0.0 for name in reward_names}
+        # Zero power breakdown
+        if power_names:
+            initial_row["power_breakdown"] = {name: 0.0 for name in power_names}
 
     # Combine initial row + step infos
     all_rows = ([initial_row] if initial_row else []) + list(infos)
@@ -142,5 +151,15 @@ def extract_trajectory_from_infos(
 
     # Instantaneous power (kW) in a step = ΔEnergy (kWh) / ΔTime (h)
     trajectory["step_power_kW"] = [float(row.get("step_power_kW", 0.0)) for row in all_rows]
+
+    # Per-infrastructure power breakdown (nested under "power_breakdown" dict)
+    if power_names:
+        power_bd: dict[str, list] = {}
+        for name in power_names:
+            power_bd[name] = []
+            for row in all_rows:
+                bd = row.get("power_breakdown", {})
+                power_bd[name].append(float(bd.get(name, 0.0)))
+        trajectory["power_breakdown"] = power_bd
 
     return trajectory
