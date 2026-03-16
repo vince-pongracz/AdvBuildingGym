@@ -33,7 +33,6 @@ from .plot_rewards import plot_rewards
 from .plot_energy import ENERGY_SIGN_CONVENTION_HTML, plot_energy
 
 # TODO VP 2026.03.13. : Plot the eval script results
-# TODO VP 2026.03.13. : Refactor eval script -- eval the same day, 10 times, but with different seeds...
 
 logger = logging.getLogger("trajectory_plot")
 

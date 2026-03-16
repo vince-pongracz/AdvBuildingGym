@@ -104,9 +104,10 @@ def common_model_config(
         num_env_runners, num_cpus_per_env_runner, driver_cpus
     )
 
-    # action_space (flat Box) is provided explicitly so the RL module / Catalog
-    # sees a flat vector, not the env's native Dict.  observation_space is
-    # intentionally omitted — FlattenObservations transforms it automatically.
+    # observation_space is intentionally omitted — FlattenObservations transforms
+    # it automatically. 
+    # action_space is also omitted — the env_creator wraps
+    # the env with FlattenAction + RescaleAction so RLlib sees a flat Box(-1, 1).
     # Link: https://docs.ray.io/en/latest/rllib/env-to-module-connector.html
 
     config = config.api_stack(
@@ -154,10 +155,8 @@ def common_model_config(
         # TODO VP 2026.02.11. : Look up this when packages present
         # episode_lookback_horizon=10,
         # Flatten dict observation space into a single vector for the RL module.
-        # NOTE: Action space flattening is handled by the env itself
-        # (AdvBuildingGym exposes a flat Box and converts via _flat_action_to_dict).
-        # RLlib's SingleAgentEnvRunner.get_spaces() reads action_space directly
-        # from env.single_action_space, ignoring env-to-module connector output.
+        # Action space flattening + rescaling is handled by env wrappers
+        # (FlattenAction + RescaleAction) applied in env_creator.
         env_to_module_connector=lambda env, spaces, device: FlattenObservations(),  # type: ignore
     )
     config.evaluation(
@@ -180,6 +179,7 @@ def common_model_config(
         "loggers": [
                 "ray.tune.json.JsonLoggerCallback",
                 "ray.tune.csv.CSVLoggerCallback",
+                # TODO VP 2026.03.16. : Fire up tensorboard...
                 "ray.tune.tensorboardx.TBXLoggerCallback",
         ],
     }

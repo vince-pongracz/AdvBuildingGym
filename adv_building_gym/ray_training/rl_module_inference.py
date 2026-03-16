@@ -49,7 +49,7 @@ def flatten_observation(obs: dict | np.ndarray) -> np.ndarray:
     """
     if isinstance(obs, dict):
         return np.concatenate([
-            np.atleast_1d(v).astype(np.float32) for v in obs.values()
+            np.asarray(v, dtype=np.float32).flatten() for v in obs.values()
         ])
     return np.asarray(obs, dtype=np.float32).flatten()
 

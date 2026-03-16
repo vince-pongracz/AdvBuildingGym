@@ -41,7 +41,7 @@ class TrajectoryCollector:
 
         Args:
             env: An AdvBuildingGym instance 
-            (or compatible env with reward_funcs, _dict_action_space attributes).
+            (or compatible env with reward_funcs and Dict action_space).
         """
 
         # Extract state and action key names from env spaces
@@ -50,8 +50,11 @@ class TrajectoryCollector:
             self.state_keys = list(env.observation_space.spaces.keys())
 
         self.action_keys: list[str] | None = None
-        if hasattr(env, "_dict_action_space") and hasattr(env._dict_action_space, "spaces"):
-            self.action_keys = list(env._dict_action_space.spaces.keys())
+        # The native Dict action space lives on the unwrapped AdvBuildingGym;
+        # wrappers (FlattenAction, RescaleAction) may hide it.
+        action_space = getattr(env, "action_space", None)
+        if hasattr(action_space, "spaces"):
+            self.action_keys = list(action_space.spaces.keys())
 
         # Reward function names for summary
         self.reward_names: list[str] = []

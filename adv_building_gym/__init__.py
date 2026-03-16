@@ -22,17 +22,23 @@ def _make_adv_building(**kwargs):
     Calls factory methods at make() time so that components are never
     captured as None at import time (singletons are lazily initialised).
     Each gym.make() call gets independent component instances.
+
+    Returns a wrapped env with flat Box(-1, 1) action space
+    (FlattenAction + RescaleAction).
     """
     from .config import config as env_config
+    from .envs.env_creator import wrap_action_space
+
     infras = env_config.create_infras()
     statesources = env_config.create_statesources()
     rewards = env_config.create_rewards(infras)
-    return AdvBuildingGym(
+    env = AdvBuildingGym(
         infras=infras,
         statesources=statesources,
         rewards=rewards,
         building_props=env_config.building_props,
     )
+    return wrap_action_space(env)
 
 
 # Register advanced environment -- for stable baselines (SB3)

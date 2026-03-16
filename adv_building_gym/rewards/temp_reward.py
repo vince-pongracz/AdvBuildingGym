@@ -40,8 +40,10 @@ class TempReward(RewardFunction):
         actual_temp = float(states["temp_in_norm"][0])
         desired_temp = float(states["desired_temp_in_norm"][0])
 
-        diff_1: float = abs(1.0 - (actual_temp / desired_temp))
-        diff_2: float = abs(1.0 - (desired_temp / actual_temp))
+        # Guard against division by zero when normalised temps cross zero
+        eps:float = 1e-6
+        diff_1: float = abs(1.0 - (actual_temp / (desired_temp + eps)))
+        diff_2: float = abs(1.0 - (desired_temp / (actual_temp + eps)))
         temp_diff = np.mean([diff_1, diff_2])
 
         if temp_diff < self.diff_threshold:

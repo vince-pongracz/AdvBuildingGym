@@ -5,10 +5,27 @@ This module provides the factory function used by Ray Tune to create
 AdvBuildingGym environment instances with the configured settings.
 """
 
+import gymnasium
+
+from gymnasium.wrappers import RescaleAction
+
 from .building_adv import AdvBuildingGym
+from .wrappers import FlattenAction
 
 
-def adv_building_env_creator(config: dict) -> AdvBuildingGym:
+def wrap_action_space(env: gymnasium.Env) -> gymnasium.Env:
+    """Apply FlattenAction + RescaleAction wrapper chain.
+
+    The resulting env exposes a flat Box(-1, 1) action space to the policy
+    while the inner AdvBuildingGym receives named Dict actions with real
+    component bounds.
+    """
+    env = FlattenAction(env)
+    env = RescaleAction(env, min_action=-1.0, max_action=1.0)
+    return env
+
+
+def adv_building_env_creator(config: dict) -> gymnasium.Env:
     """
     Factory function for Ray Tune to create AdvBuildingGym instances.
 
@@ -26,7 +43,7 @@ def adv_building_env_creator(config: dict) -> AdvBuildingGym:
             - ``log_full_info``: Whether to log full state info.
 
     Returns:
-        AdvBuildingGym instance with independent component instances
+        Wrapped AdvBuildingGym with flat Box(-1, 1) action space
     """
     # Import config here to avoid circular imports
     from ..config import config as env_config
@@ -37,7 +54,7 @@ def adv_building_env_creator(config: dict) -> AdvBuildingGym:
     statesources = env_config.create_statesources()
     rewards = env_config.create_rewards(infras)
 
-    return AdvBuildingGym(
+    env = AdvBuildingGym(
         infras=infras,
         statesources=statesources,
         rewards=rewards,
@@ -46,3 +63,4 @@ def adv_building_env_creator(config: dict) -> AdvBuildingGym:
         # TODO VP 2026.02.24. : Clean up log_full info and trajectory logging, this is a bit hacky
         log_full_info=config.get("log_full_info", False)
     )
+    return wrap_action_space(env)

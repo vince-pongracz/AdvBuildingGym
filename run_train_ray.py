@@ -198,18 +198,8 @@ def main():
     # they use the factory methods directly via adv_building_env_creator.
     active_config.init_singletons()
 
-    # Derive the flat action space for the RL module.
-    # The env exposes a Dict action space natively; the RL module needs a
-    # flat Box.  Compute total_action_dim from the singleton infras.
-    from collections import OrderedDict
-    from gymnasium.spaces import Box
-    import numpy as np
-    _action_od = OrderedDict()
-    for infr in active_config.infras:
-        infr.setup_spaces(OrderedDict(), _action_od)
-    total_action_dim = sum(int(np.prod(s.shape)) for s in _action_od.values())
-    action_space = Box(low=-1.0, high=1.0, shape=(total_action_dim,), dtype=np.float32)
-    logger.info("Derived flat action_space: %s (from %d infra keys)", action_space, len(_action_od))
+    # Action space is handled by env wrappers (FlattenAction + RescaleAction)
+    # applied in env_creator.
 
     args.config_name = active_config.config_name if args.config_name is None else args.config_name
 

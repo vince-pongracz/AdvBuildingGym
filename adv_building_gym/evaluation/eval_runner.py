@@ -14,6 +14,7 @@ import ray
 
 from adv_building_gym.data_combinator import DataCombinator
 from adv_building_gym.envs import AdvBuildingGym
+from adv_building_gym.envs.env_creator import wrap_action_space
 from adv_building_gym.ray_training.rl_module_inference import (
     flatten_observation,
     infer_action,
@@ -29,6 +30,8 @@ logger = logging.getLogger(__name__)
 def _timeout_handler(signum, frame):
     raise TimeoutError("Evaluation timed out")
 
+# TODO VP 2026.03.16. : Add model input space check, whether the loaded model matches the config
+# "The model was trained with 35 input features, but the env now produces 47 features. The difference of 12 matches exactly the extra action history entries — likely ACTION_HISTORY_LENGTH was increased (e.g. from 1 to 4) since this model was trained."
 
 def evaluate_model(
     checkpoint_path: str,
@@ -88,9 +91,11 @@ def evaluate_model(
     logger.info("Loading algorithm from checkpoint...")
     rl_module = load_rl_module(checkpoint_path)
 
-    # Create evaluation environment
+    # Create evaluation environment with action-space wrappers
+    # (FlattenAction + RescaleAction) so the policy's flat [-1, 1] output
+    # is correctly rescaled to each component's real bounds.
     logger.info("Creating evaluation environment...")
-    env = AdvBuildingGym(
+    base_env = AdvBuildingGym(
         infras=active_config.infras,
         statesources=active_config.statesources,
         rewards=active_config.rewards,
@@ -100,9 +105,12 @@ def evaluate_model(
     )
 
     if log_trajectories:
-        env.log_full_info = True
+        base_env.log_full_info = True
 
-    collector = TrajectoryCollector(env) if log_trajectories else None
+    # TrajectoryCollector reads spaces from the unwrapped env
+    collector = TrajectoryCollector(base_env) if log_trajectories else None
+
+    env = wrap_action_space(base_env)
     max_reward_per_step = sum(
         r.weight * r.max_reward for r in active_config.rewards
     )

@@ -268,6 +268,8 @@ def make_env(rank: int, seed: int):
             rewards=rewards,
             building_props=env_config.building_props,
         )
+        from adv_building_gym.envs.env_creator import wrap_action_space
+        env = wrap_action_space(env)
         env.reset(seed=seed + rank)
         return env
     return _init

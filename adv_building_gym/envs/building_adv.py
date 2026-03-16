@@ -84,6 +84,9 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
     - The environment builds an observation_space (SDict) and action_space (SDict)
         by aggregating spaces declared by every Infrastructure and DataSource. The
         env also supplies per-key action history windows (``prev_{key}_hist``).
+    - The native action_space is a Dict whose keys/bounds are defined by the
+        Infrastructure components. External wrappers (FlattenAction + RescaleAction)
+        convert the flat [-1, 1] interface expected by RL libraries.
     - Observations returned by reset() and step() are Python dicts matching the
         observation_space keys. The environment does not return a flattened vector
         by default.
@@ -229,9 +232,12 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         for key, space in action_space.items():
             hist_shape = (self.action_history_length, *space.shape)
             obs_key = f"prev_{key}_hist"
+            # Tile per-action bounds across the history window
+            low_tiled = np.tile(space.low, (self.action_history_length, 1)).reshape(hist_shape)
+            high_tiled = np.tile(space.high, (self.action_history_length, 1)).reshape(hist_shape)
             observation_space[obs_key] = spaces.Box(
-                low=-1.0,
-                high=1.0,
+                low=low_tiled.astype(np.float32),
+                high=high_tiled.astype(np.float32),
                 shape=hist_shape,
                 dtype=np.float32,
             )
@@ -243,21 +249,10 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
             # Initialize internal state arrays with the same dtype as the declared space
             self.state[state_name] = np.zeros(shape=state_space.shape, dtype=state_space.dtype)
 
-        # Store the original Dict action space for internal use
-        self._dict_action_space = SDict(action_space)
-
-        # Flatten Dict action space to Box for compatibility with RLlib.
-        # RLlib's SingleAgentEnvRunner.get_spaces() reads env.action_space
-        # directly and passes it to the RLModule/Catalog, which only accepts
-        # Box or Discrete (e.g. SAC rejects Dict).  The flat<->dict conversion
-        # is done internally via _flat_action_to_dict().
-        total_action_dim = sum(int(np.prod(space.shape)) for space in action_space.values())
-        self.action_space = spaces.Box(
-            low=-1.0,
-            high=1.0,
-            shape=(total_action_dim,),
-            dtype=np.float32,
-        )
+        # Native Dict action space — each key maps to the component's real bounds.
+        # External wrappers (FlattenAction + RescaleAction) convert between the
+        # flat [-1, 1] interface expected by RL libraries and this Dict space.
+        self.action_space = SDict(action_space)
 
         self.building_props = building_props
         # NOTE VP 2026.02.28. : Simulation time is in seconds
@@ -413,49 +408,16 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         """
         return bool(self.iteration >= self.max_iteration)
 
-    def _flat_action_to_dict(self, flat_action: np.ndarray) -> Dict[str, np.ndarray]:
-        """Convert flat action array to Dict format for infrastructure use.
-
-        Handles various input formats from RLlib/SyncVectorEnv:
-        - 1D array: [a1, a2] -> use directly
-        - 2D array with batch dim: [[a1, a2]] -> flatten
-        - Nested structures -> flatten
-        """
-        # Convert to numpy array and flatten to 1D
-        flat_action = np.asarray(flat_action, dtype=np.float32).flatten()
-
-        # Calculate expected dimension
-        expected_dim = sum(
-            int(np.prod(space.shape)) for space in self._dict_action_space.spaces.values()
-        )
-
-        # Validate action size
-        if flat_action.size != expected_dim:
-            raise ValueError(
-                f"Action size mismatch: expected {expected_dim}, got {flat_action.size}. "
-                f"Action shape: {np.asarray(flat_action).shape}, Action: {flat_action}"
-            )
-
-        dict_action = {}
-        idx = 0
-        for key in self.action_space_keys:
-            space = self._dict_action_space.spaces[key]
-            action_dim = int(np.prod(space.shape))
-            dict_action[key] = flat_action[idx:idx + action_dim].reshape(space.shape)
-            idx += action_dim
-        return dict_action
-
     def step(self, action):
-        """
-        Execute a single control step in the env by applying the selected action.
-
-        Calculates:
-          - new state
-          - reward
-          - termination conditions
+        """Execute a single control step by applying *action*.
 
         Args:
-            action (np.array): Flat action array in [-1, 1] with shape (total_action_dim,).
+            action (dict[str, np.ndarray]): Dict action mapping component
+                keys (e.g. ``HP_action``, ``battery_action``) to arrays
+                whose bounds match the Dict action space declared by each
+                Infrastructure. 
+                External wrappers (FlattenAction + RescaleAction) handle the 
+                conversion from the flat [-1, 1] array produced by the RL policy.
 
         Returns:
             observation (dict): The next observation.
@@ -464,9 +426,6 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
             truncated (bool): False in this environment.
             info (dict): Additional information data.
         """
-        # Clip actions and convert flat action to Dict format
-        clipped_flat_action = np.clip(action, -1, 1)
-        action = self._flat_action_to_dict(clipped_flat_action)
 
         # 1. Execute all infrastructure actions
         for infr in self.infras:
