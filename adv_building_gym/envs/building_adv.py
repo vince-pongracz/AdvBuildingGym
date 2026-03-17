@@ -196,7 +196,7 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         
         self.episode_count: int = 0
         self.data_combinator = data_combinator if data_combinator is not None else DataCombinator()
-        self._rng: np.random.Generator | None = None
+        self._rng: np.random.Generator = np.random.default_rng()
         self._episode_date: str = ""
         self._episode_day_mode: str = "none"
 
@@ -270,8 +270,6 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         # TODO VP 2025.12.09. : inspect this -- drop it, it is not useful for us for now
         self.temporal_features = TemporalFeatureBuffer(window_size=self.prediction_horizon)
 
-        self.state, _ = self.reset()
-
         logger.debug("AdvBuildingGym created!")
         logger.debug("  Objectives: %s", [rew.name for rew in rewards])
         logger.debug("  Actions: %s", [infr.name for infr in infras])
@@ -288,7 +286,7 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
 
         Args:
             variant: Mapping of statesource name -> new CSV file path.
-                     Only matching statesources are reloaded; others are untouched.
+                    Only matching statesources are reloaded; others are untouched.
         """
         for state_src in self.statesources:
             if state_src.name in variant:
@@ -306,12 +304,13 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
 
     def reset(self, *, seed: int | None = None, options: Dict[str, Any] | None = None):
         if seed is None:
-            seed = np.random.randint(0, 10000)  # global RNG
+            seed = int(self._rng.integers(0, 10000))
+            logger.warning("Seed was none, now use: %d", seed)
         super().reset(seed=seed, options=options)
 
-        # Seed the deterministic RNG for DataCombinator random mode
-        if seed is not None:
-            self._rng = np.random.default_rng(seed)
+        # Reseed the per-env RNG so that episode-level random choices
+        # (variant selection, day offset) are reproducible for this seed.
+        self._rng = np.random.default_rng(seed)
 
         # ======== Data variant selection logic ========
         # Approach A: episode-count-based data variant swap

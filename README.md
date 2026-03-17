@@ -117,6 +117,20 @@ To simulate real-world uncertainty, the environment includes:
 
 These features support the evaluation under uncertainty and help assess the robustness of control strategies.
 
+### Papers
+
+- Reinforcement Learning-Based Energy Management of Smart Home with Rooftop Solar Photovoltaic System, Energy Storage System, and Home Appliances. 
+Link: https://www.mdpi.com/1424-8220/19/18/3937
+Uses RL, Q learning, PV, ESS, AC and washing machine.
+Cost and comfort optimisation. Seems like each infrastructure has its own agent -- or at least own head in the policy network
+Restricted weather data (only temp)
+
+TODO VP: continue here
+
+- 
+
+
+
 #### Key Features
 
 - Single-zone indoor thermal model with electric heat pump control and heat loss dynamics

@@ -1,0 +1,57 @@
+And search for research questions which are still open in the field of the previous prompt (Search for papers, dealing with adaptive home energy management control using RL. Other keywords: generalisation, transfer learning, controlling solar panels, batteries, EV charger, reinforcement learning, PPO, SAC. Weather and energy price data.).. or which are interesting and useful to research.
+
+Gemini hat gesagt
+Research in Reinforcement Learning (RL) for Home Energy Management Systems (HEMS) has moved beyond simple cost-optimization. As of 2026, the focus has shifted toward making these agents trustworthy, scalable, and resilient to real-world chaos.
+
+Here are the most significant open research questions and "hot" topics that are currently interesting for a Ph.D. or high-level research project:
+
+1. The "Safety" and "Hard Constraints" Problem
+Standard RL (like PPO or SAC) is "reward-driven," meaning it learns by making mistakes. In a home, "mistakes" (like draining a battery to 0% or tripping a circuit breaker) are unacceptable.
+
+Open Question: How can we guarantee zero-violation of physical constraints (e.g., Transformer limits, Battery State of Health) while still allowing the agent to explore and learn?
+
+Research Direction: Investigating Safe RL (Lagrangian methods) vs. Constrained RL (MIP-DRL), where a mathematical optimization layer "overrides" the RL agent if it proposes an unsafe action.
+
+2. Generalization and the "Cold-Start" Problem
+Most papers train an agent for one specific house. If you move that agent to a house with a different battery size or a different climate, it fails.
+
+Open Question: Can we develop a "Foundation Model" for HEMS that works out-of-the-box for any house?
+
+Research Direction: Meta-Learning and Zero-Shot Transfer. Researching how to train a "Teacher" agent on 10,000 simulated buildings so that it can adapt to a new "Student" building in just 24 hours of data.
+
+3. Explainable RL (XRL): "Why did you charge now?"
+Homeowners are unlikely to trust an AI that suddenly turns off their AC or charges their EV at 3:00 AM without explanation.
+
+Open Question: How can we translate a neural network's weights into human-readable logic?
+
+Research Direction: Using Differentiable Decision Trees or SHAP (SHapley Additive exPlanations) values to provide a "dashboard" for the user that explains: "I am charging the EV now because solar production is peaking and the price will triple at 6:00 PM."
+
+4. Federated RL for Privacy
+Training a high-quality RL agent requires massive amounts of data (occupancy, appliance usage, etc.), but users don't want to upload their private life to the cloud.
+
+Open Question: How can we train a global, high-performance HEMS model without the data ever leaving the home?
+
+Research Direction: Federated Reinforcement Learning (FRL). Homes train local models on their own data and only share "gradient updates" with a central server, which aggregates them into a smarter global model.
+
+5. Multi-Agent P2P Energy Trading
+As neighborhoods become "Prosumers" (producing and consuming), homes need to trade energy with each other, not just the grid.
+
+Open Question: How do we prevent "Competitive Spirals" where all RL agents try to sell energy at the same time, crashing the local market?
+
+Research Direction: Multi-Agent Reinforcement Learning (MARL) in non-stationary environments. Researching bidding strategies where agents learn to cooperate to stabilize the local microgrid while still maximizing their own profit.
+
+6. Battery Longevity (SOH-Aware Control)
+Most RL agents only care about the price of energy, often "thrashing" the battery (constant micro-charging) which kills its lifespan.
+
+Open Question: How do we integrate complex Electrochemical Battery Degradation models into the RL reward function without making it too slow to train?
+
+Research Direction: Physics-Informed RL. Integrating LSTM-Transformers that predict "State of Health" (SOH) into the agent's observation space so it treats the battery as a depreciating asset, not just a bucket of electrons.
+
+Summary of Research Gaps
+Research Gap	Difficulty	Practical Impact
+Constraint Satisfaction	High	Critical for Grid Safety
+User Explainability	Medium	Essential for Market Adoption
+Transfer Learning	High	Required for Commercial Scalability
+Privacy (Federated)	Medium	Required for Legal Compliance (GDPR/AI Act)
+
+TODO VP: convert into markdown and format it

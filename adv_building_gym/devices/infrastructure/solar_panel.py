@@ -34,7 +34,7 @@ class SolarPanel(Infrastructure):
 
     # Internal state variables - don't serialize
     _exclude_params: ClassVar[Set[str]] = {
-        'iteration', 'irradiance_norm', 'current_production_kW'
+        'iteration', 'irradiance_norm', 'current_production_kW', '_base_seed'
     }
 
     def __init__(self,
@@ -58,6 +58,7 @@ class SolarPanel(Infrastructure):
         # NOTE VP 2026.01.24. : Inverter efficiency is not considered, 
         # peak power means peak output power, produced by the solar panel
         self.peak_power_kW = peak_power_kW # -1.0 at actions means the peak power
+        self._base_seed = seed
         self.rng = np.random.default_rng(seed=seed)
         self.control_step = control_step
 
@@ -65,6 +66,13 @@ class SolarPanel(Infrastructure):
         self.irradiance_norm = 0.0  # Normalized irradiance [0, 1]
         self.current_production_kW = 0.0  # Actual power production in kW
 
+
+    def synchronise(self, iteration: int, row_offset: int | None = None) -> None:
+        super().synchronise(iteration, row_offset)
+        # Reseed RNG at episode reset (row_offset is only passed on reset, not
+        # per-step) so that solar noise is reproducible per episode.
+        if row_offset is not None:
+            self.rng = np.random.default_rng(seed=self._base_seed + row_offset)
 
     def setup_spaces(self,
                     state_spaces,
