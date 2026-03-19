@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 DEFAULT_YAML_PATH = Path(__file__).resolve().parents[2] / "configs" / "train_data_combinator_config.yaml"
 
 
-def load_data_combinator(
+def load_data_combinator_config(
     yaml_path: str | Path | None = None,
     seed_override: int | None = None,
 ) -> DataCombinator:

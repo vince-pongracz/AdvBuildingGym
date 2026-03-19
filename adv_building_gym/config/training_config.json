@@ -1,6 +1,0 @@
-{
-  "learning_rate": 3e-4,
-  "ppo_episodes_per_iteration": 25,
-  "ppo_minibatch_size": 64,
-  "sac_replay_batch_size": 256
-}

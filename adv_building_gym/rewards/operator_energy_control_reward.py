@@ -37,9 +37,9 @@ class OperatorEnergyControlReward(RewardFunction):
                  weight: float,
                  max_power_kW: float = 10.0,
                  name: str = "operator_energy_control_reward",
-                 harsh_penalty: float = -5.0,
+                 harsh_penalty: float = -1.0,
                  soft_threshold_pct: float = 0.9,
-                 recovery_steps: int = 5,
+                 recovery_steps: int = 3,
                  ) -> None:
         """Initialize OperatorEnergyControlReward.
 

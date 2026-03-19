@@ -65,6 +65,7 @@ class EvalResults:
     seed: int
     eval_time_seconds: float
     error: str | None = None
+    output_dir: str | None = None
 
     # Summary statistics (populated by from_episodes)
     mean_reward: float = 0.0

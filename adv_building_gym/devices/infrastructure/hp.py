@@ -74,7 +74,7 @@ class HP(Infrastructure):
 
         return state_spaces, action_spaces
 
-    def exec_action(self, actions, states) -> None:
+    def exec_action(self, actions, states, info=None) -> None:
         action = actions["HP_action"]
         # Action is 2D: [energy, mode]
         energy = float(np.atleast_1d(action)[0])
@@ -169,7 +169,7 @@ class HP(Infrastructure):
             # No clipping needed, use the original dTemp
             self.temp_in_norm_change = dTemp
 
-    def update_state(self, states) -> None:
+    def update_state(self, states, info=None) -> None:
         new_temp = states["temp_in_norm"][0] + self.temp_in_norm_change
         # Clipping ensured in exec_action -- maybe reintroduction needed later
         states["temp_in_norm"][0] = np.float32(new_temp)

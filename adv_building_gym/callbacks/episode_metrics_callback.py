@@ -70,7 +70,7 @@ def _extract_clipped_actions(episode: "SingleAgentEpisode") -> list | None:
 
 
 def _save_episode_metrics_json(
-    episode: "SingleAgentEpisode",
+    episode: SingleAgentEpisode,
     env_id: str,
     ep_metrics_file: str,
     ep_length: int,
@@ -119,9 +119,9 @@ def _save_episode_metrics_json(
 def make_episode_metrics_callback_class(
     env_id: str,
     rewards: List,
-    metrics_base_dir: str = "ep_metrics",
-    exec_date: Optional[datetime.datetime] = None,
-    dump_metrics_json: bool = False,
+    metrics_base_dir: str,
+    exec_date: Optional[datetime.datetime],
+    dump_metrics_json: bool,
 ) -> Type["EpisodeMetricsCallback"]:
     """Factory that returns a configured EpisodeMetricsCallback class.
 

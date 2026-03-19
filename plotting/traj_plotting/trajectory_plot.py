@@ -32,8 +32,6 @@ from .plot_actions import plot_actions
 from .plot_rewards import plot_rewards
 from .plot_energy import ENERGY_SIGN_CONVENTION_HTML, plot_energy
 
-# TODO VP 2026.03.13. : Plot the eval script results
-
 logger = logging.getLogger("trajectory_plot")
 
 
@@ -46,8 +44,9 @@ def generate_all_plots(
     episode_id: str | None = None,
     output_dir: str | None = None,
     control_step_seconds: int = 300,
-    formats: list[str] | None = None,
+    formats: list[str] = ["html"],
     select_by: str = "reward_rate",
+    file_prefix: str | None = None,
 ) -> list[str]:
     """Load an episode, generate all four figures, save to output_dir.
 
@@ -58,15 +57,14 @@ def generate_all_plots(
         control_step_seconds: Timestep in seconds (default 300).
         formats: Output formats to produce. Default: ["html"].
         select_by: Summary metric for auto-selecting the best episode.
+        file_prefix: Prefix for output filenames. Default: episode_id.
 
     Returns:
         List of saved file paths.
     """
-    if formats is None:
-        formats = ["html"]
 
     episode = load_episode(hdf5_path, episode_id, control_step_seconds, select_by)
-    ep_id = episode.episode_id
+    ep_id = file_prefix if file_prefix is not None else episode.episode_id
 
     if output_dir is None:
         output_dir = str(get_output_root() / ep_id)

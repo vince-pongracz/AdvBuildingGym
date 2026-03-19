@@ -10,7 +10,7 @@
 # All arguments are forwarded directly to run_eval_ray.py. Available options:
 #   --algorithm, -a ALGO    Algorithm to evaluate (ppo, sac) [default: ppo]
 #   --config-name, -cn NAME Configuration name (used in checkpoint search path)
-#   --load-config PATH      Path to JSON config file to load
+#   --load-config PATH      Path to YAML config file to load
 #   --checkpoint PATH       Path to Ray checkpoint directory (auto-detects best if omitted)
 #   --episodes N            Number of evaluation episodes [default: 10]
 #   --seed N                Random seed [default: 42]

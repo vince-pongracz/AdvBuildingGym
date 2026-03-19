@@ -52,7 +52,7 @@ class DesiredUserEnergyNeed(StateSource):
 
         return state_spaces, action_spaces
 
-    def update_state(self, states) -> None:
+    def update_state(self, states, info=None) -> None:
         """Update desired energy need state based on current iteration."""
         if self.ts is not None:
             if self.effective_index < len(self.ts):
@@ -64,6 +64,7 @@ class DesiredUserEnergyNeed(StateSource):
                 desired_energy = 0.0  # Placeholder
         else:
             current_sim_hour = states.get("sim_hour", np.zeros(shape=(1,), dtype=np.float32))[0]
+            current_sim_hour = current_sim_hour % 24
             # Apply a simple time-based energy need profile if no CSV data is provided
             if current_sim_hour < 6:
                 desired_energy = 0.2  # Low demand during night

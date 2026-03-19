@@ -3,6 +3,7 @@ from collections import OrderedDict
 from typing import ClassVar, Set
 
 import numpy as np
+import pandas as pd
 from gymnasium.spaces import Box
 
 from ..base import StateSource
@@ -19,7 +20,7 @@ class WeatherDataSource(StateSource):
     _exclude_params: ClassVar[Set[str]] = {'iteration', 'ts'}
 
     def __init__(self, name: str, ds_path: str | None = None,
-                 normalise: Normalisation | str | None = Normalisation.MAX_ABS_SCALING) -> None:
+                normalise: Normalisation | str | None = Normalisation.MAX_ABS_SCALING) -> None:
         super().__init__(name, ds_path)
 
         self.normalise = Normalisation.init(normalise)  # Store for serialization
@@ -33,10 +34,40 @@ class WeatherDataSource(StateSource):
             logger.debug("No initial data file for '%s', data source will be assigned by DataCombinator", name)
 
     def _post_load_data_processing(self) -> None:
-        """Normalise weather columns after CSV load / reload."""
-        # Zenodo CSVs have direct_sun_shine only (global irradiance); create sun_shine alias
+        """Normalise weather columns after CSV load / reload.
+
+        Handles common data-quality issues in DWD weather CSVs:
+        - Missing-data sentinels (e.g. -999 / -1998 in sun_shine)
+        - NaN gaps from station outages (forward-filled then back-filled)
+        """
+        # Zenodo CSVs have direct_sun_shine only; create sun_shine alias
         if "sun_shine" not in self.ts.columns and "direct_sun_shine" in self.ts.columns:
             self.ts["sun_shine"] = self.ts["direct_sun_shine"]
+
+        # Replace negative sentinel values in irradiance with 0
+        # (real irradiance is never negative; DWD uses e.g. -999 for missing data)
+        if "sun_shine" in self.ts.columns:
+            neg_mask = self.ts["sun_shine"] < 0
+            n_neg = neg_mask.sum()
+            if n_neg > 0:
+                logger.warning(
+                    "WeatherDataSource '%s': %d negative sentinel values in "
+                    "'sun_shine' replaced with 0", self.name, n_neg,
+                )
+                self.ts.loc[neg_mask, "sun_shine"] = 0.0
+
+        # Forward-fill NaN in weather columns (station outages), then
+        # back-fill any leading NaN so no row is left with NaN.
+        weather_cols = ["temp_amb", "sun_shine", "avg_wind_speed"]
+        for col in weather_cols:
+            if col in self.ts.columns:
+                n_nan = int(self.ts[col].isna().sum())
+                if n_nan > 0:
+                    logger.warning(
+                        "WeatherDataSource '%s': %d NaN values in '%s', "
+                        "forward/back-filling", self.name, n_nan, col,
+                    )
+                    self.ts[col] = self.ts[col].ffill().bfill()
 
         cols = {
             "temp_amb": "temp_out_norm",
@@ -56,9 +87,9 @@ class WeatherDataSource(StateSource):
 
 
     def setup_spaces(self,
-                     state_spaces: OrderedDict,
-                     action_spaces: OrderedDict
-                     ) -> tuple[OrderedDict, OrderedDict]:
+                    state_spaces: OrderedDict,
+                    action_spaces: OrderedDict
+                    ) -> tuple[OrderedDict, OrderedDict]:
         if "temp_out_norm" not in state_spaces.keys():
             state_spaces["temp_out_norm"] = Box(low=-1, high=1, shape=(1,), dtype=np.float32)
         if "solar_irradiance_norm" not in state_spaces.keys():
@@ -72,9 +103,10 @@ class WeatherDataSource(StateSource):
                                             shape=(1,),
                                             dtype=np.float32)
 
+
         return state_spaces, action_spaces
 
-    def update_state(self, states) -> None:
+    def update_state(self, states, info=None) -> None:
         if self.ts is not None:
             row = self.ts.iloc[min(self.effective_index, len(self.ts) - 1)]
             temp_out_norm = float(row["temp_out_norm"])
@@ -82,23 +114,24 @@ class WeatherDataSource(StateSource):
             solar_irradiance_norm = float(row.get("solar_irradiance_norm", 0.0))
             avg_wind_speed_norm = float(row.get("avg_wind_speed_norm", 0.0))
         else:
-            current_sim_hour = states.get("sim_hour", np.zeros(shape=(1,), dtype=np.float32))[0]
-            # Apply a simple time-based temperature profile if no CSV data is provided
-            if current_sim_hour < 5:
+            # sim_hour is actual hour of day (0–24)
+            sim_hour = float(states.get("sim_hour", np.zeros(shape=(1,), dtype=np.float32))[0])
+            # Synthetic diurnal outdoor temperature profile (normalised)
+            if sim_hour < 5:
                 temp_out_norm = 0.0
-            elif current_sim_hour < 6:
+            elif sim_hour < 6:
                 temp_out_norm = 0.3
-            elif current_sim_hour < 8:
+            elif sim_hour < 8:
                 temp_out_norm = 0.4
-            elif current_sim_hour < 12:
+            elif sim_hour < 12:
                 temp_out_norm = 0.45
-            elif current_sim_hour < 16:
+            elif sim_hour < 16:
                 temp_out_norm = 0.5
-            elif current_sim_hour < 18:
+            elif sim_hour < 18:
                 temp_out_norm = 0.35
-            elif current_sim_hour < 21.5:
+            elif sim_hour < 21.5:
                 temp_out_norm = 0.2
-            elif current_sim_hour < 24:
+            elif sim_hour < 24:
                 temp_out_norm = 0.1
             else:
                 temp_out_norm = 0.3
@@ -110,6 +143,12 @@ class WeatherDataSource(StateSource):
         states["temp_out_norm"][0] = np.float32(temp_out_norm)
         states["solar_irradiance_norm"][0] = np.float32(solar_irradiance_norm)
         states["avg_wind_speed_norm"][0] = np.float32(avg_wind_speed_norm)
+
+        # Expose the temperature scale factor via info so other components
+        # (e.g. InsideTemperature) can normalise on the same scale.
+        # Not in observation space — raw °C value would destabilise the NN.
+        if info is not None:
+            info["_temp_abs_max"] = self.temp_abs_max
 
     def _get_serialize_value(self, param_name: str, value):
         """Handle enum serialization for normalise parameter."""

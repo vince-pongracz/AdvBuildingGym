@@ -37,9 +37,8 @@ class EnergyPriceDataSource(StateSource):
             self.ts["E_price_norm"] = normalise_series(self.ts["baseprice"], self.normalise)
         
     def setup_spaces(self,
-                     state_spaces,
-                     action_spaces
-                     ) -> tuple:
+                    state_spaces,
+                    action_spaces) -> tuple:
 
         if "E_price" not in state_spaces.keys():
             state_spaces["E_price"] = Box(low=-1, high=1, shape=(1,), dtype=np.float32)
@@ -53,12 +52,13 @@ class EnergyPriceDataSource(StateSource):
 
         return state_spaces, action_spaces
 
-    def update_state(self, states) -> None:
+    def update_state(self, states, info=None) -> None:
         if self.ts is not None:
             row = self.ts.iloc[min(self.effective_index, len(self.ts) - 1)]
             energy_price = float(row["E_price_norm"])
         else:
             current_sim_hour = states.get("sim_hour", np.zeros(shape=(1,), dtype=np.float32))[0]
+            current_sim_hour = current_sim_hour % 24
             # Apply a simple time-of-use tariff if no CSV data is provided
             if current_sim_hour < 4:
                 energy_price = 0.25

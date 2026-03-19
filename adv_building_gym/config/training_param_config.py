@@ -1,17 +1,18 @@
 """Training hyperparameter configuration.
 
 Provides a dataclass that holds training hyperparameters and can be loaded
-from a JSON file. 
+from a YAML file.
 Fields are split by algorithm where their semantics differ.
 """
 
-import json
 from dataclasses import dataclass
 from pathlib import Path
 
+import yaml
+
 
 @dataclass
-class TrainingConfig:
+class TrainingParamConfig:
     """Training hyperparameters, split by algorithm where semantics differ.
 
     PPO (on-policy) collects a batch of complete episodes before each policy
@@ -39,17 +40,18 @@ class TrainingConfig:
     ppo_episodes_per_iteration: int = 25
     ppo_minibatch_size: int = 64
     sac_replay_batch_size: int = 256
+    seed: int = 42
 
     @staticmethod
-    def from_json(path: str | Path) -> "TrainingConfig":
-        """Load training config from a JSON file.
+    def from_yaml(path: str | Path) -> "TrainingParamConfig":
+        """Load training config from a YAML file.
 
         Args:
-            path: Path to the JSON config file.
+            path: Path to the YAML config file.
 
         Returns:
             TrainingConfig populated from the file.
         """
         with open(path, "r") as f:
-            data = json.load(f)
-        return TrainingConfig(**data)
+            data = yaml.safe_load(f)
+        return TrainingParamConfig(**data)

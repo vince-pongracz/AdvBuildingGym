@@ -21,11 +21,10 @@ class OperatorEnergyControl(StateSource):
     """
 
     def __init__(self,
-                 name: str,
-                 ds_path: str | None = None,
-                 max_power_kW: float = 10.0,
-                 derive_max_power_from_data: bool = True
-                 ) -> None:
+                name: str,
+                ds_path: str | None = None,
+                max_power_kW: float = 10.0,
+                derive_max_power_from_data: bool = True) -> None:
         """
         Initialize OperatorEnergyControl datasource.
 
@@ -63,9 +62,8 @@ class OperatorEnergyControl(StateSource):
             logger.debug("No initial data file for '%s', using synthetic operator limits", name)
 
     def setup_spaces(self,
-                     state_spaces: OrderedDict,
-                     action_spaces: OrderedDict
-                     ) -> tuple[OrderedDict, OrderedDict]:
+                    state_spaces: OrderedDict,
+                    action_spaces: OrderedDict) -> tuple[OrderedDict, OrderedDict]:
         """Setup observation spaces for operator energy control limit."""
         # Normalized to [0, 1] range (non-negative power limit)
         if "operator_energy_max" not in state_spaces.keys():
@@ -74,12 +72,8 @@ class OperatorEnergyControl(StateSource):
 
         # Instantaneous grid power consumption in kW
         # This will be calculated by the environment using infrastructure.get_electric_consumption()
-        if "grid_power_kW" not in state_spaces.keys():
-            state_spaces["grid_power_kW"] = Box(
-                low=0.0, high=np.inf,
-                shape=(1,),
-                dtype=np.float32,
-            )
+        # grid_power_kW removed from observation space — it was never updated
+        # and the actual value is available via info["step_power_kW"].
 
         if "sim_hour" not in state_spaces.keys():
             state_spaces["sim_hour"] = Box(low=0,
@@ -90,7 +84,7 @@ class OperatorEnergyControl(StateSource):
 
         return state_spaces, action_spaces
 
-    def update_state(self, states) -> None:
+    def update_state(self, states, info=None) -> None:
         """Update operator energy limit state based on current iteration."""
 
         if self.ts is not None:

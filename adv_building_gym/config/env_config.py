@@ -27,7 +27,7 @@ from adv_building_gym.rewards import (
 
 
 @dataclass
-class Config:
+class EnvConfig:
     """
     Config serialisation -- by ConfigManager.
     - Save config: ConfigManager.save(config, path)
@@ -38,9 +38,7 @@ class Config:
     Direct access to self.infras/statesources/rewards returns shared singletons and should
     only be used for inspection, not for passing to AdvBuildingGym in parallel environments.
     """
-    config_name: str = "test1"
-
-    seed: int = 42
+    env_config_name: str = "test1"
 
     EPISODE_LENGTH: int = 288 # a day
     CONTROL_STEP: int = 300  # seconds (5 minutes)
@@ -112,7 +110,6 @@ class Config:
                 "solar",
                 Q_electric_max=5.0,
                 peak_power_kW=5.0,
-                seed=self.seed,
                 control_step=self.CONTROL_STEP
             ),
         ]
@@ -170,4 +167,4 @@ class Config:
             self.rewards = self.create_rewards(self.infras)
 
 # default/config instance
-config = Config()
+config = EnvConfig()

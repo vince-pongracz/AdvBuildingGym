@@ -404,7 +404,7 @@ def main():
     args = parser.parse_args()
 
     args.timesteps = int(args.timesteps)
-    args.config_name = env_config.config_name if args.config_name is None else args.config_name
+    args.config_name = env_config.env_config_name if args.config_name is None else args.config_name
 
     # Normalize metric name: SB3's "mean_reward" is equivalent to Ray's "episode_return_mean"
     # Use "episode_return_mean" internally for consistency across frameworks

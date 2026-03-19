@@ -61,7 +61,7 @@ class WeatherDataSource(StateSource):
 
         return state_spaces, action_spaces
 
-    def update_state(self, states) -> None:
+    def update_state(self, states, info=None) -> None:
         if self.ts is not None:
             row = self.ts.iloc[min(self.effective_index, len(self.ts) - 1)]
             temp_out_norm = float(row["temp_out_norm"])
@@ -70,6 +70,7 @@ class WeatherDataSource(StateSource):
         # TODO VP 2026.03.10. : Refactor the synthetic part? -- Think about it
         else:
             current_sim_hour = states.get("sim_hour", np.zeros(shape=(1,), dtype=np.float32))[0]
+            current_sim_hour = current_sim_hour % 24 # Temperature is periodic
             # Apply a simple time-based temperature profile if no CSV data is provided
             if current_sim_hour < 5:
                 temp_out_norm = 0.0

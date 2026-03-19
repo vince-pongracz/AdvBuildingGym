@@ -31,16 +31,20 @@ def normalise_series(series: pd.Series, method: Normalisation | None) -> pd.Seri
         Normalised pandas Series.
     """
     match method:
+        # TODO VP 2026.03.18. : Log if div by zero would have happened
         case Normalisation.ABS_MIN_MAX_SCALING:
             # norm = val / max(|min|, |max|), maps to [-1, 1]
             abs_max = max(abs(series.min()), abs(series.max()))
             return series / abs_max if abs_max != 0 else series * 0.0
         case Normalisation.MAX_ABS_SCALING:
-            return series / series.abs().max()
+            max_abs = series.abs().max()
+            return series / max_abs if max_abs != 0 else series * 0.0
         case Normalisation.MIN_MAX_SCALING:
-            return (series - series.min()) / (series.max() - series.min())
+            range_ = series.max() - series.min()
+            return (series - series.min()) / range_ if range_ != 0 else series * 0.0
         case Normalisation.STANDARDISATION:
-            return (series - series.mean()) / series.std()
+            std = series.std()
+            return (series - series.mean()) / std if std != 0 else series * 0.0
         case None:
             return series
         case _:

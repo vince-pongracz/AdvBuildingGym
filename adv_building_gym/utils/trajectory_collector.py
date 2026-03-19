@@ -11,7 +11,7 @@ import os
 import numpy as np
 
 from .json_encoder import CustomJSONEncoder
-from .trajectory_utils import extract_trajectory_from_infos
+from .trajectory_utils import extract_trajectory_from_infos, write_episode_to_hdf5
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +35,6 @@ class TrajectoryCollector:
         collector.save_json("trajectory.json")
     """
 
-    # TODO VP 2026.02.25. : Add hdf5 trajectory export option
     def __init__(self, env) -> None:
         """Extract keys from the environment for trajectory extraction.
 
@@ -160,6 +159,20 @@ class TrajectoryCollector:
         with open(filepath, "w", encoding="utf-8") as f:
             json.dump(data, f, cls=CustomJSONEncoder, indent=4)
         logger.info("Trajectory saved to %s", filepath)
+
+    def save_hdf5(self, hdf5_path: str, episode_id: str | None = None) -> None:
+        """Append this episode's trajectory to an HDF5 file.
+
+        Args:
+            hdf5_path: Path to the HDF5 file (created if absent).
+            episode_id: Group name in the HDF5 file. Defaults to
+                ``self._episode_id`` set via ``on_episode_end()``.
+        """
+        ep_id = str(episode_id if episode_id is not None else self._episode_id)
+        os.makedirs(os.path.dirname(hdf5_path) or ".", exist_ok=True)
+        data = self.to_dict()
+        write_episode_to_hdf5(hdf5_path, ep_id, data)
+        logger.info("Trajectory appended to %s (episode %s)", hdf5_path, ep_id)
 
     def reset(self) -> None:
         """Clear accumulated data for the next episode."""

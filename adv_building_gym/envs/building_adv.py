@@ -7,6 +7,7 @@ import gymnasium as gym
 from gymnasium import Space, spaces
 from gymnasium.spaces import Dict as SDict
 import numpy as np
+import random
 import pandas as pd
 
 from adv_building_gym.data_combinator import DataCombinator
@@ -28,7 +29,6 @@ logging.basicConfig(
     force=True  # Override any existing logging configuration (e.g., from Ray/RLlib)
 )
 logger = logging.getLogger(__name__)
-
 
 class AdvBuildingGym(gym.Env, DataVariantProvider):
     """
@@ -214,11 +214,12 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
 
         self.reward_funcs = rewards
 
-        # sim_hour: normalised simulation hour [0, 1] derived from the current
-        # step within the episode.  0.0 = start of day, 1.0 = end of day.
+        # sim_hour: hour of day (0–24) derived from the current step
+        # within the episode.  Used by statesource synthetic profiles
+        # and SolarPanel for time-of-day logic.
         # Managed directly by the environment (not a StateSource).
         observation_space["sim_hour"] = spaces.Box(
-            low=0.0, high=1.0, shape=(1,), dtype=np.float32,
+            low=0.0, high=24.0, shape=(1,), dtype=np.float32,
         )
 
         # Add per-key action history windows to the observation space.
@@ -246,8 +247,14 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         self.observation_space = SDict(observation_space)
         self.state = OrderedDict()
         for state_name, state_space in observation_space.items():
-            # Initialize internal state arrays with the same dtype as the declared space
+            # Initialize observation state arrays with the same dtype as the declared space
             self.state[state_name] = np.zeros(shape=state_space.shape, dtype=state_space.dtype)
+
+        # Shared dict for inter-component data that is NOT part of the
+        # observation space (raw kWh/kW/°C values, EV schedule parameters).
+        # Components write/read via the ``info`` argument of update_state()
+        # and exec_action().  Persists across steps; included in step info.
+        self._component_info: dict = {}
 
         # Native Dict action space — each key maps to the component's real bounds.
         # External wrappers (FlattenAction + RescaleAction) convert between the
@@ -277,10 +284,10 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
 
     def get_state_space(self):
         return self.observation_space
-    
+
     def get_action_space(self):
         return self.action_space
-    
+
     def apply_data_variant(self, variant: dict[str, str]) -> None:
         """Reload statesources whose names appear in *variant*.
 
@@ -303,14 +310,17 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         return f"day-{row_offset // steps_per_day}"
 
     def reset(self, *, seed: int | None = None, options: Dict[str, Any] | None = None):
-        if seed is None:
-            seed = int(self._rng.integers(0, 10000))
-            logger.warning("Seed was none, now use: %d", seed)
-        super().reset(seed=seed, options=options)
+        # ======= Seed =======
+        super().reset(seed=seed)
 
-        # Reseed the per-env RNG so that episode-level random choices
-        # (variant selection, day offset) are reproducible for this seed.
-        self._rng = np.random.default_rng(seed)
+        # Only reseed when an explicit seed is provided (typically the first
+        # reset per env runner).  Subsequent resets (seed=None) must NOT
+        # recreate the RNG — doing so would destroy the deterministic
+        # sequence and make episodes non-reproducible across runs.
+        if seed is not None:
+            random.seed(seed)
+            np.random.seed(seed)
+            self._rng = np.random.default_rng(seed)
 
         # ======== Data variant selection logic ========
         # Approach A: episode-count-based data variant swap
@@ -367,17 +377,18 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
             else:
                 logger.debug("Unidentified type: %s", type(v))
 
-        # Set sim_hour for step 0 (start of episode)
+        # Set sim_hour for step 0 (midnight start of day)
         self.state["sim_hour"][0] = np.float32(0.0)
 
         # ======== Update state from statesources to populate initial observations ========
         # This ensures observations are within bounds after reset
+        self._component_info.clear()
         for ds in self.statesources:
-            ds.update_state(states=self.state)
+            ds.update_state(states=self.state, info=self._component_info)
 
         # Update infrastructure states as well
         for infr in self.infras:
-            infr.update_state(self.state)
+            infr.update_state(self.state, info=self._component_info)
 
         # ======= Pass initial state to info ========
         info = {
@@ -385,6 +396,7 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
             "episode_date": self._episode_date,
             "episode_day_mode": self._episode_day_mode,
             "data_variant": variant if variant else None,
+            "component_info": dict(self._component_info),
         }
         if self.log_full_info:
             info["state"] = {k: np.array(v, copy=True) for k, v in self.state.items()}
@@ -397,7 +409,7 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         state = OrderedDict(self.state) if isinstance(self.state, OrderedDict) else OrderedDict()
         for ds in self.statesources:
             # statesources accept a dict and update it in-place
-            ds.update_state(states=state)
+            ds.update_state(states=state, info=self._component_info)
         return state
 
     def is_done(self) -> bool:
@@ -428,24 +440,27 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
 
         # 1. Execute all infrastructure actions
         for infr in self.infras:
-            infr.exec_action(action, self.state)
+            infr.exec_action(action, self.state, info=self._component_info)
 
         # 2. Advance time: increment iteration, then synchronise all components so
         #    update_state reads the correct (new) row from time-series data.
         #    Previously synchronise was called AFTER update_state, causing exogenous
         #    datasources (price, weather, EV schedule) to lag 2 iterations behind.
         self.iteration += 1
-        # Update normalised simulation hour: fraction of episode elapsed
-        self.state["sim_hour"][0] = np.float32(self.iteration / self.max_iteration)
+        # Update simulation hour: actual hour of day (0–24)
+        # control_step is in seconds; convert elapsed time to hours
+        self.state["sim_hour"][0] = np.float32(
+            (self.iteration * self.control_step) / 3600.0
+        )
 
         for sync in self.infras + self.statesources:
             sync.synchronise(self.iteration)
 
         # 3. Update observable states for the new iteration
         for infr in self.infras:
-            infr.update_state(self.state)
+            infr.update_state(self.state, info=self._component_info)
         for ds in self.statesources:
-            ds.update_state(states=self.state)
+            ds.update_state(states=self.state, info=self._component_info)
 
         # Accumulate net energy consumption from all infrastructures
         # Positive = consumption from grid, Negative = production to grid
@@ -479,10 +494,20 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
             else:
                 history[-1] = 0.0
 
+        # Guard against NaN/Inf in state — these propagate through the neural
+        # network and crash the action distribution (std = NaN → RuntimeError).
+        # Replace bad values with 0 so training can continue.
+        for key, val in self.state.items():
+            if isinstance(val, np.ndarray) and not np.all(np.isfinite(val)):
+                logger.error("NaN/Inf in state['%s']: %s (episode %d, step %d) — replaced with 0",
+                             key, val, self.episode_count, self.iteration)
+                self.state[key] = np.where(np.isfinite(val), val, np.zeros_like(val))
+
         # Check if episode should terminate (iteration already incremented above)
         terminated = self.is_done()
         truncated = False
 
+        # TODO VP 2026.03.19. : Rethink what has to be stored in the info for each step...
         info = {
             "action": action,  # Dict format (clipped)
             "reward": reward,
@@ -491,6 +516,7 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
             "step_power_kW": total_power_kW,  # Instantaneous net power at this step
             "power_breakdown": power_breakdown,  # Per-infrastructure power (kW)
             "episode_date": self._episode_date,
+            "component_info": dict(self._component_info),
             **self._get_raw_state_values(),
         }
         if self.log_full_info:

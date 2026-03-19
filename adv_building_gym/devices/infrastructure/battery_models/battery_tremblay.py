@@ -162,9 +162,8 @@ class BatteryTremblay(Infrastructure):
 
 
     def setup_spaces(self,
-                     state_spaces,
-                     action_spaces
-                     ):
+                    state_spaces,
+                    action_spaces):
         """Setup observation and action spaces for battery.
 
         Action convention: positive = consumption (charging from grid), negative = production (discharging to grid).
@@ -269,7 +268,7 @@ class BatteryTremblay(Infrastructure):
             # Discharge can also be limited by C-rate
             return min(self.max_charge_amps, pack_c_rate_limit)
 
-    def exec_action(self, actions: Dict, states: Dict) -> None:
+    def exec_action(self, actions: Dict, states: Dict, info=None) -> None:
         """Execute battery charge/discharge action using Tremblay model.
     
         Action is in [-1, 1]:
@@ -345,7 +344,7 @@ class BatteryTremblay(Infrastructure):
         actual_action = self.actual_power_kW / self.Q_electric_max if self.Q_electric_max > 0 else 0.0
         actions["battery_action"] = np.array([np.float32(actual_action)], dtype=np.float32)
 
-    def update_state(self, states: Dict) -> None:
+    def update_state(self, states: Dict, info=None) -> None:
         # Ensure float32 dtype for all updates
         states["battery_pct"][0] = np.float32(self.soc)
         states["battery_target_pct"][0] = np.float32(self.target_soc)

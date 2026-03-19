@@ -4,6 +4,7 @@ Composes checkpoint loading, environment creation, inference, and results
 aggregation into a single ``evaluate_model()`` entry point.
 """
 
+import datetime
 import logging
 import os
 import signal
@@ -30,8 +31,43 @@ logger = logging.getLogger(__name__)
 def _timeout_handler(signum, frame):
     raise TimeoutError("Evaluation timed out")
 
-# TODO VP 2026.03.16. : Add model input space check, whether the loaded model matches the config
-# "The model was trained with 35 input features, but the env now produces 47 features. The difference of 12 matches exactly the extra action history entries — likely ACTION_HISTORY_LENGTH was increased (e.g. from 1 to 4) since this model was trained."
+# TODO VP 2026.03.17. : Refactor it to standalone module, check reward sizes/dimensions as well
+def _check_space_compatibility(rl_module, env) -> None:
+    """Verify that the model's input/output spaces match the environment.
+
+    Raises ValueError with a diagnostic message on mismatch.
+    """
+    # Model's expected observation size (flat)
+    model_obs_size = np.prod(rl_module.observation_space.shape)
+    # Env's actual observation size (flattened Dict → flat Box)
+    env_obs_size = sum(
+        np.prod(space.shape)
+        for space in env.observation_space.spaces.values()
+    ) if hasattr(env.observation_space, "spaces") else np.prod(env.observation_space.shape)
+
+    if model_obs_size != env_obs_size:
+        raise ValueError(
+            f"Observation space mismatch: model expects {model_obs_size} features "
+            f"but the env produces {env_obs_size} features "
+            f"(difference: {env_obs_size - model_obs_size}). "
+            f"Check whether the config has changed since training "
+            f"(e.g. ACTION_HISTORY_LENGTH, added/removed statesources)."
+        )
+
+    model_act_size = np.prod(rl_module.action_space.shape)
+    env_act_size = np.prod(env.action_space.shape)
+    if model_act_size != env_act_size:
+        raise ValueError(
+            f"Action space mismatch: model expects {model_act_size} action dims "
+            f"but the env has {env_act_size} "
+            f"(difference: {env_act_size - model_act_size}). "
+            f"Check whether infrastructure components changed since training."
+        )
+
+    logger.info(
+        "Space check OK: obs=%d, act=%d", model_obs_size, model_act_size,
+    )
+
 
 def evaluate_model(
     checkpoint_path: str,
@@ -67,12 +103,18 @@ def evaluate_model(
     Returns:
         ``EvalResults`` with per-episode stats and summary.
     """
+    # Create a timestamped subdirectory so successive eval runs never collide
+    run_stamp = datetime.datetime.now().strftime("%Y%m%d_%H%M") + "_eval"
+    output_dir = os.path.join(output_dir, run_stamp)
+    os.makedirs(output_dir, exist_ok=True)
+
     logger.info("=" * 70)
     logger.info("Starting Ray model evaluation")
     logger.info("  Checkpoint: %s", checkpoint_path)
     logger.info("  Config: %s", active_config.config_name)
     logger.info("  Episodes: %d", num_episodes)
     logger.info("  Seed: %d", seed)
+    logger.info("  Output: %s", output_dir)
     logger.info("=" * 70)
 
     # Initialize Ray with minimal resources for CPU-only inference.
@@ -98,6 +140,8 @@ def evaluate_model(
     # (FlattenAction + RescaleAction) so the policy's flat [-1, 1] output
     # is correctly rescaled to each component's real bounds.
     logger.info("Creating evaluation environment...")
+    
+    # TODO VP 2026.03.17. : Why don't use the env_creator?
     base_env = AdvBuildingGym(
         infras=active_config.infras,
         statesources=active_config.statesources,
@@ -114,6 +158,7 @@ def evaluate_model(
     collector = TrajectoryCollector(base_env) if log_trajectories else None
 
     env = wrap_action_space(base_env)
+    _check_space_compatibility(rl_module, env)
     max_reward_per_step = sum(
         r.weight * r.max_reward for r in active_config.rewards
     )
@@ -130,9 +175,10 @@ def evaluate_model(
     try:
         MAX_STEPS_PER_EPISODE = 1000
         for ep in range(num_episodes):
+            episode_num = ep + 1
             logger.info("=" * 50)
             episode_seed = seed + ep
-            logger.info("Episode %d/%d (seed: %d)", ep + 1, num_episodes, episode_seed)
+            logger.info("Episode %d/%d (seed: %d)", episode_num, num_episodes, episode_seed)
 
             obs, reset_info = env.reset(seed=episode_seed)
             ep_data_variant = reset_info.get("data_variant")
@@ -175,12 +221,12 @@ def evaluate_model(
                 
                 done = terminated or truncated
                 if done:
-                    logger.info("Episode %d: DONE -- reward=%s", ep + 1, episode_reward)
+                    logger.info("Episode %d: DONE -- reward=%s", episode_num, episode_reward)
 
             if episode_length >= MAX_STEPS_PER_EPISODE:
                 logger.warning(
                     "Episode %d reached max steps (%d) without done=True.",
-                    ep + 1, MAX_STEPS_PER_EPISODE,
+                    episode_num, MAX_STEPS_PER_EPISODE,
                 )
 
             achieved_reward = float(np.sum(episode_rewards))
@@ -192,7 +238,7 @@ def evaluate_model(
             )
 
             ep_stats = EpisodeStats(
-                episode=ep + 1,
+                episode=episode_num,
                 length=episode_length,
                 total_reward=float(episode_reward),
                 achieved_reward=achieved_reward,
@@ -205,7 +251,7 @@ def evaluate_model(
 
             if collector is not None and save_results:
                 collector.on_episode_end(
-                    episode_id=ep,
+                    episode_id=episode_num,
                     seed=episode_seed,
                     metadata={
                         "config_name": active_config.config_name,
@@ -214,9 +260,11 @@ def evaluate_model(
                     },
                 )
                 traj_file = os.path.join(
-                    output_dir, f"{ep}_trajectory.json",
+                    output_dir, f"{episode_num}_trajectory.json",
                 )
                 collector.save_json(traj_file)
+                hdf5_path = os.path.join(output_dir, "trajectories.hdf5")
+                collector.save_hdf5(hdf5_path, episode_id=str(episode_num))
 
             episode_stats.append(ep_stats)
 
@@ -247,6 +295,7 @@ def evaluate_model(
         error=error,
     )
 
+    results.output_dir = output_dir
     results.log_summary()
 
     if save_results:

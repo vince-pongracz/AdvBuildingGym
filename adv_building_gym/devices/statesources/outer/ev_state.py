@@ -123,20 +123,15 @@ class EVState(StateSource):
             else:
                 logger.debug("  iter %d: DISCONNECT", it)
 
+
     def setup_spaces(self, state_spaces, action_spaces):
-        """Register schedule observation keys read by the charger."""
-        if self.KEY_CONNECTED not in state_spaces:
-            state_spaces[self.KEY_CONNECTED] = Box(
-                low=0, high=1, shape=(1,), dtype=np.float32,
-            )
-        if self.KEY_MAX_CAP not in state_spaces:
-            state_spaces[self.KEY_MAX_CAP] = Box(
-                low=0, high=np.inf, shape=(1,), dtype=np.float32,
-            )
-        if self.KEY_MAX_CHARGE not in state_spaces:
-            state_spaces[self.KEY_MAX_CHARGE] = Box(
-                low=0, high=np.inf, shape=(1,), dtype=np.float32,
-            )
+        """Register bounded EV schedule keys in the observation space.
+
+        Unbounded keys (``max_cap_kWh``, ``max_charging_kW``) and the
+        connection flag are written to the shared info dict instead (see
+        ``update_state``).  The bounded [0, 1] keys below are useful for
+        the control policy and safe for the neural network.
+        """
         if self.KEY_CHARGE_EFF not in state_spaces:
             state_spaces[self.KEY_CHARGE_EFF] = Box(
                 low=0, high=1, shape=(1,), dtype=np.float32,
@@ -160,34 +155,43 @@ class EVState(StateSource):
 
         return state_spaces, action_spaces
 
-    def update_state(self, states) -> None:
-        """Check for EV events at the current iteration and write schedule to states."""
+    def update_state(self, states, info=None) -> None:
+        """Check for EV events at the current iteration and write schedule."""
         event = self._event_lookup.get(self.iteration)
         if event is not None:
             is_connect, ev_spec = event
             self._ev_connected = is_connect
             self._current_spec = ev_spec if is_connect else None
 
-        # Always write current schedule state (hold last value between events)
-        states[self.KEY_CONNECTED][0] = np.float32(1.0 if self._ev_connected else 0.0)
-
-        if self._current_spec is not None:
-            states[self.KEY_MAX_CAP][0] = np.float32(self._current_spec.max_cap_kWh)
-            states[self.KEY_MAX_CHARGE][0] = np.float32(self._current_spec.max_charging_kW)
+        # Bounded [0, 1] keys → observation space (states)
+        # Zero everything when EV is disconnected so the agent sees a clean
+        # signal instead of stale spec values from the previous session.
+        if self._ev_connected and self._current_spec is not None:
             states[self.KEY_CHARGE_EFF][0] = np.float32(self._current_spec.charger_efficiency)
             states[self.KEY_DISCHARGE_EFF][0] = np.float32(self._current_spec.discharge_efficiency)
             states[self.KEY_V2G][0] = np.float32(1.0 if self._current_spec.v2g_enabled else 0.0)
             states[self.KEY_START_SOC][0] = np.float32(self._current_spec.start_soc)
             states[self.KEY_TARGET_SOC][0] = np.float32(self._current_spec.target_soc)
         else:
-            # Disconnected or no spec yet — zero out spec fields
-            states[self.KEY_MAX_CAP][0] = np.float32(0.0)
-            states[self.KEY_MAX_CHARGE][0] = np.float32(0.0)
             states[self.KEY_CHARGE_EFF][0] = np.float32(0.0)
             states[self.KEY_DISCHARGE_EFF][0] = np.float32(0.0)
             states[self.KEY_V2G][0] = np.float32(0.0)
             states[self.KEY_START_SOC][0] = np.float32(0.0)
             states[self.KEY_TARGET_SOC][0] = np.float32(0.0)
+
+        # Unbounded / raw keys → info (inter-component communication only)
+        if info is not None:
+            connected = self._ev_connected and self._current_spec is not None
+            info[self.KEY_CONNECTED] = 1.0 if self._ev_connected else 0.0
+            info[self.KEY_MAX_CAP] = self._current_spec.max_cap_kWh if connected else 0.0
+            info[self.KEY_MAX_CHARGE] = self._current_spec.max_charging_kW if connected else 0.0
+            # Mirror bounded keys so LinearEVCharger can read all EV spec
+            # fields from a single source.
+            info[self.KEY_CHARGE_EFF] = self._current_spec.charger_efficiency if connected else 0.0
+            info[self.KEY_DISCHARGE_EFF] = self._current_spec.discharge_efficiency if connected else 0.0
+            info[self.KEY_V2G] = (1.0 if self._current_spec.v2g_enabled else 0.0) if connected else 0.0
+            info[self.KEY_START_SOC] = self._current_spec.start_soc if connected else 0.0
+            info[self.KEY_TARGET_SOC] = self._current_spec.target_soc if connected else 0.0
 
 
 ComponentRegistry.register('statesource', EVState)

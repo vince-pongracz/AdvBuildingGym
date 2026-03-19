@@ -8,6 +8,7 @@ states:
   skip_keys:
     - E_price_max
     - sim_hour
+    - _temp_abs_max
 
   # Groups of state keys that share a single plot.
   # Each entry is a list of keys rendered together.

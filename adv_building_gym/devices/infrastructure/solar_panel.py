@@ -41,7 +41,8 @@ class SolarPanel(Infrastructure):
                 name: str,
                 Q_electric_max: float,
                 peak_power_kW: float,
-                seed: int,
+                # TODO VP 2026.03.17. : Solar panel seed -- channel global seed in.
+                seed: int = 42,
                 control_step: int = 300
                 ) -> None:
         """Initialize Solar Panel infrastructure.
@@ -92,7 +93,7 @@ class SolarPanel(Infrastructure):
         return state_spaces, action_spaces
 
 
-    def exec_action(self, actions: Dict, states: Dict) -> None:
+    def exec_action(self, actions: Dict, states: Dict, info=None) -> None:
         """Compute solar production from irradiance and write it into actions.
 
         Production is fully determined by solar irradiance — there is no

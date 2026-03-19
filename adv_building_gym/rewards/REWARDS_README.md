@@ -80,9 +80,9 @@ After weighting: `[weight * raw_min, weight * raw_max]`.
   - `ratio <= soft_threshold_pct` (default 0.9): reward = **1.0**
   - `soft_threshold_pct < ratio <= 1.0`: `exp(-5 * (ratio - 0.9) / 0.1)`,
     exponential decay from 1.0 towards ~0.007 at the limit
-  - `ratio > 1.0`: **harsh_penalty** (default -10.0)
-- **Range: [harsh_penalty, 1]** (default [-10, 1]).
-- **Parameters**: `soft_threshold_pct` (default 0.9), `harsh_penalty` (default -10.0).
+  - `ratio > 1.0`: **harsh_penalty** (default -2.0)
+- **Range: [harsh_penalty, 1]** (default [-2, 1]).
+- **Parameters**: `soft_threshold_pct` (default 0.9), `harsh_penalty` (default -2.0).
 
 ### UserEnergyNeedReward
 - **File**: `user_energy_need_reward.py`

@@ -63,7 +63,7 @@ class BuildingHeatLoss(StateSource):
 
         return state_spaces, action_spaces
 
-    def update_state(self, states: OrderedDict) -> None:
+    def update_state(self, states: OrderedDict, info=None) -> None:
         """
         Update indoor temperature based on heat loss/gain to outdoor environment.
 

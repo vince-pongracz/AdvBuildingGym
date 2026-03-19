@@ -38,21 +38,27 @@ class Infrastructure(EnvSyncInterface, Serializable):
         """Set target for infrastructure component."""
         pass
 
-    def exec_action(self, actions, states) -> None:
+    def exec_action(self, actions, states, info: dict | None = None) -> None:
         """Execute action of the infrastructure.
 
         Args:
             actions (Dict): contains actions
             states (Dict): should be treated as immutable, holds information for the action execution
+            info: Shared dict for inter-component data that is not part of
+                the observation space (e.g., EV schedule parameters).
         """
         pass
 
-    def update_state(self, states: Dict) -> None:
-        """
-        Update state based on current iteration. Implement in derived classes.
-        
-        **Note**: Called after `exec_action` to update observable states, 
+    def update_state(self, states: Dict, info: dict | None = None) -> None:
+        """Update state based on current iteration. Implement in derived classes.
+
+        **Note**: Called after ``exec_action`` to update observable states,
         and only to update them, not to perform actions.
+
+        Args:
+            states: Observable state dict (agent-visible).
+            info: Shared dict for inter-component data that is not part of
+                the observation space.
         """
         pass
 

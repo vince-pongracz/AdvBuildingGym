@@ -48,6 +48,8 @@ class DataCombinator:
     def __post_init__(self) -> None:
         self._variants = self._build_variants()
 
+    # TODO VP 2026.03.18. : Solve data combinator with a generator function?
+
     @property
     def variants(self) -> list[dict[str, str]]:
         """Return the cached variant pool."""

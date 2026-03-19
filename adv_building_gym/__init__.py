@@ -6,7 +6,7 @@ from gymnasium.envs.registration import register
 
 from .envs import AdvBuildingGym
 from .controllers import FuzzyController, MPCController, PIController, PIDController
-from .config import config, ConfigManager
+from .config import config, EnvConfigManager
 from .data_combinator import DataCombinator
 from .callbacks import (
     make_episode_metrics_callback_class,
@@ -52,7 +52,7 @@ register(
 __all__ = [
     "AdvBuildingGym",
     "config",
-    "ConfigManager",
+    "EnvConfigManager",
     "FuzzyController",
     "MPCController",
     "PIController",

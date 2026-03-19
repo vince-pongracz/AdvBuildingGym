@@ -119,14 +119,63 @@ These features support the evaluation under uncertainty and help assess the robu
 
 ### Papers
 
-- Reinforcement Learning-Based Energy Management of Smart Home with Rooftop Solar Photovoltaic System, Energy Storage System, and Home Appliances. 
+#### Reinforcement Learning-Based Energy Management of Smart Home with Rooftop Solar Photovoltaic System, Energy Storage System, and Home Appliances. 
 Link: https://www.mdpi.com/1424-8220/19/18/3937
-Uses RL, Q learning, PV, ESS, AC and washing machine.
+Uses RL, tabular Q learning (tables, discrete state-action pairs), PV, ESS, AC and washing machine.
 Cost and comfort optimisation. Seems like each infrastructure has its own agent -- or at least own head in the policy network
 Restricted weather data (only temp)
 
-TODO VP: continue here
+Previous works: almost everything done... multi agent, Q learning, manage HVAC, manage ESS
+This paper: 
+- ESS + consumer comfort -- but with TOU tariff, not with variable, real day ahead data
+- only optimises for energy cost and thermal comfort -- 2 optimisation goals
+- shiftable and non shiftable energy consumption -- washing machine can't be stopped at any time, charging can
+- shiftable interruptable/non-interruptable, non shiftable interruptable/non-interruptable
+- only PV, ESS, HVAC -- no EV and Wind turbine
+- only binary (on/off) ESS control?
+- schedule of the energy usage is learnt, not the actual energy allocation -- energy allocation is discrete in this paper
+- scheduling resolution is 1h, not 5min -- update in each hour, not in every 5 mins.
+- for indoor temp: they predict it with an NN -- no physical model, just NN behind actual temp prediction -- T_act in the current step is predicted by an NN -- I have physics here instead
+- user desired temp is a range, not an exact value -- in my project it's a fix value with a threshold up and down
+- they compare MILP and RL control of the same setup -- RL is better
 
+New stuff can be in my thesis: 
+- based on data and actions, forecast the passive states as well -- try to learn the passive states -- model based RL (?)
+- resolution is more fine grained, I use wholesale price data
+- Flexibility: not only PV, HVAC and ESS -- wind turbine, etc, config and flexibility
+- more rewards, more reward aspects, flexible to config how many rewards. Optimise on achieved reward or to reward rate
+
+TODO VP: How to solve that the same model used for different infra/state configs?
+--> if it's multi agent, then it's easy -- each agent outputs an action, number of agents change, but not really their state
+- What if the state sources config changes as well? -- I guess no need to overcome this
+
+TODO VP: tune discount factor of the Q values -- long term or short term optimisation
+
+TODO VP: take out big oscillations from the battery charge discharge actions -- or at least inspect whether it happens or not
+TODO VP: at ESS -- add lifetime decay/degradation in capacity or in discharge rate
+TODO VP: use the WPuQ PV production data (actions..?) along with its weather data?
+
+#### Enhanced Robust Index Model for Load Scheduling of a Home Energy Local Network With a Load Shifting Strategy
+
+Link: https://ieeexplore.ieee.org/document/8600304
+
+Paper:
+- load scheduling
+- robust index model: to opt home energy local network (HELN)
+- rather deals with how to optimise so, that in the case of max uncertainty (worst case scenario) the system is still functional and does not violate hard constraints.
+- no RL, it's not a really relevant paper
+
+
+New idea for my thesis:
+- predict actions and states for N steps (model based RL) -- MPC and Monte Carlo sims would be something like this
+
+TODO VP: Check again on nan values in datasources... -- or should the model deal sensory issues as well?
+
+#### State of the Art of Machine Learning Models in Energy Systems, a Systematic Review
+
+Link: https://www.mdpi.com/1996-1073/12/7/1301
+
+Paper:
 - 
 
 

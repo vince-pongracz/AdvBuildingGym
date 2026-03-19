@@ -70,14 +70,19 @@ class StateSource(EnvSyncInterface, Serializable):
         logger.debug("StateSource '%s' reloaded from %s", self.name, resolved)
 
     def setup_spaces(self,
-                     state_spaces,
-                     action_spaces
-                     ):
+                    state_spaces,
+                    action_spaces):
         """Setup observation and action spaces. Implement in derived classes."""
         return state_spaces, action_spaces
 
-    def update_state(self, states) -> None:
-        """Update state based on current iteration. Implement in derived classes."""
+    def update_state(self, states, info: dict | None = None) -> None:
+        """Update state based on current iteration. Implement in derived classes.
+
+        Args:
+            states: Observable state dict (agent-visible).
+            info: Shared dict for inter-component data that is not part of
+                the observation space (e.g., scale factors, EV schedule).
+        """
         pass
 
     @classmethod

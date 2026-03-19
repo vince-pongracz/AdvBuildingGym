@@ -9,7 +9,7 @@ import argparse
 import logging
 import sys
 
-from adv_building_gym import ConfigManager, evaluate_model
+from adv_building_gym import EnvConfigManager, evaluate_model
 from adv_building_gym.config import config as default_config
 from adv_building_gym.utils import resolve_checkpoint_path, setup_warning_filters
 
@@ -41,7 +41,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--load-config", type=str,
-        help="Path to JSON config file to load (e.g., 'configs/my_config.json')",
+        help="Path to YAML config file to load (e.g., 'configs/my_config.yaml')",
     )
     parser.add_argument(
         "--checkpoint", type=str, default=None,
@@ -68,10 +68,11 @@ def parse_args() -> argparse.Namespace:
         default=True,
         help="Save per-step trajectory JSON per episode (default: True)",
     )
-    # TODO VP 2026.03.11. : Check this out again -- run it
     parser.add_argument(
-        "--data-config", type=str, default=None,
-        help="Path to data combinator YAML config (e.g. configs/eval_data_combinator_config.yaml)",
+        "--data-config", type=str, nargs="?", default=None,
+        const="configs/eval_data_combinator_config.yaml",
+        help="Path to data combinator YAML config. "
+            "If given without a path, uses configs/eval_data_combinator_config.yaml.",
     )
     parser.add_argument(
         "--data-mode", type=str, default=None,
@@ -82,7 +83,23 @@ def parse_args() -> argparse.Namespace:
         "--data-day", type=str, default=None,
         help="Override day mode: 'each', 'random', or a date string like '2022-07-15'",
     )
-    return parser.parse_args()
+    parser.add_argument(
+        "--plot", action="store_true", default=False,
+        help="Plot the best episode's trajectory after evaluation (implies --log-trajectories)",
+    )
+    parser.add_argument(
+        "--plot-all", action="store_true", default=False,
+        help="Plot all episodes' trajectories after evaluation (implies --log-trajectories)",
+    )
+    args = parser.parse_args()
+
+    # --plot / --plot-all require trajectory data; force --log-trajectories on
+    if args.plot or args.plot_all:
+        if not args.log_trajectories:
+            logger.info("--plot/--plot-all implies --log-trajectories; enabling trajectory logging.")
+        args.log_trajectories = True
+
+    return args
 
 
 def main() -> None:
@@ -92,8 +109,8 @@ def main() -> None:
     # Load config from file if specified, otherwise use default
     if args.load_config:
         logger.info("Loading config from: %s", args.load_config)
-        active_config = ConfigManager.load(args.load_config)
-        logger.info("Config loaded successfully: %s", active_config.config_name)
+        active_config = EnvConfigManager.load(args.load_config)
+        logger.info("Config loaded successfully: %s", active_config.env_config_name)
     else:
         active_config = default_config
 
@@ -103,15 +120,15 @@ def main() -> None:
     config_name = (
         args.config_name
         if args.config_name is not None
-        else active_config.config_name
+        else active_config.env_config_name
     )
 
     # Build DataCombinator from YAML if specified
     data_combinator = None
     if args.data_config:
-        from adv_building_gym.config.data_config import load_data_combinator
+        from adv_building_gym.config.data_config import load_data_combinator_config
 
-        data_combinator = load_data_combinator(args.data_config, seed_override=args.seed)
+        data_combinator = load_data_combinator_config(args.data_config, seed_override=args.seed)
         if args.data_mode is not None:
             data_combinator.mode = args.data_mode
         if args.data_day is not None:
@@ -131,7 +148,7 @@ def main() -> None:
     )
 
     try:
-        evaluate_model(
+        results = evaluate_model(
             checkpoint_path=checkpoint_path,
             active_config=active_config,
             num_episodes=args.episodes,
@@ -144,8 +161,52 @@ def main() -> None:
             data_combinator=data_combinator,
         )
         logger.info("Evaluation completed successfully!")
+
+        # Generate trajectory plots if requested
+        if (args.plot or args.plot_all) and not args.no_save:
+            import os
+
+            import h5py
+
+            actual_output_dir = results.output_dir or args.output_dir
+            hdf5_path = os.path.join(actual_output_dir, "trajectories.hdf5")
+            if os.path.isfile(hdf5_path):
+                from plotting.traj_plotting.trajectory_plot import generate_all_plots
+
+                plot_dir = os.path.join(actual_output_dir, "plots")
+
+                if args.plot_all:
+                    with h5py.File(hdf5_path, "r") as hf:
+                        episode_ids = list(hf.keys())
+                    total_paths: list[str] = []
+                    for ep_id in episode_ids:
+                        ep_label = f"ep_{ep_id}"
+                        ep_plot_dir = os.path.join(plot_dir, ep_label)
+                        paths = generate_all_plots(
+                            hdf5_path=hdf5_path,
+                            episode_id=ep_id,
+                            output_dir=ep_plot_dir,
+                            file_prefix=ep_label,
+                        )
+                        total_paths.extend(paths)
+                    logger.info(
+                        "Generated %d plot files for %d episodes in %s",
+                        len(total_paths), len(episode_ids), plot_dir,
+                    )
+                else:
+                    paths = generate_all_plots(
+                        hdf5_path=hdf5_path,
+                        output_dir=plot_dir,
+                        file_prefix="ep_best",
+                    )
+                    logger.info("Generated %d plot files in %s", len(paths), plot_dir)
+            else:
+                logger.warning(
+                    "No trajectories.hdf5 found at %s — skipping plots.", hdf5_path,
+                )
     except Exception as e:
         logger.error("Evaluation failed: %s", str(e), exc_info=True)
+        logger.error("==================")
         sys.exit(1)
 
 
@@ -157,7 +218,7 @@ if __name__ == "__main__":
 # python run_eval_ray.py --algorithm ppo --episodes 10 --seed 42
 #
 # Evaluate with a custom config file (matching training config)
-# python run_eval_ray.py --algorithm ppo --load-config configs/my_config.json --episodes 10
+# python run_eval_ray.py --algorithm ppo --load-config configs/my_config.yaml --episodes 10
 #
 # Evaluate latest SAC model
 # python run_eval_ray.py --algorithm sac --config-name test1 --episodes 10

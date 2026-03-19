@@ -10,6 +10,7 @@ import logging
 from typing import List
 
 from ray.rllib.connectors.env_to_module import FlattenObservations
+from ray.rllib.algorithms.algorithm_config import AlgorithmConfig
 
 from adv_building_gym.callbacks import (
     create_data_schedule_on_train_result,
@@ -22,8 +23,8 @@ from adv_building_gym.utils import ResourceAllocation, validate_resource_allocat
 logger = logging.getLogger(__name__)
 
 
-def common_model_config(
-    config,
+def common_model_setup(
+    config: AlgorithmConfig,
     seed: int,
     episode_length: int,
     num_cpus: int,
@@ -110,6 +111,7 @@ def common_model_config(
     # the env with FlattenAction + RescaleAction so RLlib sees a flat Box(-1, 1).
     # Link: https://docs.ray.io/en/latest/rllib/env-to-module-connector.html
 
+    # TODO VP 2026.03.18. : Check each setting here and at SAC/PPO
     config = config.api_stack(
         enable_rl_module_and_learner=True,
         enable_env_runner_and_connector_v2=True,
@@ -130,11 +132,13 @@ def common_model_config(
     )
     config.framework(
         framework="torch",
-        eager_tracing=True,
-        eager_max_retraces=20,
+        torch_skip_nan_gradients=True,
+        # TODO VP 2026.03.18. : Torch dynamo backend -- what is it?
+        # It runs on torch, not tensorflow
         tf_session_args={},
         local_tf_session_args={},
     )
+    config.log_gradients = True
     # NOTE VP 2026.01.08. : about ray and rllib concept https://docs.ray.io/en/latest/rllib/key-concepts.html
     # Learning the NN, policy (gradient updates) -- needs GPU
     config.learners(
@@ -171,6 +175,7 @@ def common_model_config(
         # True only if `evaluation_num_env_runners` > 0
         evaluation_parallel_to_training=False,
     )
+
     # TODO VP 2026.02.11. : Check this out in HPC
     # config.training(gamma=0.995)
 
@@ -194,6 +199,7 @@ def common_model_config(
         rewards=rewards,
         metrics_base_dir=f"{metrics_base_dir}/metrics",
         exec_date=exec_date,
+        dump_metrics_json=False
     )
 
     # Assemble the callbacks_class list: checkpoint + metrics (always), trajectory (optional)

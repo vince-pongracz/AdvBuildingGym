@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 def create_data_schedule_on_train_result(
     combinator: DataCombinator,
-    swap_every_n_iterations: int = 10,
+    swap_every_n_iterations: int,
 ):
     """Factory that returns an ``on_train_result`` function for ``config.callbacks()``.
 

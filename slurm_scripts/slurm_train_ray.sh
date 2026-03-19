@@ -11,8 +11,8 @@
 # All arguments are forwarded directly to run_train_ray.py. Available options:
 #   --algorithm ALGO          Algorithm to use (ppo, sac, ddpg, td3, a2c) [default: ppo]
 #   --config_name, -cn NAME   Configuration name for the experiment
-#   --load-config PATH        Path to JSON config file to load
-#   --save-config PATH        Path to save config as JSON
+#   --load-config PATH        Path to YAML config file to load
+#   --save-config PATH        Path to save config as YAML
 #   --episodes N              Total training episodes [default: 3500]
 #   --timesteps N             (Deprecated, prefer --episodes) Total timesteps
 #   --num-envs N              Number of parallel environments [default: 1]
@@ -26,7 +26,7 @@
 #
 # Examples:
 #   sbatch slurm_scripts/slurm_train_ray.sh --algorithm ppo --episodes 3500 --seed 42
-#   sbatch slurm_scripts/slurm_train_ray.sh --algorithm sac --load-config configs/my_config.json
+#   sbatch slurm_scripts/slurm_train_ray.sh --algorithm sac --load-config configs/my_config.yaml
 #   sbatch slurm_scripts/slurm_train_ray.sh --algorithm ppo --episodes 5000 --checkpoint-frequency-episodes 50
 #
 # The script activates the project's Python virtualenv and runs the training
@@ -42,7 +42,7 @@
 #SBATCH --gres=gpu:full:1
 #SBATCH --time=00:10:00
 # Exclude nodes with known GPU issues (add problematic nodes here)
-#SBATCH --exclude=haicn1704
+#SBATCH --exclude=haicn1704,haicn1711
 #SBATCH --output=slurm_logs/train/slurm-train-ray-%j.out
 #SBATCH --error=slurm_logs/train/slurm-train-ray-%j.err
 #SBATCH --job-name=ray-train-%j
@@ -78,21 +78,21 @@ echo "CUDA_VISIBLE_DEVICES : ${CUDA_VISIBLE_DEVICES:-}"
 echo "=== LD_LIBRARY_PATH (before) ==="
 echo "${LD_LIBRARY_PATH:-<not set>}"
 
-# Fix cuDNN version mismatch: PyTorch bundles cuDNN 9.10.2, but system CUDA 12.4 has cuDNN 9.5.1.
-# Solution: Remove the system CUDA toolkit path entirely, then prepend PyTorch's lib path.
-# The NVIDIA driver (libcuda.so) should be in /usr/lib64, accessible without the toolkit path.
+# Fix cuDNN version mismatch: pip nvidia-cudnn-cu12 ships cuDNN 9.10.2, but
+# system CUDA 12.4 has cuDNN 9.5.1.  cuDNN lives in the nvidia pip package
+# (nvidia/cudnn/lib), NOT in torch/lib.  Prepend both so the linker finds
+# the pip-installed versions before the system ones.
+# Do NOT remove system CUDA paths — they provide libcuda.so (driver stub) on HPC clusters.
+NVIDIA_CUDNN_LIB=$(python -c "import nvidia.cudnn; import os; print(os.path.join(nvidia.cudnn.__path__[0], 'lib'))" 2>/dev/null || echo "")
 PYTORCH_LIB=$(python -c "import torch; print(torch.__path__[0] + '/lib')" 2>/dev/null || echo "")
-if [ -n "$LD_LIBRARY_PATH" ]; then
-    # Remove system CUDA paths (which contain conflicting cuDNN)
-    FILTERED_PATH=$(echo "$LD_LIBRARY_PATH" | tr ':' '\n' | grep -v '/cuda/' | tr '\n' ':' | sed 's/:$//')
-    # Prepend PyTorch's lib path (contains correct cuDNN)
-    if [ -n "$PYTORCH_LIB" ] && [ -d "$PYTORCH_LIB" ]; then
-        export LD_LIBRARY_PATH="${PYTORCH_LIB}:${FILTERED_PATH}"
-    else
-        export LD_LIBRARY_PATH="${FILTERED_PATH}"
-    fi
-    echo "=== LD_LIBRARY_PATH (cuda removed, pytorch prepended) ==="
-    echo "${LD_LIBRARY_PATH:-<empty>}"
+PREPEND=""
+for p in "$NVIDIA_CUDNN_LIB" "$PYTORCH_LIB"; do
+    [ -n "$p" ] && [ -d "$p" ] && PREPEND="${PREPEND:+${PREPEND}:}${p}"
+done
+if [ -n "$PREPEND" ]; then
+    export LD_LIBRARY_PATH="${PREPEND}:${LD_LIBRARY_PATH:-}"
+    echo "=== LD_LIBRARY_PATH (nvidia+pytorch prepended) ==="
+    echo "${LD_LIBRARY_PATH}"
 fi
 
 # CUDA initialization workarounds for HPC clusters

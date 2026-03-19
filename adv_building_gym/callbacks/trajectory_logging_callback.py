@@ -19,53 +19,14 @@ import datetime
 from typing import List, Optional, Type
 
 import numpy as np
-import h5py
 
 from ray.rllib.callbacks.callbacks import RLlibCallback
 from ray.rllib.env.single_agent_episode import SingleAgentEpisode
 
 from ..utils import CustomJSONEncoder
-from ..utils.trajectory_utils import extract_trajectory_from_infos
+from ..utils.trajectory_utils import extract_trajectory_from_infos, write_episode_to_hdf5
 
 logger = logging.getLogger(__name__)
-
-
-def _write_episode_to_hdf5(hdf5_path: str, episode_id: str, traj_dump: dict) -> None:
-    """Append one episode's trajectory data to an HDF5 file.
-
-    Creates the file if it does not exist; adds a new group for each episode.
-
-    Args:
-        hdf5_path: Path to the HDF5 file.
-        episode_id: Unique episode identifier (used as group name).
-        traj_dump: The trajectory dict (same structure written to JSON).
-    """
-    with h5py.File(hdf5_path, "a") as f:
-        ep_grp = f.create_group(episode_id)
-
-        # Scalar metadata as group attributes
-        for key in ("version", "episode_id", "seed", "length", "eval"):
-            val = traj_dump.get(key)
-            if val is not None:
-                ep_grp.attrs[key] = val
-
-        # Summary subgroup with attrs
-        summary_grp = ep_grp.create_group("summary")
-        for key, val in traj_dump.get("summary", {}).items():
-            if val is not None:
-                summary_grp.attrs[key] = val
-
-        # Trajectory subgroup
-        traj_grp = ep_grp.create_group("trajectory")
-        for key, val in traj_dump.get("trajectory", {}).items():
-            if isinstance(val, dict):
-                sub_grp = traj_grp.create_group(key)
-                for sub_key, sub_val in val.items():
-                    arr = np.asarray(sub_val, dtype=np.float32)
-                    sub_grp.create_dataset(sub_key, data=arr)
-            elif isinstance(val, list):
-                arr = np.asarray(val, dtype=np.float32)
-                traj_grp.create_dataset(key, data=arr)
 
 
 def make_trajectory_logging_callback_class(
@@ -190,7 +151,7 @@ def make_trajectory_logging_callback_class(
                 logger.info("Trajectory saved to %s", traj_file)
 
                 hdf5_path = f"{ep_metrics_dir}/trajectories.hdf5"
-                _write_episode_to_hdf5(hdf5_path, episode_id, traj_dump)
+                write_episode_to_hdf5(hdf5_path, episode_id, traj_dump)
                 logger.info("Trajectory appended to %s", hdf5_path)
 
             except Exception:

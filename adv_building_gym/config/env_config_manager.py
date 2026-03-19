@@ -2,17 +2,18 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import TYPE_CHECKING, Dict, Any
 
+import yaml
+
 if TYPE_CHECKING:
-    from adv_building_gym.config.env_config import Config
+    from adv_building_gym.config.env_config import EnvConfig
 
 from adv_building_gym.envs.utils import BuildingProps
 
 
-class ConfigManager:
+class EnvConfigManager:
     """Handles serialization and deserialization of Config objects.
 
     Uses the flexible serialization system where each component (Infrastructure,
@@ -21,7 +22,7 @@ class ConfigManager:
     """
 
     @staticmethod
-    def to_dict(config: Config) -> Dict[str, Any]:
+    def to_dict(config: EnvConfig) -> Dict[str, Any]:
         """
         Serialize config to dictionary.
 
@@ -35,8 +36,7 @@ class ConfigManager:
             Dictionary representation of config
         """
         config_dict = {
-            "config_name": config.config_name,
-            "seed": config.seed,            
+            "env_config_name": config.env_config_name,
             "EPISODE_LENGTH": config.EPISODE_LENGTH,
             "control_step": config.CONTROL_STEP,
             "building_props": {
@@ -60,7 +60,7 @@ class ConfigManager:
         return config_dict
 
     @staticmethod
-    def from_dict(config_dict: Dict[str, Any]) -> Config:
+    def from_dict(config_dict: Dict[str, Any]) -> EnvConfig:
         """
         Deserialize config from dictionary.
 
@@ -74,7 +74,7 @@ class ConfigManager:
         Returns:
             Config object
         """
-        from adv_building_gym.config.env_config import Config
+        from adv_building_gym.config.env_config import EnvConfig
         from adv_building_gym.devices.infrastructure import Infrastructure
         from adv_building_gym.devices.statesources import StateSource
         from adv_building_gym.rewards import RewardFunction
@@ -87,12 +87,10 @@ class ConfigManager:
         )
 
         control_step = config_dict.get("control_step", 300)
-        seed = config_dict.get("seed", 42)
 
         # Create Config with basic params (don't trigger __post_init__ defaults)
-        config = Config(
-            config_name=config_dict.get("config_name", "loaded_config"),
-            seed=seed,
+        config = EnvConfig(
+            env_config_name=config_dict.get("env_config_name", "loaded_config"),
             EPISODE_LENGTH=config_dict.get("EPISODE_LENGTH", 288),
             CONTROL_STEP=control_step,
             building_props=building_props,
@@ -107,7 +105,6 @@ class ConfigManager:
             "K": building_props.K,
             "mC": building_props.mC,
             "control_step": control_step,
-            "seed": seed,
         }
 
         # Reconstruct infrastructures
@@ -151,27 +148,27 @@ class ConfigManager:
     @staticmethod
     def save(config, path: str | Path) -> None:
         """
-        Save config to JSON file.
+        Save config to YAML file.
 
         Args:
             config: Config object to save
-            path: File path where config should be saved (e.g., 'configs/my_config.json')
+            path: File path where config should be saved (e.g., 'configs/my_config.yaml')
         """
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
 
-        config_dict = ConfigManager.to_dict(config)
+        config_dict = EnvConfigManager.to_dict(config)
 
         with open(path, 'w') as f:
-            json.dump(config_dict, f, indent=2)
+            yaml.dump(config_dict, f, default_flow_style=False, sort_keys=False)
 
     @staticmethod
-    def load(path: str | Path) -> Config:
+    def load(path: str | Path) -> EnvConfig:
         """
-        Load config from JSON file.
+        Load config from YAML file.
 
         Args:
-            path: File path to load config from (e.g., 'configs/my_config.json')
+            path: File path to load config from (e.g., 'configs/my_config.yaml')
 
         Returns:
             Config object reconstructed from file
@@ -179,6 +176,6 @@ class ConfigManager:
         path = Path(path)
 
         with open(path, 'r') as f:
-            config_dict = json.load(f)
+            config_dict = yaml.safe_load(f)
 
-        return ConfigManager.from_dict(config_dict)
+        return EnvConfigManager.from_dict(config_dict)

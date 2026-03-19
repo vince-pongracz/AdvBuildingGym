@@ -14,18 +14,18 @@ from ray.rllib.algorithms.sac import SACConfig
 # Use SAC instead - similar off-policy algorithm with entropy regularization.
 from ray.rllib.core.rl_module.default_model_config import DefaultModelConfig
 
-from adv_building_gym.config.training_config import TrainingConfig
+from adv_building_gym.config.training_param_config import TrainingParamConfig
 
 logger = logging.getLogger(__name__)
 
-# Default path to the bundled training config JSON
-_DEFAULT_TRAINING_CONFIG = Path(__file__).resolve().parent.parent / "config" / "training_config.json"
+# Default path to the bundled training config YAML
+_DEFAULT_TRAINING_CONFIG = Path(__file__).resolve().parents[2] / "configs" / "training_param_config.yaml"
 
 
 def select_model(
     algorithm: str,
     episode_length: int,
-    training_config: TrainingConfig | None = None,
+    training_config: TrainingParamConfig | None = None,
 ):
     """
     Selects and configures algorithm-specific settings for training.
@@ -39,14 +39,14 @@ def select_model(
         algorithm: RL algorithm to use ("ppo" or "sac")
         episode_length: Episode length in timesteps
         training_config: Optional TrainingConfig with learning rate and batch
-            size.  When *None* the bundled ``training_config.json`` is loaded.
+            size.  When *None* the bundled ``training_config.yaml`` is loaded.
 
     Returns:
         Algorithm-specific config (before common_model_config applied)
     """
 
     if training_config is None:
-        training_config = TrainingConfig.from_json(_DEFAULT_TRAINING_CONFIG)
+        training_config = TrainingParamConfig.from_yaml(_DEFAULT_TRAINING_CONFIG)
 
     learning_starts = 10 * episode_length
 
@@ -101,9 +101,14 @@ def select_model(
             tau=0.005,  # Soft update coefficient for target networks (at Polyak averaging)
             train_batch_size_per_learner=training_config.sac_replay_batch_size,
             num_steps_sampled_before_learning_starts=learning_starts, # Number of steps to collect before starting learning (to fill up replay buffer)
-            # Gradient clipping prevents NaN/Inf in the policy network when
-            # reward signals have large magnitude (e.g. harsh penalties).
-            # Without this, SAC can crash with "normal expects all elements of std >= 0.0".
+            # Gradient clipping mitigates but does NOT fully prevent NaN in
+            # the policy network. If the loss itself is NaN/Inf (e.g. from
+            # extreme Q-values caused by large reward spikes like the -2.0
+            # harsh penalty in OperatorEnergyControlReward), NaN propagates
+            # into weights before grad_clip can act.  The root fix is keeping
+            # per-step rewards in a bounded range (ideally [-1, 1] total).
+            # See: slurm job 1624328 — crash at iter 48 with
+            # "normal expects all elements of std >= 0.0".
             grad_clip=1.0,
         )
     # NOTE VP 2026.02.11. : Maybe add DreamerV3 -- but in that case drop the forecasting states

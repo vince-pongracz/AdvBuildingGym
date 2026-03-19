@@ -1,6 +1,57 @@
-"""Utility for converting per-step info dicts into columnar trajectory data."""
+"""Utility for converting per-step info dicts into columnar trajectory data.
 
+Also provides ``write_episode_to_hdf5()`` for appending a single episode's
+trajectory dict to an HDF5 file (shared by the training callback and the
+standalone eval pipeline).
+"""
+
+import logging
+
+import h5py
 import numpy as np
+
+logger = logging.getLogger(__name__)
+
+
+def write_episode_to_hdf5(hdf5_path: str, episode_id: str, traj_dump: dict) -> None:
+    """Append one episode's trajectory data to an HDF5 file.
+
+    Creates the file if it does not exist; adds a new group for each episode.
+    If a group with the same episode_id already exists it is replaced.
+
+    Args:
+        hdf5_path: Path to the HDF5 file.
+        episode_id: Unique episode identifier (used as group name).
+        traj_dump: The trajectory dict (same structure written to JSON).
+    """
+    with h5py.File(hdf5_path, "a") as f:
+        if episode_id in f:
+            del f[episode_id]
+        ep_grp = f.create_group(episode_id)
+
+        # Scalar metadata as group attributes
+        for key in ("version", "episode_id", "seed", "length", "eval"):
+            val = traj_dump.get(key)
+            if val is not None:
+                ep_grp.attrs[key] = val
+
+        # Summary subgroup with attrs
+        summary_grp = ep_grp.create_group("summary")
+        for key, val in traj_dump.get("summary", {}).items():
+            if val is not None:
+                summary_grp.attrs[key] = val
+
+        # Trajectory subgroup
+        traj_grp = ep_grp.create_group("trajectory")
+        for key, val in traj_dump.get("trajectory", {}).items():
+            if isinstance(val, dict):
+                sub_grp = traj_grp.create_group(key)
+                for sub_key, sub_val in val.items():
+                    arr = np.asarray(sub_val, dtype=np.float32)
+                    sub_grp.create_dataset(sub_key, data=arr)
+            elif isinstance(val, list):
+                arr = np.asarray(val, dtype=np.float32)
+                traj_grp.create_dataset(key, data=arr)
 
 
 def extract_trajectory_from_infos(

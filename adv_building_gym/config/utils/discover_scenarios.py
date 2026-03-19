@@ -7,7 +7,7 @@ logger = logging.getLogger(__name__)
 
 
 def discover_augmented_scenarios(
-    years: range = range(2018, 2025),
+    years: range,
     weather_dir: str = "data/weather/dwd/preprocessed",
     price_dirs: dict[str, str] | None = None,
 ) -> list[dict[str, str]]:
