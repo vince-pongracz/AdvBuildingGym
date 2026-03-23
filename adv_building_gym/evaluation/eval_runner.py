@@ -111,7 +111,7 @@ def evaluate_model(
     logger.info("=" * 70)
     logger.info("Starting Ray model evaluation")
     logger.info("  Checkpoint: %s", checkpoint_path)
-    logger.info("  Config: %s", active_config.config_name)
+    logger.info("  Config: %s", active_config.env_config_name)
     logger.info("  Episodes: %d", num_episodes)
     logger.info("  Seed: %d", seed)
     logger.info("  Output: %s", output_dir)
@@ -254,13 +254,15 @@ def evaluate_model(
                     episode_id=episode_num,
                     seed=episode_seed,
                     metadata={
-                        "config_name": active_config.config_name,
+                        "env_config_name": active_config.env_config_name,
                         "checkpoint_path": checkpoint_path,
                         "algorithm": algorithm_hint,
                     },
                 )
+                traj_dir = os.path.join(output_dir, "trajectories")
+                os.makedirs(traj_dir, exist_ok=True)
                 traj_file = os.path.join(
-                    output_dir, f"{episode_num}_trajectory.json",
+                    traj_dir, f"{episode_num}_trajectory.json",
                 )
                 collector.save_json(traj_file)
                 hdf5_path = os.path.join(output_dir, "trajectories.hdf5")
@@ -288,7 +290,7 @@ def evaluate_model(
     results = EvalResults.from_episodes(
         episodes=episode_stats,
         checkpoint_path=checkpoint_path,
-        config_name=active_config.config_name,
+        env_config_name=active_config.env_config_name,
         algorithm=algorithm_hint,
         seed=seed,
         eval_time_seconds=eval_time,

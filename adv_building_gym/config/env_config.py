@@ -19,9 +19,10 @@ from adv_building_gym.devices.statesources import (
 )
 
 from adv_building_gym.rewards import (
-    RewardFunction, ActionSmoothnessReward, TempReward, EconomicReward,
-    EVChargingOnTimeReward, MinimiseEnergyConsumption_Reward,
-    UserEnergyNeedReward, OperatorEnergyControlReward
+    RewardFunction, ActionSmoothnessReward, BatteryTargetReward, TempReward,
+    EconomicReward, EVChargingOnTimeReward, EVChargingReward,
+    MinimiseEnergyConsumption_Reward, UserEnergyNeedReward,
+    OperatorEnergyControlReward
 )
 
 
@@ -130,8 +131,10 @@ class EnvConfig:
         return [
             TempReward(weight=1),
             EconomicReward(infras, weight=1),
-            MinimiseEnergyConsumption_Reward(weight=1),
+            MinimiseEnergyConsumption_Reward(weight=0.3),
             OperatorEnergyControlReward(infras, weight=1),
+            BatteryTargetReward(weight=1),
+            EVChargingReward(weight=1),
             EVChargingOnTimeReward(infrastructures=infras, weight=1),
             ActionSmoothnessReward(weight=0.5),
         ]

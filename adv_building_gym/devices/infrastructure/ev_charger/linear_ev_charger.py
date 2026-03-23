@@ -196,12 +196,11 @@ class LinearEVCharger(Infrastructure):
 
         action = float(np.atleast_1d(actions["lin_ev_charger_action"])[0])
 
-        # Clip action based on V2G capability -- and write it back to actions
-        # V2G discharge is only allowed when SOC >= target_soc (the EV has
-        # enough charge).  Discharging a car that still needs charging defeats
-        # the purpose of the charging session.
-        if not self.v2g_enabled or (
-            self.target_soc - self.v2g_playroom < self.soc and self.soc < self.target_soc + self.v2g_playroom):
+        # Clip action based on V2G capability — only allow discharge when the
+        # EV has enough charge.  Discharging a car that still needs charging
+        # defeats the purpose of the charging session.
+        # V2G is permitted only when SoC >= (target - playroom).
+        if not self.v2g_enabled or self.soc < self.target_soc - self.v2g_playroom:
             action = max(0.0, action)
             actions["lin_ev_charger_action"][0] = action
 
@@ -287,8 +286,8 @@ class LinearEVCharger(Infrastructure):
 
         action = float(np.atleast_1d(actions["lin_ev_charger_action"])[0])
 
-        # V2G discharge only allowed when SOC >= target (consistent with exec_action)
-        if not self.v2g_enabled or self.soc < self.target_soc:
+        # V2G discharge only allowed when SOC >= target - playroom (consistent with exec_action)
+        if not self.v2g_enabled or self.soc < self.target_soc - self.v2g_playroom:
             action = max(0.0, action)
 
         # Power consumption in kW

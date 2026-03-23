@@ -28,6 +28,16 @@ def plot_states(episode: EpisodeData) -> list[go.Figure]:
     suffix = episode.title_suffix()
     time_hhmm = episode.time_hhmm
 
+    # Mask EV-related keys with NaN when ev_connected < 0.5
+    # so Plotly renders non-continuous lines (gaps when disconnected).
+    mask_cfg = plot_config.get("mask_when_disconnected", {})
+    cond_key = mask_cfg.get("condition_key")
+    mask_keys: set[str] = set(mask_cfg.get("keys", []))
+    disconnected_mask: np.ndarray | None = None
+    if cond_key and cond_key in states:
+        cond = states[cond_key]
+        disconnected_mask = (cond < 0.5) if cond.ndim == 1 else (cond[:, 0] < 0.5)
+
     # Build ordered list of plot specs.  Each entry is a list of keys.
     grouped_flat = {k for group in grouped_keys for k in group}
     plot_specs: list[list[str]] = []
@@ -74,7 +84,17 @@ def plot_states(episode: EpisodeData) -> list[go.Figure]:
             if key not in states:
                 logger.info("State key '%s' missing from data, skipping.", key)
                 continue
-            arr = states[key]
+            arr = states[key].copy()
+
+            # Replace values with NaN when disconnected (non-continuous line)
+            if key in mask_keys and disconnected_mask is not None:
+                if arr.ndim == 1:
+                    arr = arr.astype(np.float64)
+                    arr[disconnected_mask] = np.nan
+                elif arr.ndim == 2:
+                    arr = arr.astype(np.float64)
+                    arr[disconnected_mask, :] = np.nan
+
             if arr.ndim == 1:
                 fig.add_trace(go.Scatter(
                     x=time, y=arr, mode="lines",
@@ -112,10 +132,10 @@ def plot_states(episode: EpisodeData) -> list[go.Figure]:
 
         if all_data:
             combined = np.concatenate([d.ravel() for d in all_data])
-            y_lo = -1.0 if float(np.min(combined)) < 0 else 0.0
+            y_lo = -1.0 if float(np.nanmin(combined)) < 0 else 0.0
             fig.update_yaxes(
-                range=[min(y_lo, float(np.min(combined))),
-                       max(1.0, float(np.max(combined)))],
+                range=[min(y_lo, float(np.nanmin(combined))),
+                       max(1.0, float(np.nanmax(combined)))],
             )
 
         apply_day_xaxis(fig)

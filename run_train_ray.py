@@ -360,7 +360,6 @@ def main():
         timesteps_per_iteration
     )
 
-    # TODO VP 2026.03.17. : Check why are these not applied
     # Setup stopping criteria and run configuration for the tuner
     # Note: In the new API stack, use 'num_env_steps_sampled_lifetime' instead of 'timesteps_total'
     # Episodes are converted to timesteps above (--episodes × EPISODE_LENGTH)
@@ -395,6 +394,9 @@ def main():
             metric=args.metric,
             mode="max",
             trial_dirname_creator=trial_dirname_creator,
+            # TODO VP 2026.03.20. : Read more about TuneConfig params -- needed when tune hyperparam optimisation is used...
+            # search_alg=,
+            # scheduler=
         ),
         run_config=tune.RunConfig(
             name=run_name,
@@ -485,6 +487,7 @@ def main():
     # ===================================================================================
 
 
+    # TODO VP 2026.03.20. : Clean this up, refactor
     for i, res in enumerate(results._results):
         with open(f"result_{i}.json", "w", encoding="utf-8") as f:
             # Handle failed trials where config/metrics may be None

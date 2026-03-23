@@ -176,7 +176,52 @@ TODO VP: Check again on nan values in datasources... -- or should the model deal
 Link: https://www.mdpi.com/1996-1073/12/7/1301
 
 Paper:
+- Comprehensive review of ML and energy systems, 2019, ANN, but no RL
+- single domain systems (only PV, only HP, etc..)
+- likely not really relevant, as it is an older survey paper, a SOTA overview from 2019
+- does not mention RL --> drop this
+
+#### 
+
+### Frameworks
+
+#### CityLearn
+
+Link: https://www.citylearn.net/
+GitHub: https://github.com/citylearn-project/CityLearn
+
+Summary:
+- MARL for energy coordination among multiple buildings
+- flatten the energy need of a neighbourhood -- control multiple households with cooperating agents
+- several controller types: Rule based control (RBC), MPC, RL
+- PV, EV with V2G
+- multiple buildings controlled together, to simulate a district -- possible to simulate a single building as well
+- a simulation environment -- maybe a decent starting point
+
+My project:
+- single household -- no grid, no cooperation with other buildings
+- intervention at eval, not only static behaviour (still a TODO)
+- more options to eval: generalisation and transfer -- feasible with this one as well, just the data and config management is missing I guess
+- Monte Carlo rollouts
+
+#### SinerGym
+
+Link: https://www.sciencedirect.com/science/article/pii/S0378778824011915
+GitHub: https://github.com/ugr-sail/sinergym
+
+Summary:
+- seems really similar to my Gym and repo...
+- Building energy optimisation (BEO)
+- 3 other frameworks: RL Testbed for EnergyPlus, BOPTEST-Gym, Energym -- they are still active
+- not maintained anymore: Gym-Eplus [10], ModelicaGym, [41], Tropical Precooling Environment [42], COmprehensive Building, Simulator (COBS) [43], and RL-EmsPy
+- GridLearn [45] and Grid2Op [46] -- rahter grid management and not BEO
+- it seems like they do not use price data
+- it seems like they only use TMY (typical meterological year -- median weather data over multiyear period)
 - 
+
+
+TODO VP: Google DeepMind -- they reduced their energy usage as well, take a look onto that
+TODO VP: what is EnergyPlus? https://energyplus.readthedocs.io/en/latest/api.html
 
 
 

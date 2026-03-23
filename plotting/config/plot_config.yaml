@@ -19,6 +19,16 @@ states:
     - [ev_schedule_start_soc, ev_schedule_target_soc]
     - [ev_soc, ev_target_soc]
 
+  # Keys masked with NaN when a condition key is below 0.5.
+  # Produces non-continuous lines (gaps) when the device is disconnected.
+  mask_when_disconnected:
+    condition_key: ev_connected
+    keys:
+      - ev_soc
+      - ev_target_soc
+      - ev_soc_hist
+      - ev_charge_to_target_hrs_norm
+
 
 actions:
   # Human-readable dimension labels for multi-dimensional actions.

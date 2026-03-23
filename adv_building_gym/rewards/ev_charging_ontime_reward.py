@@ -33,7 +33,7 @@ class EVChargingOnTimeReward(RewardFunction):
     def __init__(self,
                  infrastructures: List,
                  weight: float,
-                 name: str = "ev_charging_reward") -> None:
+                 name: str = "ev_charging_ontime_reward") -> None:
         """Initialize EVChargingReward.
 
         Args:
