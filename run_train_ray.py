@@ -287,7 +287,6 @@ def main():
     )
 
     env_creator_config = {
-        "log_full_info": args.log_trajectories,
         "data_combinator": data_combinator,
     }
     register_env("AdvBuilding", lambda cfg: adv_building_env_creator({**env_creator_config, **cfg}))
@@ -521,5 +520,5 @@ if __name__ == "__main__":
 # python run_train_ray.py --algorithm ppo --seed 42 --episodes 5000 --checkpoint-frequency-episodes 50 --metric achieved_reward
 
 # SAC with specific config name
-# python run_train_ray.py --algorithm sac --seed 18 -cn test1 --episodes 3500 --metric reward_rate
+# python run_train_ray.py --algorithm sac --seed 18 -cn env_test1_{s/m/l} --episodes 3500 --metric reward_rate
 

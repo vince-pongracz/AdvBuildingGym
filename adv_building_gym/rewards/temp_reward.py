@@ -15,10 +15,10 @@ class TempReward(RewardFunction):
     """
 
     def __init__(self, weight: float,
-                 name: str = "temp_reward",
-                 diff_threshold: float = 0.02,
-                 wrong_direction_penalty: float = 0.0,
-                 temp_const_multiplier: float = 5.0) -> None:
+                diff_threshold: float,
+                name: str = "temp_reward",
+                wrong_direction_penalty: float = -1.0,
+                temp_const_multiplier: float = 5.0) -> None:
         """
         Initialize TempReward.
         Args:

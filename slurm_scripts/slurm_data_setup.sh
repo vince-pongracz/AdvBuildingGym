@@ -12,7 +12,9 @@
 #   --price-source {awattar,energy-charts}  Price data source (default: awattar)
 #   --skip-prices                 Skip the entire price pipeline
 #   --skip-price-fetch            Skip fetching, use existing raw files
-#   --skip-weather                Skip the entire weather/Zenodo pipeline
+#   --skip-weather                Skip all weather pipelines (WPuQ/Zenodo and DWD)
+#   --skip-wpuq                   Skip the WPuQ/Zenodo weather pipeline only
+#   --skip-dwd                    Skip the DWD weather pipeline only
 #   --steps STEP [STEP ...]       Select which steps to run
 #   --augment                     Run price augmentation after preprocessing
 #   --log-level {DEBUG,INFO,...}  Logging level (default: INFO)

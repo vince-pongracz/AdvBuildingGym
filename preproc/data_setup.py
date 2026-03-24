@@ -7,11 +7,11 @@ By default, this script runs all three pipelines:
 
 Examples:
     python preproc/data_setup.py
-    python preproc/data_setup.py --skip-weather --skip-dwd
+    python preproc/data_setup.py --skip-weather
     python preproc/data_setup.py --skip-prices --steps zenodo-extract weather-csv
-    python preproc/data_setup.py --skip-weather --skip-dwd --years 2025 --skip-price-fetch --raw-price-files data/e_price/2025_prices.csv
-    python preproc/data_setup.py --skip-prices --skip-weather --steps dwd-fetch dwd-preprocess
-    python preproc/data_setup.py --skip-prices --skip-weather --dwd-station-id 04177 --dwd-upsample-method duplicate
+    python preproc/data_setup.py --skip-weather --years 2025 --skip-price-fetch --raw-price-files data/e_price/2025_prices.csv
+    python preproc/data_setup.py --skip-prices --skip-wpuq --steps dwd-fetch dwd-preprocess
+    python preproc/data_setup.py --skip-prices --skip-wpuq --dwd-station-id 04177 --dwd-upsample-method duplicate
 """
 
 from __future__ import annotations
@@ -83,9 +83,9 @@ def _parse_args() -> argparse.Namespace:
     )
 
     parser.add_argument(
-        "--skip-weather",
+        "--skip-wpuq",
         action="store_true",
-        help="Skip the entire weather/Zenodo pipeline",
+        help="Skip the entire WPuQ/Zenodo weather pipeline",
     )
     parser.add_argument(
         "--zenodo-links",
@@ -103,6 +103,11 @@ def _parse_args() -> argparse.Namespace:
         help="Overwrite already downloaded files and re-extract archives",
     )
 
+    parser.add_argument(
+        "--skip-weather",
+        action="store_true",
+        help="Skip all weather pipelines (both WPuQ/Zenodo and DWD)",
+    )
     parser.add_argument(
         "--skip-dwd",
         action="store_true",
@@ -181,7 +186,7 @@ def _parse_args() -> argparse.Namespace:
         "--augment",
         action="store_true",
         help="Run data augmentation (Gaussian noise) on yearly price and weather CSVs after all pipelines. "
-             "Noise parameters are configured in preproc/augment_config.yaml.",
+            "Noise parameters are configured in preproc/augment_config.yaml.",
     )
 
     parser.add_argument(
@@ -210,11 +215,16 @@ def main() -> None:
         format="%(asctime)s %(levelname)s %(message)s",
     )
 
+    # --skip-weather is a convenience shorthand for --skip-wpuq --skip-dwd
+    if args.skip_weather:
+        args.skip_wpuq = True
+        args.skip_dwd = True
+
     _log_settings(args)
 
-    if args.skip_prices and args.skip_weather and args.skip_dwd:
+    if args.skip_prices and args.skip_wpuq and args.skip_dwd:
         raise ValueError(
-            "Nothing to do: --skip-prices, --skip-weather, and --skip-dwd were all set"
+            "Nothing to do: --skip-prices, --skip-wpuq, and --skip-dwd were all set"
         )
 
     raw_price_files, preprocessed_price_files = run_price_pipeline(args)

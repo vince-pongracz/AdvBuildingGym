@@ -29,13 +29,13 @@ class LinearEVCharger(Infrastructure):
     _context_params: ClassVar[Set[str]] = {'control_step'}
 
     # Internal state variables - don't serialize
-    _exclude_params: ClassVar[Set[str]] = {'iteration', 'soc', 'ev_connected', 'charge_to_target_in_hrs'}
+    _exclude_params: ClassVar[Set[str]] = {'iteration', 'soc', 'ev_connected', 'charge_to_target_in_hrs', 'max_cap_kWh'}
 
     def __init__(self,
                  name: str,
                  Q_electric_max: float,
                  max_charging_kW: float,
-                 max_cap_kWh: float,
+                 max_cap_kWh: float = 60.0,
                  charger_efficiency: float = 0.92,
                  discharge_efficiency: float = 0.92,
                  v2g_enabled: bool = True,
@@ -177,6 +177,7 @@ class LinearEVCharger(Infrastructure):
                 v2g_enabled=bool(info["ev_schedule_v2g"] > 0.5),
                 start_soc=float(info["ev_schedule_start_soc"]),
                 target_soc=float(info["ev_schedule_target_soc"]),
+                charge_to_target_in_hrs=float(info.get("ev_schedule_charge_to_target_hrs", 8.0)),
             )
             logger.debug("EV schedule: CONNECT (cap=%.1f, soc=%.2f->%.2f)",
                         ev_spec.max_cap_kWh, ev_spec.start_soc, ev_spec.target_soc)

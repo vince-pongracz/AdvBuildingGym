@@ -21,8 +21,8 @@
 #
 # Examples:
 #   sbatch slurm_scripts/slurm_eval_ray.sh --algorithm ppo --episodes 10 --seed 42
-#   sbatch slurm_scripts/slurm_eval_ray.sh --algorithm sac -cn test1 --episodes 20
-#   sbatch slurm_scripts/slurm_eval_ray.sh --checkpoint models/test1/ray/ppo/best_model_ep100
+#   sbatch slurm_scripts/slurm_eval_ray.sh --algorithm sac -cn env_test1_{s/m/l} --episodes 20
+#   sbatch slurm_scripts/slurm_eval_ray.sh --checkpoint models/env_test1_{s/m/l}/ray/ppo/best_model_ep100
 #
 # Note: Inference runs on CPU (sufficient for the small [32,32,32] network).
 # No GPU is requested.

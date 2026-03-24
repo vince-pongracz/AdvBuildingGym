@@ -48,24 +48,42 @@ Link: https://eshop.se.com/in/blog/post/difference-between-active-power-reactive
 
 https://en.wikipedia.org/wiki/AC_power
 
+### Data setup
 
-
-### Curl help
-
-Download `link` under the name `name` with progress-bar:
-
-`curl -L --progress-bar -o "name" "link"`
-
-Download links form a file (one link per line, skipping empty lines):
+All data fetching and preprocessing is handled by a single entry point:
 
 ```bash
-while IFS= read -r link; do
-  [[ -z "${link//[[:space:]]/}" ]] && continue
-  curl -L --progress-bar -OJ "$link"
-done < ds_links.txt
+python preproc/data_setup.py
 ```
-or
-`cat ds_links.txt | xargs -n 1 -P 4 curl -L --progress-bar -OJ`
+
+This runs three pipelines:
+
+1. **Electricity prices** — fetches day-ahead EPEX Spot prices from aWATTar and Energy Charts APIs, resamples to 5-minute resolution, and normalizes
+2. **Zenodo weather** — downloads the WPuQ dataset (residential heat pump load profiles), extracts HDF5 archives, and produces per-house weather CSVs
+3. **DWD weather** — downloads 10-minute station data from the DWD Climate Data Center, merges parameters, upsamples to 5 minutes, and normalizes
+
+Preprocessed files are written to `data/e_price/` and `data/weather/`.
+
+**Common flags:**
+
+```bash
+# Run only the price pipeline for specific years
+python preproc/data_setup.py --skip-weather --years 2024 2025
+
+# Run only the DWD weather pipeline
+python preproc/data_setup.py --skip-prices --skip-wpuq --dwd-station-id 04177
+
+# Run only the WPuQ/Zenodo weather pipeline
+python preproc/data_setup.py --skip-prices --skip-dwd
+
+# Apply Gaussian noise augmentation after all pipelines
+python preproc/data_setup.py --augment
+
+# Preprocess existing raw price files without re-fetching
+python preproc/data_setup.py --skip-weather --skip-price-fetch --raw-price-files data/e_price/2025_prices.csv
+```
+
+EV usage profiles (`data/ev_usage_profiles/ev_*.csv`) are manually authored and do not require fetching.
 
 <!-- Add NOTEs:
 TODO VP: SAC and PPO notes
@@ -179,7 +197,36 @@ Paper:
 - likely not really relevant, as it is an older survey paper, a SOTA overview from 2019
 - does not mention RL --> drop this
 
-#### 
+#### Optimal Energy System Scheduling Using A Constraint-Aware Reinforcement Learning Algorithm
+
+Link: https://www.sciencedirect.com/science/article/pii/S0142061523002879
+
+GitHub: https://github.com/EnergyQuantResearch/Optimal-Energy-System-Scheduling-Combining-Mixed-Integer-Programming-and-Deep-Reinforcement-Learning
+
+Summary:
+- goes with RL and MIP (mixed integer programming) -- MIP-DQP
+- model free RL
+- constraints are important, they consider them better (...)
+- They deal with: "enforcing operational constraints during the online scheduling stage is a critical challenge for DRL algorithms and it must be addressed in order to enable their wide adoption in real system"
+ - operational constraints of RL algorithms
+- a lot of implementations are not freely accessible...
+- strict enforcement of each operational condition in the action space (e.g. power balance constraint), even in
+unseen test data
+- uses day ahead wholesale prices
+- needs full future information (consumption, dynamic prices, weather) -- to keep/ensure all the constraints
+
+Conclusion:
+- no generalisation for multiple env setups
+- constrainsts: Env and the infra elements enforce them...
+- quite similar to my project...
+- they do not handle varying infrastructure or other user interventions -- like EV connect/disconnect
+- they only deal with energy, only optimise for energetic balance -- no other rewards regarding temperature, EV, etc...
+
+
+TODO VP: look up KIT EnergyLab 2.0 data sources for weather data -- is it existing, can I use it?
+TODO VP: check actual data and simulated control -- how are the differences? If only linear transformation is the difference --> it's okay, it's mimicing the actual item
+
+
 
 ### Frameworks
 
@@ -206,6 +253,7 @@ My project:
 
 Link: https://www.sciencedirect.com/science/article/pii/S0378778824011915
 GitHub: https://github.com/ugr-sail/sinergym
+Docs: https://ugr-sail.github.io/sinergym/compilation/main/index.html
 
 Summary:
 - seems really similar to my Gym and repo...
@@ -213,9 +261,19 @@ Summary:
 - 3 other frameworks: RL Testbed for EnergyPlus, BOPTEST-Gym, Energym -- they are still active
 - not maintained anymore: Gym-Eplus [10], ModelicaGym, [41], Tropical Precooling Environment [42], COmprehensive Building, Simulator (COBS) [43], and RL-EmsPy
 - GridLearn [45] and Grid2Op [46] -- rahter grid management and not BEO
-- it seems like they do not use price data
+- it seems like they do not use price/energy cost data
 - it seems like they only use TMY (typical meterological year -- median weather data over multiyear period), not daily weather data
-- RL
+- RL: they trained 40 years simulation -- 365 * 40 = 14600 episodes in my framework...
+- fixed reward: in my repo, it's easily replaceable, flexible
+- for them PPO was strong -- but only temp control and min. energy usage were the objectives.
+- has W&B integration, configurable -- maybe a TODO VP: W&B and tensorboard fire up
+- hyperparameter optimization of a DRL algorithm... -- that's what I would do as well...
+
+Conclusion:
+- in framework, it's similar, in goals it's not -- SinerGym paper is only about the framework and it's basic usage.
+- I need a bit more advanced data and env config management
+- in my work it's RLLib
+- the paper shows some good figures about the training process, worth using them for ideas
 
 TODO VP: Idea -- maybe it is easier to have MA setup with distinct state spaces -- then each agent NN has its own input heads (general input heads and specific input heads)
 The problem is the state space inputs -- that can't be changed easily.
@@ -240,6 +298,19 @@ Conclusion:
 - just simulator, no RL, no config management
 - no building wide generalisation targeted -- EnergyPlus simulates buildings, nothing more
 
+#### NatLabRockies/dss-cosim
+
+GitHub: https://github.com/NatLabRockies/dss-cosim
+
+Summary:
+- Simulation framework
+- interaction between power distribution and distr. energy resource controllers
+- bridge between control logic and OpenDSS power distr. system simulator
+
+Conclusion:
+- not really relevant, it's rather large scale and more physical
+- it's a simulator bridge, no control defined -- that's another module
+- it's for testing controllers
 
 
 #### Explicable Reward Design for Reinforcement Learning Agents

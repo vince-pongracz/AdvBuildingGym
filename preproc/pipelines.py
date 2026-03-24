@@ -225,8 +225,8 @@ def run_weather_pipeline(args: argparse.Namespace) -> dict[str, int]:
         Dict with counts: downloaded, extracted, weather_csvs, sfh_csvs.
     """
     stats = {"downloaded": 0, "extracted": 0, "weather_csvs": 0, "sfh_csvs": 0}
-    if args.skip_weather:
-        logger.info("Skipping weather pipeline (--skip-weather).")
+    if args.skip_wpuq:
+        logger.info("Skipping WPuQ/Zenodo weather pipeline (--skip-wpuq).")
         return stats
 
     active_steps = set(args.steps)

@@ -35,6 +35,7 @@ class HP(Infrastructure):
                  mC: float,
                  cop_heat: float = 1.0,
                  cop_cool: float = 1.0,
+                 # TODO VP 2026.03.24. : Control step should not be default here -- get it from caller
                  control_step: int = 300
                  ) -> None:
         super().__init__(name, Q_electric_max)
@@ -54,9 +55,8 @@ class HP(Infrastructure):
             raise ValueError("cop_heat and cop_cool must be positive.")
 
     def setup_spaces(self,
-                     state_spaces,
-                     action_spaces
-                     ):
+                    state_spaces,
+                    action_spaces):
         # HP action is 2D: [energy, mode]
         # - energy: [0, 1] - HP always consumes energy (positive = consumption)
         # - mode: [0, 1] - <0.4: cooling, >0.6: heating, [0.4, 0.6]: no action

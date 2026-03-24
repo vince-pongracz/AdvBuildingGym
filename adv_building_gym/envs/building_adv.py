@@ -181,7 +181,6 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         # Number of steps to look ahead for forecasted values
         prediction_horizon=8 * 12,  # 8 hours at 5-minute steps
         data_combinator: DataCombinator | None = None,
-        log_full_info: bool = False,
         action_history_length: int | None = None,
         **kwargs,
     ):
@@ -295,7 +294,9 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
 
         # When True, step()/reset() include a deep copy of the full named state
         # dict in info["state"]. Expensive in memory — enable for evaluation only.
-        self.log_full_info: bool = log_full_info
+        # Not a constructor param: set by the evaluation context (eval_runner,
+        # Ray evaluation env_config) rather than at construction time.
+        self.log_full_info: bool = False
 
         # Cache raw-attribute names for _get_raw_state_values().
         # Scanned once at init rather than using dir() every step.
@@ -572,13 +573,13 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         Also derives ``temp_in_raw`` by denormalising the simulated
         indoor temperature.
         """
+        
+        # TODO VP 2026.03.24. : No entropy/alpha logging visible -- add logging
+        
         # TODO VP 2026.03.23. : Continue here
         # TODO VP 2026.03.23. : encourage exploration more
         # TODO VP 2026.03.23. : Use more history as state input
         # TODO VP 2026.03.23. : Plot all eval curves together -- with avg and variance
-        # TODO VP 2026.03.23. : Why no charging in 20260323_1644_eval? And hp is not working as well, however it should heat.
-        # TODO VP 2026.03.23. : Switch off action smooting
-        # TODO VP 2026.03.23. : How is that possible, that the raw temperatures are near to 0 celsius?
         # TODO VP 2026.03.23. : At raw value plotting, only temp is plotted -- what about the other stuff, energy for each element?
         # TODO VP 2026.03.23. : Remove default values from methods and functions where it is not needed
         # TODO VP 2026.03.23. : Check whether currently passed params really needed for the functions/methods

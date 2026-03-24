@@ -303,6 +303,35 @@ def apply_day_xaxis(
         fig.update_xaxes(**base_kwargs, title_text="Time (HH:MM)")
 
 
+def align_zero_dual_yaxes(fig: go.Figure, y1_data: list[float], y2_data: list[float]) -> None:
+    """Set both y-axis ranges so that zero sits at the same vertical position."""
+    min1, max1 = min(y1_data), max(y1_data)
+    min2, max2 = min(y2_data), max(y2_data)
+
+    # Add 10% padding
+    pad1 = (max1 - min1) * 0.1 or 1.0
+    pad2 = (max2 - min2) * 0.1 or 1.0
+    min1, max1 = min1 - pad1, max1 + pad1
+    min2, max2 = min2 - pad2, max2 + pad2
+
+    # Compute the fraction of the range below zero for each axis
+    frac1 = abs(min1) / (abs(min1) + abs(max1)) if (abs(min1) + abs(max1)) > 0 else 0.5
+    frac2 = abs(min2) / (abs(min2) + abs(max2)) if (abs(min2) + abs(max2)) > 0 else 0.5
+
+    # Use the larger zero-fraction so both axes have room
+    frac = max(frac1, frac2)
+
+    # Expand each axis so zero sits at the same relative position
+    # range_below = frac * total_range, range_above = (1 - frac) * total_range
+    span1 = max(abs(min1) / frac if frac > 0 else max1,
+                abs(max1) / (1 - frac) if frac < 1 else abs(min1))
+    span2 = max(abs(min2) / frac if frac > 0 else max2,
+                abs(max2) / (1 - frac) if frac < 1 else abs(min2))
+
+    fig.update_yaxes(range=[-frac * span1, (1 - frac) * span1], secondary_y=False)
+    fig.update_yaxes(range=[-frac * span2, (1 - frac) * span2], secondary_y=True)
+
+
 def style_figure(fig: go.Figure) -> go.Figure:
     """Apply consistent styling."""
     fig.update_layout(

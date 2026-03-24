@@ -17,15 +17,21 @@ class WeatherDataSource(StateSource):
     """WeatherDataSource"""
 
     # normalise is an enum, need special handling for serialization
-    _exclude_params: ClassVar[Set[str]] = {'iteration', 'ts'}
+    _context_params: ClassVar[Set[str]] = {'control_step', 'temp_abs_max'}
+    _exclude_params: ClassVar[Set[str]] = {'iteration', 'ts', '_fixed_temp_abs_max'}
 
     def __init__(self, name: str, ds_path: str | None = None,
-                normalise: Normalisation | str | None = Normalisation.MAX_ABS_SCALING) -> None:
+                normalise: Normalisation | str | None = Normalisation.ABS_MIN_MAX_SCALING,
+                temp_abs_max: float | None = None) -> None:
         super().__init__(name, ds_path)
 
         self.normalise = Normalisation.init(normalise)  # Store for serialization
         self.temp_out_raw: float = 0.0  # Raw outdoor temperature (°C)
-        self.temp_abs_max: float = 1.0  # Scale factor for denormalising temperatures
+        # Fixed scale factor from config (max(|temp_min|, |temp_max|)).
+        # When set, temperature normalisation uses this instead of the
+        # data-derived value, ensuring consistent scaling across datasets.
+        self._fixed_temp_abs_max: float | None = temp_abs_max
+        self.temp_abs_max: float = temp_abs_max if temp_abs_max is not None else 1.0
 
         if self.ts is not None:
             logger.info("Use data file: %s", ds_path)
@@ -77,10 +83,16 @@ class WeatherDataSource(StateSource):
 
         for raw_col, norm_col in cols.items():
             if raw_col in self.ts.columns:
-                self.ts[norm_col] = normalise_series(self.ts[raw_col], self.normalise)
+                if raw_col == "temp_amb" and self._fixed_temp_abs_max is not None:
+                    # Use fixed config range for temperature normalisation
+                    self.ts[norm_col] = self.ts[raw_col] / self._fixed_temp_abs_max
+                else:
+                    self.ts[norm_col] = normalise_series(self.ts[raw_col], self.normalise)
 
-        # Store scale factor for denormalising temperature values
-        if "temp_amb" in self.ts.columns:
+        # Use fixed scale factor when provided, otherwise derive from data
+        if self._fixed_temp_abs_max is not None:
+            self.temp_abs_max = self._fixed_temp_abs_max
+        elif "temp_amb" in self.ts.columns:
             self.temp_abs_max = float(self.ts["temp_amb"].abs().max())
         else:
             self.temp_abs_max = 1.0
@@ -114,8 +126,9 @@ class WeatherDataSource(StateSource):
             solar_irradiance_norm = float(row.get("solar_irradiance_norm", 0.0))
             avg_wind_speed_norm = float(row.get("avg_wind_speed_norm", 0.0))
         else:
-            # sim_hour is actual hour of day (0–24)
-            sim_hour = float(states.get("sim_hour", np.zeros(shape=(1,), dtype=np.float32))[0])
+            # sim_hour is actual hour of day (0–24); modulo ensures correct
+            # wrap-around if the value ever accumulates beyond 24.
+            sim_hour = float(states.get("sim_hour", np.zeros(shape=(1,), dtype=np.float32))[0]) % 24
             # Synthetic diurnal outdoor temperature profile (normalised)
             if sim_hour < 5:
                 temp_out_norm = 0.0

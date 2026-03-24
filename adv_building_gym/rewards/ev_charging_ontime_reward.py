@@ -3,6 +3,8 @@
 import logging
 from typing import ClassVar, Dict, List, Set
 
+import numpy as np
+
 from .base import RewardFunction
 from adv_building_gym.config.utils.serializable import ComponentRegistry
 from adv_building_gym.devices.infrastructure.ev_charger import LinearEVCharger
@@ -31,9 +33,11 @@ class EVChargingOnTimeReward(RewardFunction):
     _context_params: ClassVar[Set[str]] = {'infrastructures'}
 
     def __init__(self,
-                 infrastructures: List,
-                 weight: float,
-                 name: str = "ev_charging_ontime_reward") -> None:
+                infrastructures: List,
+                weight: float,
+                name: str = "ev_charging_ontime_reward",
+                harsh_penalty: float = -5.0
+                ) -> None:
         """Initialize EVChargingReward.
 
         Args:
@@ -55,6 +59,7 @@ class EVChargingOnTimeReward(RewardFunction):
         self.max_cap_kWh = ev_charger.max_cap_kWh
         self.charger_efficiency = ev_charger.charger_efficiency
         self.max_charge_time_hrs = ev_charger.max_charge_time_hrs
+        self.harsh_penalty = harsh_penalty
 
     def get_reward(self, actions: Dict, states: Dict) -> tuple[float, float]:
         """Calculate EV charging progress reward.
@@ -94,8 +99,8 @@ class EVChargingOnTimeReward(RewardFunction):
 
         # Avoid division by zero
         if energy_achievable <= 0:
-            # No time left, can't achieve target
-            return 0.0, max_step
+            # No time left, target not met — apply harsh penalty
+            return self.weight * self.harsh_penalty, max_step
 
         # Calculate ratio of needed vs achievable energy
         ratio = energy_needed / energy_achievable
@@ -103,6 +108,13 @@ class EVChargingOnTimeReward(RewardFunction):
         # Reward: 1 when ratio=0 (target achieved), decreasing as ratio increases
         # Clipped to [0, 1] - no negative rewards
         reward = max(0.0, 1.0 - ratio)
+
+        # Only give reward if the agent is actually charging at least a tiny bit.
+        # Without this gate the reward rewards inaction (having time left) instead
+        # of rewarding charging progress.
+        ev_action = float(np.atleast_1d(actions.get("lin_ev_charger_action", [0]))[0])
+        if ev_action < 0.01:
+            reward = 0.0
 
         return self.weight * reward, max_step
 

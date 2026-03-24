@@ -81,7 +81,7 @@ Key `run_train_ray.py` options:
 |------|-------------|---------|
 | `--algorithm` | `ppo` or `sac` | `ppo` |
 | `--episodes N` | Total training episodes | 3500 |
-| `-cn NAME` | Configuration name | `test1` |
+| `-cn NAME` | Configuration name | `env_test1_{s/m/l}` |
 | `--seed N` | Random seed | 42 |
 | `--metric METRIC` | Optimisation target (`reward_rate`, `achieved_reward`, `episode_return_mean`) | `reward_rate` |
 | `--checkpoint-frequency-episodes N` | Checkpoint every N episodes | 20 |
@@ -99,8 +99,8 @@ All arguments are forwarded to `run_eval_ray.py`.
 
 ```bash
 sbatch slurm_scripts/slurm_eval_ray.sh --algorithm ppo --episodes 10 --seed 42
-sbatch slurm_scripts/slurm_eval_ray.sh --algorithm sac -cn test1 --episodes 20
-sbatch slurm_scripts/slurm_eval_ray.sh --checkpoint models/test1/ray/ppo/best_model_ep100
+sbatch slurm_scripts/slurm_eval_ray.sh --algorithm sac -cn env_test1_{s/m/l} --episodes 20
+sbatch slurm_scripts/slurm_eval_ray.sh --checkpoint models/env_test1_{s/m/l}/ray/ppo/best_model_ep100
 ```
 
 Key `run_eval_ray.py` options:
@@ -149,7 +149,9 @@ Key options:
 | `--price-source` | `awattar` or `energy-charts` | `awattar` |
 | `--skip-prices` | Skip entire price pipeline | - |
 | `--skip-price-fetch` | Skip fetching, use existing raw files | - |
-| `--skip-weather` | Skip weather/Zenodo pipeline | - |
+| `--skip-weather` | Skip all weather pipelines (WPuQ/Zenodo and DWD) | - |
+| `--skip-wpuq` | Skip WPuQ/Zenodo weather pipeline only | - |
+| `--skip-dwd` | Skip DWD weather pipeline only | - |
 | `--augment` | Run price augmentation after preprocessing | - |
 
 ## Trajectory plotting (slurm_plot_trajectory.sh)

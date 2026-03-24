@@ -49,8 +49,8 @@ The base class provides `reload(ds_path)` which re-reads the CSV, calls
 
 ### Where data paths are wired
 
-`Config.create_statesources()` in `adv_building_gym/config/env_config.py` creates statesources
-**without** a `ds_path` — they start with `self.ts = None`. The `DataCombinator` on `Config`
+`EnvConfig.create_statesources()` in `adv_building_gym/config/env_config.py` creates statesources
+**without** a `ds_path` — they start with `self.ts = None`. The `DataCombinator`
 provides the actual file paths and pushes them to statesources via `reload()` at episode
 boundaries (Approach A) or training iteration boundaries (Approach D1).
 
@@ -59,19 +59,32 @@ boundaries (Approach A) or training iteration boundaries (Approach D1).
 ```
 data/
 ├── eval1/
-│   ├── LLEC_outdoor_temperature_5min_data.csv   # weather (single day)
-│   └── price_data_2025_1.csv                    # energy price (single day)
+│   ├── LLEC_outdoor_temperature_5min_data.csv     # weather (single day, legacy)
+│   └── price_data_2025_1.csv                      # energy price (single day, legacy)
 ├── e_price/
-│   ├── <YEAR>_prices.csv                        # raw hourly aWATTar fetch
-│   └── price_data_<YEAR>_norm.csv               # preprocessed 5-min normalized
+│   ├── awattar/
+│   │   ├── <YEAR>_prices.csv                      # raw hourly aWATTar fetch
+│   │   └── price_data_<YEAR>.csv                  # preprocessed 5-min (2017–2026)
+│   └── e_charts/
+│       ├── <YEAR>_15m_prices.csv                  # raw 15-min e-charts fetch
+│       └── price_data_<YEAR>.csv                  # preprocessed 5-min (2018–2026)
 ├── weather/
-│   ├── LLEC_outdoor_temperature_5min_data.csv   # outdoor temperature (multi-day)
+│   ├── LLEC/                                      # LLEC sensor data (legacy)
+│   ├── dwd/
+│   │   ├── downloaded/                            # raw DWD station files
+│   │   └── preprocessed/
+│   │       ├── <YEAR>_merged_04177.csv            # merged 5-min weather (2008–2026)
+│   │       └── <YEAR>_missing_entries.txt          # gap reports per year
 │   └── zenodo/
-│       ├── 2018_weather.hdf5  …  2020_weather.hdf5  # multi-year weather (HDF5)
-│       └── csvs_2018_data_1min/SFH10.csv …          # 1-min building data
+│       ├── csvs_weather/
+│       │   └── <YEAR>_weather.csv                 # multi-year weather (2018–2020)
+│       ├── csvs_2018_data_1min/SFH10.csv …        # 1-min building data
+│       └── csvs_2020_data_1min/SFH10.csv …        # 1-min building data
 ├── ev_usage_profiles/
-│   ├── ev_0.csv                                 # empty profile (no EV events)
-│   └── ev_1.csv  …  ev_5.csv                    # 5 distinct EV user profiles
+│   ├── ev_0.csv                                   # empty profile (no EV events)
+│   └── ev_1.csv  …  ev_5.csv                     # 5 distinct EV user profiles
+├── inside_temp/
+│   └── inside_temp_0.csv  …  inside_temp_2.csv   # desired indoor temperature profiles
 ```
 
 ---
@@ -86,7 +99,7 @@ statesources in-place.
 
 #### DataCombinator data model
 
-`DataCombinator` is a small dataclass (`adv_building_gym/config/data_combinator.py`) that
+`DataCombinator` is a dataclass (`adv_building_gym/data_combinator/data_combinator.py`) that
 distinguishes between **correlated** and **independent** data sources:
 
 - **`scenarios`** — a list of explicit variant dicts. Each scenario is a bundle of sources
@@ -129,11 +142,24 @@ DataCombinator(
 A *variant* is a plain `dict[str, str]` mapping `source_name → path`. Only the statesources
 whose names appear in the dict are reloaded; others are untouched.
 
+The DataCombinator also supports **day selection** via the `day` parameter:
+- `"random"` — sample a uniformly random day each episode (default for training).
+- `"each"` — walk through days sequentially (default for evaluation).
+- A date string (e.g. `"2025-03-15"`) — pin every episode to that calendar day.
+
+Training and evaluation each have their own DataCombinator config:
+- `configs/train_data_combinator_config.yaml` — shuffled, random days, swap every 2 episodes.
+- `configs/eval_data_combinator_config.yaml` — deterministic, sequential days, swap every episode.
+
+These YAML configs define `scenario_sources` with `{year}` placeholders and a `years` list;
+the DataCombinator expands these into concrete file paths at construction time. Augmented
+data files (e.g. from data augmentation pipelines) can be auto-discovered via `augmented_paths`.
+
 #### Code changes (implemented)
 
-**1. `adv_building_gym/config/data_combinator.py`** — DataCombinator dataclass with
+**1. `adv_building_gym/data_combinator/data_combinator.py`** — DataCombinator dataclass with
 `scenarios`/`variable` axes, `variants` property (Cartesian product), `get_variant()`,
-and `to_dict()`/`from_dict()` serialisation.
+day selection, year-based scenario expansion, and augmented data discovery.
 
 **2. `adv_building_gym/devices/statesources/base.py`** — `reload(ds_path)` method and
 `_post_load_data_processing()` template-method hook. Relative paths resolved against
@@ -153,17 +179,16 @@ call the hook so subclasses define post-processing once.
 `episode_count`, `_rng` attributes, public `apply_data_variant(variant)` method,
 Approach A swap in `reset()`, Approach C override via `reset(options=...)`.
 
-**5. `adv_building_gym/config/env_config.py`** — `data_combinator` field on `Config` with
-a default factory containing real data paths (weather + price scenario, 6 EV profiles).
+**5. `adv_building_gym/config/env_config.py`** — `EnvConfig` dataclass (renamed from `Config`).
 `create_statesources()` creates sources **without** `ds_path` — the combinator provides
 paths at runtime.
 
-**6. `adv_building_gym/config/config_manager.py`** — `DataCombinator` serialised in
-`to_dict()` and deserialised in `from_dict()`.
+**6. `adv_building_gym/config/env_config_manager.py`** — `EnvConfigManager` (renamed from
+`ConfigManager`). Serialises/deserialises `EnvConfig` to/from **YAML** (previously JSON).
 
 **7. `adv_building_gym/envs/env_creator.py`** — passes `data_combinator` to `AdvBuildingGym`.
 
-**8. `adv_building_gym/config/__init__.py`** — lazy import + `__all__` export for `DataCombinator`.
+**8. `adv_building_gym/data_combinator/__init__.py`** — exports `DataCombinator`.
 
 #### Multi-worker behaviour
 
@@ -178,7 +203,7 @@ replay buffer or rollout batches. This is intentional.
 | ✅ | Self-contained — no Ray callbacks needed |
 | ✅ | Zero overhead per step (reload only at episode boundaries) |
 | ✅ | Works with SB3, standalone eval, and Ray RLlib |
-| ✅ | Serialisable — `DataCombinator` round-trips through JSON |
+| ✅ | Serialisable — `DataCombinator` round-trips through YAML |
 | ✅ | Partial swaps — only sources listed in `scenarios`/`variable` are ever reloaded |
 | ✅ | Combinatorial — specifying N axes generates N₁×N₂×… variants automatically |
 | ✅ | Correlation-safe — correlated sources (weather + price) bundled in `scenarios`; independent sources in `variable` |
@@ -404,7 +429,7 @@ dataset-scheduling use case D1 (or Approach A) is sufficient and far cheaper.
 ## Implementation Summary
 
 **Approaches A, C, and D1** are implemented. Empty `variable`/`scenarios` → no reloads →
-existing behaviour preserved. `data_combinator=None` on Config disables all swapping.
+existing behaviour preserved. `data_combinator=None` on `EnvConfig` disables all swapping.
 
 **Approach B** is deferred until multi-day CSVs are prepared from the zenodo/HDF5 sources.
 
@@ -415,7 +440,7 @@ length) are required.
 
 | File | Action | Status |
 |---|---|---|
-| `adv_building_gym/config/data_combinator.py` | **Created** | Done |
+| `adv_building_gym/data_combinator/data_combinator.py` | **Created** (moved from `config/`) | Done |
 | `adv_building_gym/callbacks/data_schedule_callback.py` | **Created** (D1 callback) | Done |
 | `adv_building_gym/devices/statesources/base.py` | Added `reload()` + `_post_load_data_processing()` | Done |
 | `adv_building_gym/devices/statesources/outer/weather.py` | Extract → `_post_load_data_processing()` | Done |
@@ -423,16 +448,21 @@ length) are required.
 | `adv_building_gym/devices/statesources/outer/ev_state.py` | Extract → `_post_load_data_processing()` | Done |
 | `adv_building_gym/devices/statesources/outer/inside_temperature.py` | Extract → `_post_load_data_processing()` | Done |
 | `adv_building_gym/envs/building_adv.py` | Episode counter + combinator + Approach A/C | Done |
-| `adv_building_gym/config/env_config.py` | `data_combinator` field with default data | Done |
-| `adv_building_gym/config/config_manager.py` | Serialise/deserialise `DataCombinator` | Done |
+| `adv_building_gym/config/env_config.py` | `EnvConfig` dataclass (renamed from `Config`) | Done |
+| `adv_building_gym/config/env_config_manager.py` | `EnvConfigManager` — YAML serialisation (renamed from `ConfigManager`, migrated from JSON) | Done |
 | `adv_building_gym/envs/env_creator.py` | Pass `data_combinator` | Done |
-| `adv_building_gym/config/__init__.py` | Lazy export `DataCombinator` | Done |
+| `adv_building_gym/data_combinator/__init__.py` | Export `DataCombinator` | Done |
 | `adv_building_gym/callbacks/__init__.py` | Export `create_data_schedule_on_train_result` | Done |
 | `adv_building_gym/ray_training/common_model_config.py` | D1 callback wiring | Done |
 | `run_train_ray.py` | Pass `data_combinator` to `common_model_config()` | Done |
-| `configs/test1.json` | **Created** — full config with DataCombinator | Done |
+| `configs/env_test1_small.yaml` | **Created** — small env config (YAML, replaces `test1.json`) | Done |
+| `configs/env_test1_mid.yaml` | **Created** — mid env config (YAML) | Done |
+| `configs/env_test1_large.yaml` | **Created** — large env config (YAML) | Done |
+| `configs/train_data_combinator_config.yaml` | **Created** — training DataCombinator config | Done |
+| `configs/eval_data_combinator_config.yaml` | **Created** — evaluation DataCombinator config | Done |
+| `configs/training_param_config.yaml` | **Created** — algorithm hyperparameters (YAML) | Done |
 | `data/ev_usage_profiles/ev_0.csv` | **Created** — empty EV profile (no events) | Done |
-| `.gitignore` | Stopped ignoring `test1.json` | Done |
+| `data/inside_temp/inside_temp_{0..2}.csv` | **Created** — desired indoor temperature profiles | Done |
 
 ---
 
@@ -453,7 +483,7 @@ length) are required.
 5. **Approach C override**: `env.reset(options={"data_variant": {"ev_schedule": ev3}})`;
    assert `ev_state.ds_path == ev3` regardless of episode counter.
 
-6. **Serialisation roundtrip**: `ConfigManager.save(config)` / `ConfigManager.load(path)`;
+6. **Serialisation roundtrip**: `EnvConfigManager.save(config, path)` / `EnvConfigManager.load(path)` (YAML);
    assert `config.data_combinator.scenarios`, `.variable`, and `swap_every_n_episodes` are preserved. *(Passed during implementation)*
 
 7. **Training integration (Approach A)**: `python run_train_ray.py --algorithm ppo --episodes 100` with

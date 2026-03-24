@@ -34,6 +34,7 @@ augmented_paths:
     e_charts: data/e_price/e_charts
 
 # Independent variable sources
+# TODO VP 2026.03.24. : Use different profiles for eval...
 variable:
   ev_schedule:
     - data/ev_usage_profiles/ev_0.csv
@@ -42,3 +43,7 @@ variable:
     - data/ev_usage_profiles/ev_3.csv
     - data/ev_usage_profiles/ev_4.csv
     - data/ev_usage_profiles/ev_5.csv
+  desired_temp_in:
+    - data/inside_temp/inside_temp_0.csv
+    - data/inside_temp/inside_temp_1.csv
+    - data/inside_temp/inside_temp_2.csv

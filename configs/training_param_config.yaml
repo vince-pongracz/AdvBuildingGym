@@ -15,4 +15,4 @@ ppo:
 # SAC-specific (off-policy)
 sac:
   replay_batch_size: 256
-  days_to_keep_in_replay_buffer: 100
+  days_to_keep_in_replay_buffer: 1500

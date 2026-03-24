@@ -105,8 +105,12 @@ class SolarPanel(Infrastructure):
         if "solar_irradiance_norm" in states:
             self.irradiance_norm = float(states["solar_irradiance_norm"][0])
 
-        # If no external irradiance, use synthetic time-based profile
-        if self.irradiance_norm == 0.0 and "sim_hour" in states:
+        # Use synthetic irradiance ONLY when no weather data source is active.
+        # When a weather source exists, irradiance=0.0 means "no sunshine"
+        # (e.g. nighttime, overcast), not "data unavailable".
+        # The weather source writes _temp_abs_max to info when active.
+        weather_active = (info or {}).get("_temp_abs_max") is not None
+        if not weather_active and self.irradiance_norm == 0.0 and "sim_hour" in states:
             self.irradiance_norm = self._synthetic_irradiance(states)
 
         # Production = irradiance * peak_power

@@ -36,9 +36,8 @@ class DesiredUserEnergyNeed(StateSource):
             logger.debug("No initial data file for '%s', using synthetic energy need profile", name)
 
     def setup_spaces(self,
-                     state_spaces: OrderedDict,
-                     action_spaces: OrderedDict
-                     ) -> tuple[OrderedDict, OrderedDict]:
+                    state_spaces: OrderedDict,
+                    action_spaces: OrderedDict) -> tuple[OrderedDict, OrderedDict]:
         """Setup observation spaces for desired user energy need."""
 
         if "desired_energy_need" not in state_spaces.keys():

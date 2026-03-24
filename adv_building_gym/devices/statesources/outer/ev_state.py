@@ -54,6 +54,7 @@ class EVState(StateSource):
     KEY_V2G = "ev_schedule_v2g"
     KEY_START_SOC = "ev_schedule_start_soc"
     KEY_TARGET_SOC = "ev_schedule_target_soc"
+    KEY_CHARGE_TO_TARGET_HRS = "ev_schedule_charge_to_target_hrs"
 
     def __init__(
         self,
@@ -100,6 +101,7 @@ class EVState(StateSource):
                     v2g_enabled=str(row["v2g_enabled"]).strip().lower() == "true",
                     start_soc=float(row["start_soc"]),
                     target_soc=float(row["target_soc"]),
+                    charge_to_target_in_hrs=float(row["target_soc_reach_duration_h"]),
                 )
                 self._events.append((iteration_index, True, ev_spec))
                 self._event_lookup[iteration_index] = (True, ev_spec)
@@ -192,6 +194,7 @@ class EVState(StateSource):
             info[self.KEY_V2G] = (1.0 if self._current_spec.v2g_enabled else 0.0) if connected else 0.0
             info[self.KEY_START_SOC] = self._current_spec.start_soc if connected else 0.0
             info[self.KEY_TARGET_SOC] = self._current_spec.target_soc if connected else 0.0
+            info[self.KEY_CHARGE_TO_TARGET_HRS] = self._current_spec.charge_to_target_in_hrs if connected else 0.0
 
 
 ComponentRegistry.register('statesource', EVState)

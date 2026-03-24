@@ -44,8 +44,7 @@ class InsideTemperature(StateSource):
             self.ts = None
             return
 
-    # TODO VP 2026.03.10. : Crete a time series for this -- for the 4 seasons
-    # Choosing the inside_temperature profile should depend on the date -- or on user interaction, but this part comes later, keep it in the TODO comment
+    # NOTE VP 2026.03.24. : Choosing the inside_temperature profile should depend on the date -- or on user interaction, but this part comes later, keep it in the TODO comment
     def setup_spaces(self,
                     state_spaces: OrderedDict,
                     action_spaces: OrderedDict
@@ -68,15 +67,19 @@ class InsideTemperature(StateSource):
 
         When CSV data is available the raw °C value is normalised at
         runtime using the same scale as temp_in_norm / temp_out_norm
-        (MAX_ABS_SCALING with temp_abs_max from WeatherDataSource).
+        (ABS_MIN_MAX_SCALING with temp_abs_max from WeatherDataSource).
         This ensures the reward function sees comparable values.
         """
         # Shared temperature scale written by WeatherDataSource to info.
-        # Fallback 40 °C covers typical European outdoor range.
-        temp_abs_max: float = float((info or {}).get("_temp_abs_max", 40.0))
+        # Fallback 60 °C matches the default EnvConfig.temp_max.
+        temp_abs_max: float = float((info or {}).get("_temp_abs_max", 60.0))
 
         if self.ts is not None:
-            idx = min(self.effective_index, len(self.ts) - 1)
+            # Profile CSVs cover a single day (e.g. 288 rows at 5-min steps).
+            # Index by time-of-day so the profile repeats daily regardless of
+            # the actual simulation date or row_offset.
+            profile_len = len(self.ts)
+            idx = self.iteration % profile_len
             row = self.ts.iloc[idx]
             raw_temp = float(row[self._raw_column])
             self.desired_temp_in_raw = raw_temp
@@ -104,6 +107,8 @@ class InsideTemperature(StateSource):
                 desired_temp_in_norm = 0.20
             else:
                 desired_temp_in_norm = 0.25
+            # Denormalise for raw-value logging (mirrors CSV path line 82)
+            self.desired_temp_in_raw = desired_temp_in_norm * temp_abs_max
 
         # Ensure float32 dtype and clip to bounds
         desired_temp_in_norm = np.float32(np.clip(desired_temp_in_norm, -1.0, 1.0))

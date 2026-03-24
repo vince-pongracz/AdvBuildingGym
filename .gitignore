@@ -36,7 +36,9 @@ dist/
 result_**.json
 result.json
 
+# Trained models/checkpoints
 models/test1/**
+models/env_**/**
 
 # Episode metrics -- on episode end
 ep_metrics/**

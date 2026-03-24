@@ -48,3 +48,7 @@ variable:
     - data/ev_usage_profiles/ev_3.csv
     - data/ev_usage_profiles/ev_4.csv
     - data/ev_usage_profiles/ev_5.csv
+  desired_temp_in:
+    - data/inside_temp/inside_temp_0.csv
+    - data/inside_temp/inside_temp_1.csv
+    - data/inside_temp/inside_temp_2.csv

@@ -221,10 +221,10 @@ if __name__ == "__main__":
 # python run_eval_ray.py --algorithm ppo --load-config configs/my_config.yaml --episodes 10
 #
 # Evaluate latest SAC model
-# python run_eval_ray.py --algorithm sac --config-name test1 --episodes 10
+# python run_eval_ray.py --algorithm sac --config-name env_test1_{s/m/l} --episodes 10
 #
 # Evaluate specific checkpoint
-# python run_eval_ray.py --checkpoint models/test1/ray/ppo/checkpoints_ppo_seed42_20260106/best_model_ep100_...
+# python run_eval_ray.py --checkpoint models/env_test1_{s/m/l}/ray/ppo/checkpoints_ppo_seed42_20260106/best_model_ep100_...
 #
 # Evaluate without saving results
 # python run_eval_ray.py --algorithm ppo --episodes 50 --no-save

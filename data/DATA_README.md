@@ -35,7 +35,9 @@ python preproc/data_setup.py --skip-prices --steps zenodo-extract weather-csv
 - `--price-source awattar|energy-charts`: choose source API
 - `--skip-price-fetch`: skip API calls and use local raw CSVs
 - `--raw-price-files ...`: explicit local raw CSV inputs
-- `--skip-weather`: disable weather/Zenodo pipeline
+- `--skip-weather`: disable all weather pipelines (WPuQ/Zenodo and DWD)
+- `--skip-wpuq`: disable WPuQ/Zenodo weather pipeline only
+- `--skip-dwd`: disable DWD weather pipeline only
 - `--steps ...`: select which steps to run (price-fetch, price-preproc, zenodo-download, zenodo-extract, weather-csv, sfh-csv; default: all)
 - `--augment`: run price augmentation after preprocessing
 - `--augment-noise-std`: Gaussian noise std in ct/kWh (default: 0.3)

@@ -39,8 +39,10 @@ def adv_building_env_creator(config: dict) -> gymnasium.Env:
     Args:
         config: Configuration dict passed by Ray Tune. Supports:
             - ``data_combinator``: Pre-built DataCombinator instance to share
-              across environments (loaded from YAML by the training entrypoint).
-            - ``log_full_info``: Whether to log full state info.
+            across environments (loaded from YAML by the training entrypoint).
+            - ``log_full_info``: When True, enables deep-copy of named state
+            into info["state"] each step. Intended for evaluation EnvRunners
+            only (set via ``config.evaluation(env_config=...)``).
 
     Returns:
         Wrapped AdvBuildingGym with flat Box(-1, 1) action space
@@ -60,7 +62,10 @@ def adv_building_env_creator(config: dict) -> gymnasium.Env:
         rewards=rewards,
         building_props=env_config.building_props,
         data_combinator=config.get("data_combinator"),
-        # TODO VP 2026.02.24. : Clean up log_full info and trajectory logging, this is a bit hacky
-        log_full_info=config.get("log_full_info", False)
     )
+
+    # Set by Ray's evaluation env_config — only eval EnvRunners pass this.
+    if config.get("log_full_info", False):
+        env.log_full_info = True
+
     return wrap_action_space(env)

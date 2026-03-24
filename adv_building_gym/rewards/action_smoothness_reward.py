@@ -31,10 +31,10 @@ class ActionSmoothnessReward(RewardFunction):
     # TODO VP 2026.03.14. : Read the paper
     # TODO VP 2026.03.14. : Fix reward ranges and adjust reward rate computations
 
-    # max_reward = 0.0 means the best this reward can return is 0 (no penalty).
-    # It contributes nothing to max_achievable in reward_rate, but pulls down
-    # achieved_reward when actions oscillate.
-    max_reward: float = 0.0
+    # max_reward = 0.3 means perfectly smooth actions earn a small positive
+    # reward, contributing to max_achievable in reward_rate and giving the
+    # agent incentive for smooth control rather than only penalising jitter.
+    max_reward: float = 0.3
 
     def __init__(self, weight: float, name: str = "action_smoothness") -> None:
         super().__init__(weight, name)
@@ -47,7 +47,7 @@ class ActionSmoothnessReward(RewardFunction):
         return -self._n_action_keys
 
     def get_reward(self, actions: dict, states: dict) -> tuple[float, float]:
-        max_step = self.weight * self.max_reward  # 0.0 — penalty-only reward
+        max_step = self.weight * self.max_reward
         penalties: list[float] = []
 
         for key, current_action in actions.items():
@@ -76,10 +76,12 @@ class ActionSmoothnessReward(RewardFunction):
         if self._n_action_keys == 0:
             self._n_action_keys = len(penalties)
 
-        # Sum of per-key penalties; range is [-n_action_keys, 0]
-        action_diff_penalty = sum(penalties)
+        # Sum of per-key penalties; range is [-n_action_keys, 0].
+        # Shift by max_reward so smooth actions earn a positive reward
+        # instead of just zero: range becomes [max_reward - n_keys, max_reward].
+        raw_reward = self.max_reward + sum(penalties)
 
-        return float(self.weight * action_diff_penalty), max_step
+        return float(self.weight * raw_reward), max_step
 
 
 # Register with the component registry

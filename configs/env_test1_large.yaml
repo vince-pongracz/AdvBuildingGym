@@ -1,6 +1,8 @@
-env_config_name: test1
+env_config_name: env_test1_large
 EPISODE_LENGTH: 288
 control_step: 300
+temp_min: -60.0
+temp_max: 60.0
 building_props:
   mC: 300
   K: 20
@@ -12,8 +14,8 @@ infras:
   cop_cool: 2.5
 - class: BatteryTremblay
   name: battery
-  Q_electric_max: 19.0
-  cell_capacity_Ah: 3.5
+  Q_electric_max: 38.0
+  cell_capacity_Ah: 7.2
   max_charge_amps: 48.0
   max_charge_voltage: 420.0
   target_soc: 1.0
@@ -32,9 +34,8 @@ infras:
   soc_max: 0.95
 - class: LinearEVCharger
   name: ev_charger
-  Q_electric_max: 7.0
-  max_charging_kW: 7.0
-  max_cap_kWh: 60.0
+  Q_electric_max: 12.0
+  max_charging_kW: 30.0
   charger_efficiency: 0.92
   discharge_efficiency: 0.92
   v2g_enabled: true
@@ -44,8 +45,8 @@ infras:
   v2g_playroom: 0.1
 - class: SolarPanel
   name: solar
-  Q_electric_max: 5.0
-  peak_power_kW: 5.0
+  Q_electric_max: 30.0
+  peak_power_kW: 30.0
 - class: HouseholdEnergyConsumers
   name: hh_consumers
   Q_electric_max: 8.0
@@ -56,7 +57,7 @@ statesources:
   normalise: abs_min_max
 - class: WeatherDataSource
   name: weather
-  normalise: max_abs
+  normalise: abs_min_max
 - class: InsideTemperature
   name: desired_temp_in
 - class: DesiredUserEnergyNeed
@@ -65,12 +66,13 @@ statesources:
   name: building_heat_loss
 - class: EVState
   name: ev_schedule
+
 rewards:
 - class: TempReward
   weight: 1
   name: temp_reward
-  diff_threshold: 0.02
-  wrong_direction_penalty: 0.0
+  diff_threshold: 0.0001
+  wrong_direction_penalty: -1.0
   temp_const_multiplier: 5.0
 - class: EconomicReward
   weight: 1
@@ -91,12 +93,12 @@ rewards:
   diff_threshold: 0.02
   soc_diff_multiplier: 5.0
 - class: EVChargingReward
-  weight: 1
+  weight: 2
   name: ev_charging_reward
   diff_threshold: 0.02
   soc_diff_multiplier: 5.0
 - class: EVChargingOnTimeReward
-  weight: 1
+  weight: 2
   name: ev_charging_ontime_reward
 - class: ActionSmoothnessReward
   weight: 0.5

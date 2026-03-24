@@ -39,7 +39,7 @@ class EnvConfig:
     Direct access to self.infras/statesources/rewards returns shared singletons and should
     only be used for inspection, not for passing to AdvBuildingGym in parallel environments.
     """
-    env_config_name: str = "test1"
+    env_config_name: str = "env_test1_small"
 
     EPISODE_LENGTH: int = 288 # a day
     CONTROL_STEP: int = 300  # seconds (5 minutes)
@@ -48,6 +48,14 @@ class EnvConfig:
     building_props: BuildingProps = field(default_factory=lambda:
         BuildingProps(mC=300, K=20)
     )
+
+    # Fixed temperature normalisation range [°C].
+    # All temperature values (outdoor, indoor, desired setpoint) are normalised
+    # as temp_norm = temp_raw / max(|temp_min|, |temp_max|), mapping to [-1, 1].
+    # A fixed range ensures consistent normalisation across different weather
+    # datasets and temperature profiles.
+    temp_min: float = -60.0  # °C
+    temp_max: float = 60.0   # °C
 
     # Cached singleton instances (for backward compatibility and inspection)
     # WARNING: Do not pass these to parallel environments - use factory methods instead
@@ -65,9 +73,10 @@ class EnvConfig:
         Returns:
             List of newly created StateSource instances.
         """
+        temp_abs_max = max(abs(self.temp_min), abs(self.temp_max))
         return [
             EnergyPriceDataSource("E_price"),
-            WeatherDataSource("weather"),
+            WeatherDataSource("weather", temp_abs_max=temp_abs_max),
             InsideTemperature("desired_temp_in"),
             DesiredUserEnergyNeed("user_energy_need"),
             BuildingHeatLoss(
@@ -103,7 +112,6 @@ class EnvConfig:
             LinearEVCharger(
                 "ev_charger",
                 Q_electric_max=7.0,
-                max_cap_kWh=60.0,
                 max_charging_kW=7.0,
                 control_step=self.CONTROL_STEP
             ),
@@ -135,14 +143,14 @@ class EnvConfig:
             List of newly created RewardFunction instances.
         """
         return [
-            TempReward(weight=1),
+            TempReward(weight=1, diff_threshold=0.0001),
             EconomicReward(infras, weight=1),
             MinimiseEnergyConsumptionReward(weight=0.2),
             OperatorEnergyControlReward(infras, weight=1),
             BatteryTargetReward(weight=1),
             EVChargingReward(weight=1),
             EVChargingOnTimeReward(infrastructures=infras, weight=1),
-            ActionSmoothnessReward(weight=0.5),
+            # ActionSmoothnessReward(weight=0.5),
         ]
 
     def __post_init__(self):

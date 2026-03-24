@@ -1,5 +1,8 @@
 # Trajectory Logging & Metrics Tracking — Implementation Plan
 
+TODO VP: check this document, adjust its state to the current repo state
+
+
 ## Motivation
 
 Currently, evaluation-time data collection is limited:
@@ -490,7 +493,7 @@ ep_metrics/
   "length": 288,
   "metadata": {
     "env_id": "AdvBuildingGym_config1",
-    "config_name": "test1",
+    "env_config_name": "test1",
     "checkpoint_path": "models/test1/ray/ppo/best_model_ep500_..."
   },
   "summary": {

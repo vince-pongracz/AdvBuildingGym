@@ -159,6 +159,10 @@ def common_model_setup(
         env_to_module_connector=lambda env, spaces, device: FlattenObservations(),  # type: ignore
     )
     # NOTE VP 2026.03.23. : Eval during training does not really influence anything -- check whether the model checkpointing depends on this
+    # Evaluation EnvRunners get log_full_info=True so step() includes a deep
+    # copy of named state in info["state"] — needed by trajectory logging.
+    # Training EnvRunners are unaffected (no extra memory overhead).
+    eval_env_config = {"log_full_info": True} if log_trajectories else {}
     config.evaluation(
         # evaluation_interval=1 ensures `evaluation/env_runners/<metric>` is present in every
         # iteration result, which is required by tune.TuneConfig(metric=...) — it performs a strict
@@ -170,6 +174,7 @@ def common_model_setup(
         evaluation_duration=2,  # e.g., 2 episodes
         # True only if `evaluation_num_env_runners` > 0
         evaluation_parallel_to_training=False,
+        evaluation_config=AlgorithmConfig.overrides(env_config=eval_env_config),
     )
 
     # TODO VP 2026.02.11. : Check this out in HPC
