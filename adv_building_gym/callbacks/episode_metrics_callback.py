@@ -170,20 +170,26 @@ def make_episode_metrics_callback_class(
             ep_length = len(episode)
             ep_achieved_reward = np.sum(episode.get_rewards())
 
-            max_reward_per_step = sum(r.weight * r.max_reward for r in _rewards)
-            max_achievable_reward = ep_length * max_reward_per_step
+            # Sum step-wise max achievable rewards from info dicts.
+            # Each step's info contains "max_reward_step" — the sum of
+            # per-reward max values returned by get_reward() — so the
+            # total adapts to state-dependent maxima (e.g. EV rewards
+            # are 0 when the EV is disconnected).
+            max_achievable_reward = 0.0
+            cum_E_kWh = None
+            if hasattr(episode, "get_infos"):
+                infos = episode.get_infos()
+                for info in infos:
+                    if isinstance(info, dict):
+                        max_achievable_reward += info.get("max_reward_step", 0.0)
+                if infos and len(infos) > 0 and isinstance(infos[-1], dict):
+                    cum_E_kWh = infos[-1].get("cum_E_kWh")
+
             reward_rate = (
                 ep_achieved_reward / max_achievable_reward
                 if max_achievable_reward > 0
                 else 0.0
             )
-
-            # Extract cumulative energy from last info dict
-            cum_E_kWh = None
-            if hasattr(episode, "get_infos"):
-                infos = episode.get_infos()
-                if infos and len(infos) > 0 and isinstance(infos[-1], dict):
-                    cum_E_kWh = infos[-1].get("cum_E_kWh")
 
             # Register custom metrics with RLlib's metrics system
             # These appear in results under "env_runners/achieved_reward_mean" etc.

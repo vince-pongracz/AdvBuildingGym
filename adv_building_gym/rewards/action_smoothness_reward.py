@@ -46,7 +46,8 @@ class ActionSmoothnessReward(RewardFunction):
         """Minimum raw (unweighted) reward: -1 per action key."""
         return -self._n_action_keys
 
-    def get_reward(self, actions: dict, states: dict) -> float:
+    def get_reward(self, actions: dict, states: dict) -> tuple[float, float]:
+        max_step = self.weight * self.max_reward  # 0.0 — penalty-only reward
         penalties: list[float] = []
 
         for key, current_action in actions.items():
@@ -69,7 +70,7 @@ class ActionSmoothnessReward(RewardFunction):
             penalties.append(-float(np.dot(a_diff, a_diff)) / (4.0 * n_dims))
 
         if not penalties:
-            return 0.0
+            return 0.0, max_step
 
         # Update action key count on first call (stable across episode)
         if self._n_action_keys == 0:
@@ -78,7 +79,7 @@ class ActionSmoothnessReward(RewardFunction):
         # Sum of per-key penalties; range is [-n_action_keys, 0]
         action_diff_penalty = sum(penalties)
 
-        return float(self.weight * action_diff_penalty)
+        return float(self.weight * action_diff_penalty), max_step
 
 
 # Register with the component registry

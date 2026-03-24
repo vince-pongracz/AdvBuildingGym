@@ -9,16 +9,14 @@
 #   sbatch slurm_scripts/slurm_train_ray.sh [OPTIONS]
 #
 # All arguments are forwarded directly to run_train_ray.py. Available options:
-#   --algorithm ALGO          Algorithm to use (ppo, sac, ddpg, td3, a2c) [default: ppo]
+#   --algorithm ALGO          Algorithm to use (ppo, sac) [default: ppo]
 #   --config_name, -cn NAME   Configuration name for the experiment
 #   --load-config PATH        Path to YAML config file to load
 #   --save-config PATH        Path to save config as YAML
 #   --episodes N              Total training episodes [default: 3500]
 #   --timesteps N             (Deprecated, prefer --episodes) Total timesteps
-#   --num-envs N              Number of parallel environments [default: 1]
-#   --seed N                  Random seed [default: 42]
+#   --seed N                  Random seed
 #   --eval-freq N             Evaluation frequency [default: 20000]
-#   --training                Use training split of price data (always enabled)
 #   --metric METRIC           Metric to optimize (episode_return_mean, achieved_reward, reward_rate) [default: reward_rate]
 #   --checkpoint-frequency-episodes N   Checkpoint frequency in episodes [default: 20]
 #   --log-trajectories              Save per-step trajectory JSON during eval episodes [default: off]
@@ -63,7 +61,6 @@ fi
 
 # All arguments are forwarded directly to run_train_ray.py which owns the
 # defaults (algorithm, episodes, seed, metric, etc.) via argparse.
-# The only flag this script always injects is --training.
 SCRIPT_ARGS=("$@")
 
 echo "=== Starting Ray training job ==="
@@ -113,8 +110,8 @@ export TERM=dumb
 # Force unbuffered Python output for immediate log visibility
 export PYTHONUNBUFFERED=1
 
-# Build command: always inject --training, forward everything else as-is
-CMD=(python -u run_train_ray.py --training "${SCRIPT_ARGS[@]}")
+# Build command: Forward every param as they are
+CMD=(python -u run_train_ray.py "${SCRIPT_ARGS[@]}")
 
 echo "======"
 echo "Running: ${CMD[*]}"

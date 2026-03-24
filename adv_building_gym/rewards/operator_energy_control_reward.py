@@ -37,7 +37,7 @@ class OperatorEnergyControlReward(RewardFunction):
                  weight: float,
                  max_power_kW: float = 10.0,
                  name: str = "operator_energy_control_reward",
-                 harsh_penalty: float = -1.0,
+                 harsh_penalty: float = -4.0,
                  soft_threshold_pct: float = 0.9,
                  recovery_steps: int = 3,
                  ) -> None:
@@ -72,7 +72,7 @@ class OperatorEnergyControlReward(RewardFunction):
         self._step: int = 0
         self._last_violation_step: int = -recovery_steps  # no active recovery at init
 
-    def get_reward(self, actions, states) -> float:
+    def get_reward(self, actions, states) -> tuple[float, float]:
         """Calculate reward based on grid power consumption vs operator limit.
 
         Args:
@@ -80,21 +80,15 @@ class OperatorEnergyControlReward(RewardFunction):
             states: Dictionary containing "operator_energy_max" (normalized limit [0, 1]).
 
         Returns:
-            Weighted reward value.
+            Tuple of (weighted reward, weighted max reward for this step).
         """
         self._step += 1
+        max_step = self.weight * self.max_reward
 
         # Calculate total grid E consumption by summing all infrastructure consumption
         grid_power_kW = 0.0
         for infra in self.infrastructures:
             grid_power_kW += infra.get_electric_consumption(actions)
-
-        # Store in state for observability (e.g., logging, other reward functions)
-        # TODO VP 2026.01.14. : Store it in info instead?
-        # states["grid_power_kW"] = np.array([grid_power_kW], dtype=np.float32)
-        
-        # TODO VP 2026.03.01. : Check out negative reward values in the logs, investigate if they are expected (e.g., due to harsh penalty) or if there is a bug in the reward calculation.
-        # e.g: "Achieved Reward: -286.20, Reward Rate: -0.1988" --> What?
 
         # Get normalized operator limit from state [0, 1]
         operator_limit_norm = float(states.get("operator_energy_max", np.array([1.0]))[0])
@@ -106,8 +100,8 @@ class OperatorEnergyControlReward(RewardFunction):
             # If limit is 0, any consumption is a violation
             if grid_power_kW > 0:
                 self._last_violation_step = self._step
-                return float(self.weight * self.harsh_penalty)
-            return float(self.weight * 1.0)
+                return float(self.weight * self.harsh_penalty), max_step
+            return float(self.weight * 1.0), max_step
 
         ratio = grid_power_kW / operator_limit_kW
 
@@ -123,7 +117,7 @@ class OperatorEnergyControlReward(RewardFunction):
         else:
             # Above operator limit: harsh penalty and mark violation
             self._last_violation_step = self._step
-            return float(self.weight * self.harsh_penalty)
+            return float(self.weight * self.harsh_penalty), max_step
 
         # During recovery: override reward with an exponential curve from
         # harsh_penalty towards 0.  The agent earns a negative (but shrinking)
@@ -133,7 +127,7 @@ class OperatorEnergyControlReward(RewardFunction):
             reward = float(self.harsh_penalty * np.exp(
                 -self._recovery_rate * steps_since_violation))
 
-        return float(self.weight * reward)
+        return float(self.weight * reward), max_step
 
 
 # Register OperatorEnergyControlReward with the component registry

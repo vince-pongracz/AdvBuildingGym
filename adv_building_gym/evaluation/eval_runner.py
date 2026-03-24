@@ -21,7 +21,7 @@ from adv_building_gym.ray_training.rl_module_inference import (
     infer_action,
     load_rl_module,
 )
-from adv_building_gym.utils import TrajectoryCollector
+from adv_building_gym.utils import TrajectoryCollector, check_space_compatibility
 
 from .results import EpisodeStats, EvalResults
 
@@ -30,43 +30,6 @@ logger = logging.getLogger(__name__)
 
 def _timeout_handler(signum, frame):
     raise TimeoutError("Evaluation timed out")
-
-# TODO VP 2026.03.17. : Refactor it to standalone module, check reward sizes/dimensions as well
-def _check_space_compatibility(rl_module, env) -> None:
-    """Verify that the model's input/output spaces match the environment.
-
-    Raises ValueError with a diagnostic message on mismatch.
-    """
-    # Model's expected observation size (flat)
-    model_obs_size = np.prod(rl_module.observation_space.shape)
-    # Env's actual observation size (flattened Dict → flat Box)
-    env_obs_size = sum(
-        np.prod(space.shape)
-        for space in env.observation_space.spaces.values()
-    ) if hasattr(env.observation_space, "spaces") else np.prod(env.observation_space.shape)
-
-    if model_obs_size != env_obs_size:
-        raise ValueError(
-            f"Observation space mismatch: model expects {model_obs_size} features "
-            f"but the env produces {env_obs_size} features "
-            f"(difference: {env_obs_size - model_obs_size}). "
-            f"Check whether the config has changed since training "
-            f"(e.g. ACTION_HISTORY_LENGTH, added/removed statesources)."
-        )
-
-    model_act_size = np.prod(rl_module.action_space.shape)
-    env_act_size = np.prod(env.action_space.shape)
-    if model_act_size != env_act_size:
-        raise ValueError(
-            f"Action space mismatch: model expects {model_act_size} action dims "
-            f"but the env has {env_act_size} "
-            f"(difference: {env_act_size - model_act_size}). "
-            f"Check whether infrastructure components changed since training."
-        )
-
-    logger.info(
-        "Space check OK: obs=%d, act=%d", model_obs_size, model_act_size,
-    )
 
 
 def evaluate_model(
@@ -141,7 +104,10 @@ def evaluate_model(
     # is correctly rescaled to each component's real bounds.
     logger.info("Creating evaluation environment...")
     
-    # TODO VP 2026.03.17. : Why don't use the env_creator?
+    # Built manually (not via adv_building_env_creator) because the factory
+    # reads from the global env_config singleton, but eval uses an explicit
+    # active_config passed by the caller (which may differ, e.g. loaded
+    # from a JSON checkpoint).
     base_env = AdvBuildingGym(
         infras=active_config.infras,
         statesources=active_config.statesources,
@@ -158,10 +124,7 @@ def evaluate_model(
     collector = TrajectoryCollector(base_env) if log_trajectories else None
 
     env = wrap_action_space(base_env)
-    _check_space_compatibility(rl_module, env)
-    max_reward_per_step = sum(
-        r.weight * r.max_reward for r in active_config.rewards
-    )
+    check_space_compatibility(rl_module, env)
 
     episode_stats: list[EpisodeStats] = []
     start_time = time.time()
@@ -191,6 +154,7 @@ def evaluate_model(
             episode_reward = 0.0
             episode_length = 0
             episode_rewards: list[float] = []
+            max_achievable_reward = 0.0
 
             if collector is not None:
                 collector.reset()
@@ -217,6 +181,7 @@ def evaluate_model(
                 episode_reward += reward
                 episode_length += 1
                 episode_rewards.append(reward)
+                max_achievable_reward += step_info.get("max_reward_step", 0.0)
                 obs = next_obs
                 
                 done = terminated or truncated
@@ -230,7 +195,6 @@ def evaluate_model(
                 )
 
             achieved_reward = float(np.sum(episode_rewards))
-            max_achievable_reward = episode_length * max_reward_per_step
             reward_rate = (
                 achieved_reward / max_achievable_reward
                 if max_achievable_reward > 0

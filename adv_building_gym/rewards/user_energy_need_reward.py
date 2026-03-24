@@ -15,7 +15,7 @@ class UserEnergyNeedReward(RewardFunction):
     def __init__(self, weight: float, name: str = "user_energy_need_reward") -> None:
         super().__init__(weight, name)
 
-    def get_reward(self, actions, states) -> float:
+    def get_reward(self, actions, states) -> tuple[float, float]:
         """Calculate reward based on meeting desired energy need.
 
         Penalizes underproduction but does not penalize overproduction.
@@ -25,7 +25,7 @@ class UserEnergyNeedReward(RewardFunction):
             states: Dictionary containing 'desired_energy_need' state
 
         Returns:
-            Reward value (higher when actual energy meets or exceeds desired need)
+            Tuple of (reward, max_reward_for_this_step).
         """
         # Get desired energy need from states
         desired_energy = float(states.get("desired_energy_need", [0.0])[0])
@@ -46,7 +46,7 @@ class UserEnergyNeedReward(RewardFunction):
             shortfall = desired_energy - actual_energy
             reward = np.exp(-shortfall)
 
-        return float(self.weight * reward)
+        return float(self.weight * reward), self.weight * self.max_reward
 
 
 # Register UserEnergyNeedReward with the component registry

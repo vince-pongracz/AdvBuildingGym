@@ -45,6 +45,7 @@ class InsideTemperature(StateSource):
             return
 
     # TODO VP 2026.03.10. : Crete a time series for this -- for the 4 seasons
+    # Choosing the inside_temperature profile should depend on the date -- or on user interaction, but this part comes later, keep it in the TODO comment
     def setup_spaces(self,
                     state_spaces: OrderedDict,
                     action_spaces: OrderedDict

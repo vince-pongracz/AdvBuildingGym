@@ -11,6 +11,7 @@ When ``--hdf5`` is omitted the script auto-discovers the latest
 """
 
 # TODO VP 2026.03.16. : Just as an idea -- Reward the reward smoothness?
+# That would prevent immediate full charging actions, as if the EV is connected, it's a huge jump in rewards if charge is possible as well.
 
 from __future__ import annotations
 
@@ -31,6 +32,7 @@ from .plot_states import plot_states
 from .plot_actions import plot_actions
 from .plot_rewards import plot_rewards
 from .plot_energy import ENERGY_SIGN_CONVENTION_HTML, plot_energy
+from .plot_raw import plot_raw
 
 logger = logging.getLogger("trajectory_plot")
 
@@ -75,6 +77,7 @@ def generate_all_plots(
         "actions": plot_actions(episode),
         "rewards": plot_rewards(episode),
         "energy": plot_energy(episode),
+        "raw": plot_raw(episode),
     }
 
     # Per-figure-group footnotes rendered as separate HTML divs below the plots

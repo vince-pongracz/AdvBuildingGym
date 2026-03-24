@@ -7,6 +7,7 @@ plot_states  – state variable plots
 plot_actions – action dimension plots
 plot_rewards – reward breakdown plots
 plot_energy  – energy / power plots
+plot_raw     – raw (unnormalised) physical value plots
 """
 
 from plotting.utils import EpisodeData, find_latest_hdf5, load_episode
@@ -14,6 +15,7 @@ from .plot_states import plot_states
 from .plot_actions import plot_actions
 from .plot_rewards import plot_rewards
 from .plot_energy import plot_energy
+from .plot_raw import plot_raw
 
 __all__ = [
     "EpisodeData",
@@ -23,6 +25,7 @@ __all__ = [
     "plot_actions",
     "plot_rewards",
     "plot_energy",
+    "plot_raw",
     "generate_all_plots",
 ]
 

@@ -169,8 +169,6 @@ Paper:
 New idea for my thesis:
 - predict actions and states for N steps (model based RL) -- MPC and Monte Carlo sims would be something like this
 
-TODO VP: Check again on nan values in datasources... -- or should the model deal sensory issues as well?
-
 #### State of the Art of Machine Learning Models in Energy Systems, a Systematic Review
 
 Link: https://www.mdpi.com/1996-1073/12/7/1301
@@ -216,13 +214,41 @@ Summary:
 - not maintained anymore: Gym-Eplus [10], ModelicaGym, [41], Tropical Precooling Environment [42], COmprehensive Building, Simulator (COBS) [43], and RL-EmsPy
 - GridLearn [45] and Grid2Op [46] -- rahter grid management and not BEO
 - it seems like they do not use price data
-- it seems like they only use TMY (typical meterological year -- median weather data over multiyear period)
-- 
+- it seems like they only use TMY (typical meterological year -- median weather data over multiyear period), not daily weather data
+- RL
 
+TODO VP: Idea -- maybe it is easier to have MA setup with distinct state spaces -- then each agent NN has its own input heads (general input heads and specific input heads)
+The problem is the state space inputs -- that can't be changed easily.
+What if each state source / input has a pre-net, which translates the actual state to an intermediate N long vector -- each state variable/state source (history with K steps) would be mapped to an N long vector (only an N long vector, so it's an encoder...) -- state-source encoder? Trained to have an intermediate representation about the specific statesource.
 
 TODO VP: Google DeepMind -- they reduced their energy usage as well, take a look onto that
-TODO VP: what is EnergyPlus? https://energyplus.readthedocs.io/en/latest/api.html
 
+##### EnergyPlus -- simulator:
+
+Link: https://energyplus.readthedocs.io/en/latest/api.html
+
+GitHub: https://github.com/NatLabRockies/EnergyPlus
+
+Summary:
+- What is it? An energy analysis and thermal load simulation program for buildings
+- a mighty simulator/simulation engine
+- Deals with building geometry, materials, HVAC systems, thermal calculations and energy usage
+- OpenSource
+- processes building config and weather time series
+
+Conclusion:
+- just simulator, no RL, no config management
+- no building wide generalisation targeted -- EnergyPlus simulates buildings, nothing more
+
+
+
+#### Explicable Reward Design for Reinforcement Learning Agents
+
+Link to paper: https://machineteaching.mpi-sws.org/files/papers/explicable_reward_design.pdf
+
+Summary:
+- it's about reward design, how to design explainable rewards -- what are the mathematical criteria
+- explainable: informativeness and spareseness -- tradeoff
 
 
 #### Key Features

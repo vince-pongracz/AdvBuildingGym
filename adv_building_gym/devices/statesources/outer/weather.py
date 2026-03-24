@@ -67,7 +67,7 @@ class WeatherDataSource(StateSource):
                         "WeatherDataSource '%s': %d NaN values in '%s', "
                         "forward/back-filling", self.name, n_nan, col,
                     )
-                    self.ts[col] = self.ts[col].ffill().bfill()
+                    self.ts[col] = self.ts[col].fillna(0)
 
         cols = {
             "temp_amb": "temp_out_norm",

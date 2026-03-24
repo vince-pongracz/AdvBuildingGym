@@ -142,8 +142,6 @@ RLlib has a built-in offline data recording system (`config.offline_data(output=
 1. **Callback-based logging** (Option B — primary for training-time eval): Extract trajectory from `episode.get_infos()` at `on_episode_end`, gated by `env_runner.config.in_evaluation` + configurable flag.
 2. **Standalone eval script** (Option A): Use the same extraction utility, but fed from step-by-step `info` dicts collected in the eval loop. Needed because `run_eval_ray.py` does not use RLlib callbacks — it runs its own `env.step()` loop.
 
-TODO VP: Option to use rllib eval in the eval script as well? -- to use rllib callbacks.
-
 ---
 
 ## Current Architecture Summary
@@ -164,7 +162,7 @@ The `info["state"]` contains a full deep copy of all named state variables at ea
 
 ## Decisions (Resolved)
 
-1. **Save format:** JSON — one JSON file per episode. TODO VP: Maybe use some binary dataformat, which is suitable (parquet, hdf, other options?)
+1. **Save format:** JSON — one JSON file per episode and hdf.
 2. **Training-time logging:** Configurable on/off. When on, trajectory logging runs during training evaluation episodes (gated by `env_runner.config.in_evaluation` + a config flag). Off by default.
 3. **Plotting utilities:** Separate scope — not part of this plan.
 4. **Storage structure:** One file per episode. All episodes from a single eval run go under a dedicated directory: `<output_base>/<run_id>/episode_<N>_trajectory.json`.

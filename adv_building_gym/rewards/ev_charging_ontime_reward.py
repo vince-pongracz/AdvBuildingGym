@@ -18,7 +18,7 @@ class EVChargingOnTimeReward(RewardFunction):
     the target can be achieved given the remaining time and charging capacity.
 
     Reward calculation:
-    - If EV not connected: reward = 1.0 (neutral, no penalty -- this objective is fulfilled when EV is not present)
+    - If EV not connected: reward = 0 (max reward also 0)
     - If target SoC already achieved (soc >= target_soc): reward = 1
     - Otherwise: reward = max(0, 1 - (energy_needed / energy_achievable))
 
@@ -56,7 +56,7 @@ class EVChargingOnTimeReward(RewardFunction):
         self.charger_efficiency = ev_charger.charger_efficiency
         self.max_charge_time_hrs = ev_charger.max_charge_time_hrs
 
-    def get_reward(self, _actions: Dict, states: Dict) -> float:
+    def get_reward(self, actions: Dict, states: Dict) -> tuple[float, float]:
         """Calculate EV charging progress reward.
 
         Args:
@@ -64,23 +64,22 @@ class EVChargingOnTimeReward(RewardFunction):
             states: Dictionary of current environment states
 
         Returns:
-            Weighted reward in range [0, weight]:
-            - 0 if EV not connected or behind schedule
-            - weight if target achieved or on track
+            Tuple of (reward, max_reward_for_this_step):
+            - (0, 0) if EV not connected
+            - (weight, weight) if target achieved or on track
         """
         ev_connected = states["ev_connected"][0]
 
-        # No reward if EV not connected
         if ev_connected < 0.5:
-            # Neutral reward when EV is not present, as this objective is fulfilled when EV is not present
-            return self.weight * 1.0 
+            return 0.0, 0.0
 
+        max_step = self.weight * self.max_reward
         current_soc = states["ev_soc"][0]
         target_soc = states["ev_target_soc"][0]
 
         # Max reward if target already achieved
         if current_soc >= target_soc:
-            return self.weight * 1.0
+            return self.weight * 1.0, max_step
 
         # Denormalize remaining time from [0, 1] to hours
         normalized_time = states["ev_charge_to_target_hrs_norm"][0]
@@ -96,7 +95,7 @@ class EVChargingOnTimeReward(RewardFunction):
         # Avoid division by zero
         if energy_achievable <= 0:
             # No time left, can't achieve target
-            return 0.0
+            return 0.0, max_step
 
         # Calculate ratio of needed vs achievable energy
         ratio = energy_needed / energy_achievable
@@ -105,7 +104,7 @@ class EVChargingOnTimeReward(RewardFunction):
         # Clipped to [0, 1] - no negative rewards
         reward = max(0.0, 1.0 - ratio)
 
-        return self.weight * reward
+        return self.weight * reward, max_step
 
 
 # Register EVChargingReward with the component registry

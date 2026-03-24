@@ -132,11 +132,15 @@ def plot_states(episode: EpisodeData) -> list[go.Figure]:
 
         if all_data:
             combined = np.concatenate([d.ravel() for d in all_data])
-            y_lo = -1.0 if float(np.nanmin(combined)) < 0 else 0.0
-            fig.update_yaxes(
-                range=[min(y_lo, float(np.nanmin(combined))),
-                       max(1.0, float(np.nanmax(combined)))],
-            )
+            if np.all(np.isnan(combined)):
+                # All values masked (e.g. EV disconnected entire episode)
+                fig.update_yaxes(range=[0.0, 1.0])
+            else:
+                y_lo = -1.0 if float(np.nanmin(combined)) < 0 else 0.0
+                fig.update_yaxes(
+                    range=[min(y_lo, float(np.nanmin(combined))),
+                           max(1.0, float(np.nanmax(combined)))],
+                )
 
         apply_day_xaxis(fig)
         fig.update_layout(title=f"{title}  —  {suffix}", height=350)

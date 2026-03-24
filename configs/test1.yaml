@@ -1,104 +1,103 @@
-config_name: test1
+env_config_name: test1
 EPISODE_LENGTH: 288
-EPISODES_IN_ITERATION: 25
 control_step: 300
-
 building_props:
   mC: 300
   K: 20
-
 infras:
-  - class: HP
-    name: HP
-    Q_electric_max: 1000.0
-    cop_heat: 3.0
-    cop_cool: 2.5
-
-  - class: BatteryTremblay
-    name: battery
-    Q_electric_max: 19.0
-    cell_capacity_Ah: 3.5
-    max_charge_amps: 48.0
-    max_charge_voltage: 420.0
-    target_soc: 1.0
-    max_charge_rate: 1.5
-    history_length: 4
-    E0: 3.2
-    K: 0.009
-    A: 0.468
-    B: 3.529
-    R_cell: 0.01
-    n_series: 125
-    n_parallel: 10
-    charge_efficiency: 0.95
-    discharge_efficiency: 0.95
-    soc_min: 0.1
-    soc_max: 0.95
-
-  - class: LinearEVCharger
-    name: ev_charger
-    Q_electric_max: 7.0
-    max_charging_kW: 7.0
-    max_cap_kWh: 60.0
-    charger_efficiency: 0.92
-    discharge_efficiency: 0.92
-    v2g_enabled: true
-    history_length: 4
-    target_soc: 0.9
-
-  - class: SolarPanel
-    name: solar
-    Q_electric_max: 5.0
-    peak_power_kW: 5.0
-
-data_combinator:
-  scenarios:
-    - weather: data/eval1/LLEC_outdoor_temperature_5min_data.csv
-      E_price: data/e_price/price_data_2025_1.csv
-  variable:
-    ev_schedule:
-      - data/ev_usage_profiles/ev_0.csv
-      - data/ev_usage_profiles/ev_1.csv
-      - data/ev_usage_profiles/ev_2.csv
-      - data/ev_usage_profiles/ev_3.csv
-      - data/ev_usage_profiles/ev_4.csv
-      - data/ev_usage_profiles/ev_5.csv
-  swap_every_n_episodes: 10
-  mode: cycle
-
+- class: HP
+  name: HP
+  Q_electric_max: 5.0
+  cop_heat: 3.0
+  cop_cool: 2.5
+- class: BatteryTremblay
+  name: battery
+  Q_electric_max: 19.0
+  cell_capacity_Ah: 3.5
+  max_charge_amps: 48.0
+  max_charge_voltage: 420.0
+  target_soc: 1.0
+  max_charge_rate: 1.5
+  history_length: 4
+  E0: 3.2
+  K: 0.009
+  A: 0.468
+  B: 3.529
+  R_cell: 0.01
+  n_series: 125
+  n_parallel: 10
+  charge_efficiency: 0.95
+  discharge_efficiency: 0.95
+  soc_min: 0.1
+  soc_max: 0.95
+- class: LinearEVCharger
+  name: ev_charger
+  Q_electric_max: 7.0
+  max_charging_kW: 7.0
+  max_cap_kWh: 60.0
+  charger_efficiency: 0.92
+  discharge_efficiency: 0.92
+  v2g_enabled: true
+  history_length: 4
+  target_soc: 0.9
+  max_charge_time_hrs: 24.0
+  v2g_playroom: 0.1
+- class: SolarPanel
+  name: solar
+  Q_electric_max: 5.0
+  peak_power_kW: 5.0
+- class: HouseholdEnergyConsumers
+  name: hh_consumers
+  Q_electric_max: 8.0
+  peak_consumption_kW: 8.0
 statesources:
-  - class: EnergyPriceDataSource
-    name: E_price
-
-  - class: WeatherDataSource
-    name: weather
-    normalise: max_abs
-
-  - class: InsideTemperature
-    name: desired_temp_in
-
-  - class: DesiredUserEnergyNeed
-    name: user_energy_need
-
-  - class: BuildingHeatLoss
-    name: building_heat_loss
-
+- class: EnergyPriceDataSource
+  name: E_price
+  normalise: abs_min_max
+- class: WeatherDataSource
+  name: weather
+  normalise: max_abs
+- class: InsideTemperature
+  name: desired_temp_in
+- class: DesiredUserEnergyNeed
+  name: user_energy_need
+- class: BuildingHeatLoss
+  name: building_heat_loss
+- class: EVState
+  name: ev_schedule
 rewards:
-  - class: TempReward
-    weight: 1
-    name: temp_reward
-    diff_threshold: 0.3
-
-  - class: EconomicReward
-    weight: 1
-    name: economic_reward
-
-  - class: MinimiseEnergyConsumption_Reward
-    weight: 1
-    name: E_consumption_reward
-
-  - class: OperatorEnergyControlReward
-    weight: 1
-    max_power_kW: 10.0
-    name: operator_energy_control_reward
-    harsh_penalty: -2.0
+- class: TempReward
+  weight: 1
+  name: temp_reward
+  diff_threshold: 0.02
+  wrong_direction_penalty: 0.0
+  temp_const_multiplier: 5.0
+- class: EconomicReward
+  weight: 1
+  name: economic_reward
+- class: MinimiseEnergyConsumptionReward
+  weight: 0.2
+  name: E_consumption_reward
+- class: OperatorEnergyControlReward
+  weight: 1
+  max_power_kW: 10.0
+  name: operator_energy_control_reward
+  harsh_penalty: -4.0
+  soft_threshold_pct: 0.9
+  recovery_steps: 3
+- class: BatteryTargetReward
+  weight: 1
+  name: battery_target_reward
+  diff_threshold: 0.02
+  soc_diff_multiplier: 5.0
+- class: EVChargingReward
+  weight: 1
+  name: ev_charging_reward
+  diff_threshold: 0.02
+  soc_diff_multiplier: 5.0
+- class: EVChargingOnTimeReward
+  weight: 1
+  name: ev_charging_ontime_reward
+- class: ActionSmoothnessReward
+  weight: 0.5
+  name: action_smoothness

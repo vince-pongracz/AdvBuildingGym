@@ -15,7 +15,6 @@ from adv_building_gym.devices.statesources import StateSource
 from adv_building_gym.rewards import RewardFunction
 from adv_building_gym.devices.infrastructure import Infrastructure
 
-from adv_building_gym.utils.temporal_features import TemporalFeatureBuffer
 from adv_building_gym.utils.warning_filters import setup_warning_filters
 from adv_building_gym.envs.data_variant import DataVariantProvider
 from adv_building_gym.envs.utils import BuildingProps
@@ -52,6 +51,27 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
     - Rewards are the sum of values returned by each configured RewardFunction.
     - The environment keeps a simple iteration counter and exposes cumulative
         energy and other datasource-provided signals in the state dict.
+
+    Data contract — observation vs. info
+        The environment maintains three distinct data channels:
+
+        1. **Observation space** (``self.state`` / ``observation_space``):
+           Policy-relevant values only. Every key is registered via
+           ``setup_spaces()`` with bounded ``Box`` limits and normalised to
+           small ranges ([-1, 1], [0, 1], or [0, 24] for ``sim_hour``).
+           The RL policy sees exactly these keys (after ``FlattenObservations``).
+
+        2. **Component info** (``self._component_info``):
+           Shared inter-component dict for raw physical values that other
+           components need but the policy must not see (e.g. EV schedule
+           kWh/kW capacities, ``_temp_abs_max`` scale factor). Passed as
+           the ``info`` argument to ``update_state()`` and ``exec_action()``.
+
+        3. **Step/reset info** (returned to the caller):
+           Diagnostics and logging data: reward breakdown, energy totals
+           (``cum_E_kWh``, ``step_power_kW``), episode metadata, and
+           ``info["raw"]`` containing denormalised physical values collected
+           from component attributes ending in ``_raw``.
     Initialization (constructor arguments)
     - infras: list[Infrastructure]
             Infrastructure objects that define actions, their effects and setup logic.
@@ -200,6 +220,9 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         self._episode_date: str = ""
         self._episode_day_mode: str = "none"
 
+        # Build observation and action spaces from components.
+        # Only normalised, bounded values belong here — raw physical
+        # quantities (kWh, °C, kW) go into _component_info instead.
         observation_space = OrderedDict()
         action_space = OrderedDict()
 
@@ -274,8 +297,18 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         # dict in info["state"]. Expensive in memory — enable for evaluation only.
         self.log_full_info: bool = log_full_info
 
-        # TODO VP 2025.12.09. : inspect this -- drop it, it is not useful for us for now
-        self.temporal_features = TemporalFeatureBuffer(window_size=self.prediction_horizon)
+        # Cache raw-attribute names for _get_raw_state_values().
+        # Scanned once at init rather than using dir() every step.
+        self._raw_attr_cache: list[tuple[object, str]] = []
+        self._temp_abs_max_source: object | None = None
+        for src in self.statesources + self.infras:
+            for attr_name in dir(src):
+                if attr_name.endswith("_raw") and not attr_name.startswith("_"):
+                    val = getattr(src, attr_name, None)
+                    if val is not None and not callable(val):
+                        self._raw_attr_cache.append((src, attr_name))
+            if hasattr(src, "temp_abs_max"):
+                self._temp_abs_max_source = src
 
         logger.debug("AdvBuildingGym created!")
         logger.debug("  Objectives: %s", [rew.name for rew in rewards])
@@ -299,7 +332,7 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
             if state_src.name in variant:
                 state_src.reload(variant[state_src.name])
 
-    # TODO VP 2026.03.10. : This does not belong strictly to the env...
+    # TODO VP 2026.03.10. : This does not belong strictly to the env... -- how to refactor it?
     def _resolve_episode_date(self, row_offset: int) -> str:
         """Derive a date string from the row offset using the first statesource with a 'start' column."""
         for src in self.statesources:
@@ -390,13 +423,14 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         for infr in self.infras:
             infr.update_state(self.state, info=self._component_info)
 
-        # ======= Pass initial state to info ========
+        # Reset info — episode metadata and raw values for logging.
+        # None of these keys are part of the observation space.
         info = {
             "seed": seed,
             "episode_date": self._episode_date,
             "episode_day_mode": self._episode_day_mode,
             "data_variant": variant if variant else None,
-            "component_info": dict(self._component_info),
+            "raw": self._get_raw_state_values(),  # Denormalised physical values (°C, €, etc.)
         }
         if self.log_full_info:
             info["state"] = {k: np.array(v, copy=True) for k, v in self.state.items()}
@@ -475,10 +509,13 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         # Calculate reward with per-function breakdown
         reward: float = 0
         reward_breakdown = {}
+        max_reward_step: float = 0
         for rew_f in self.reward_funcs:
-            rew_val = float(np.asarray(rew_f.get_reward(action, self.state)).item())
+            rew_val, rew_max = rew_f.get_reward(action, self.state)
+            rew_val = float(np.asarray(rew_val).item())
             reward_breakdown[rew_f.name] = rew_val
             reward += rew_val
+            max_reward_step += rew_max
 
         # Track executed actions in a rolling history window (oldest first, newest last).
         # Must happen AFTER reward computation so that ActionSmoothnessReward can
@@ -500,24 +537,24 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         for key, val in self.state.items():
             if isinstance(val, np.ndarray) and not np.all(np.isfinite(val)):
                 logger.error("NaN/Inf in state['%s']: %s (episode %d, step %d) — replaced with 0",
-                             key, val, self.episode_count, self.iteration)
+                            key, val, self.episode_count, self.iteration)
                 self.state[key] = np.where(np.isfinite(val), val, np.zeros_like(val))
 
         # Check if episode should terminate (iteration already incremented above)
         terminated = self.is_done()
         truncated = False
 
-        # TODO VP 2026.03.19. : Rethink what has to be stored in the info for each step...
+        # Step info — diagnostics and raw values for logging/evaluation.
+        # None of these keys are part of the observation space.
         info = {
             "action": action,  # Dict format (clipped)
             "reward": reward,
             "reward_breakdown": reward_breakdown,
+            "max_reward_step": max_reward_step,  # Step-wise max achievable reward
             "cum_E_kWh": self.cum_E_kWh,  # Cumulative net energy (positive=consumption, negative=production)
             "step_power_kW": total_power_kW,  # Instantaneous net power at this step
             "power_breakdown": power_breakdown,  # Per-infrastructure power (kW)
-            "episode_date": self._episode_date,
-            "component_info": dict(self._component_info),
-            **self._get_raw_state_values(),
+            "raw": self._get_raw_state_values(),  # Denormalised physical values (°C, €, etc.)
         }
         if self.log_full_info:
             info["state"] = {k: np.array(v, copy=True) for k, v in self.state.items()}
@@ -528,30 +565,38 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
     # original values are stored as well in the info dict -- to show real data later in the plots
 
     def _get_raw_state_values(self) -> dict[str, float]:
-        """Collect raw (unnormalised) values from all state sources.
+        """Collect raw (unnormalised) physical values from all components.
 
-        Each state source may expose ``*_raw`` attributes that hold the
-        original physical values before normalisation.  This method
-        iterates over all sources, picks up every attribute ending in
-        ``_raw``, and also derives ``temp_in_raw`` from the normalised
-        indoor temperature using the weather scale factor.
+        Uses a cache of ``(component, attribute_name)`` pairs built once
+        at ``__init__`` time, avoiding a ``dir()`` scan every step.
+        Also derives ``temp_in_raw`` by denormalising the simulated
+        indoor temperature.
         """
+        # TODO VP 2026.03.23. : Continue here
+        # TODO VP 2026.03.23. : encourage exploration more
+        # TODO VP 2026.03.23. : Use more history as state input
+        # TODO VP 2026.03.23. : Plot all eval curves together -- with avg and variance
+        # TODO VP 2026.03.23. : Why no charging in 20260323_1644_eval? And hp is not working as well, however it should heat.
+        # TODO VP 2026.03.23. : Switch off action smooting
+        # TODO VP 2026.03.23. : How is that possible, that the raw temperatures are near to 0 celsius?
+        # TODO VP 2026.03.23. : At raw value plotting, only temp is plotted -- what about the other stuff, energy for each element?
+        # TODO VP 2026.03.23. : Remove default values from methods and functions where it is not needed
+        # TODO VP 2026.03.23. : Check whether currently passed params really needed for the functions/methods
+        # TODO VP 2026.03.23. : Add standalone input and output heads for the policy NN, fix the core policy NN -- investigate this option
+        
         raw: dict[str, float] = {}
-        temp_abs_max = 1.0
+        for src, attr_name in self._raw_attr_cache:
+            raw[attr_name] = float(getattr(src, attr_name))
 
-        for src in self.statesources + self.infras:
-            # Collect any attribute ending in '_raw' exposed by a component
-            for attr_name in dir(src):
-                if attr_name.endswith("_raw") and not attr_name.startswith("_"):
-                    raw[attr_name] = float(getattr(src, attr_name))
-            # Cache weather scale factor for temp_in_raw derivation
-            if hasattr(src, "temp_abs_max"):
-                temp_abs_max = float(src.temp_abs_max)
-
-        # temp_in_norm is a simulated value using the same scale as
-        # temp_out_norm (MAX_ABS_SCALING with temp_abs_max)
-        temp_in_norm = float(self.state.get("temp_in_norm", 
-                                            np.zeros(1, dtype=np.float32),)[0])
+        # temp_in_raw: denormalise simulated indoor temperature
+        temp_abs_max = (
+            float(self._temp_abs_max_source.temp_abs_max)
+            if self._temp_abs_max_source is not None
+            else 1.0
+        )
+        temp_in_norm = float(
+            self.state.get("temp_in_norm", np.zeros(1, dtype=np.float32))[0]
+        )
         raw["temp_in_raw"] = temp_in_norm * temp_abs_max
 
         return raw

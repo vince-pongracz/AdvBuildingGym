@@ -59,9 +59,6 @@ class TrajectoryCollector:
         self.reward_names: list[str] = []
         if hasattr(env, "reward_funcs"):
             self.reward_names = [r.name for r in env.reward_funcs]
-        self.max_reward_per_step: float = 0.0
-        if hasattr(env, "reward_funcs"):
-            self.max_reward_per_step = sum(r.weight * r.max_reward for r in env.reward_funcs)
 
         self._initial_info: dict | None = None
         self._step_infos: list[dict] = []
@@ -127,11 +124,15 @@ class TrajectoryCollector:
                     values.append(float(act.flat[d]))
                 trajectory[col] = values
 
-        # Compute summary
+        # Compute summary using step-wise max rewards from info dicts
         rewards = trajectory.get("reward", [])
         achieved_reward = sum(rewards)
         ep_length = len(self._step_infos)
-        max_achievable = ep_length * self.max_reward_per_step
+        max_achievable = sum(
+            info.get("max_reward_step", 0.0)
+            for info in self._step_infos
+            if isinstance(info, dict)
+        )
         reward_rate = achieved_reward / max_achievable if max_achievable > 0 else 0.0
         cum_values = trajectory.get("cum_E_kWh", [])
         final_cum_E = cum_values[-1] if cum_values else 0.0

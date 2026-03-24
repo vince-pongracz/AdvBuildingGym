@@ -13,15 +13,16 @@ class EVChargingReward(RewardFunction):
     when |ev_soc - ev_target_soc| is within a small threshold, decaying
     smoothly as the gap grows.
 
-    When the EV is not connected the objective is trivially satisfied
-    and the reward is 1.0 (neutral).
+    When the EV is not connected the reward is 0 and the step-wise
+    max reward is also 0, so disconnected periods do not inflate
+    the reward rate.
     """
 
     def __init__(self,
-                 weight: float,
-                 name: str = "ev_charging_reward",
-                 diff_threshold: float = 0.02,
-                 soc_diff_multiplier: float = 5.0) -> None:
+                weight: float,
+                name: str = "ev_charging_reward",
+                diff_threshold: float = 0.02,
+                soc_diff_multiplier: float = 5.0) -> None:
         """
         Args:
             weight: Reward weight for multi-objective optimisation.
@@ -35,11 +36,11 @@ class EVChargingReward(RewardFunction):
         self.diff_threshold = diff_threshold
         self.soc_diff_multiplier = soc_diff_multiplier
 
-    def get_reward(self, _actions, states) -> float:
+    def get_reward(self, actions, states) -> tuple[float, float]:
         ev_connected = float(states["ev_connected"][0])
 
         if ev_connected < 0.5:
-            return self.weight * 1.0
+            return 0.0, 0.0
 
         current_soc = float(states["ev_soc"][0])
         target_soc = float(states["ev_target_soc"][0])
@@ -50,7 +51,7 @@ class EVChargingReward(RewardFunction):
         else:
             reward = float(np.exp(-soc_diff * self.soc_diff_multiplier))
 
-        return self.weight * reward
+        return self.weight * reward, self.weight * self.max_reward
 
 
 ComponentRegistry.register('reward', EVChargingReward)

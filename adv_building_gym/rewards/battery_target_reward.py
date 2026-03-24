@@ -6,7 +6,7 @@ from .base import RewardFunction
 from adv_building_gym.config.utils.serializable import ComponentRegistry
 
 
-# TODO VP 2026.03.20. : Create a general TargetReward class, which provides some reward modes, but basically rewards getting closer to a target
+# NOTE VP 2026.03.20. : Create a general TargetReward class, which provides some reward modes, but basically rewards getting closer to a target
 class BatteryTargetReward(RewardFunction):
     """Reward for keeping the battery state-of-charge close to its target.
 
@@ -33,7 +33,7 @@ class BatteryTargetReward(RewardFunction):
         self.diff_threshold = diff_threshold
         self.soc_diff_multiplier = soc_diff_multiplier
 
-    def get_reward(self, actions, states) -> float:
+    def get_reward(self, actions, states) -> tuple[float, float]:
         current_pct = float(states["battery_pct"][0])
         target_pct = float(states["battery_target_pct"][0])
         soc_diff = abs(current_pct - target_pct)
@@ -43,7 +43,7 @@ class BatteryTargetReward(RewardFunction):
         else:
             reward = float(np.exp(-soc_diff * self.soc_diff_multiplier))
 
-        return self.weight * reward
+        return self.weight * reward, self.weight * self.max_reward
 
 
 ComponentRegistry.register('reward', BatteryTargetReward)

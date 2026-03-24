@@ -7,7 +7,7 @@ seed: 42
 shuffle: true
 
 # Variant cycling settings
-swap_every_n_episodes: 10
+swap_every_n_episodes: 2
 mode: cycle       # "cycle" (round-robin) or "random"
 day: random       # "random", "each", or a date string like "2025-03-15"
 
@@ -31,7 +31,7 @@ scenario_sources:
 # Augmented data discovery paths (used when include_augmented is true)
 augmented_paths:
   # TODO VP 2026.03.13. : add WPuQ weather data as well to the data combinator config
-  # TODO VP 2026.03.13. : test1.json should be rather a yaml (to allow comments, etc..), and a combinator would be needed there as well -- 
+  # TODO VP 2026.03.13. : A combinator would be needed as well for the infra items config -- 
   # only 1 infra element should change at a time.
   # for N episodes a config is fixed, then 1 aspect changes in it -- trains on that as well, then another aspect changes -- trains again...
   weather_dir: data/weather/dwd/preprocessed

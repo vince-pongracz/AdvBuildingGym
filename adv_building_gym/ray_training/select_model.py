@@ -67,7 +67,7 @@ def select_model(
             lr=training_config.learning_rate,
             train_batch_size_per_learner=ppo_batch_timesteps,
             minibatch_size=training_config.ppo_minibatch_size,
-            num_epochs=4,
+            num_epochs=training_config.ppo_num_epochs,
             use_critic=True,
             use_gae=True,
             use_kl_loss=True,
@@ -92,7 +92,7 @@ def select_model(
             alpha_lr=training_config.learning_rate,  # Influences weight of entropy -- and thus exploration
             replay_buffer_config={
                 "type": "EpisodeReplayBuffer",
-                "capacity": 100000,
+                "capacity": episode_length * training_config.sac_days_to_keep_in_replay_buffer,
             },
             # SAC-specific hyperparameters
             twin_q=True,  # Use twin Q-networks to reduce overestimation bias

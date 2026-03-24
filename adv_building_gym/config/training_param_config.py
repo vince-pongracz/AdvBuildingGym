@@ -37,21 +37,42 @@ class TrainingParamConfig:
     """
 
     learning_rate: float = 3e-4
+    episode_lookback_horizon_steps: int = 12
+    seed: int = 42
+    max_episodes_to_run:int = 10000
+    
     ppo_episodes_per_iteration: int = 25
     ppo_minibatch_size: int = 64
+    ppo_num_epochs: int = 20
+    
     sac_replay_batch_size: int = 256
-    seed: int = 42
+    sac_days_to_keep_in_replay_buffer: int = 100
 
     @staticmethod
     def from_yaml(path: str | Path) -> "TrainingParamConfig":
         """Load training config from a YAML file.
 
+        The YAML is organised into ``common``, ``ppo``, and ``sac`` sections.
+        Keys inside ``ppo`` / ``sac`` are prefixed with the algorithm name
+        (e.g. ``ppo.episodes_per_iteration`` → ``ppo_episodes_per_iteration``)
+        before being passed to the dataclass constructor.
+
         Args:
             path: Path to the YAML config file.
 
         Returns:
-            TrainingConfig populated from the file.
+            TrainingParamConfig populated from the file.
         """
         with open(path, "r") as f:
             data = yaml.safe_load(f)
-        return TrainingParamConfig(**data)
+
+        flat: dict = {}
+        for section in ("common", "ppo", "sac"):
+            section_data = data.pop(section, {}) or {}
+            prefix = "" if section == "common" else f"{section}_"
+            for key, value in section_data.items():
+                flat[f"{prefix}{key}"] = value
+        # Allow top-level keys as well (backwards compatibility)
+        flat.update(data)
+
+        return TrainingParamConfig(**flat)

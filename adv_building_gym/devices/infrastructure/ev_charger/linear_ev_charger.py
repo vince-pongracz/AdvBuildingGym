@@ -44,6 +44,7 @@ class LinearEVCharger(Infrastructure):
                  start_soc: float = 0.3,
                  target_soc: float = 0.9,
                  max_charge_time_hrs: float = 24.0,
+                 v2g_playroom: float = 0.1
                  ) -> None:
         """Initialize EV Charger infrastructure.
 
@@ -70,7 +71,7 @@ class LinearEVCharger(Infrastructure):
         self.charger_efficiency = charger_efficiency
         self.discharge_efficiency = discharge_efficiency
         self.v2g_enabled = v2g_enabled
-        self.v2g_playroom = 0.1 # TODO VP 2026.03.17. : Refine this
+        self.v2g_playroom = v2g_playroom
         self.control_step = control_step
         self.history_length = history_length
         self.max_charge_time_hrs = max_charge_time_hrs

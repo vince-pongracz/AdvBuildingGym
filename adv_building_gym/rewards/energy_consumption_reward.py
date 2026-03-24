@@ -6,7 +6,7 @@ from adv_building_gym.config.utils.serializable import ComponentRegistry
 
 # TODO VP 2026.01.14. : Add battery life saving reward
 
-class MinimiseEnergyConsumption_Reward(RewardFunction):
+class MinimiseEnergyConsumptionReward(RewardFunction):
     """Energy consumption-based reward function.
 
     Penalises total energy consumption across all actions, but exempts
@@ -15,16 +15,19 @@ class MinimiseEnergyConsumption_Reward(RewardFunction):
     is excluded from the penalty.  This prevents the reward from
     conflicting with the battery/EV target rewards.
     """
-    # TODO VP 2026.03.20. : Review this behaviour
 
     def __init__(self, weight: float, name: str = "E_consumption_reward") -> None:
         super().__init__(weight, name)
 
-    def get_reward(self, actions, states) -> float:
+    def get_reward(self, actions, states) -> tuple[float, float]:
         e_consumption: float = 0
         n_actions: int = 0
 
         for key, v in actions.items():
+            # TODO VP 2026.03.23. : Really like this?
+            if key == "hh_consumption_action":
+                continue  # Non-controllable load — exempt from penalty
+
             n_actions += 1
 
             if key == "HP_action":
@@ -55,8 +58,8 @@ class MinimiseEnergyConsumption_Reward(RewardFunction):
 
         reward = -1.0 * e_consumption / n_actions if n_actions > 0 else 0.0
 
-        return float(self.weight * reward)
+        return float(self.weight * reward), self.weight * self.max_reward
 
 
 # Register MinimiseEnergyConsumption_Reward with the component registry
-ComponentRegistry.register('reward', MinimiseEnergyConsumption_Reward)
+ComponentRegistry.register('reward', MinimiseEnergyConsumptionReward)

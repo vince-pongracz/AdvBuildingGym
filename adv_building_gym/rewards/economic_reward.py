@@ -31,7 +31,9 @@ class EconomicReward(RewardFunction):
         # Sum of rated capacities used as normalisation denominator
         self.max_power_kW = sum(infra.Q_electric_max for infra in infrastructures)
 
-    def get_reward(self, actions, states) -> float:
+    def get_reward(self, actions, states) -> tuple[float, float]:
+        max_step = self.weight * self.max_reward
+
         # E_price is already normalised to [-1, 1], no need to divide by price_max
         current_energy_price = float(states["E_price"][0])
 
@@ -41,11 +43,11 @@ class EconomicReward(RewardFunction):
         )
 
         if self.max_power_kW <= 0:
-            return 0.0
+            return 0.0, max_step
 
         # Negative sign: consumption → negative reward (cost); production → positive reward (income)
         reward_economic: float = -net_power_kW * current_energy_price / self.max_power_kW
-        return float(self.weight * reward_economic)
+        return float(self.weight * reward_economic), max_step
 
 
 # Register EconomicReward with the component registry

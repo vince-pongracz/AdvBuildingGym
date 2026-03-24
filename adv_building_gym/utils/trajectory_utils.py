@@ -104,6 +104,11 @@ def extract_trajectory_from_infos(
     if "power_breakdown" in first:
         power_names = list(first["power_breakdown"].keys())
 
+    # Discover raw (unnormalised physical value) keys
+    raw_names: list[str] = []
+    if "raw" in first:
+        raw_names = list(first["raw"].keys())
+
     # Build initial-conditions row (step 0) from reset info
     initial_row: dict | None = None
     if initial_info is not None:
@@ -125,6 +130,12 @@ def extract_trajectory_from_infos(
         # Zero power breakdown
         if power_names:
             initial_row["power_breakdown"] = {name: 0.0 for name in power_names}
+        # Raw values from reset info, or zeros
+        if raw_names:
+            if "raw" in initial_info:
+                initial_row["raw"] = initial_info["raw"]
+            else:
+                initial_row["raw"] = {name: 0.0 for name in raw_names}
 
     # Combine initial row + step infos
     all_rows = ([initial_row] if initial_row else []) + list(infos)
@@ -212,5 +223,15 @@ def extract_trajectory_from_infos(
                 bd = row.get("power_breakdown", {})
                 power_bd[name].append(float(bd.get(name, 0.0)))
         trajectory["power_breakdown"] = power_bd
+
+    # Raw (unnormalised) physical values (nested under "raw" dict)
+    if raw_names:
+        raw_bd: dict[str, list] = {}
+        for name in raw_names:
+            raw_bd[name] = []
+            for row in all_rows:
+                bd = row.get("raw", {})
+                raw_bd[name].append(float(bd.get(name, 0.0)))
+        trajectory["raw"] = raw_bd
 
     return trajectory

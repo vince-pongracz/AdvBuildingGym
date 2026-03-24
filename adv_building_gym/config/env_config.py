@@ -9,8 +9,8 @@ from adv_building_gym.envs.utils import BuildingProps
 logger = logging.getLogger(__name__)
 
 from adv_building_gym.devices.infrastructure import (
-    Infrastructure, HP, BatteryTremblay, 
-    SolarPanel, LinearEVCharger
+    Infrastructure, HP, BatteryTremblay,
+    SolarPanel, LinearEVCharger, HouseholdEnergyConsumers
 )
 
 from adv_building_gym.devices.statesources import (
@@ -21,7 +21,7 @@ from adv_building_gym.devices.statesources import (
 from adv_building_gym.rewards import (
     RewardFunction, ActionSmoothnessReward, BatteryTargetReward, TempReward,
     EconomicReward, EVChargingOnTimeReward, EVChargingReward,
-    MinimiseEnergyConsumption_Reward, UserEnergyNeedReward,
+    MinimiseEnergyConsumptionReward, UserEnergyNeedReward,
     OperatorEnergyControlReward
 )
 
@@ -113,6 +113,12 @@ class EnvConfig:
                 peak_power_kW=5.0,
                 control_step=self.CONTROL_STEP
             ),
+            HouseholdEnergyConsumers(
+                "hh_consumers",
+                Q_electric_max=8.0,
+                peak_consumption_kW=8.0,
+                control_step=self.CONTROL_STEP
+            ),
         ]
 
     def create_rewards(self, infras: List[Infrastructure]) -> List[RewardFunction]:
@@ -131,7 +137,7 @@ class EnvConfig:
         return [
             TempReward(weight=1),
             EconomicReward(infras, weight=1),
-            MinimiseEnergyConsumption_Reward(weight=0.3),
+            MinimiseEnergyConsumptionReward(weight=0.2),
             OperatorEnergyControlReward(infras, weight=1),
             BatteryTargetReward(weight=1),
             EVChargingReward(weight=1),

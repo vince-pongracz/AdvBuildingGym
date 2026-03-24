@@ -36,6 +36,15 @@ actions:
   dim_labels:
     HP_action: [energy, mode]
 
+raw:
+  # Group temperature raw values into a single plot (same unit: °C)
+  grouped_keys:
+    - [temp_out_raw, temp_in_raw, desired_temp_in_raw]
+
+  # Raw keys to skip in plotting
+  skip_keys:
+    - E_price_max_raw  # constant per episode, not useful as time series
+
 output:
   # Relative to repository root
   dir: plotting/out/traj_plots

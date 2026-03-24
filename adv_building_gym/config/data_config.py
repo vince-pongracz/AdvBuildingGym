@@ -14,12 +14,11 @@ from adv_building_gym.data_combinator import DataCombinator
 
 logger = logging.getLogger(__name__)
 
-# TODO VP 2026.03.16. : It's stupid a bit how the default is handled -- why not a direct pass to the load_data_combinator?
-DEFAULT_YAML_PATH = Path(__file__).resolve().parents[2] / "configs" / "train_data_combinator_config.yaml"
+_DEFAULT_YAML_PATH = Path(__file__).resolve().parents[2] / "configs" / "train_data_combinator_config.yaml"
 
 
 def load_data_combinator_config(
-    yaml_path: str | Path | None = None,
+    yaml_path: str | Path | None = _DEFAULT_YAML_PATH,
     seed_override: int | None = None,
 ) -> DataCombinator:
     """Build a DataCombinator from a YAML config file.
@@ -33,7 +32,7 @@ def load_data_combinator_config(
         A fully constructed DataCombinator with scenarios expanded from
         the year/source templates defined in the YAML.
     """
-    yaml_path = Path(yaml_path) if yaml_path is not None else DEFAULT_YAML_PATH
+    yaml_path = Path(yaml_path) if yaml_path is not None else _DEFAULT_YAML_PATH
 
     if not yaml_path.exists():
         logger.error("Data combinator YAML config not found: %s", yaml_path)

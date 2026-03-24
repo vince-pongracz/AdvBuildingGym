@@ -31,7 +31,6 @@ from adv_building_gym.utils import setup_warning_filters
 # Trigger registration of the custom Gym IDs
 from adv_building_gym import make_checkpoint_callback_class, EnvConfigManager
 from adv_building_gym.config import config as default_config, load_data_combinator_config
-from adv_building_gym.config.data_config import DEFAULT_YAML_PATH
 from adv_building_gym.envs import adv_building_env_creator
 from adv_building_gym.ray_training import common_model_setup, select_model
 from adv_building_gym.config.training_param_config import TrainingParamConfig
@@ -116,12 +115,6 @@ def main():
         "--num-envs", type=int, default=1, help="Number of parallel environments" # Change env number?
     )
     parser.add_argument("--seed", type=int, default=None)
-    parser.add_argument("--eval-freq", type=int, default=20_000)
-    parser.add_argument(
-        "--training",
-        action="store_true",
-        help="Use training split of price data (else test split)",
-    )
     parser.add_argument(
         "--metric",
         type=str,
@@ -156,8 +149,8 @@ def main():
         help="Save per-step trajectory JSON per episode (default: False)"
     )
     parser.add_argument(
-        "--data-config", type=str, default=str(DEFAULT_YAML_PATH),
-        help="Path to data combinator YAML config (default: %(default)s)"
+        "--data-config", type=str, default=None,
+        help="Path to data combinator YAML config (default: configs/train_data_combinator_config.yaml)"
     )
 
     args = parser.parse_args()
@@ -199,8 +192,7 @@ def main():
         logger.info("--timesteps is deprecated, prefer --episodes. "
                     "Stopping after %d timesteps (~%d episodes)", args.timesteps, args.episodes)
     else:
-        # Neither given — default to 3500 episodes
-        args.episodes = 3500
+        args.episodes = training_param_config.max_episodes_to_run
         args.timesteps = args.episodes * active_config.EPISODE_LENGTH
         logger.info("Using default: %d episodes (%d timesteps)", args.episodes, args.timesteps)
 
@@ -312,8 +304,8 @@ def main():
     # Apply common RLlib configuration (resource allocation, action space, and callbacks)
     algo_config = common_model_setup(
         config=algo_config,
-        seed=args.seed,
         episode_length=active_config.EPISODE_LENGTH,
+        training_config=training_param_config,
         num_cpus=cpus,
         num_gpus=gpus,
         checkpoint_callback_class=checkpoint_callback_class,

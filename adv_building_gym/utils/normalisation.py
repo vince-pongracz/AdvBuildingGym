@@ -1,8 +1,11 @@
 """Reusable normalisation utilities for pandas Series."""
 
+import logging
 from enum import Enum
 
 import pandas as pd
+
+logger = logging.getLogger(__name__)
 
 
 class Normalisation(Enum):
@@ -20,6 +23,18 @@ class Normalisation(Enum):
         return cls(value)
 
 
+def _safe_divide(series: pd.Series, numerator: pd.Series, divisor: float) -> pd.Series:
+    """Divide numerator by divisor, returning zeros and logging if divisor is zero."""
+    if divisor != 0:
+        return numerator / divisor
+    else:
+        logger.warning("Divisor is zero at normalising %s!", series.name)
+
+    if series.notna().any():
+        logger.warning("Series '%s' is constant zero — normalisation returns zeros", series.name)
+    return series * 0.0
+
+
 def normalise_series(series: pd.Series, method: Normalisation | None) -> pd.Series:
     """Normalise a pandas Series using the given method.
 
@@ -31,20 +46,19 @@ def normalise_series(series: pd.Series, method: Normalisation | None) -> pd.Seri
         Normalised pandas Series.
     """
     match method:
-        # TODO VP 2026.03.18. : Log if div by zero would have happened
         case Normalisation.ABS_MIN_MAX_SCALING:
             # norm = val / max(|min|, |max|), maps to [-1, 1]
             abs_max = max(abs(series.min()), abs(series.max()))
-            return series / abs_max if abs_max != 0 else series * 0.0
+            return _safe_divide(series, series, abs_max)
         case Normalisation.MAX_ABS_SCALING:
             max_abs = series.abs().max()
-            return series / max_abs if max_abs != 0 else series * 0.0
+            return _safe_divide(series, series, max_abs)
         case Normalisation.MIN_MAX_SCALING:
             range_ = series.max() - series.min()
-            return (series - series.min()) / range_ if range_ != 0 else series * 0.0
+            return _safe_divide(series, series - series.min(), range_)
         case Normalisation.STANDARDISATION:
             std = series.std()
-            return (series - series.mean()) / std if std != 0 else series * 0.0
+            return _safe_divide(series, series - series.mean(), std)
         case None:
             return series
         case _:

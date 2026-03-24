@@ -93,6 +93,10 @@ class EpisodeData:
     # Per-infrastructure power breakdown  {infra_name: 1-D ndarray (kW)}
     power_breakdown: dict[str, np.ndarray] = field(default_factory=dict)
 
+    # Raw (unnormalised) physical values  {name: 1-D ndarray}
+    # e.g. temp_out_raw (°C), desired_temp_in_raw (°C), temp_in_raw (°C)
+    raw: dict[str, np.ndarray] = field(default_factory=dict)
+
     # -- convenience helpers ------------------------------------------------
 
     @property
@@ -236,6 +240,12 @@ def load_episode(
             for key in traj["power_breakdown"]:
                 power_breakdown[key] = traj["power_breakdown"][key][:]
 
+        # Raw (unnormalised) physical values
+        raw: dict[str, np.ndarray] = {}
+        if "raw" in traj:
+            for key in traj["raw"]:
+                raw[key] = traj["raw"][key][:]
+
     return EpisodeData(
         episode_id=episode_id,
         seed=seed,
@@ -249,6 +259,7 @@ def load_episode(
         step_power_kW=power,
         cum_E_kWh=cum_e,
         power_breakdown=power_breakdown,
+        raw=raw,
     )
 
 

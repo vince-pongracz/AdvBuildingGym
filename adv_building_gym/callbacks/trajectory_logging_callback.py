@@ -10,8 +10,6 @@ See docs/about_traj_hdf5_export.md for the HDF5 file structure.
 Link: https://docs.ray.io/en/latest/rllib/rllib-callback.html
 """
 
-# TODO VP 2026.03.12. : add callback readme, add this link to that: https://docs.ray.io/en/latest/rllib/rllib-callback.html#rllib-callback-docs
-
 import os
 import json
 import logging
@@ -113,16 +111,19 @@ def make_trajectory_logging_callback_class(
                 # Compute summary statistics
                 ep_length = len(episode)
                 ep_achieved_reward = float(np.sum(episode.get_rewards()))
-                max_reward_per_step = sum(r.weight * r.max_reward for r in _rewards)
-                max_achievable_reward = ep_length * max_reward_per_step
+                # Sum step-wise max rewards from info dicts (state-dependent)
+                max_achievable_reward = 0.0
+                cum_E_kWh = None
+                for info in step_infos:
+                    if isinstance(info, dict):
+                        max_achievable_reward += info.get("max_reward_step", 0.0)
+                if infos and isinstance(infos[-1], dict):
+                    cum_E_kWh = infos[-1].get("cum_E_kWh")
                 reward_rate = (
                     ep_achieved_reward / max_achievable_reward
                     if max_achievable_reward > 0
                     else 0.0
                 )
-                cum_E_kWh = None
-                if infos and isinstance(infos[-1], dict):
-                    cum_E_kWh = infos[-1].get("cum_E_kWh")
 
                 traj_dump = {
                     "version": 1,

@@ -17,6 +17,7 @@ from adv_building_gym.callbacks import (
     make_episode_metrics_callback_class,
     make_trajectory_logging_callback_class,
 )
+from adv_building_gym.config.training_param_config import TrainingParamConfig
 from adv_building_gym.data_combinator import DataCombinator
 from adv_building_gym.utils import ResourceAllocation, validate_resource_allocation
 
@@ -25,10 +26,10 @@ logger = logging.getLogger(__name__)
 
 def common_model_setup(
     config: AlgorithmConfig,
-    seed: int,
     episode_length: int,
     num_cpus: int,
     num_gpus: int,
+    training_config: TrainingParamConfig,
     # TODO VP 2026.01.13. : Improve checkpoint directory structure
     # save Policy NN in
     checkpoint_callback_class: type,
@@ -37,7 +38,6 @@ def common_model_setup(
     metrics_base_dir: str = "ep_metrics",
     clip_actions: bool = True,
     data_combinator: DataCombinator | None = None,
-    data_swap_every_n_iterations: int = 15,
     log_trajectories: bool = False,
 ):
     """
@@ -59,7 +59,6 @@ def common_model_setup(
 
     Args:
         config: Algorithm config object (e.g., PPOConfig instance)
-        seed: Random seed for reproducibility
         action_space: Flat Box action space for the RL module
         episode_length: Episode length in timesteps (used for rollout_fragment_length)
         num_cpus: Total CPUs available (from Ray/SLURM)
@@ -72,9 +71,6 @@ def common_model_setup(
         data_combinator: DataCombinator for iteration-aligned variant
             scheduling via DataScheduleCallback (Approach D1). An empty
             DataCombinator() acts as a no-op (no variant swapping).
-        data_swap_every_n_iterations: How often (in training iterations) the D1
-            callback pushes a new variant to all env_runners. Only effective when
-            data_combinator has variants configured.
         log_trajectories: When True, save full per-step trajectory JSON
             during evaluation episodes (via episode callback).
 
@@ -124,7 +120,7 @@ def common_model_setup(
         # WARN: Reduces verbosity (suppress connector pipeline INFO messages)
         log_level="INFO",
         log_sys_usage=True,
-        seed=seed
+        seed=training_config.seed
     )
     config.reporting(
         keep_per_episode_custom_metrics=True,
@@ -156,13 +152,13 @@ def common_model_setup(
         # Without this, off-policy algorithms (SAC) default to 1, causing
         # training episodes to be reported as length = 1 in callbacks.
         rollout_fragment_length=episode_length,
-        # TODO VP 2026.02.11. : Look up this when packages present
-        # episode_lookback_horizon=10,
+        episode_lookback_horizon=training_config.episode_lookback_horizon_steps,
         # Flatten dict observation space into a single vector for the RL module.
         # Action space flattening + rescaling is handled by env wrappers
         # (FlattenAction + RescaleAction) applied in env_creator.
         env_to_module_connector=lambda env, spaces, device: FlattenObservations(),  # type: ignore
     )
+    # NOTE VP 2026.03.23. : Eval during training does not really influence anything -- check whether the model checkpointing depends on this
     config.evaluation(
         # evaluation_interval=1 ensures `evaluation/env_runners/<metric>` is present in every
         # iteration result, which is required by tune.TuneConfig(metric=...) — it performs a strict
@@ -216,14 +212,15 @@ def common_model_setup(
     # on_train_result callable for iteration-aligned data variant scheduling (Approach D1)
     # DataCombinator is always present; an empty one (no variants) is a safe no-op
     # because create_data_schedule_on_train_result early-returns when variant is empty.
+    
     callback_kwargs = {
         "on_train_result": create_data_schedule_on_train_result(
-            data_combinator, data_swap_every_n_iterations,
+            data_combinator, data_combinator.swap_every_n_episodes,
         ),
     }
     logger.info(
         "DataScheduleCallback: swap every %d iterations, %d variants",
-        data_swap_every_n_iterations, len(data_combinator.variants),
+        data_combinator.swap_every_n_episodes, len(data_combinator.variants),
     )
 
     # Register all callback classes + optional callable-based callbacks.
