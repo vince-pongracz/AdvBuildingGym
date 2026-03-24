@@ -152,7 +152,7 @@ def main():
     parser.add_argument(
         "--reward_mode", default="temperature", choices=["temperature", "combined"]
     )
-    parser.add_argument("--energy-price-path", default="data/price_data_2025.csv")
+    parser.add_argument("--energy-price-path", default="data/e_price/price_data_2025_norm.csv")
     parser.add_argument(
         "--training",
         action="store_true",

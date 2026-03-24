@@ -19,10 +19,10 @@ logger = logging.getLogger(__name__)
 
 def make_checkpoint_callback_class(
     checkpoint_dir: str,
-    checkpoint_frequency: int = 20,
-    num_to_keep: int = 1,
-    metric: str = "evaluation/env_runners/reward_rate",
-    episode_length: int = 288, # a day in 5 minute timeframes
+    episode_length: int,
+    checkpoint_frequency: int,
+    num_to_keep: int,
+    metric: str,
 ) -> Type["BestModelCheckpointCallback"]:
     """
     Factory function that returns a configured BestModelCheckpointCallback class.
@@ -32,10 +32,10 @@ def make_checkpoint_callback_class(
 
     Args:
         checkpoint_dir: Directory to save checkpoints
-        checkpoint_frequency: Save checkpoint every N episodes (default: 20)
-        num_to_keep: Number of best checkpoints to keep (default: 1)
-        metric: Metric name to optimize (default: "evaluation/env_runners/reward_rate")
-        episode_length: Number of timesteps per episode (default: 288).
+        checkpoint_frequency: Save checkpoint every N episodes
+        num_to_keep: Number of best checkpoints to keep
+        metric: Metric name to optimize
+        episode_length: Number of timesteps per episode.
             Used to calculate episode count from num_env_steps_sampled_lifetime.
             This is needed because off-policy algorithms (SAC) don't reliably
             report num_episodes_lifetime in the result dict.
@@ -50,6 +50,7 @@ def make_checkpoint_callback_class(
                 checkpoint_dir="/path/to/checkpoints",
                 checkpoint_frequency=20,
                 metric="evaluation/env_runners/reward_rate",
+                num_to_keep=1,
                 episode_length=288,
             ),
             on_episode_end=my_episode_end_callback,  # Separate callback

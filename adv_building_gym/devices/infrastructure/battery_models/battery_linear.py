@@ -88,7 +88,7 @@ class BatteryLinear(Infrastructure):
     def set_target(self, target: Optional[float] = None) -> None:
         self.target_soc = target
 
-    def exec_action(self, actions: Dict, states: Dict) -> None:
+    def exec_action(self, actions: Dict, states: Dict, info=None) -> None:
         """Execute battery charge/discharge action using linear model.
 
         Action in [-1, 1]:
@@ -126,7 +126,7 @@ class BatteryLinear(Infrastructure):
         actual_action = self.actual_power_kW / self.Q_electric_max if self.Q_electric_max > 0 else 0.0
         actions["battery_action"] = np.array([np.float32(actual_action)], dtype=np.float32)
 
-    def update_state(self, states: Dict) -> None:
+    def update_state(self, states: Dict, info=None) -> None:
         states["battery_pct"][0] = np.float32(self.soc)
         states["battery_target_pct"][0] = np.float32(self.target_soc)
 

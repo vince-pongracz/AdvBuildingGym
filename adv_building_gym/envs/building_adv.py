@@ -7,15 +7,19 @@ import gymnasium as gym
 from gymnasium import Space, spaces
 from gymnasium.spaces import Dict as SDict
 import numpy as np
+import random
 import pandas as pd
 
+from adv_building_gym.data_combinator import DataCombinator
 from adv_building_gym.devices.statesources import StateSource
 from adv_building_gym.rewards import RewardFunction
 from adv_building_gym.devices.infrastructure import Infrastructure
 
-from adv_building_gym.utils.temporal_features import TemporalFeatureBuffer
 from adv_building_gym.utils.warning_filters import setup_warning_filters
+from adv_building_gym.envs.data_variant import DataVariantProvider
 from adv_building_gym.envs.utils import BuildingProps
+
+from adv_building_gym.config.env_config import config as env_config
 
 # Logging configuration
 logging.basicConfig(
@@ -25,12 +29,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# TODO VP 2026.01.12. : Use Env-to-module and module-to-Env pipelines and keep the dict state and action spaces in the env...
-# So the mapping from action vector to dict and vice versa is done in the pipelines, not in the env directly... -- this mapping is rather the task of the Rllib, not the env's
-# In this case, SB could not really work anymore, because of the dict spaces... but RLlib could work with custom pipelines...
-# Link: https://docs.ray.io/en/latest/rllib/env-to-module-connector.html#env-to-module-pipeline-docs
-
-class AdvBuildingGym(gym.Env):
+class AdvBuildingGym(gym.Env, DataVariantProvider):
     """
     AdvBuildingGym
 
@@ -43,7 +42,7 @@ class AdvBuildingGym(gym.Env):
     functions compute objective values from the current action and state.
     Core behavior
     - The environment advances in fixed discrete control steps (control_step, seconds)
-        until simulation_time is reached or the episode is otherwise terminated.
+        until max_iterations reached or the episode is otherwise terminated.
     - Observations are assembled from datasources (and any internal bookkeeping)
         into a dictionary-based observation (SDict).
     - Actions are provided as a dictionary mapping infrastructure identifiers to
@@ -52,6 +51,27 @@ class AdvBuildingGym(gym.Env):
     - Rewards are the sum of values returned by each configured RewardFunction.
     - The environment keeps a simple iteration counter and exposes cumulative
         energy and other datasource-provided signals in the state dict.
+
+    Data contract — observation vs. info
+        The environment maintains three distinct data channels:
+
+        1. **Observation space** (``self.state`` / ``observation_space``):
+           Policy-relevant values only. Every key is registered via
+           ``setup_spaces()`` with bounded ``Box`` limits and normalised to
+           small ranges ([-1, 1], [0, 1], or [0, 24] for ``sim_hour``).
+           The RL policy sees exactly these keys (after ``FlattenObservations``).
+
+        2. **Component info** (``self._component_info``):
+           Shared inter-component dict for raw physical values that other
+           components need but the policy must not see (e.g. EV schedule
+           kWh/kW capacities, ``_temp_abs_max`` scale factor). Passed as
+           the ``info`` argument to ``update_state()`` and ``exec_action()``.
+
+        3. **Step/reset info** (returned to the caller):
+           Diagnostics and logging data: reward breakdown, energy totals
+           (``cum_E_kWh``, ``step_power_kW``), episode metadata, and
+           ``info["raw"]`` containing denormalised physical values collected
+           from component attributes ending in ``_raw``.
     Initialization (constructor arguments)
     - infras: list[Infrastructure]
             Infrastructure objects that define actions, their effects and setup logic.
@@ -66,8 +86,6 @@ class AdvBuildingGym(gym.Env):
             each step. Each reward function is queried via get_reward(action, state).
     - building_props: BuildingProps
             Static description of building parameters used by infras/datasources/rewards.
-    - simulation_time: int (seconds, default 24*60*60)
-            Total simulation duration.
     - control_step: int (seconds, default 300)
             Duration of a single control step / time advancement between calls to step.
     - schedule_type: optional
@@ -85,7 +103,10 @@ class AdvBuildingGym(gym.Env):
     Observation and action spaces
     - The environment builds an observation_space (SDict) and action_space (SDict)
         by aggregating spaces declared by every Infrastructure and DataSource. The
-        env also supplies a "prev_action" entry (Box in [-1, 1]).
+        env also supplies per-key action history windows (``prev_{key}_hist``).
+    - The native action_space is a Dict whose keys/bounds are defined by the
+        Infrastructure components. External wrappers (FlattenAction + RescaleAction)
+        convert the flat [-1, 1] interface expected by RL libraries.
     - Observations returned by reset() and step() are Python dicts matching the
         observation_space keys. The environment does not return a flattened vector
         by default.
@@ -111,8 +132,7 @@ class AdvBuildingGym(gym.Env):
             - Aggregates rewards by summing get_reward(action, state) from each
                 RewardFunction in self.reward_funcs.
             - Increments the internal "iteration" counter.
-            - terminated is True when the maximum number of iterations (simulation_time /
-                control_step) is reached; truncated is always False in the current
+            - terminated is True when the maximum number of iterations is reached; truncated is always False in the current
                 implementation.
             - info contains keys: "action", "reward", "state", and "E_HP_el_Wh" (alias
                 for cumulative energy key) among any additional diagnostic entries.
@@ -153,20 +173,38 @@ class AdvBuildingGym(gym.Env):
         statesources: list[StateSource],
         rewards: list[RewardFunction],
         building_props: BuildingProps,
-        simulation_time=24 * 60 * 60,
-        control_step=300,
+        control_step: int | None = None,
         schedule_type=None,
         render_mode=None,
         training=True,
         train_ratio=0.8,
         # Number of steps to look ahead for forecasted values
-        prediction_horizon=12 * 5 * 6,
+        prediction_horizon=8 * 12,  # 8 hours at 5-minute steps
+        data_combinator: DataCombinator | None = None,
+        log_full_info: bool = False,
+        action_history_length: int | None = None,
         **kwargs,
     ):
+        """Initialise the building-energy gym environment.
+
+        Args:
+            infras: Infrastructure components (HP, battery, EV charger, etc.)
+                that define controllable action and observation sub-spaces.
+            statesources: External state sources (weather, pricing, schedules)
+                that inject uncontrollable observations into the state.
+            rewards: Reward functions evaluated at each step to produce
+                the scalar reward signal.
+            building_props: Physical and thermal properties of the building.
+            control_step: Time between control actions in seconds (default: 300 s).
+            schedule_type: Optional schedule identifier for occupancy / usage patterns.
+            render_mode: Gymnasium render mode (currently unused).
+            training: If True, sample from the training data split; otherwise
+                use the held-out evaluation split.
+            train_ratio: Fraction of available data used for training (default: 0.8).
+            prediction_horizon: Number of future time-steps included in
+                forecast observations (default: 360, i.e. 30 h at 300 s steps).
         """
-        Initialize the Gym environment with building parameters and reward structure.
-        """
-        # TODO VP 2026.01.07. : add docsstring
+
         # Setup warning filters for Ray workers (must be called early)
         setup_warning_filters()
 
@@ -175,7 +213,16 @@ class AdvBuildingGym(gym.Env):
 
         self.iteration = 0
         self.cum_E_kWh = 0.0  # Cumulative net energy in kWh (tracked in info, not observation)
+        
+        self.episode_count: int = 0
+        self.data_combinator = data_combinator if data_combinator is not None else DataCombinator()
+        self._rng: np.random.Generator = np.random.default_rng()
+        self._episode_date: str = ""
+        self._episode_day_mode: str = "none"
 
+        # Build observation and action spaces from components.
+        # Only normalised, bounded values belong here — raw physical
+        # quantities (kWh, °C, kW) go into _component_info instead.
         observation_space = OrderedDict()
         action_space = OrderedDict()
 
@@ -190,50 +237,78 @@ class AdvBuildingGym(gym.Env):
 
         self.reward_funcs = rewards
 
-        # Calculate total action dimension (sum of all action space shapes)
-        # This must match the flattened action vector built in step()
-        total_action_dim = sum(int(np.prod(space.shape)) for space in action_space.values())
-
-        observation_space["prev_action"] = spaces.Box(
-            low=np.full((total_action_dim,), -1.0, dtype=np.float32),
-            high=np.full((total_action_dim,), 1.0, dtype=np.float32),
-            shape=(total_action_dim,),
-            dtype=np.float32,
+        # sim_hour: hour of day (0–24) derived from the current step
+        # within the episode.  Used by statesource synthetic profiles
+        # and SolarPanel for time-of-day logic.
+        # Managed directly by the environment (not a StateSource).
+        observation_space["sim_hour"] = spaces.Box(
+            low=0.0, high=24.0, shape=(1,), dtype=np.float32,
         )
 
-        # Assign spaces, but it only goes like this...
+        # Add per-key action history windows to the observation space.
+        # Each entry ``prev_{key}_hist`` has shape ``(action_history_length, *action_shape)``
+        # and stores a rolling window of the N most recent executed actions
+        # (oldest first, newest last).  The agent can use this to reason about
+        # action smoothness and the ActionSmoothnessReward reads the latest
+        # entry to compute the change penalty.
+        # FlattenObservations (RLlib connector) handles flattening for the RL module.
+        self.action_history_length = action_history_length if action_history_length is not None else env_config.ACTION_HISTORY_LENGTH
+        for key, space in action_space.items():
+            hist_shape = (self.action_history_length, *space.shape)
+            obs_key = f"prev_{key}_hist"
+            # Tile per-action bounds across the history window
+            low_tiled = np.tile(space.low, (self.action_history_length, 1)).reshape(hist_shape)
+            high_tiled = np.tile(space.high, (self.action_history_length, 1)).reshape(hist_shape)
+            observation_space[obs_key] = spaces.Box(
+                low=low_tiled.astype(np.float32),
+                high=high_tiled.astype(np.float32),
+                shape=hist_shape,
+                dtype=np.float32,
+            )
+
+        # Assign spaces
         self.observation_space = SDict(observation_space)
         self.state = OrderedDict()
         for state_name, state_space in observation_space.items():
-            # Initialize internal state arrays with the same dtype as the declared space
+            # Initialize observation state arrays with the same dtype as the declared space
             self.state[state_name] = np.zeros(shape=state_space.shape, dtype=state_space.dtype)
 
-        # Store the original Dict action space for internal use
-        self._dict_action_space = SDict(action_space)
+        # Shared dict for inter-component data that is NOT part of the
+        # observation space (raw kWh/kW/°C values, EV schedule parameters).
+        # Components write/read via the ``info`` argument of update_state()
+        # and exec_action().  Persists across steps; included in step info.
+        self._component_info: dict = {}
 
-        # Flatten Dict action space to Box for compatibility with RLlib's
-        # vectorized environments (SyncVectorEnv). Dict action spaces cause
-        # IndexError in gymnasium's _iterate_dict when used with vectorization.
-        # Note: total_action_dim already calculated above for prev_action space
-        self.action_space = spaces.Box(
-            low=-1.0,
-            high=1.0,
-            shape=(total_action_dim,),
-            dtype=np.float32,
-        )
+        # Native Dict action space — each key maps to the component's real bounds.
+        # External wrappers (FlattenAction + RescaleAction) convert between the
+        # flat [-1, 1] interface expected by RL libraries and this Dict space.
+        self.action_space = SDict(action_space)
 
         self.building_props = building_props
-        self.simulation_time = simulation_time
+        # NOTE VP 2026.02.28. : Simulation time is in seconds
+        self.simulation_time = env_config.CONTROL_STEP * env_config.EPISODE_LENGTH
         self.prediction_horizon = prediction_horizon
-        self.control_step = control_step
+        self.control_step = control_step if control_step is not None else env_config.CONTROL_STEP
         self.training = training
         self.train_ratio = train_ratio
-        self.max_iteration = int(self.simulation_time / self.control_step)
+        self.max_iteration = env_config.EPISODE_LENGTH
 
-        # TODO VP 2025.12.09. : inspect this
-        self.temporal_features = TemporalFeatureBuffer(window_size=self.prediction_horizon)
+        # When True, step()/reset() include a deep copy of the full named state
+        # dict in info["state"]. Expensive in memory — enable for evaluation only.
+        self.log_full_info: bool = log_full_info
 
-        self.state, _ = self.reset()
+        # Cache raw-attribute names for _get_raw_state_values().
+        # Scanned once at init rather than using dir() every step.
+        self._raw_attr_cache: list[tuple[object, str]] = []
+        self._temp_abs_max_source: object | None = None
+        for src in self.statesources + self.infras:
+            for attr_name in dir(src):
+                if attr_name.endswith("_raw") and not attr_name.startswith("_"):
+                    val = getattr(src, attr_name, None)
+                    if val is not None and not callable(val):
+                        self._raw_attr_cache.append((src, attr_name))
+            if hasattr(src, "temp_abs_max"):
+                self._temp_abs_max_source = src
 
         logger.debug("AdvBuildingGym created!")
         logger.debug("  Objectives: %s", [rew.name for rew in rewards])
@@ -242,20 +317,92 @@ class AdvBuildingGym(gym.Env):
 
     def get_state_space(self):
         return self.observation_space
-    
+
     def get_action_space(self):
         return self.action_space
-    
-    def reset(self, *, seed: int | None = None, options: Dict[str, Any] | None = None):
-        if seed is None:
-            seed = np.random.randint(0, 10000)  # global RNG
-        super().reset(seed=seed, options=options)
 
+    def apply_data_variant(self, variant: dict[str, str]) -> None:
+        """Reload statesources whose names appear in *variant*.
+
+        Args:
+            variant: Mapping of statesource name -> new CSV file path.
+                    Only matching statesources are reloaded; others are untouched.
+        """
+        for state_src in self.statesources:
+            if state_src.name in variant:
+                state_src.reload(variant[state_src.name])
+
+    # TODO VP 2026.03.10. : This does not belong strictly to the env... -- how to refactor it?
+    def _resolve_episode_date(self, row_offset: int) -> str:
+        """Derive a date string from the row offset using the first statesource with a 'start' column."""
+        for src in self.statesources:
+            if src.ts is not None and "start" in src.ts.columns and row_offset < len(src.ts):
+                return str(pd.to_datetime(src.ts.iloc[row_offset]["start"]).date())
+        # Fallback: day-of-year index
+        steps_per_day = int(86400 / self.control_step)
+        return f"day-{row_offset // steps_per_day}"
+
+    def reset(self, *, seed: int | None = None, options: Dict[str, Any] | None = None):
+        # ======= Seed =======
+        super().reset(seed=seed)
+
+        # Only reseed when an explicit seed is provided (typically the first
+        # reset per env runner).  Subsequent resets (seed=None) must NOT
+        # recreate the RNG — doing so would destroy the deterministic
+        # sequence and make episodes non-reproducible across runs.
+        if seed is not None:
+            random.seed(seed)
+            np.random.seed(seed)
+            self._rng = np.random.default_rng(seed)
+
+        # ======== Data variant selection logic ========
+        # Approach A: episode-count-based data variant swap
+        self.episode_count += 1
+        variant = self.data_combinator.get_variant(self.episode_count, self._rng)
+        if variant:
+            self.apply_data_variant(variant)
+
+        # Approach C: external override via reset(options={"data_variant": {...}})
+        if options and "data_variant" in options:
+            variant = options["data_variant"]
+            self.apply_data_variant(variant)
+
+        # Compute day offset from DataCombinator (must run before logging so get_day_date() is set)
+        steps_per_day = env_config.EPISODE_LENGTH  # Assuming 1 day per episode; adjust if multiple days per episode
+        row_offset = 0
+        # Determine max available days and data start year from the first statesource with data
+        max_days = 1
+        data_start_year = None
+        for src in self.statesources:
+            if src.ts is not None and len(src.ts) >= steps_per_day:
+                max_days = len(src.ts) // steps_per_day
+                # Extract year from the first date-like column
+                for col in ("start", "start_timestamp", "date", "datetime"):
+                    if col in src.ts.columns:
+                        data_start_year = pd.Timestamp(src.ts[col].iloc[0]).year
+                        break
+                break
+        row_offset, self._episode_day_mode = self.data_combinator.get_day_offset(
+            self.episode_count, max_days, steps_per_day, data_start_year, self._rng,
+        )
+        self._episode_date = self._resolve_episode_date(row_offset)
+
+        if variant:
+            logger.info("Episode %d, date %s: data variant %s", self.episode_count, self.data_combinator.get_day_date(), variant)
+
+        # Allow external override via reset options
+        if options and "row_offset" in options:
+            row_offset = int(options["row_offset"])
+            self._episode_date = self._resolve_episode_date(row_offset)
+            self._episode_day_mode = "manual"
+
+        # ======== Reset state and synchronise datasources/infras ========
         self.iteration = 0
         self.cum_E_kWh = 0.0  # Reset cumulative energy on episode reset
         for sync in self.infras + self.statesources:
-            sync.synchronise(self.iteration)
+            sync.synchronise(self.iteration, row_offset)
 
+        # ======== Initialise state dict with zeros (matching observation space dtypes) ========
         for k, v in self.state.items():
             if isinstance(v, np.ndarray):
                 # Initialize with zeros using the correct dtype (float32)
@@ -263,16 +410,31 @@ class AdvBuildingGym(gym.Env):
             else:
                 logger.debug("Unidentified type: %s", type(v))
 
-        # Update state from statesources to populate initial observations
+        # Set sim_hour for step 0 (midnight start of day)
+        self.state["sim_hour"][0] = np.float32(0.0)
+
+        # ======== Update state from statesources to populate initial observations ========
         # This ensures observations are within bounds after reset
+        self._component_info.clear()
         for ds in self.statesources:
-            ds.update_state(states=self.state)
+            ds.update_state(states=self.state, info=self._component_info)
 
         # Update infrastructure states as well
         for infr in self.infras:
-            infr.update_state(self.state)
+            infr.update_state(self.state, info=self._component_info)
 
-        info = {"seed": seed}
+        # Reset info — episode metadata and raw values for logging.
+        # None of these keys are part of the observation space.
+        info = {
+            "seed": seed,
+            "episode_date": self._episode_date,
+            "episode_day_mode": self._episode_day_mode,
+            "data_variant": variant if variant else None,
+            "raw": self._get_raw_state_values(),  # Denormalised physical values (°C, €, etc.)
+        }
+        if self.log_full_info:
+            info["state"] = {k: np.array(v, copy=True) for k, v in self.state.items()}
+
         return self.state, info
 
     def _get_observation(self) -> dict:
@@ -281,124 +443,163 @@ class AdvBuildingGym(gym.Env):
         state = OrderedDict(self.state) if isinstance(self.state, OrderedDict) else OrderedDict()
         for ds in self.statesources:
             # statesources accept a dict and update it in-place
-            ds.update_state(states=state)
+            ds.update_state(states=state, info=self._component_info)
         return state
 
     def is_done(self) -> bool:
+        """        
+        :return: True if episode (a day) elapsed
+        :rtype: bool
+        """
         return bool(self.iteration >= self.max_iteration)
 
-    def _flat_action_to_dict(self, flat_action: np.ndarray) -> Dict[str, np.ndarray]:
-        """Convert flat action array to Dict format for infrastructure use.
-
-        Handles various input formats from RLlib/SyncVectorEnv:
-        - 1D array: [a1, a2] -> use directly
-        - 2D array with batch dim: [[a1, a2]] -> flatten
-        - Nested structures -> flatten
-        """
-        logger.debug(f"Flat action dim: {flat_action.shape}")
-
-        # Convert to numpy array and flatten to 1D
-        flat_action = np.asarray(flat_action, dtype=np.float32).flatten()
-
-        # Calculate expected dimension
-        expected_dim = sum(
-            int(np.prod(space.shape)) for space in self._dict_action_space.spaces.values()
-        )
-
-        # Validate action size
-        if flat_action.size != expected_dim:
-            raise ValueError(
-                f"Action size mismatch: expected {expected_dim}, got {flat_action.size}. "
-                f"Action shape: {np.asarray(flat_action).shape}, Action: {flat_action}"
-            )
-
-        dict_action = {}
-        idx = 0
-        for key in self.action_space_keys:
-            space = self._dict_action_space.spaces[key]
-            action_dim = int(np.prod(space.shape))
-            dict_action[key] = flat_action[idx:idx + action_dim].reshape(space.shape)
-            idx += action_dim
-        return dict_action
-
     def step(self, action):
-        """
-        Execute a single control step in the env by applying the selected action.
-
-        Calculates:
-          - new state
-          - reward
-          - termination conditions
+        """Execute a single control step by applying *action*.
 
         Args:
-            action (np.array): Flat action array in [-1, 1] with shape (total_action_dim,).
+            action (dict[str, np.ndarray]): Dict action mapping component
+                keys (e.g. ``HP_action``, ``battery_action``) to arrays
+                whose bounds match the Dict action space declared by each
+                Infrastructure. 
+                External wrappers (FlattenAction + RescaleAction) handle the 
+                conversion from the flat [-1, 1] array produced by the RL policy.
 
         Returns:
-            observation (np.array): The next observation.
+            observation (dict): The next observation.
             reward (float): The computed reward signal.
             terminated (bool): True if the episode has ended, else False.
             truncated (bool): False in this environment.
             info (dict): Additional information data.
         """
-        # Clip actions and store for logging
-        clipped_flat_action = np.clip(action, -1, 1)
-        # Convert flat action to Dict format for internal infrastructure use
-        action = self._flat_action_to_dict(clipped_flat_action)
 
+        # 1. Execute all infrastructure actions
         for infr in self.infras:
-            infr.exec_action(action, self.state)
-            infr.update_state(self.state)
+            infr.exec_action(action, self.state, info=self._component_info)
 
-        for ds in self.statesources:
-            ds.update_state(states=self.state)
+        # 2. Advance time: increment iteration, then synchronise all components so
+        #    update_state reads the correct (new) row from time-series data.
+        #    Previously synchronise was called AFTER update_state, causing exogenous
+        #    datasources (price, weather, EV schedule) to lag 2 iterations behind.
+        self.iteration += 1
+        # Update simulation hour: actual hour of day (0–24)
+        # control_step is in seconds; convert elapsed time to hours
+        self.state["sim_hour"][0] = np.float32(
+            (self.iteration * self.control_step) / 3600.0
+        )
 
-        # Track last executed action for observability (flattened order matches action_space_keys)
-        prev_action_vec = []
-        for key in self.action_space_keys:
-            act_val = action.get(key)
-            if act_val is not None:
-                # Flatten multi-dimensional actions (e.g., HP_action is 2D)
-                act_array = np.atleast_1d(act_val).flatten()
-                prev_action_vec.extend(act_array)
-            else:
-                # Default to 0 if action not present
-                space = self._dict_action_space.spaces[key]
-                action_dim = int(np.prod(space.shape)) if space.shape else 1
-                prev_action_vec.extend([0.0] * action_dim)
-        self.state["prev_action"] = np.array(prev_action_vec, dtype=np.float32)
-
-        # Accumulate net energy consumption from all infrastructures
-        # Positive = consumption from grid, Negative = production to grid
-        total_power_kW = sum(infra.get_electric_consumption(action) for infra in self.infras)
-        energy_kWh = total_power_kW * (self.control_step / 3600)  # kW * hours = kWh
-        self.cum_E_kWh += energy_kWh
-
-        # Calculate reward
-        reward: float = 0
-        for rew_f in self.reward_funcs:
-            rew_val = float(np.asarray(rew_f.get_reward(action, self.state)).item())
-            reward += rew_val
-
-        # Sync iterations
         for sync in self.infras + self.statesources:
             sync.synchronise(self.iteration)
 
-        # Check if episode should terminate
+        # 3. Update observable states for the new iteration
+        for infr in self.infras:
+            infr.update_state(self.state, info=self._component_info)
+        for ds in self.statesources:
+            ds.update_state(states=self.state, info=self._component_info)
+
+        # Accumulate net energy consumption from all infrastructures
+        # Positive = consumption from grid, Negative = production to grid
+        power_breakdown = {
+            infra.name: infra.get_electric_consumption(action)
+            for infra in self.infras
+        }
+        total_power_kW = sum(power_breakdown.values())
+        energy_kWh = total_power_kW * (self.control_step / 3600)  # kW * hours = kWh
+        self.cum_E_kWh += energy_kWh
+
+        # Calculate reward with per-function breakdown
+        reward: float = 0
+        reward_breakdown = {}
+        max_reward_step: float = 0
+        for rew_f in self.reward_funcs:
+            rew_val, rew_max = rew_f.get_reward(action, self.state)
+            rew_val = float(np.asarray(rew_val).item())
+            reward_breakdown[rew_f.name] = rew_val
+            reward += rew_val
+            max_reward_step += rew_max
+
+        # Track executed actions in a rolling history window (oldest first, newest last).
+        # Must happen AFTER reward computation so that ActionSmoothnessReward can
+        # compare the current action against the previous one stored in history[-1].
+        for key in self.action_space_keys:
+            obs_key = f"prev_{key}_hist"
+            history = self.state[obs_key]
+            # Shift rows up (drop oldest) and insert latest action at the end
+            history[:-1] = history[1:]
+            act_val = action.get(key)
+            if act_val is not None:
+                history[-1] = np.asarray(act_val, dtype=np.float32)
+            else:
+                history[-1] = 0.0
+
+        # Guard against NaN/Inf in state — these propagate through the neural
+        # network and crash the action distribution (std = NaN → RuntimeError).
+        # Replace bad values with 0 so training can continue.
+        for key, val in self.state.items():
+            if isinstance(val, np.ndarray) and not np.all(np.isfinite(val)):
+                logger.error("NaN/Inf in state['%s']: %s (episode %d, step %d) — replaced with 0",
+                            key, val, self.episode_count, self.iteration)
+                self.state[key] = np.where(np.isfinite(val), val, np.zeros_like(val))
+
+        # Check if episode should terminate (iteration already incremented above)
         terminated = self.is_done()
         truncated = False
 
-        if not terminated:
-            self.iteration += 1
-
+        # Step info — diagnostics and raw values for logging/evaluation.
+        # None of these keys are part of the observation space.
         info = {
-            "action": action,  # Dict format (for compatibility)
-            "clipped_action": clipped_flat_action,  # Flat clipped action for logging
+            "action": action,  # Dict format (clipped)
             "reward": reward,
-            "state": {k: np.array(v, copy=True) for k, v in self.state.items()},
+            "reward_breakdown": reward_breakdown,
+            "max_reward_step": max_reward_step,  # Step-wise max achievable reward
             "cum_E_kWh": self.cum_E_kWh,  # Cumulative net energy (positive=consumption, negative=production)
+            "step_power_kW": total_power_kW,  # Instantaneous net power at this step
+            "power_breakdown": power_breakdown,  # Per-infrastructure power (kW)
+            "raw": self._get_raw_state_values(),  # Denormalised physical values (°C, €, etc.)
         }
+        if self.log_full_info:
+            info["state"] = {k: np.array(v, copy=True) for k, v in self.state.items()}
 
         return self.state, reward, terminated, truncated, info
+
+    # TODO VP 2026.03.10. : Rework environment that it accepts data series, in state sources things are normalised, but 
+    # original values are stored as well in the info dict -- to show real data later in the plots
+
+    def _get_raw_state_values(self) -> dict[str, float]:
+        """Collect raw (unnormalised) physical values from all components.
+
+        Uses a cache of ``(component, attribute_name)`` pairs built once
+        at ``__init__`` time, avoiding a ``dir()`` scan every step.
+        Also derives ``temp_in_raw`` by denormalising the simulated
+        indoor temperature.
+        """
+        # TODO VP 2026.03.23. : Continue here
+        # TODO VP 2026.03.23. : encourage exploration more
+        # TODO VP 2026.03.23. : Use more history as state input
+        # TODO VP 2026.03.23. : Plot all eval curves together -- with avg and variance
+        # TODO VP 2026.03.23. : Why no charging in 20260323_1644_eval? And hp is not working as well, however it should heat.
+        # TODO VP 2026.03.23. : Switch off action smooting
+        # TODO VP 2026.03.23. : How is that possible, that the raw temperatures are near to 0 celsius?
+        # TODO VP 2026.03.23. : At raw value plotting, only temp is plotted -- what about the other stuff, energy for each element?
+        # TODO VP 2026.03.23. : Remove default values from methods and functions where it is not needed
+        # TODO VP 2026.03.23. : Check whether currently passed params really needed for the functions/methods
+        # TODO VP 2026.03.23. : Add standalone input and output heads for the policy NN, fix the core policy NN -- investigate this option
+        
+        raw: dict[str, float] = {}
+        for src, attr_name in self._raw_attr_cache:
+            raw[attr_name] = float(getattr(src, attr_name))
+
+        # temp_in_raw: denormalise simulated indoor temperature
+        temp_abs_max = (
+            float(self._temp_abs_max_source.temp_abs_max)
+            if self._temp_abs_max_source is not None
+            else 1.0
+        )
+        temp_in_norm = float(
+            self.state.get("temp_in_norm", np.zeros(1, dtype=np.float32))[0]
+        )
+        raw["temp_in_raw"] = temp_in_norm * temp_abs_max
+
+        return raw
 
     def render(self):
         """Render the environment."""

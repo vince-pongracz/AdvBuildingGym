@@ -26,7 +26,7 @@ class HP(Infrastructure):
     _context_params: ClassVar[Set[str]] = {'K', 'mC'}
 
     # Internal state variables - don't serialize
-    _exclude_params: ClassVar[Set[str]] = {'iteration', 'temp_norm_in', 'temp_norm_in_change', 'control_step'}
+    _exclude_params: ClassVar[Set[str]] = {'iteration', 'temp_in_norm', 'temp_in_norm_change', 'control_step'}
 
     def __init__(self,
                  name: str,
@@ -47,8 +47,8 @@ class HP(Infrastructure):
         self.K = K
         self.mC = mC
 
-        self.temp_norm_in = 0
-        self.temp_norm_in_change = 0
+        self.temp_in_norm = 0
+        self.temp_in_norm_change = 0
 
         if self.cop_heat <= 0 or self.cop_cool <= 0:
             raise ValueError("cop_heat and cop_cool must be positive.")
@@ -67,14 +67,14 @@ class HP(Infrastructure):
             dtype=np.float32
         )
 
-        if "temp_norm_in" not in state_spaces:
-            state_spaces["temp_norm_in"] = Box(low=-1, high=1, shape=(1,), dtype=np.float32)
-        if "temp_norm_out" not in state_spaces:
-            state_spaces["temp_norm_out"] = Box(low=-1, high=1, shape=(1,), dtype=np.float32)
+        if "temp_in_norm" not in state_spaces:
+            state_spaces["temp_in_norm"] = Box(low=-1, high=1, shape=(1,), dtype=np.float32)
+        if "temp_out_norm" not in state_spaces:
+            state_spaces["temp_out_norm"] = Box(low=-1, high=1, shape=(1,), dtype=np.float32)
 
         return state_spaces, action_spaces
 
-    def exec_action(self, actions, states) -> None:
+    def exec_action(self, actions, states, info=None) -> None:
         action = actions["HP_action"]
         # Action is 2D: [energy, mode]
         energy = float(np.atleast_1d(action)[0])
@@ -87,18 +87,32 @@ class HP(Infrastructure):
             # Cooling mode: remove heat from building (negative q_hp)
             cop = self.cop_cool
             q_hp = -energy * self.Q_electric_max * cop  # heat removed from building
+            mode = 0.0
         elif mode > 0.6:
             # Heating mode: add heat to building (positive q_hp)
             cop = self.cop_heat
             q_hp = energy * self.Q_electric_max * cop  # heat added to building
+            mode = 1.0
         else:
             # No action zone [0.4, 0.6]
             q_hp = 0.0
             # Set also the energy part to 0 in this case -- at rewards it is useful to have the real actions
             actions["HP_action"][0] = 0.0
-            self.temp_norm_in_change = 0.0
+            actions["HP_action"][1] = 0.5
+            self.temp_in_norm_change = 0.0
             return
 
+        # Write back discretized mode so downstream consumers (info["action"],
+        # prev_HP_action, rewards) see the effective 0/0.5/1 value, not the
+        # raw continuous policy output.
+        actions["HP_action"][1] = np.float32(mode)
+
+        # TODO VP 2026.03.16. : Refinement idea for slow cooling/ slow heating. Add venting system / window open controller (as infrastructure), 
+        # which can cool the house faster if the temperature diff is too big and cooling is not fast enough.
+        # Possible to schedule it, if once fired, then it can't be fire again in an hour -- physics of venting/ventillating a house?
+        # action, but with minimal energy (as window open and close is there). 
+        # Refinement idea: If the wind is too strong or wind is higher than a threshold and it's raining, do not allow this action
+        
         # TODO VP 2026.01.20. : Add forecasting window (and thus MPC) for the states and the
         # actions as well in the config, generally window size is 0.
         # Allow it only for the forecasted desired states -- not for the actual system states
@@ -117,7 +131,7 @@ class HP(Infrastructure):
         dTemp = 0.001 * self.control_step * q_hp / self.mC
 
         # Check if temperature would be clipped after the change
-        current_temp = states["temp_norm_in"][0]
+        current_temp = states["temp_in_norm"][0]
         new_temp = current_temp + dTemp
 
         if new_temp > 1.0 or new_temp < -1.0:
@@ -142,19 +156,23 @@ class HP(Infrastructure):
                 # => energy = q_hp / (Q_electric_max * cop)
                 actual_energy = actual_q_hp / (self.Q_electric_max * cop) if (self.Q_electric_max * cop) > 0 else 0.0
 
+            # Clamp to valid range — HP can only consume energy, never produce
+            actual_energy = np.clip(actual_energy, 0.0, 1.0)
+
             # Update action with the reduced energy (preserve mode)
             actions["HP_action"][0] = np.float32(actual_energy)
+            actions["HP_action"][1] = np.float32(mode)
 
             # Store the actual temperature change
-            self.temp_norm_in_change = actual_dTemp
+            self.temp_in_norm_change = actual_dTemp
         else:
             # No clipping needed, use the original dTemp
-            self.temp_norm_in_change = dTemp
+            self.temp_in_norm_change = dTemp
 
-    def update_state(self, states) -> None:
-        new_temp = states["temp_norm_in"][0] + self.temp_norm_in_change
+    def update_state(self, states, info=None) -> None:
+        new_temp = states["temp_in_norm"][0] + self.temp_in_norm_change
         # Clipping ensured in exec_action -- maybe reintroduction needed later
-        states["temp_norm_in"][0] = np.float32(new_temp)
+        states["temp_in_norm"][0] = np.float32(new_temp)
 
     def get_electric_consumption(self, actions) -> float:
         """Get current electric energy consumption from heat pump.

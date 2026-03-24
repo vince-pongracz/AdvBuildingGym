@@ -1,0 +1,84 @@
+
+
+In Ray Tune, configuring search algorithms is about choosing how to sample your hyperparameters (the Searcher) and when to stop or pause trials to save resources (the Scheduler).
+
+Think of the Searcher as the "Scout" (deciding where to look next based on past data) and the Scheduler as the "Judge" (killing off losers early).
+
+1. Configuring Searchers and Schedulers
+To use advanced search algorithms (like Bayesian Optimization or Optuna), you typically need to install the respective library (e.g., pip install optuna).
+
+Searchers (tune.search): These replace random sampling with smarter logic. Common choices include OptunaSearch, HyperOptSearch, or BayesOptSearch.
+
+Schedulers (tune.schedulers): These handle "Early Stopping." ASHA (Asynchronous Successive Halving Algorithm) is the standard for Reinforcement Learning because it aggressively stops poor-performing SAC trials.
+
+2. Practical Example: New RLlib API (2026)
+The new RLlib API focuses on a unified AlgorithmConfig object. In this example, we’ll use Optuna to find the best learning rate and ASHA to manage the trial lifecycle.
+
+Python
+import ray
+from ray import tune
+from ray.tune.search.optuna import OptunaSearch
+from ray.tune.schedulers import ASHAScheduler
+from ray.rllib.algorithms.sac import SACConfig
+
+# 1. Initialize Ray
+ray.init(ignore_reinit_error=True)
+
+# 2. Define the SAC Configuration using the New API
+# We use tune.uniform() placeholders that the Searcher will fill
+config = (
+    SACConfig()
+    .environment("Pendulum-v1")
+    .training(
+        initial_alpha=tune.uniform(0.1, 0.5),
+        lr=tune.loguniform(1e-5, 1e-3),
+        tau=tune.uniform(0.001, 0.01),
+        train_batch_size=256,
+    )
+    .framework("torch") # Or "tf2"
+    .resources(num_gpus=0) # Set to 1 if you have a GPU
+    .rollouts(num_rollout_workers=2)
+)
+
+# 3. Setup the Search Algorithm (Optuna)
+# It will try to maximize the "episode_reward_mean"
+search_alg = OptunaSearch(metric="episode_reward_mean", mode="max")
+
+# 4. Setup the Scheduler (ASHA)
+# This will stop trials that aren't showing promise early on
+scheduler = ASHAScheduler(
+    metric="episode_reward_mean",
+    mode="max",
+    max_t=100,        # Max iterations per trial
+    grace_period=10,  # Minimum iterations before a trial can be stopped
+    reduction_factor=2
+)
+
+# 5. Execute via Tuner
+tuner = tune.Tuner(
+    "SAC",
+    param_space=config.to_dict(),
+    tune_config=tune.TuneConfig(
+        search_alg=search_alg,
+        scheduler=scheduler,
+        num_samples=10, # Total number of trials to run
+    ),
+    run_config=tune.RunConfig(
+        stop={"training_iteration": 100},
+        checkpoint_config=tune.CheckpointConfig(checkpoint_at_end=True)
+    ),
+)
+
+results = tuner.fit()
+
+# Get the best result
+best_result = results.get_best_result(metric="episode_reward_mean", mode="max")
+print(f"Best hyperparameters: {best_result.config}")
+Key Changes in the New API
+SACConfig(): Instead of passing a giant dictionary to tune.run, we use the SACConfig object. This provides better IDE auto-completion and validation.
+
+.to_dict(): When passing the config to the Tuner, we convert the config object into a dictionary that Tune understands.
+
+tune.Tuner: This is the modern entry point (replacing tune.run). It separates the what (param_space) from the how (tune_config) and the where (run_config).
+
+Decoupled Search: Notice that OptunaSearch doesn't need to know about SAC; it just looks at the episode_reward_mean reported by RLlib and tweaks the values in param_space.

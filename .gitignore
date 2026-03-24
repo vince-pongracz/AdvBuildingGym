@@ -1,4 +1,3 @@
-.ipynb_checkpoints/
 # Bytecode and cache
 __pycache__/
 *.py[cod]
@@ -13,36 +12,25 @@ dist/
 # Jupyter Notebook checkpoints
 .ipynb_checkpoints/
 
-# Archived notebooks (custom)
-notebooks_archive/
-
-# Ignore imitation learning folder (top level)
-imitation_learning/
-
-# Ignore specific subfolder in models
-models/il_agent/
-
-# VSCode / PyCharm project files (optional)
+# VSCode / PyCharm project files
 .vscode/
 .idea/
 
-# SLURM output logs (optional, for HPC clusters)
-**slurm_logs_eval/**.out
-**slurm_logs_eval/**.err
-**slurm_logs_train/**.err
-**slurm_logs_train/**.out
+# SLURM output logs
+**/slurm_logs/eval/**.out
+**/slurm_logs/eval/**.err
+**/slurm_logs/train/**.err
+**/slurm_logs/train/**.out
+**/slurm_logs/data_setup/**.err
+**/slurm_logs/data_setup/**.out
+**/slurm_logs/plotting/**.err
+**/slurm_logs/plotting/**.out
 
 # Environment and runtime
 .env
 .venv
 *.log
 .DS_Store
-*.pyc
-__pycache__/
-plot-paper/workshop_animation.ipynb
-results/
-models/temperature/T01/ppo_model_seed18.zip
-adv_env
 
 # Temporary files
 result_**.json
@@ -57,11 +45,28 @@ ep_metrics/**
 logs/**
 
 # Data
-data/zenodo/**
-!data/zenodo/ds_links.txt
+# Weather data is large, so we ignore the entire folder except for the ds_links.txt file which contains the Zenodo links to the original data sources.
+data/weather/zenodo/**
+!data/weather/zenodo/ds_links.txt
+data/weather/**/LLEC_**
+data/weather/**/10min**
+data/weather/**/produkt_zehn**
+data/weather/dwd/downloaded/**
+data/weather/dwd/preprocessed/**
+# Energy price data -- ignore all, scripts are there for fetching and preprocessing the data.
+data/e_price/**
+
+**rapidapi_key.yaml**
+
+# Data eval dir
+data/eval1/**
 
 # HDF file report
 hdf5_report.json
 
 param_space.json
-test1.json
+
+# Plotting outputs
+plotting/out/**
+
+eval_results/**

@@ -1,93 +1,179 @@
 
+import logging
 from dataclasses import dataclass, field
 from typing import List, Optional
 
+# TODO VP 2026.02.20. : Simplyfy env config somehow, too much code here, too little declarative stuff...
 from adv_building_gym.envs.utils import BuildingProps
 
-from adv_building_gym.devices.infrastructure import Infrastructure, HP, BatteryTremblay, SolarPanel, LinearEVCharger
+logger = logging.getLogger(__name__)
+
+from adv_building_gym.devices.infrastructure import (
+    Infrastructure, HP, BatteryTremblay,
+    SolarPanel, LinearEVCharger, HouseholdEnergyConsumers
+)
+
 from adv_building_gym.devices.statesources import (
-    StateSource, BuildingHeatLoss, DesiredUserEnergyNeed, InsideTemperature,
+    StateSource, BuildingHeatLoss, DesiredUserEnergyNeed, EVState, InsideTemperature,
     EnergyPriceDataSource, WeatherDataSource
 )
+
 from adv_building_gym.rewards import (
-    RewardFunction, TempReward, EconomicReward, 
-    EVChargingOnTimeReward, MinimiseEnergyConsumption_Reward, 
-    UserEnergyNeedReward, OperatorEnergyControlReward
+    RewardFunction, ActionSmoothnessReward, BatteryTargetReward, TempReward,
+    EconomicReward, EVChargingOnTimeReward, EVChargingReward,
+    MinimiseEnergyConsumptionReward, UserEnergyNeedReward,
+    OperatorEnergyControlReward
 )
 
 
-# TODO VP 2026.01.13. : How to learn more days during training? -- solve consecutive days from data sources
 
 @dataclass
-class Config:
+class EnvConfig:
     """
-    Config serialisation -- handled by ConfigManager.
-    Use ConfigManager.save(config, path) to save and ConfigManager.load(path) to load configurations
-    """
-    config_name: str = "test1"
+    Config serialisation -- by ConfigManager.
+    - Save config: ConfigManager.save(config, path)
+    - Load config: ConfigManager.load(path)
 
-    seed: int = 42
-    EPISODE_LENGTH: int = 288
-    control_step: int = 300  # seconds (5 minutes)
+    **IMPORTANT**: Use the factory methods (create_infras, create_statesources, create_rewards)
+    when creating env instances to ensure each env gets independent component instances.
+    Direct access to self.infras/statesources/rewards returns shared singletons and should
+    only be used for inspection, not for passing to AdvBuildingGym in parallel environments.
+    """
+    env_config_name: str = "test1"
+
+    EPISODE_LENGTH: int = 288 # a day
+    CONTROL_STEP: int = 300  # seconds (5 minutes)
+    ACTION_HISTORY_LENGTH: int = 4  # rolling window of past actions exposed in observations
 
     building_props: BuildingProps = field(default_factory=lambda:
         BuildingProps(mC=300, K=20)
     )
 
-    # Initialisation is later, it depends on the building_props
+    # Cached singleton instances (for backward compatibility and inspection)
+    # WARNING: Do not pass these to parallel environments - use factory methods instead
     infras: Optional[List[Infrastructure]] = None
-
-    # Note: statesources list is initialized in __post_init__ to use building_props
     statesources: Optional[List[StateSource]] = None
-
-    # Note: rewards list is initialized in __post_init__ to use infras
     rewards: Optional[List[RewardFunction]] = None
 
+    def create_statesources(self) -> List[StateSource]:
+        """
+        Factory method to create fresh StateSource instances.
+
+        Each call returns NEW independent instances, safe for parallel environments.
+        Components have their own iteration counter and state.
+
+        Returns:
+            List of newly created StateSource instances.
+        """
+        return [
+            EnergyPriceDataSource("E_price"),
+            WeatherDataSource("weather"),
+            InsideTemperature("desired_temp_in"),
+            DesiredUserEnergyNeed("user_energy_need"),
+            BuildingHeatLoss(
+                name="building_heat_loss",
+                K=self.building_props.K,
+                mC=self.building_props.mC,
+                timestep=self.CONTROL_STEP
+            ),
+            EVState("ev_schedule"),
+        ]
+
+    def create_infras(self) -> List[Infrastructure]:
+        """
+        Factory method to create fresh Infrastructure instances.
+
+        Each call returns NEW independent instances, safe for parallel environments.
+        Components have their own iteration counter and state.
+
+        Returns:
+            List of newly created Infrastructure instances.
+        """
+        return [
+            HP(
+                name="HP",
+                Q_electric_max=5.0,  # kW (consistent with battery 19 kW, EV 7 kW, solar 5 kW)
+                K=self.building_props.K,
+                mC=self.building_props.mC,
+                cop_heat=3.0,
+                cop_cool=2.5,
+                control_step=self.CONTROL_STEP
+            ),
+            BatteryTremblay("battery", control_step=self.CONTROL_STEP),
+            LinearEVCharger(
+                "ev_charger",
+                Q_electric_max=7.0,
+                max_cap_kWh=60.0,
+                max_charging_kW=7.0,
+                control_step=self.CONTROL_STEP
+            ),
+            SolarPanel(
+                "solar",
+                Q_electric_max=5.0,
+                peak_power_kW=5.0,
+                control_step=self.CONTROL_STEP
+            ),
+            HouseholdEnergyConsumers(
+                "hh_consumers",
+                Q_electric_max=8.0,
+                peak_consumption_kW=8.0,
+                control_step=self.CONTROL_STEP
+            ),
+        ]
+
+    def create_rewards(self, infras: List[Infrastructure]) -> List[RewardFunction]:
+        """
+        Factory method to create fresh RewardFunction instances.
+
+        Each call returns NEW independent instances, safe for parallel environments.
+
+        Args:
+            infras: List of Infrastructure instances (from create_infras) to link
+                    rewards that depend on infrastructure state (e.g., EV charger).
+
+        Returns:
+            List of newly created RewardFunction instances.
+        """
+        return [
+            TempReward(weight=1),
+            EconomicReward(infras, weight=1),
+            MinimiseEnergyConsumptionReward(weight=0.2),
+            OperatorEnergyControlReward(infras, weight=1),
+            BatteryTargetReward(weight=1),
+            EVChargingReward(weight=1),
+            EVChargingOnTimeReward(infrastructures=infras, weight=1),
+            ActionSmoothnessReward(weight=0.5),
+        ]
+
     def __post_init__(self):
-        """Initialize infras, statesources, and rewards using building_props if not provided."""
+        """Lightweight post-init — does NOT eagerly call factory methods.
+
+        Singleton fields (infras, statesources, rewards) are left as None to
+        avoid unnecessary CSV parsing in every Ray worker subprocess that
+        imports this module.  Call init_singletons() explicitly in the main
+        process where those fields are actually needed.
+        """
+
+    def init_singletons(self) -> None:
+        """Initialise the cached singleton component instances.
+
+        Call this once in the main process after creating / loading a Config,
+        before accessing self.infras / self.statesources / self.rewards.
+        Not needed in Ray worker subprocesses — they call the factory methods
+        (create_infras, create_statesources, create_rewards) directly via
+        adv_building_env_creator.
+
+        WARNING: Do not pass these singleton instances to parallel environments
+        — use the factory methods instead.
+        """
         if self.statesources is None:
-            self.statesources = [
-                EnergyPriceDataSource("E_price", ds_path="data/price_data_2025.csv"),
-                WeatherDataSource("weather", ds_path="data/LLEC_outdoor_temperature_5min_data.csv"),
-                InsideTemperature("desired_temp_in"),
-                DesiredUserEnergyNeed("user_energy_need"),
-                BuildingHeatLoss(
-                    name="building_heat_loss",
-                    K=self.building_props.K,
-                    mC=self.building_props.mC,
-                    timestep=self.control_step
-                ),
-            ]
+            self.statesources = self.create_statesources()
 
         if self.infras is None:
-            self.infras = [
-                HP(
-                    name="HP",
-                    Q_electric_max=1000.0,
-                    K=self.building_props.K,
-                    mC=self.building_props.mC,
-                    cop_heat=3.0,  # Typical heating COP for heat pumps
-                    cop_cool=2.5,  # Typical cooling COP for heat pumps
-                    control_step=self.control_step
-                ),
-                BatteryTremblay("battery", control_step=self.control_step),  # 14 kWh, 48A defaults
-                LinearEVCharger("ev_charger", Q_electric_max=7.0, max_cap_kWh=60.0, max_charging_kW=7.0, control_step=self.control_step),
-                SolarPanel("solar", Q_electric_max=5.0, peak_power_kW=5.0, seed=self.seed, control_step=self.control_step),
-            ]
+            self.infras = self.create_infras()
 
         if self.rewards is None:
-            # Find EV charger from infras for EVChargingOnTimeReward
-            ev_charger = next(
-                (infra for infra in self.infras if isinstance(infra, LinearEVCharger)),
-                None
-            )
-            self.rewards = [
-                TempReward(weight=1),
-                EconomicReward(weight=1),
-                MinimiseEnergyConsumption_Reward(weight=1),
-                OperatorEnergyControlReward(self.infras, weight=1),
-                EVChargingOnTimeReward(weight=1, ev_charger=ev_charger),
-            ]
+            self.rewards = self.create_rewards(self.infras)
 
 # default/config instance
-config = Config()
+config = EnvConfig()

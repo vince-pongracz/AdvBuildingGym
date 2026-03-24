@@ -6,9 +6,11 @@ reward metrics during training.
 """
 
 import os
+import sys
 import time
 import datetime
 import logging
+from pathlib import Path
 
 import json
 import argparse
@@ -17,6 +19,7 @@ import torch
 import ray
 from ray import tune
 from ray.tune import CLIReporter
+from ray.tune.registry import register_env
 
 # Import warning filter setup from utils
 # The function is centrally defined in adv_building_gym/utils/warning_filters.py
@@ -26,10 +29,11 @@ from ray.tune import CLIReporter
 from adv_building_gym.utils import setup_warning_filters
 
 # Trigger registration of the custom Gym IDs
-from adv_building_gym import make_checkpoint_callback_class, ConfigManager
-from adv_building_gym.config import config as default_config
+from adv_building_gym import make_checkpoint_callback_class, EnvConfigManager
+from adv_building_gym.config import config as default_config, load_data_combinator_config
 from adv_building_gym.envs import adv_building_env_creator
-from adv_building_gym.ray_training import common_model_config, select_model
+from adv_building_gym.ray_training import common_model_setup, select_model
+from adv_building_gym.config.training_param_config import TrainingParamConfig
 from adv_building_gym.utils import (
     CustomJSONEncoder,
     trial_dirname_creator,
@@ -90,23 +94,27 @@ def main():
     )
     parser.add_argument(
         "--load-config", type=str,
-        help="Path to JSON config file to load (e.g., 'configs/my_config.json')"
+        help="Path to YAML config file to load (e.g., 'configs/my_config.yaml')"
     )
     parser.add_argument(
         "--save-config", type=str,
-        help="Path where to save the config as JSON (e.g., 'configs/my_config.json')"
+        help="Path where to save the config as YAML (e.g., 'configs/my_config.yaml')"
     )
-    parser.add_argument("--timesteps", type=float, default=1e6) # a million
+    parser.add_argument(
+        "--episodes", type=int, default=None,
+        help="Total training episodes. Primary stopping criterion. "
+            "Converted to timesteps internally (episodes × EPISODE_LENGTH). "
+            "Takes precedence over --timesteps if both are given."
+    )
+    parser.add_argument(
+        "--timesteps", type=float, default=None,
+        help="(Deprecated, prefer --episodes) Total environment timesteps. "
+            "Ignored when --episodes is given. Legacy default: 1e6."
+    )
     parser.add_argument(
         "--num-envs", type=int, default=1, help="Number of parallel environments" # Change env number?
     )
-    parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--eval-freq", type=int, default=20_000)
-    parser.add_argument(
-        "--training",
-        action="store_true",
-        help="Use training split of price data (else test split)",
-    )
+    parser.add_argument("--seed", type=int, default=None)
     parser.add_argument(
         "--metric",
         type=str,
@@ -134,24 +142,75 @@ def main():
         default=20,
         help="Checkpoint frequency in number of episodes (will be converted to training iterations)",
     )
+    parser.add_argument(
+        "--log-trajectories",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Save per-step trajectory JSON per episode (default: False)"
+    )
+    parser.add_argument(
+        "--data-config", type=str, default=None,
+        help="Path to data combinator YAML config (default: configs/train_data_combinator_config.yaml)"
+    )
+
     args = parser.parse_args()
 
-    args.timesteps = int(args.timesteps)
-
+    # Load configs:
+    # Load training hyperparameters (shared across select_model and checkpoint calc)
+    training_param_config = TrainingParamConfig.from_yaml(
+        Path(__file__).resolve().parent / "configs" / "training_param_config.yaml"
+    )
+    
+    if args.seed is not None:
+        training_param_config.seed = args.seed
+    else:
+        args.seed = training_param_config.seed
+    
     # Load config from file if specified, otherwise use default
     if args.load_config:
         logger.info("Loading config from: %s", args.load_config)
-        active_config = ConfigManager.load(args.load_config)
-        logger.info("Config loaded successfully: %s", active_config.config_name)
+        active_config = EnvConfigManager.load(args.load_config)
+        logger.info("Config loaded successfully: %s", active_config.env_config_name)
     else:
         active_config = default_config
 
-    args.config_name = active_config.config_name if args.config_name is None else args.config_name
+    # Load data combinator from YAML (separate from env config)
+    data_combinator = load_data_combinator_config(
+        yaml_path=args.data_config,
+        seed_override=args.seed,
+    )
+
+    # Resolve stopping criterion: --episodes takes precedence over --timesteps.
+    # Internally, RLlib always stops on num_env_steps_sampled_lifetime (timesteps),
+    # so we convert episodes → timesteps here for a user-friendly interface.
+    if args.episodes is not None:
+        args.timesteps = args.episodes * active_config.EPISODE_LENGTH
+        logger.info("Stopping after %d episodes (%d timesteps)", args.episodes, args.timesteps)
+    elif args.timesteps is not None:
+        args.timesteps = int(args.timesteps)
+        args.episodes = args.timesteps // active_config.EPISODE_LENGTH
+        logger.info("--timesteps is deprecated, prefer --episodes. "
+                    "Stopping after %d timesteps (~%d episodes)", args.timesteps, args.episodes)
+    else:
+        args.episodes = training_param_config.max_episodes_to_run
+        args.timesteps = args.episodes * active_config.EPISODE_LENGTH
+        logger.info("Using default: %d episodes (%d timesteps)", args.episodes, args.timesteps)
+
+    # Initialise the singleton component instances exactly once in the main process.
+    # This triggers CSV parsing (e.g. EVState) here, and only here.
+    # Ray worker subprocesses (EnvRunners, SAC actor, Learner) never call this —
+    # they use the factory methods directly via adv_building_env_creator.
+    active_config.init_singletons()
+
+    # Action space is handled by env wrappers (FlattenAction + RescaleAction)
+    # applied in env_creator.
+
+    args.config_name = active_config.env_config_name if args.config_name is None else args.config_name
 
     # Save config to file if specified
     if args.save_config:
         logger.info("Saving config to: %s", args.save_config)
-        ConfigManager.save(active_config, args.save_config)
+        EnvConfigManager.save(active_config, args.save_config)
         logger.info("Config saved successfully")
 
     # Add evaluation/env_runners/ prefix to metric if not already present
@@ -168,28 +227,32 @@ def main():
     slurm_cpus = os.environ.get("SLURM_CPUS_PER_TASK")
     cpus = int(slurm_cpus) if slurm_cpus and slurm_cpus.isdigit() else 2
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    logger.info("Training on device: %s", device)
-
-    # Only count GPUs if PyTorch can actually use CUDA
-    if torch.cuda.is_available():
-        cuda_visible = os.environ.get("CUDA_VISIBLE_DEVICES")
-        if cuda_visible:
-            # CUDA_VISIBLE_DEVICES may contain comma-separated GPU ids
-            gpus = len([x for x in cuda_visible.split(",") if x.strip() != ""])
-        else:
-            gpus = torch.cuda.device_count()
+    # Only use GPUs that SLURM explicitly allocated via --gres=gpu.
+    # SLURM sets CUDA_VISIBLE_DEVICES to the allocated GPU ids; if unset,
+    # no GPU was booked and Ray must not try to acquire one.
+    cuda_visible = os.environ.get("CUDA_VISIBLE_DEVICES")
+    if cuda_visible:
+        gpus = len([x for x in cuda_visible.split(",") if x.strip() != ""])
+        if not torch.cuda.is_available():
+            logger.error(
+                "SLURM allocated GPUs (CUDA_VISIBLE_DEVICES=%s) but PyTorch "
+                "cannot access CUDA. Check driver/CUDA toolkit setup.",
+                cuda_visible,
+            )
+            logger.error("Exiting.")
+            sys.exit(1)
     else:
         gpus = 0
-        if os.environ.get("CUDA_VISIBLE_DEVICES"):
-            logger.warning(
-                "CUDA_VISIBLE_DEVICES=%s but PyTorch cannot see GPU. "
-                "Training will use CPU only. Check CUDA/driver setup.",
-                os.environ.get("CUDA_VISIBLE_DEVICES")
-            )
+        logger.error(
+            "No GPU allocated (CUDA_VISIBLE_DEVICES is not set). "
+            "Training requires a GPU — submit with --gres=gpu:1.",
+        )
+        logger.error("Exiting.")
+        sys.exit(1)
+
+    logger.info("Training on device: cuda (%d GPU(s) from SLURM)", gpus)
 
     logger.info("Initializing Ray with cpus=%s gpus=%s (from SLURM/CUDA env)", cpus, gpus)
-
     ray.init(
         num_cpus=cpus,
         num_gpus=gpus,
@@ -214,6 +277,7 @@ def main():
     # NOTE: episode_length is required to calculate episode count from timesteps.
     # This is needed because off-policy algorithms (SAC) don't reliably report
     # num_episodes_lifetime, but num_env_steps_sampled_lifetime is always accurate.
+    # NOTE VP 2026.02.24. : Callback is here because it needs checkpoint_dir and run_name, these are CLI argument dependent.
     checkpoint_callback_class = make_checkpoint_callback_class(
         checkpoint_dir=checkpoint_dir,
         checkpoint_frequency=args.checkpoint_frequency_episodes,
@@ -222,17 +286,26 @@ def main():
         episode_length=active_config.EPISODE_LENGTH,
     )
 
+    env_creator_config = {
+        "log_full_info": args.log_trajectories,
+        "data_combinator": data_combinator,
+    }
+    register_env("AdvBuilding", lambda cfg: adv_building_env_creator({**env_creator_config, **cfg}))
+
+    # TODO VP 2026.02.20. : It is not a nice thing that episode_length is needed in multiple places
+    # (common_model_config, select_model)
     # Build algorithm-specific config
     algo_config = select_model(
         algorithm=args.algorithm,
         episode_length=active_config.EPISODE_LENGTH,
+        training_config=training_param_config,
     )
 
     # Apply common RLlib configuration (resource allocation, action space, and callbacks)
-    algo_config = common_model_config(
+    algo_config = common_model_setup(
         config=algo_config,
-        seed=args.seed,
-        env_creator=adv_building_env_creator,
+        episode_length=active_config.EPISODE_LENGTH,
+        training_config=training_param_config,
         num_cpus=cpus,
         num_gpus=gpus,
         checkpoint_callback_class=checkpoint_callback_class,
@@ -240,6 +313,8 @@ def main():
         rewards=active_config.rewards,
         metrics_base_dir="ep_metrics",
         clip_actions=True,
+        data_combinator=data_combinator,
+        log_trajectories=args.log_trajectories
     )
 
     # Convert the RLlib config into a Tune param space
@@ -247,15 +322,22 @@ def main():
 
     # Save parameter space for inspection -- 
     with open("param_space.json", "w", encoding="utf-8") as f:
-        # NOTE: param_space stores both new and old API stuff for backward compatibility, 
+        # NOTE: param_space stores both new and old API stuff for backward compatibility,
         # that is why the model dict contains the default values and _model_config the true specification
         json.dump(param_space, f, cls=CustomJSONEncoder, indent=4)
 
-    # Calculate checkpoint frequency in training iterations based on episodes
-    # Episode length from env config (288 timesteps per episode)
-    # Training batch size per iteration: train_batch_size_per_learner = 4000 timesteps
+    # Calculate checkpoint frequency in training iterations based on episodes.
+    # train_batch_size_per_learner drives how many timesteps RLlib processes per
+    # training iteration — but its meaning differs by algorithm:
+    #   PPO  — ppo_episodes_per_iteration × EPISODE_LENGTH (on-policy batch)
+    #   SAC  — sac_replay_batch_size (off-policy replay buffer sample)
+    # We compute it from training_config directly (not from param_space, where
+    # RLlib serializes it under a different key: _train_batch_size_per_learner).
     timesteps_per_episode = active_config.EPISODE_LENGTH  # 288 timesteps
-    timesteps_per_iteration = param_space.get("train_batch_size_per_learner", 4000)
+    if args.algorithm == "ppo":
+        timesteps_per_iteration = training_param_config.ppo_episodes_per_iteration * active_config.EPISODE_LENGTH
+    else:
+        timesteps_per_iteration = training_param_config.sac_replay_batch_size
     checkpoint_freq_iterations = max(1, int((args.checkpoint_frequency_episodes * timesteps_per_episode) / timesteps_per_iteration))
 
     logger.info("Checkpoint configuration:")
@@ -272,9 +354,9 @@ def main():
 
     # Setup stopping criteria and run configuration for the tuner
     # Note: In the new API stack, use 'num_env_steps_sampled_lifetime' instead of 'timesteps_total'
+    # Episodes are converted to timesteps above (--episodes × EPISODE_LENGTH)
     stop_criteria = {
         "num_env_steps_sampled_lifetime": args.timesteps,
-        "training_iteration": 250,
     }
 
     # Configure progress reporter to show training metrics
@@ -292,7 +374,7 @@ def main():
     )
 
     tuner = tune.Tuner(
-        args.algorithm.upper(),  # "PPO"
+        args.algorithm.upper(),  # e.g.: "PPO" or "SAC"
         param_space=param_space,
         tune_config=tune.TuneConfig(
             reuse_actors=True,
@@ -304,6 +386,9 @@ def main():
             metric=args.metric,
             mode="max",
             trial_dirname_creator=trial_dirname_creator,
+            # TODO VP 2026.03.20. : Read more about TuneConfig params -- needed when tune hyperparam optimisation is used...
+            # search_alg=,
+            # scheduler=
         ),
         run_config=tune.RunConfig(
             name=run_name,
@@ -394,6 +479,7 @@ def main():
     # ===================================================================================
 
 
+    # TODO VP 2026.03.20. : Clean this up, refactor
     for i, res in enumerate(results._results):
         with open(f"result_{i}.json", "w", encoding="utf-8") as f:
             # Handle failed trials where config/metrics may be None
@@ -428,11 +514,12 @@ if __name__ == "__main__":
 # Usage examples:
 # On slurm: sbatch slurm_scripts/slurm_train_ray.sh
 
-# Default settings (checkpoint every 20 episodes, optimize reward_rate)
-# python run_train_ray.py --algorithm ppo --seed 42 --timesteps 1e6
+# Default settings (3500 episodes, checkpoint every 20 episodes, optimize reward_rate)
+# python run_train_ray.py --algorithm ppo --seed 42 --episodes 3500
 
-# Custom checkpoint frequency and metric
-# python run_train_ray.py --algorithm ppo --seed 42 --timesteps 1e6 --checkpoint-frequency-episodes 50 --metric achieved_reward
+# Custom episode count, checkpoint frequency, and metric
+# python run_train_ray.py --algorithm ppo --seed 42 --episodes 5000 --checkpoint-frequency-episodes 50 --metric achieved_reward
 
-# With specific config name
-# python run_train_ray.py -a sac -s 18 -cn test1 --checkpoint-frequency-episodes 30 --metric reward_rate
+# SAC with specific config name
+# python run_train_ray.py --algorithm sac --seed 18 -cn test1 --episodes 3500 --metric reward_rate
+

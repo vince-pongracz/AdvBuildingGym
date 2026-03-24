@@ -44,6 +44,7 @@ class LinearEVCharger(Infrastructure):
                  start_soc: float = 0.3,
                  target_soc: float = 0.9,
                  max_charge_time_hrs: float = 24.0,
+                 v2g_playroom: float = 0.1
                  ) -> None:
         """Initialize EV Charger infrastructure.
 
@@ -70,6 +71,7 @@ class LinearEVCharger(Infrastructure):
         self.charger_efficiency = charger_efficiency
         self.discharge_efficiency = discharge_efficiency
         self.v2g_enabled = v2g_enabled
+        self.v2g_playroom = v2g_playroom
         self.control_step = control_step
         self.history_length = history_length
         self.max_charge_time_hrs = max_charge_time_hrs
@@ -77,7 +79,7 @@ class LinearEVCharger(Infrastructure):
         # State variables
         self.soc = start_soc
         self.target_soc = target_soc
-        self.ev_connected = True  # Whether EV is connected to charger
+        self.ev_connected = False  # Whether EV is connected to charger
         self.charge_to_target_in_hrs = 0.0  # Time remaining to reach target SoC
 
         if charger_efficiency <= 0 or charger_efficiency > 1:
@@ -150,8 +152,43 @@ class LinearEVCharger(Infrastructure):
                 self.max_charge_time_hrs
             )
 
-    def exec_action(self, actions: Dict, states: Dict) -> None:
+    def _check_schedule(self, info: Dict) -> None:
+        """Check the shared info dict for EV schedule changes from EVState.
+
+        Reads ``ev_schedule_connected`` (and EV spec fields) written by the
+        EVState source.  When the schedule differs from the current connection
+        state, calls :meth:`set_ev_connected` to apply the transition.
+        """
+        if "ev_schedule_connected" not in info:
+            return  # No EVState in this config
+
+        scheduled_connected = bool(info["ev_schedule_connected"] > 0.5)
+
+        if scheduled_connected == self.ev_connected:
+            return  # No change
+
+        if scheduled_connected:
+            # Build EvSpec from schedule fields in info dict
+            ev_spec = EvSpec(
+                max_cap_kWh=float(info["ev_schedule_max_cap_kWh"]),
+                max_charging_kW=float(info["ev_schedule_max_charging_kW"]),
+                charger_efficiency=float(info["ev_schedule_charger_eff"]),
+                discharge_efficiency=float(info["ev_schedule_discharge_eff"]),
+                v2g_enabled=bool(info["ev_schedule_v2g"] > 0.5),
+                start_soc=float(info["ev_schedule_start_soc"]),
+                target_soc=float(info["ev_schedule_target_soc"]),
+            )
+            logger.debug("EV schedule: CONNECT (cap=%.1f, soc=%.2f->%.2f)",
+                        ev_spec.max_cap_kWh, ev_spec.start_soc, ev_spec.target_soc)
+            self.set_ev_connected(connected=True, ev_spec=ev_spec)
+        else:
+            logger.debug("EV schedule: DISCONNECT")
+            self.set_ev_connected(connected=False)
+
+    def exec_action(self, actions: Dict, states: Dict, info=None) -> None:
         """Execute charging/discharging action."""
+        # Check for EV schedule changes before acting
+        self._check_schedule(info or {})
 
         if not self.ev_connected:
             # EV not connected --> no action
@@ -160,8 +197,11 @@ class LinearEVCharger(Infrastructure):
 
         action = float(np.atleast_1d(actions["lin_ev_charger_action"])[0])
 
-        # Clip action based on V2G capability -- and write it back to actions
-        if not self.v2g_enabled:
+        # Clip action based on V2G capability — only allow discharge when the
+        # EV has enough charge.  Discharging a car that still needs charging
+        # defeats the purpose of the charging session.
+        # V2G is permitted only when SoC >= (target - playroom).
+        if not self.v2g_enabled or self.soc < self.target_soc - self.v2g_playroom:
             action = max(0.0, action)
             actions["lin_ev_charger_action"][0] = action
 
@@ -213,7 +253,7 @@ class LinearEVCharger(Infrastructure):
         # Write adjusted action back
         actions["lin_ev_charger_action"][0] = np.float32(action)
 
-    def update_state(self, states: Dict) -> None:
+    def update_state(self, states: Dict, info=None) -> None:
         """Update observable state."""
         states["ev_soc"][0] = np.float32(self.soc)
         states["ev_target_soc"][0] = np.float32(self.target_soc)
@@ -247,8 +287,8 @@ class LinearEVCharger(Infrastructure):
 
         action = float(np.atleast_1d(actions["lin_ev_charger_action"])[0])
 
-        # Clip action based on V2G capability
-        if not self.v2g_enabled:
+        # V2G discharge only allowed when SOC >= target - playroom (consistent with exec_action)
+        if not self.v2g_enabled or self.soc < self.target_soc - self.v2g_playroom:
             action = max(0.0, action)
 
         # Power consumption in kW

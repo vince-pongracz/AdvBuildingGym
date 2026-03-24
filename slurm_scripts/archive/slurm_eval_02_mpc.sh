@@ -10,8 +10,8 @@
 #SBATCH --ntasks=1
 #SBATCH --gres=gpu:0
 #SBATCH --time=24:00:00
-#SBATCH --output=slurm_logs_eval/slurm-eval-mpc-%j.out
-#SBATCH --error=slurm_logs_eval/slurm-eval-mpc-%j.err
+#SBATCH --output=slurm_logs/eval/slurm-eval-mpc-%j.out
+#SBATCH --error=slurm_logs/eval/slurm-eval-mpc-%j.err
 
 # Evaluation: MPC Control and Perfect MPC Control
 
@@ -70,5 +70,5 @@ echo "MPC evaluations completed."
 # - To submit the job to SLURM:
 #     sbatch slurm_script/slurm_eval_02_mpc.sh
 #
-# - Output and error logs will be written to: slurm_logs_eval/slurm-eval-mpc-<jobid>.out/.err
+# - Output and error logs will be written to: slurm_logs/eval/slurm-eval-mpc-<jobid>.out/.err
 # -------------------------------------------------------------------------------

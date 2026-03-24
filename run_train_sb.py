@@ -250,14 +250,26 @@ class BestModelCheckpointCallback(BaseCallback):
 
 
 def make_env(rank: int, seed: int):
-    """Factory function for creating environment instances."""
+    """Factory function for creating environment instances.
+
+    Uses factory methods to create fresh component instances for each env,
+    ensuring parallel environments don't share mutable state.
+    """
     def _init() -> gym.Env:
+        # Create fresh instances for this environment using factory methods.
+        # Each env gets its own infras/statesources/rewards with independent state.
+        infras = env_config.create_infras()
+        statesources = env_config.create_statesources()
+        rewards = env_config.create_rewards(infras)
+
         env = AdvBuildingGym(
-            infras=env_config.infras, # type: ignore
-            statesources=env_config.statesources, # type: ignore
-            rewards=env_config.rewards,
+            infras=infras,
+            statesources=statesources,
+            rewards=rewards,
             building_props=env_config.building_props,
         )
+        from adv_building_gym.envs.env_creator import wrap_action_space
+        env = wrap_action_space(env)
         env.reset(seed=seed + rank)
         return env
     return _init
@@ -392,7 +404,7 @@ def main():
     args = parser.parse_args()
 
     args.timesteps = int(args.timesteps)
-    args.config_name = env_config.config_name if args.config_name is None else args.config_name
+    args.config_name = env_config.env_config_name if args.config_name is None else args.config_name
 
     # Normalize metric name: SB3's "mean_reward" is equivalent to Ray's "episode_return_mean"
     # Use "episode_return_mean" internally for consistency across frameworks

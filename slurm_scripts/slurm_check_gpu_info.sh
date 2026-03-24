@@ -5,8 +5,8 @@
 # Description: GPU availability and configuration check using nvidia-smi and PyTorch
 
 #SBATCH --job-name=gpu-info
-#SBATCH --output=slurm_logs_train/gpu-info-%j.out
-#SBATCH --error=slurm_logs_train/gpu-info-%j.err
+#SBATCH --output=slurm_logs/train/gpu-info-%j.out
+#SBATCH --error=slurm_logs/train/gpu-info-%j.err
 #SBATCH --partition=normal
 #SBATCH --gres=gpu:4g.20gb:1
 #SBATCH --time=00:05:00

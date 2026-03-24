@@ -10,6 +10,15 @@ class EnvSyncInterface(ABC):
     """Interface for synchronizing devices in the environment."""
     def __init__(self):
         self.iteration = 0
+        self.row_offset = 0
 
-    def synchronise(self, iteration: int) -> None:
+    def synchronise(self, iteration: int, row_offset: int | None = None) -> None:
         self.iteration = iteration
+        
+        if row_offset is not None:
+            self.row_offset = row_offset
+
+    @property
+    def effective_index(self) -> int:
+        """Row index into time-series data: row_offset + iteration."""
+        return self.row_offset + self.iteration

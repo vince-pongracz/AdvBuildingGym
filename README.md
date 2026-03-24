@@ -21,6 +21,13 @@ Data link: https://zenodo.org/records/5642902
 
 <!-- TODO VP: add it to the repo setup description... -->
 
+TODO VP: Idea 2. The "Mixture of Experts" or Hierarchical Approach
+You can have a single agent that switches between different policies based on the state.
+
+How it works: You define a multi-agent setup where one "Manager" policy selects which "Worker" policy to use. Even though it's technically a single entity in the game, RLlib treats it as a coordination task between multiple policies.
+
+Use case: An agent that has a "Combat Policy" and a "Navigation Policy."
+
 Script to download data from zenedo:
 ```bash
 while IFS= read -r link; do
@@ -59,6 +66,15 @@ done < ds_links.txt
 ```
 or
 `cat ds_links.txt | xargs -n 1 -P 4 curl -L --progress-bar -OJ`
+
+<!-- Add NOTEs:
+TODO VP: SAC and PPO notes
+SAC: https://spinningup.openai.com/en/latest/algorithms/sac.html
+- test alpha param, controlling exploitation, exploration tradeoff
+
+PPO: https://spinningup.openai.com/en/latest/algorithms/ppo.html
+
+-->
 
 ### Slurm
 
@@ -101,6 +117,140 @@ To simulate real-world uncertainty, the environment includes:
 
 These features support the evaluation under uncertainty and help assess the robustness of control strategies.
 
+### Papers
+
+#### Reinforcement Learning-Based Energy Management of Smart Home with Rooftop Solar Photovoltaic System, Energy Storage System, and Home Appliances. 
+Link: https://www.mdpi.com/1424-8220/19/18/3937
+Uses RL, tabular Q learning (tables, discrete state-action pairs), PV, ESS, AC and washing machine.
+Cost and comfort optimisation. Seems like each infrastructure has its own agent -- or at least own head in the policy network
+Restricted weather data (only temp)
+
+Previous works: almost everything done... multi agent, Q learning, manage HVAC, manage ESS
+This paper: 
+- ESS + consumer comfort -- but with TOU tariff, not with variable, real day ahead data
+- only optimises for energy cost and thermal comfort -- 2 optimisation goals
+- shiftable and non shiftable energy consumption -- washing machine can't be stopped at any time, charging can
+- shiftable interruptable/non-interruptable, non shiftable interruptable/non-interruptable
+- only PV, ESS, HVAC -- no EV and Wind turbine
+- only binary (on/off) ESS control?
+- schedule of the energy usage is learnt, not the actual energy allocation -- energy allocation is discrete in this paper
+- scheduling resolution is 1h, not 5min -- update in each hour, not in every 5 mins.
+- for indoor temp: they predict it with an NN -- no physical model, just NN behind actual temp prediction -- T_act in the current step is predicted by an NN -- I have physics here instead
+- user desired temp is a range, not an exact value -- in my project it's a fix value with a threshold up and down
+- they compare MILP and RL control of the same setup -- RL is better
+
+New stuff can be in my thesis: 
+- based on data and actions, forecast the passive states as well -- try to learn the passive states -- model based RL (?)
+- resolution is more fine grained, I use wholesale price data
+- Flexibility: not only PV, HVAC and ESS -- wind turbine, etc, config and flexibility
+- more rewards, more reward aspects, flexible to config how many rewards. Optimise on achieved reward or to reward rate
+
+TODO VP: How to solve that the same model used for different infra/state configs?
+--> if it's multi agent, then it's easy -- each agent outputs an action, number of agents change, but not really their state
+- What if the state sources config changes as well? -- I guess no need to overcome this
+
+TODO VP: tune discount factor of the Q values -- long term or short term optimisation
+
+TODO VP: take out big oscillations from the battery charge discharge actions -- or at least inspect whether it happens or not
+TODO VP: at ESS -- add lifetime decay/degradation in capacity or in discharge rate
+TODO VP: use the WPuQ PV production data (actions..?) along with its weather data?
+
+#### Enhanced Robust Index Model for Load Scheduling of a Home Energy Local Network With a Load Shifting Strategy
+
+Link: https://ieeexplore.ieee.org/document/8600304
+
+Paper:
+- load scheduling
+- robust index model: to opt home energy local network (HELN)
+- rather deals with how to optimise so, that in the case of max uncertainty (worst case scenario) the system is still functional and does not violate hard constraints.
+- no RL, it's not a really relevant paper
+
+
+New idea for my thesis:
+- predict actions and states for N steps (model based RL) -- MPC and Monte Carlo sims would be something like this
+
+#### State of the Art of Machine Learning Models in Energy Systems, a Systematic Review
+
+Link: https://www.mdpi.com/1996-1073/12/7/1301
+
+Paper:
+- Comprehensive review of ML and energy systems, 2019, ANN, but no RL
+- single domain systems (only PV, only HP, etc..)
+- likely not really relevant, as it is an older survey paper, a SOTA overview from 2019
+- does not mention RL --> drop this
+
+#### 
+
+### Frameworks
+
+#### CityLearn
+
+Link: https://www.citylearn.net/
+GitHub: https://github.com/citylearn-project/CityLearn
+
+Summary:
+- MARL for energy coordination among multiple buildings
+- flatten the energy need of a neighbourhood -- control multiple households with cooperating agents
+- several controller types: Rule based control (RBC), MPC, RL
+- PV, EV with V2G
+- multiple buildings controlled together, to simulate a district -- possible to simulate a single building as well
+- a simulation environment -- maybe a decent starting point
+
+My project:
+- single household -- no grid, no cooperation with other buildings
+- intervention at eval, not only static behaviour (still a TODO)
+- more options to eval: generalisation and transfer -- feasible with this one as well, just the data and config management is missing I guess
+- Monte Carlo rollouts
+
+#### SinerGym
+
+Link: https://www.sciencedirect.com/science/article/pii/S0378778824011915
+GitHub: https://github.com/ugr-sail/sinergym
+
+Summary:
+- seems really similar to my Gym and repo...
+- Building energy optimisation (BEO)
+- 3 other frameworks: RL Testbed for EnergyPlus, BOPTEST-Gym, Energym -- they are still active
+- not maintained anymore: Gym-Eplus [10], ModelicaGym, [41], Tropical Precooling Environment [42], COmprehensive Building, Simulator (COBS) [43], and RL-EmsPy
+- GridLearn [45] and Grid2Op [46] -- rahter grid management and not BEO
+- it seems like they do not use price data
+- it seems like they only use TMY (typical meterological year -- median weather data over multiyear period), not daily weather data
+- RL
+
+TODO VP: Idea -- maybe it is easier to have MA setup with distinct state spaces -- then each agent NN has its own input heads (general input heads and specific input heads)
+The problem is the state space inputs -- that can't be changed easily.
+What if each state source / input has a pre-net, which translates the actual state to an intermediate N long vector -- each state variable/state source (history with K steps) would be mapped to an N long vector (only an N long vector, so it's an encoder...) -- state-source encoder? Trained to have an intermediate representation about the specific statesource.
+
+TODO VP: Google DeepMind -- they reduced their energy usage as well, take a look onto that
+
+##### EnergyPlus -- simulator:
+
+Link: https://energyplus.readthedocs.io/en/latest/api.html
+
+GitHub: https://github.com/NatLabRockies/EnergyPlus
+
+Summary:
+- What is it? An energy analysis and thermal load simulation program for buildings
+- a mighty simulator/simulation engine
+- Deals with building geometry, materials, HVAC systems, thermal calculations and energy usage
+- OpenSource
+- processes building config and weather time series
+
+Conclusion:
+- just simulator, no RL, no config management
+- no building wide generalisation targeted -- EnergyPlus simulates buildings, nothing more
+
+
+
+#### Explicable Reward Design for Reinforcement Learning Agents
+
+Link to paper: https://machineteaching.mpi-sws.org/files/papers/explicable_reward_design.pdf
+
+Summary:
+- it's about reward design, how to design explainable rewards -- what are the mathematical criteria
+- explainable: informativeness and spareseness -- tradeoff
+
+
 #### Key Features
 
 - Single-zone indoor thermal model with electric heat pump control and heat loss dynamics
@@ -134,8 +284,10 @@ LLECBuildingGym/                              # Root directory of the project
 │   ├── plot_fig04_price_data.ipynb           # Plots dynamic energy prices for Figure 04
 │   ├── plot_fig05_indoor_temp_setpoint.ipynb # Plots dynamic indoor temp setpoints for Figure 05
 │   └── preprocess_outdoor_temperature.ipynb  # Prepares outdoor temperature time series
-├── slurm_logs_eval/                          # SLURM logs from evaluation jobs
-├── slurm_logs_train/                         # SLURM logs from training jobs
+├── slurm_logs/
+│   ├── eval/                                 # SLURM logs from evaluation jobs
+│   └── train/                                # SLURM logs from training jobs
+│   └── data_setup/                           # SLURM logs from data setup jobs
 ├── slurm_script/                             # SLURM job submission scripts
 ├── results/                                  # Evaluation logs and result CSVs
 ├── .gitignore                                # Ignore in version control
@@ -223,6 +375,27 @@ After registering the kernel, restart Jupyter so the `Python (llec_env)` kernel 
 
 </details>
 
+## Data Preprocessing
+
+Before training, set up data with the unified setup script.
+By default it runs **both** pipelines: electricity prices and weather/Zenodo.
+
+```bash
+# Recommended: full setup (price + weather)
+python preproc/data_setup.py
+
+# Price-focused run only (disable weather pipeline)
+python preproc/data_setup.py --skip-weather --years 2023 2024 2025 2026
+
+# If raw prices already exist locally, skip API calls
+python preproc/data_setup.py --skip-weather --years 2025 --skip-price-fetch --raw-price-files data/e_price/2025_prices.csv
+
+# Weather-focused run only (disable price pipeline)
+python preproc/data_setup.py --skip-prices --skip-zenodo-download
+```
+
+See [data/DATA_README.md](data/DATA_README.md) for all options and manual fallback commands.
+
 ## 3.Training and Evaluation
 
 <details>
@@ -250,7 +423,7 @@ Two reward modes and multiple observation variants are supported for flexible ev
 | `--seed`              | int   | `42`                         | Any integer                                     | Random seed for reproducibility.                             |
 | `--eval-freq`         | int   | `5000`                       | >= 1                                            | Evaluation frequency (in timesteps).                         |
 | `--reward_mode`       | str   | `"temperature"`              | `temperature`, `combined`                       | Reward mode: temperature (single-reward) or combined (multi-reward). |
-| `--energy-price-path` | str   | `"data/price_data_2025.csv"` | Valid CSV path                                  | Path to normalized energy price CSV file.                    |
+| `--energy-price-path` | str   | `"data/e_price/price_data_2025_norm.csv"` | Valid CSV path                                  | Path to normalized energy price CSV file.                    |
 | `--training`          | flag  | `False`                      | `False`, `True`                                 | Use training data for energy prices (default: `TOU Prices`). |
 | `--obs_variant`       | str   | `T01`                        | `T01`,`T02`.`T03`,`T04`,`C01`,`C02`.`C03`,`C04` | Select observation variant (see detailed list below).        |
 
@@ -294,8 +467,8 @@ These include:
 | `--model_seed`  | int  | `42`                                                                                                | Any integer                                            | Seed number used during training for selecting the correct model file.                                                                                                                                                                  |
 | `--mpc_horizon` | int  | `72`                                                                                                | >= 1 (typically multiples of 12)                       | Prediction horizon for MPC (in 5-minute steps, e.g., 12 = 1 hour).                                                                                                                               |
 | `--reward_mode` | str  | `"temperature"`                                                                                     | `temperature`, `combined`                              | Reward mode: temperature or combined (multi-objective).                                                                                                                                      |
-| `--energy_price_path` | str  | `"data/price_data_2025.csv"`                                                                  | `data/price_data_2025.csv`                             | Path to normalized energy price CSV.                                                                                                                                      |
-| `--outdoor_temperature_path` | str  | `"data/LLEC_outdoor_temperature_5min_data.csv"`                                        | `data/LLEC_outdoor_temperature_5min_data.csv`          | If not provided, a synthetic temperature profile is used.                                                                                                                                      |
+| `--energy_price_path` | str  | `"data/e_price/price_data_2025_norm.csv"`                                                     | `data/e_price/price_data_2025_norm.csv`                | Path to normalized energy price CSV.                                                                                                                                      |
+| `--outdoor_temperature_path` | str  | `"data/weather/LLEC_outdoor_temperature_5min_data.csv"`                                | `data/weather/LLEC_outdoor_temperature_5min_data.csv`  | If not provided, a synthetic temperature profile is used.                                                                                                                                      |
 | `--obs_variant` | str  | `T01`                                                                                               | `T01`,`T02`.`T03`,`T04`,`C01`,`C02`.`C03`,`C04`        | Select observation variant (see detailed list below).                                                                                                                                             |
 | `--prefer_best` | flag | `False`                                                                                             | `False`,`True`                                         | If set, prefers loading `best_model.zip` instead of `<algorithm>_model_seed<seed>.zip` (e.g., `ppo_model_seed42.zip`) during evaluation. Supported algorithms: `ppo`, `sac`, `ddpg`,`td3`, `a2c`. |
 
@@ -338,4 +511,4 @@ If you use this framework in your research, please consider citing our paper &#1
 ## License
 
 This code is licensed under the **[MIT License](LICENSE)**.
-For any issues or any intention of cooperation, please feel free to contact me at **[goekhan.demirel@kit.edu](goekhan.demirel@kit.edu)**.
+For any issues or any intention of cooperation, please feel free to contact me at **[pongrvin@gmail.com](pongrvin@gmail.com)**.
