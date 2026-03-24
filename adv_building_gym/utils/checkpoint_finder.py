@@ -72,6 +72,11 @@ def find_best_checkpoint(base_path: str) -> str:
 def find_latest_checkpoint(base_path: str = "models") -> str:
     """Fallback: find the most recent Ray checkpoint by modification time.
 
+    Identifies checkpoint root directories by the presence of
+    ``rllib_checkpoint.json`` (new API stack) or ``.is_checkpoint``
+    (older Ray versions).  This avoids false positives from `.pkl`
+    files buried inside subdirectories of a checkpoint.
+
     Args:
         base_path: Root directory to search.
 
@@ -84,29 +89,28 @@ def find_latest_checkpoint(base_path: str = "models") -> str:
     checkpoint_paths = []
 
     for root, _, files in os.walk(base_path):
-        # Ray checkpoints contain either .pkl files (older) or
-        # algorithm_state.pkl / .is_checkpoint marker files (newer)
-        is_checkpoint = (
-            "checkpoint_" in root
-            and any(
-                f.endswith(".pkl") or f == ".is_checkpoint"
-                for f in files
-            )
-        ) or (
-            # Callback-saved best_model checkpoints
-            "best_model_" in os.path.basename(root)
-            and any(f.endswith(".pkl") or f == ".is_checkpoint" for f in files)
+        # rllib_checkpoint.json is the authoritative marker written at
+        # the checkpoint root by both Ray Tune and our callback.
+        is_checkpoint_root = (
+            "rllib_checkpoint.json" in files
+            or ".is_checkpoint" in files
         )
-
-        if is_checkpoint:
+        if is_checkpoint_root:
             mtime = os.path.getmtime(root)
             checkpoint_paths.append((mtime, root))
 
     if not checkpoint_paths:
         raise FileNotFoundError(f"No checkpoints found in {base_path}")
 
-    # Sort by modification time and return most recent
-    checkpoint_paths.sort(reverse=True)
+    # Sort by (mtime DESC, is_best_model DESC) so that when two checkpoints
+    # share the same mtime the callback-saved best_model is preferred over
+    # a Ray Tune periodic checkpoint.
+    def _sort_key(entry):
+        mtime, path = entry
+        is_best = "best_model_" in os.path.basename(path)
+        return (mtime, is_best)
+
+    checkpoint_paths.sort(key=_sort_key, reverse=True)
     latest_checkpoint = checkpoint_paths[0][1]
 
     logger.info(
@@ -145,10 +149,18 @@ def resolve_checkpoint_path(
     Raises:
         FileNotFoundError: If no checkpoint can be found.
     """
-    if checkpoint is not None:
+    if checkpoint is not None and checkpoint != "latest":
         return os.path.abspath(checkpoint)
 
     search_base = os.path.join(models_base, config_name, "ray", algorithm)
+
+    # "latest" keyword: skip best-checkpoint metadata, pick most recent by mtime.
+    if checkpoint == "latest":
+        if os.path.exists(search_base):
+            logger.info("--checkpoint latest: searching %s", search_base)
+            return os.path.abspath(find_latest_checkpoint(search_base))
+        logger.warning("Algorithm directory not found: %s — broadening search", search_base)
+        return os.path.abspath(find_latest_checkpoint(models_base))
 
     if os.path.exists(search_base):
         try:

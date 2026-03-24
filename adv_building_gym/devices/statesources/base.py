@@ -85,6 +85,16 @@ class StateSource(EnvSyncInterface, Serializable):
         """
         pass
 
+    def reset(self, states, info: dict | None = None) -> None:
+        """Populate initial state at episode start (after data reloads).
+
+        Called once per episode instead of update_state() during reset().
+        The default implementation delegates to update_state(); subclasses
+        can override to apply reset-specific initialisation (e.g. seeding
+        temp_in_norm from the desired setpoint).
+        """
+        self.update_state(states, info)
+
     @classmethod
     def from_dict(
         cls: Type[T],

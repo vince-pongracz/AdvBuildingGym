@@ -62,6 +62,15 @@ class Infrastructure(EnvSyncInterface, Serializable):
         """
         pass
 
+    def reset(self, states: Dict, info: dict | None = None) -> None:
+        """Populate initial state at episode start (after data reloads).
+
+        Called once per episode instead of update_state() during reset().
+        The default delegates to update_state(); subclasses can override
+        for reset-specific initialisation.
+        """
+        self.update_state(states, info)
+
     def get_electric_consumption(self, actions: Dict) -> float:
         """Get current electric energy consumption in kW.
 

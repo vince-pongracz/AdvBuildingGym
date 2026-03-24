@@ -415,14 +415,15 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         self.state["sim_hour"][0] = np.float32(0.0)
 
         # ======== Update state from statesources to populate initial observations ========
-        # This ensures observations are within bounds after reset
+        # reset_state() calls update_state() by default; subclasses (e.g.
+        # InsideTemperature) override it for reset-specific initialisation.
         self._component_info.clear()
         for ds in self.statesources:
-            ds.update_state(states=self.state, info=self._component_info)
+            ds.reset(states=self.state, info=self._component_info)
 
         # Update infrastructure states as well
         for infr in self.infras:
-            infr.update_state(self.state, info=self._component_info)
+            infr.reset(self.state, info=self._component_info)
 
         # Reset info — episode metadata and raw values for logging.
         # None of these keys are part of the observation space.

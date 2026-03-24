@@ -114,6 +114,16 @@ class InsideTemperature(StateSource):
         desired_temp_in_norm = np.float32(np.clip(desired_temp_in_norm, -1.0, 1.0))
         states["desired_temp_in_norm"][0] = desired_temp_in_norm
 
+    def reset(self, states, info=None) -> None:
+        """Populate initial desired temperature and seed temp_in_norm.
+
+        At episode start the indoor temperature should equal the desired
+        setpoint so the agent begins in a comfortable state.
+        """
+        self.update_state(states, info)
+        if "temp_in_norm" in states and "desired_temp_in_norm" in states:
+            states["temp_in_norm"][0] = states["desired_temp_in_norm"][0]
+
 
 # Register InsideTemperature with the component registry
 ComponentRegistry.register('statesource', InsideTemperature)
