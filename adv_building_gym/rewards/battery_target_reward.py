@@ -33,7 +33,7 @@ class BatteryTargetReward(RewardFunction):
         self.diff_threshold = diff_threshold
         self.soc_diff_multiplier = soc_diff_multiplier
 
-    def get_reward(self, actions, states) -> tuple[float, float]:
+    def get_reward(self, actions, states, info: dict | None = None) -> tuple[float, float]:
         current_pct = float(states["battery_pct"][0])
         target_pct = float(states["battery_target_pct"][0])
         soc_diff = abs(current_pct - target_pct)

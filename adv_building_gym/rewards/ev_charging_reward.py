@@ -36,7 +36,7 @@ class EVChargingReward(RewardFunction):
         self.diff_threshold = diff_threshold
         self.soc_diff_multiplier = soc_diff_multiplier
 
-    def get_reward(self, actions, states) -> tuple[float, float]:
+    def get_reward(self, actions, states, info: dict | None = None) -> tuple[float, float]:
         ev_connected = float(states["ev_connected"][0])
 
         if ev_connected < 0.5:

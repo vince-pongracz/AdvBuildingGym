@@ -18,26 +18,23 @@ from adv_building_gym.devices.statesources import (
     EnergyPriceDataSource, WeatherDataSource
 )
 
-from adv_building_gym.rewards import (
-    RewardFunction, ActionSmoothnessReward, BatteryTargetReward, TempReward,
-    EconomicReward, EVChargingOnTimeReward, EVChargingReward,
-    MinimiseEnergyConsumptionReward, UserEnergyNeedReward,
-    OperatorEnergyControlReward
-)
-
+from adv_building_gym.config.reward_config import RewardConfig
 
 
 @dataclass
 class EnvConfig:
-    """
+    """Environment topology configuration — state sources, infrastructure, and physics.
+
     Config serialisation -- by ConfigManager.
     - Save config: ConfigManager.save(config, path)
     - Load config: ConfigManager.load(path)
 
-    **IMPORTANT**: Use the factory methods (create_infras, create_statesources, create_rewards)
+    **IMPORTANT**: Use the factory methods (create_infras, create_statesources)
     when creating env instances to ensure each env gets independent component instances.
-    Direct access to self.infras/statesources/rewards returns shared singletons and should
+    Direct access to self.infras/statesources returns shared singletons and should
     only be used for inspection, not for passing to AdvBuildingGym in parallel environments.
+
+    Reward composition is managed by ``reward_config`` (RewardConfig).
     """
     env_config_name: str = "env_test1_small"
 
@@ -61,7 +58,9 @@ class EnvConfig:
     # WARNING: Do not pass these to parallel environments - use factory methods instead
     infras: Optional[List[Infrastructure]] = None
     statesources: Optional[List[StateSource]] = None
-    rewards: Optional[List[RewardFunction]] = None
+
+    # Reward composition — separate config
+    reward_config: RewardConfig = field(default_factory=RewardConfig)
 
     def create_statesources(self) -> List[StateSource]:
         """
@@ -129,34 +128,14 @@ class EnvConfig:
             ),
         ]
 
-    def create_rewards(self, infras: List[Infrastructure]) -> List[RewardFunction]:
-        """
-        Factory method to create fresh RewardFunction instances.
-
-        Each call returns NEW independent instances, safe for parallel environments.
-
-        Args:
-            infras: List of Infrastructure instances (from create_infras) to link
-                    rewards that depend on infrastructure state (e.g., EV charger).
-
-        Returns:
-            List of newly created RewardFunction instances.
-        """
-        return [
-            TempReward(weight=1, diff_threshold=0.0001),
-            EconomicReward(infras, weight=1),
-            MinimiseEnergyConsumptionReward(weight=0.2),
-            OperatorEnergyControlReward(infras, weight=1),
-            BatteryTargetReward(weight=1),
-            EVChargingReward(weight=1),
-            EVChargingOnTimeReward(infrastructures=infras, weight=1),
-            # ActionSmoothnessReward(weight=0.5),
-        ]
+    def create_rewards(self) -> list:
+        """Delegate to reward_config.create_rewards()."""
+        return self.reward_config.create_rewards()
 
     def __post_init__(self):
         """Lightweight post-init — does NOT eagerly call factory methods.
 
-        Singleton fields (infras, statesources, rewards) are left as None to
+        Singleton fields (infras, statesources) are left as None to
         avoid unnecessary CSV parsing in every Ray worker subprocess that
         imports this module.  Call init_singletons() explicitly in the main
         process where those fields are actually needed.
@@ -166,9 +145,9 @@ class EnvConfig:
         """Initialise the cached singleton component instances.
 
         Call this once in the main process after creating / loading a Config,
-        before accessing self.infras / self.statesources / self.rewards.
+        before accessing self.infras / self.statesources / self.reward_config.rewards.
         Not needed in Ray worker subprocesses — they call the factory methods
-        (create_infras, create_statesources, create_rewards) directly via
+        (create_infras, create_statesources, reward_config.create_rewards) directly via
         adv_building_env_creator.
 
         WARNING: Do not pass these singleton instances to parallel environments
@@ -180,8 +159,7 @@ class EnvConfig:
         if self.infras is None:
             self.infras = self.create_infras()
 
-        if self.rewards is None:
-            self.rewards = self.create_rewards(self.infras)
+        self.reward_config.init_singletons()
 
 # default/config instance
 config = EnvConfig()

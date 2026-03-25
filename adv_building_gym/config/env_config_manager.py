@@ -11,14 +11,15 @@ if TYPE_CHECKING:
     from adv_building_gym.config.env_config import EnvConfig
 
 from adv_building_gym.envs.utils import BuildingProps
+from adv_building_gym.config.reward_config_manager import RewardConfigManager
 
 
 class EnvConfigManager:
-    """Handles serialization and deserialization of Config objects.
+    """Handles serialization and deserialization of EnvConfig objects.
 
     Uses the flexible serialization system where each component (Infrastructure,
-    StateSource, RewardFunction) knows how to serialize itself via the Serializable
-    mixin. This allows adding new component types without modifying ConfigManager.
+    StateSource) knows how to serialize itself via the Serializable mixin.
+    Reward serialization is delegated to RewardConfigManager.
     """
 
     @staticmethod
@@ -55,9 +56,9 @@ class EnvConfigManager:
         if config.statesources is not None:
             config_dict["statesources"] = [source.to_dict() for source in config.statesources]
 
-        # Serialize rewards using their to_dict() method
-        if config.rewards is not None:
-            config_dict["rewards"] = [reward.to_dict() for reward in config.rewards]
+        # Delegate reward serialization to RewardConfigManager
+        reward_dict = RewardConfigManager.to_dict(config.reward_config)
+        config_dict.update(reward_dict)
 
         return config_dict
 
@@ -77,9 +78,9 @@ class EnvConfigManager:
             Config object
         """
         from adv_building_gym.config.env_config import EnvConfig
+        from adv_building_gym.config.reward_config import RewardConfig
         from adv_building_gym.devices.infrastructure import Infrastructure
         from adv_building_gym.devices.statesources import StateSource
-        from adv_building_gym.rewards import RewardFunction
 
         # Create BuildingProps
         building_props_dict = config_dict.get("building_props", {})
@@ -104,7 +105,7 @@ class EnvConfigManager:
             # Set to empty lists to prevent __post_init__ from creating defaults
             infras=[],
             statesources=[],
-            rewards=[],
+            reward_config=RewardConfig(),
         )
 
         # Build context for infrastructure deserialization
@@ -138,18 +139,8 @@ class EnvConfigManager:
                 statesources.append(source)
             config.statesources = statesources
 
-        # Build context for reward deserialization (includes infrastructures reference)
-        reward_context = {
-            "infrastructures": config.infras,
-        }
-
-        # Reconstruct rewards
-        if "rewards" in config_dict:
-            rewards = []
-            for reward_dict in config_dict["rewards"]:
-                reward = RewardFunction.from_dict(reward_dict, reward_context)
-                rewards.append(reward)
-            config.rewards = rewards
+        # Delegate reward deserialization to RewardConfigManager
+        config.reward_config = RewardConfigManager.from_dict(config_dict)
 
         return config
 

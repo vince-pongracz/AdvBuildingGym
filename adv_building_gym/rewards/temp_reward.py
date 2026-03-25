@@ -38,7 +38,7 @@ class TempReward(RewardFunction):
         self.temp_const_multiplier = temp_const_multiplier
         self.wrong_direction_penalty = wrong_direction_penalty
 
-    def get_reward(self, actions, states) -> tuple[float, float]:
+    def get_reward(self, actions, states, info: dict | None = None) -> tuple[float, float]:
         """
         Calculate temperature comfort reward based on absolute difference
         between actual and desired indoor temperature (both on the same

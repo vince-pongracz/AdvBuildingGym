@@ -41,7 +41,9 @@ from .training_param_config import TrainingParamConfig
 
 if TYPE_CHECKING:
     from .env_config import EnvConfig as EnvConfig, config as config
+    from .reward_config import RewardConfig as RewardConfig
     from .env_config_manager import EnvConfigManager as EnvConfigManager
+    from .reward_config_manager import RewardConfigManager as RewardConfigManager
     from .data_config import load_data_combinator_config as load_data_combinator_config
 
 
@@ -53,9 +55,15 @@ def __getattr__(name):
     elif name == "config":
         from .env_config import config
         return config
+    elif name == "RewardConfig":
+        from .reward_config import RewardConfig
+        return RewardConfig
     elif name == "EnvConfigManager":
         from .env_config_manager import EnvConfigManager
         return EnvConfigManager
+    elif name == "RewardConfigManager":
+        from .reward_config_manager import RewardConfigManager
+        return RewardConfigManager
     elif name == "DataCombinator":
         from adv_building_gym.data_combinator import DataCombinator
         return DataCombinator
@@ -68,7 +76,9 @@ def __getattr__(name):
 __all__ = [
     "EnvConfig",
     "config",
+    "RewardConfig",
     "EnvConfigManager",
+    "RewardConfigManager",
     "DataCombinator",
     "load_data_combinator_config",
     "Serializable",

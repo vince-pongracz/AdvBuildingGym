@@ -508,12 +508,20 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         energy_kWh = total_power_kW * (self.control_step / 3600)  # kW * hours = kWh
         self.cum_E_kWh += energy_kWh
 
+        # Publish power data into component info so reward functions can
+        # access it without holding infrastructure references.
+        self._component_info["power_breakdown"] = power_breakdown
+        self._component_info["net_power_kW"] = total_power_kW
+        self._component_info["max_power_kW"] = sum(
+            infra.Q_electric_max for infra in self.infras
+        )
+
         # Calculate reward with per-function breakdown
         reward: float = 0
         reward_breakdown = {}
         max_reward_step: float = 0
         for rew_f in self.reward_funcs:
-            rew_val, rew_max = rew_f.get_reward(action, self.state)
+            rew_val, rew_max = rew_f.get_reward(action, self.state, info=self._component_info)
             rew_val = float(np.asarray(rew_val).item())
             reward_breakdown[rew_f.name] = rew_val
             reward += rew_val
@@ -579,8 +587,10 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         
         # TODO VP 2026.03.23. : Continue here
         # TODO VP 2026.03.23. : encourage exploration more
-        # TODO VP 2026.03.23. : Use more history as state input
-        # TODO VP 2026.03.23. : Plot all eval curves together -- with avg and variance
+        # TODO VP 2026.03.23. : Use more history as state input -- from the 6h , 5h, 4h, 3h, 2h and 1h ago -- and the last 30min: each step from here
+        # To this, implement a history collector -- collect specified timesteps from the past, according to the current simulation time: t-6h, t-4h, etc... -- can be generalised, it only needs the spec, the time series and the current simulation time.
+        # Maybe not only for states, but for trajectory as well -- so that complete (s, a, r, s') tuples caputured from the past...
+        # TODO VP 2026.03.23. : Eval script -- Plot all (reward, cum_E_usage) eval curves together -- with avg and variance
         # TODO VP 2026.03.23. : At raw value plotting, only temp is plotted -- what about the other stuff, energy for each element?
         # TODO VP 2026.03.23. : Remove default values from methods and functions where it is not needed
         # TODO VP 2026.03.23. : Check whether currently passed params really needed for the functions/methods

@@ -31,7 +31,7 @@ def _make_adv_building(**kwargs):
 
     infras = env_config.create_infras()
     statesources = env_config.create_statesources()
-    rewards = env_config.create_rewards(infras)
+    rewards = env_config.create_rewards()
     env = AdvBuildingGym(
         infras=infras,
         statesources=statesources,

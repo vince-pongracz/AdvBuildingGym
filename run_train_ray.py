@@ -309,7 +309,7 @@ def main():
         num_gpus=gpus,
         checkpoint_callback_class=checkpoint_callback_class,
         env_id=ENV_ID,
-        rewards=active_config.rewards,
+        rewards=active_config.reward_config.rewards,
         metrics_base_dir="ep_metrics",
         clip_actions=True,
         data_combinator=data_combinator,

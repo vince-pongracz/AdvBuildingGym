@@ -15,7 +15,7 @@ class UserEnergyNeedReward(RewardFunction):
     def __init__(self, weight: float, name: str = "user_energy_need_reward") -> None:
         super().__init__(weight, name)
 
-    def get_reward(self, actions, states) -> tuple[float, float]:
+    def get_reward(self, actions, states, info: dict | None = None) -> tuple[float, float]:
         """Calculate reward based on meeting desired energy need.
 
         Penalizes underproduction but does not penalize overproduction.

@@ -9,8 +9,6 @@ class RewardFunction(Serializable):
     """Base class for reward functions."""
 
     # Inherited from Serializable; redeclared here as empty-set defaults.
-    # Subclasses override as needed (e.g. EconomicReward sets
-    # _context_params = {'infrastructures'}).
     _context_params: ClassVar[Set[str]] = set()
     _exclude_params: ClassVar[Set[str]] = set()
 
@@ -22,12 +20,15 @@ class RewardFunction(Serializable):
         self.weight = weight
         self.name = name
 
-    def get_reward(self, actions, states) -> tuple[float, float]:
+    def get_reward(self, actions, states, info: dict | None = None) -> tuple[float, float]:
         """Calculate reward and step-wise maximum for this reward function.
 
         Args:
             actions: Dictionary of actions taken by the agent.
             states: Dictionary of current environment states.
+            info: Shared inter-component dict with raw physical values
+                (e.g. net_power_kW, EV charger params). Passed from the
+                environment's ``_component_info``.
 
         Returns:
             Tuple of (reward, max_reward_for_this_step).

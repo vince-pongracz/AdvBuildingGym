@@ -46,7 +46,7 @@ class ActionSmoothnessReward(RewardFunction):
         """Minimum raw (unweighted) reward: -1 per action key."""
         return -self._n_action_keys
 
-    def get_reward(self, actions: dict, states: dict) -> tuple[float, float]:
+    def get_reward(self, actions: dict, states: dict, info: dict | None = None) -> tuple[float, float]:
         max_step = self.weight * self.max_reward
         penalties: list[float] = []
 

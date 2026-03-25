@@ -274,6 +274,15 @@ class LinearEVCharger(Infrastructure):
         history[:-1] = history[1:]
         history[-1] = np.float32(self.soc)
 
+        # Publish static charger params into info for downstream consumers
+        # (e.g. EVChargingOnTimeReward) that need them without holding an
+        # infrastructure reference.
+        if info is not None:
+            info["ev_max_charging_kW"] = self.max_charging_kW
+            info["ev_max_cap_kWh"] = self.max_cap_kWh
+            info["ev_charger_efficiency"] = self.charger_efficiency
+            info["ev_max_charge_time_hrs"] = self.max_charge_time_hrs
+
     def get_electric_consumption(self, actions: Dict) -> float:
         """Get current electric energy consumption from EV charger.
 

@@ -111,7 +111,7 @@ def evaluate_model(
     base_env = AdvBuildingGym(
         infras=active_config.infras,
         statesources=active_config.statesources,
-        rewards=active_config.rewards,
+        rewards=active_config.reward_config.rewards,
         building_props=active_config.building_props,
         training=False,
         data_combinator=data_combinator,

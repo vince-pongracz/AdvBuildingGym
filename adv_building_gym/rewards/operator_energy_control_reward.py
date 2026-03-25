@@ -1,6 +1,5 @@
 import logging
 import numpy as np
-from typing import ClassVar, List, Set
 
 from .base import RewardFunction
 from adv_building_gym.config.utils.serializable import ComponentRegistry
@@ -23,17 +22,17 @@ class OperatorEnergyControlReward(RewardFunction):
       from harsh_penalty towards 0. After recovery_steps the normal
       reward function resumes. This signals sustained displeasure
       after a violation without a flat zero gap.
-    """
 
-    # infrastructures comes from context (the Config's infras list)
-    _context_params: ClassVar[Set[str]] = {'infrastructures'}
+    Reads ``net_power_kW`` from the ``info`` dict (published by the environment
+    from infrastructure power computations) instead of querying infrastructures
+    directly.
+    """
 
     # Scale factor for the exponential decay in the transition zone.
     # exp(-5) ~ 0.007, so reward nearly reaches 0 right at the limit.
     _DECAY_SCALE: float = 5.0
 
     def __init__(self,
-                 infrastructures: List,
                  weight: float,
                  max_power_kW: float = 10.0,
                  name: str = "operator_energy_control_reward",
@@ -44,7 +43,6 @@ class OperatorEnergyControlReward(RewardFunction):
         """Initialize OperatorEnergyControlReward.
 
         Args:
-            infrastructures: List of Infrastructure objects to query for power consumption.
             weight: Reward weight (scaling factor).
             max_power_kW: Maximum power in kW for denormalization (default: 10.0 kW).
             name: Reward function name.
@@ -56,7 +54,6 @@ class OperatorEnergyControlReward(RewardFunction):
                 before returning to normal (default 12 = 1 hour at 5-min steps).
         """
         super().__init__(weight, name)
-        self.infrastructures = infrastructures
         self.max_power_kW = max_power_kW
         self.harsh_penalty = harsh_penalty
         if not 0.0 < soft_threshold_pct < 1.0:
@@ -72,12 +69,13 @@ class OperatorEnergyControlReward(RewardFunction):
         self._step: int = 0
         self._last_violation_step: int = -recovery_steps  # no active recovery at init
 
-    def get_reward(self, actions, states) -> tuple[float, float]:
+    def get_reward(self, actions, states, info: dict | None = None) -> tuple[float, float]:
         """Calculate reward based on grid power consumption vs operator limit.
 
         Args:
             actions: Dictionary of actions taken by infrastructures.
             states: Dictionary containing "operator_energy_max" (normalized limit [0, 1]).
+            info: Shared inter-component dict containing ``net_power_kW``.
 
         Returns:
             Tuple of (weighted reward, weighted max reward for this step).
@@ -85,10 +83,12 @@ class OperatorEnergyControlReward(RewardFunction):
         self._step += 1
         max_step = self.weight * self.max_reward
 
-        # Calculate total grid E consumption by summing all infrastructure consumption
-        grid_power_kW = 0.0
-        for infra in self.infrastructures:
-            grid_power_kW += infra.get_electric_consumption(actions)
+        if info is None:
+            logger.warning("OperatorEnergyControlReward: info dict is None, returning 0")
+            return 0.0, max_step
+
+        # Read pre-computed net power from info dict (published by environment)
+        grid_power_kW = info.get("net_power_kW", 0.0)
 
         # Get normalized operator limit from state [0, 1]
         operator_limit_norm = float(states.get("operator_energy_max", np.array([1.0]))[0])

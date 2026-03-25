@@ -54,7 +54,7 @@ def adv_building_env_creator(config: dict) -> gymnasium.Env:
     # Each env gets its own infras/statesources/rewards with independent state.
     infras = env_config.create_infras()
     statesources = env_config.create_statesources()
-    rewards = env_config.create_rewards(infras)
+    rewards = env_config.create_rewards()
 
     env = AdvBuildingGym(
         infras=infras,
