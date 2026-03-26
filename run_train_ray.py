@@ -31,6 +31,7 @@ from adv_building_gym.utils import setup_warning_filters
 # Trigger registration of the custom Gym IDs
 from adv_building_gym import make_checkpoint_callback_class, EnvConfigManager
 from adv_building_gym.config import config as default_config, load_data_combinator_config
+from adv_building_gym.config.reward_config_manager import RewardConfigManager, RewardScheduleMode
 from adv_building_gym.envs import adv_building_env_creator
 from adv_building_gym.ray_training import common_model_setup, select_model
 from adv_building_gym.config.training_param_config import TrainingParamConfig
@@ -152,15 +153,28 @@ def main():
         "--data-config", type=str, default=None,
         help="Path to data combinator YAML config (default: configs/train_data_combinator_config.yaml)"
     )
-
-    args = parser.parse_args()
+    parser.add_argument(
+        "--grad-train",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Enable gradual reward training (curriculum). "
+            "When active, rewards are introduced according to the reward "
+            "schedule config. When inactive, all rewards are active from start."
+    )
+    parser.add_argument(
+        "--reward-schedule", type=str, default=None,
+        help="Path to reward schedule YAML config "
+            "(default: configs/reward_schedule_train.yaml)"
+    )
 
     # Load configs:
     # Load training hyperparameters (shared across select_model and checkpoint calc)
     training_param_config = TrainingParamConfig.from_yaml(
         Path(__file__).resolve().parent / "configs" / "training_param_config.yaml"
     )
-    
+
+    args = parser.parse_args()
+
     if args.seed is not None:
         training_param_config.seed = args.seed
     else:
@@ -179,6 +193,23 @@ def main():
         yaml_path=args.data_config,
         seed_override=args.seed,
     )
+
+    # Load reward schedule config.
+    # When --grad-train is active the manager uses its configured mode
+    # (gradual_add / iterate / random).  Otherwise mode is forced to "off"
+    # (all rewards active, no swapping).
+    reward_schedule_path = args.reward_schedule or str(
+        Path(__file__).resolve().parent / "configs" / "reward_schedule_train.yaml"
+    )
+    reward_manager = RewardConfigManager.from_yaml(reward_schedule_path)
+    if not args.grad_train:
+        reward_manager.mode = RewardScheduleMode.OFF
+        logger.info("Gradual training disabled — all specified rewards active from start")
+    else:
+        logger.info(
+            "Gradual training enabled: mode=%s, swap every %d iterations",
+            reward_manager.mode, reward_manager.swap_every_n_iterations,
+        )
 
     # Resolve stopping criterion: --episodes takes precedence over --timesteps.
     # Internally, RLlib always stops on num_env_steps_sampled_lifetime (timesteps),
@@ -288,6 +319,7 @@ def main():
 
     env_creator_config = {
         "data_combinator": data_combinator,
+        "reward_config_manager": reward_manager,
     }
     register_env("AdvBuilding", lambda cfg: adv_building_env_creator({**env_creator_config, **cfg}))
 
@@ -300,6 +332,7 @@ def main():
         training_config=training_param_config,
     )
 
+    # TODO VP 2026.03.25. : Refactor params here, what are passed, what is needed, what not...
     # Apply common RLlib configuration (resource allocation, action space, and callbacks)
     algo_config = common_model_setup(
         config=algo_config,
@@ -309,11 +342,11 @@ def main():
         num_gpus=gpus,
         checkpoint_callback_class=checkpoint_callback_class,
         env_id=ENV_ID,
-        rewards=active_config.reward_config.rewards,
         metrics_base_dir="ep_metrics",
         clip_actions=True,
         data_combinator=data_combinator,
-        log_trajectories=args.log_trajectories
+        log_trajectories=args.log_trajectories,
+        reward_config_manager=reward_manager,
     )
 
     # Convert the RLlib config into a Tune param space

@@ -316,6 +316,21 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         logger.debug("  Actions: %s", [infr.name for infr in infras])
         logger.debug("  States: %s", [ds.name for ds in statesources])
 
+    def set_reward_funcs(self, rewards: list[RewardFunction]) -> None:
+        """Hot-swap the active reward functions.
+
+        Called by the reward_switch callback to change which objectives
+        the environment evaluates during ``step()``.
+
+        Args:
+            rewards: New list of RewardFunction instances.
+        """
+        self.reward_funcs = rewards
+        logger.debug(
+            "Reward functions updated: %s",
+            [r.name for r in rewards],
+        )
+
     def get_state_space(self):
         return self.observation_space
 

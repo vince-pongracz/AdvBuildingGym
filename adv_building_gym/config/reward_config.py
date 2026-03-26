@@ -10,7 +10,10 @@ passed to ``get_reward()`` by the environment.
 
 import logging
 from dataclasses import dataclass, field
-from typing import List, Optional
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+import yaml
 
 from adv_building_gym.rewards import (
     RewardFunction, ActionSmoothnessReward, BatteryTargetReward, TempReward,
@@ -62,3 +65,71 @@ class RewardConfig:
         """
         if self.rewards is None:
             self.rewards = self.create_rewards()
+
+    # ------------------------------------------------------------------
+    # Serialization
+    # ------------------------------------------------------------------
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize this RewardConfig to a dictionary.
+
+        Each RewardFunction serializes itself via the Serializable mixin.
+
+        Returns:
+            Dictionary with a ``rewards`` key containing serialized reward list.
+        """
+        config_dict: Dict[str, Any] = {}
+        if self.rewards is not None:
+            config_dict["rewards"] = [
+                reward.to_dict() for reward in self.rewards
+            ]
+        return config_dict
+
+    @classmethod
+    def from_dict(cls, config_dict: Dict[str, Any]) -> "RewardConfig":
+        """Deserialize a RewardConfig from a dictionary.
+
+        Uses the ComponentRegistry to find the correct class for each
+        reward and reconstructs it from serialized parameters.
+
+        Args:
+            config_dict: Dictionary that may contain a ``rewards`` key.
+
+        Returns:
+            RewardConfig with deserialized reward instances.
+        """
+        reward_config = cls()
+        if "rewards" in config_dict:
+            rewards = []
+            for reward_dict in config_dict["rewards"]:
+                reward = RewardFunction.from_dict(reward_dict)
+                rewards.append(reward)
+            reward_config.rewards = rewards
+        return reward_config
+
+    def save(self, path: str | Path) -> None:
+        """Save this RewardConfig to a YAML file.
+
+        Args:
+            path: File path (e.g., 'configs/my_rewards.yaml').
+        """
+        path = Path(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        config_dict = self.to_dict()
+        with open(path, "w") as f:
+            yaml.dump(config_dict, f, default_flow_style=False, sort_keys=False)
+
+    @classmethod
+    def load(cls, path: str | Path) -> "RewardConfig":
+        """Load a RewardConfig from a YAML file.
+
+        Args:
+            path: File path to load from (e.g., 'configs/my_rewards.yaml').
+
+        Returns:
+            RewardConfig reconstructed from file.
+        """
+        path = Path(path)
+        with open(path, "r") as f:
+            config_dict = yaml.safe_load(f)
+        return cls.from_dict(config_dict)

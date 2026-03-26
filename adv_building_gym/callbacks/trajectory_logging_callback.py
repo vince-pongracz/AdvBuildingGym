@@ -14,7 +14,7 @@ import os
 import json
 import logging
 import datetime
-from typing import List, Optional, Type
+from typing import Optional, Type
 
 import numpy as np
 
@@ -28,7 +28,6 @@ logger = logging.getLogger(__name__)
 
 
 def make_trajectory_logging_callback_class(
-    rewards: List,
     metrics_base_dir: str = "ep_metrics",
     exec_date: Optional[datetime.datetime] = None,
 ) -> Type["TrajectoryLoggingCallback"]:
@@ -40,7 +39,6 @@ def make_trajectory_logging_callback_class(
     no trajectory I/O happens during training.
 
     Args:
-        rewards: List of reward objects (used for summary statistics).
         metrics_base_dir: Base directory for saving trajectory JSON and HDF5.
         exec_date: Execution datetime for directory naming. Defaults to now.
 
@@ -50,7 +48,6 @@ def make_trajectory_logging_callback_class(
     if exec_date is None:
         exec_date = datetime.datetime.now()
 
-    _rewards = rewards
     _metrics_base_dir = os.path.abspath(metrics_base_dir)
     _exec_date = exec_date
 

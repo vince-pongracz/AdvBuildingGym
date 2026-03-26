@@ -26,26 +26,27 @@ def wrap_action_space(env: gymnasium.Env) -> gymnasium.Env:
 
 
 def adv_building_env_creator(config: dict) -> gymnasium.Env:
-    """
-    Factory function for Ray Tune to create AdvBuildingGym instances.
+    """Factory function for Ray Tune to create AdvBuildingGym instances.
 
     This function is registered with Ray Tune and called whenever a new
     environment instance is needed (e.g., for env runners, evaluation).
 
-    IMPORTANT: Uses factory methods to create FRESH component instances for each
-    environment. This ensures parallel env_runners don't share mutable state
-    (iteration counters, internal buffers) which would cause state corruption.
+    Uses factory methods to create FRESH component instances for each
+    environment.  This ensures parallel env_runners don't share mutable
+    state (iteration counters, internal buffers).
 
     Args:
-        config: Configuration dict passed by Ray Tune. Supports:
-            - ``data_combinator``: Pre-built DataCombinator instance to share
-            across environments (loaded from YAML by the training entrypoint).
-            - ``log_full_info``: When True, enables deep-copy of named state
-            into info["state"] each step. Intended for evaluation EnvRunners
-            only (set via ``config.evaluation(env_config=...)``).
+        config: Configuration dict passed by Ray Tune. Required keys:
+            - ``reward_config_manager``: RewardConfigManager instance.
+              Rewards are created from the manager's active subset
+              (mode=OFF returns all rewards).
+          Optional keys:
+            - ``data_combinator``: Pre-built DataCombinator instance.
+            - ``log_full_info``: When True, enables deep-copy of named
+              state into info["state"] each step (evaluation only).
 
     Returns:
-        Wrapped AdvBuildingGym with flat Box(-1, 1) action space
+        Wrapped AdvBuildingGym with flat Box(-1, 1) action space.
     """
     # Import config here to avoid circular imports
     from ..config import config as env_config
@@ -54,7 +55,10 @@ def adv_building_env_creator(config: dict) -> gymnasium.Env:
     # Each env gets its own infras/statesources/rewards with independent state.
     infras = env_config.create_infras()
     statesources = env_config.create_statesources()
-    rewards = env_config.create_rewards()
+
+    # Rewards always come from the RewardConfigManager (mode=OFF returns all).
+    reward_manager = config["reward_config_manager"]
+    rewards = reward_manager.create_active_rewards()
 
     env = AdvBuildingGym(
         infras=infras,

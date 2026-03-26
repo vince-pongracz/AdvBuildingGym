@@ -11,15 +11,13 @@ if TYPE_CHECKING:
     from adv_building_gym.config.env_config import EnvConfig
 
 from adv_building_gym.envs.utils import BuildingProps
-from adv_building_gym.config.reward_config_manager import RewardConfigManager
 
 
 class EnvConfigManager:
     """Handles serialization and deserialization of EnvConfig objects.
 
     Uses the flexible serialization system where each component (Infrastructure,
-    StateSource) knows how to serialize itself via the Serializable mixin.
-    Reward serialization is delegated to RewardConfigManager.
+    StateSource, RewardConfig) knows how to serialize itself.
     """
 
     @staticmethod
@@ -56,8 +54,8 @@ class EnvConfigManager:
         if config.statesources is not None:
             config_dict["statesources"] = [source.to_dict() for source in config.statesources]
 
-        # Delegate reward serialization to RewardConfigManager
-        reward_dict = RewardConfigManager.to_dict(config.reward_config)
+        # RewardConfig serializes itself
+        reward_dict = config.reward_config.to_dict()
         config_dict.update(reward_dict)
 
         return config_dict
@@ -139,8 +137,8 @@ class EnvConfigManager:
                 statesources.append(source)
             config.statesources = statesources
 
-        # Delegate reward deserialization to RewardConfigManager
-        config.reward_config = RewardConfigManager.from_dict(config_dict)
+        # RewardConfig deserializes itself
+        config.reward_config = RewardConfig.from_dict(config_dict)
 
         return config
 

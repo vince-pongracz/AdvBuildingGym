@@ -1,0 +1,56 @@
+# Reward schedule configuration for training.
+# Controls which reward functions are active during training and how they
+# are swapped over the course of training (gradual curriculum).
+#
+# Modes:
+#   off          - All rewards active from the start, no swapping.
+#   gradual_add  - Start with the first reward, add the next one every
+#                  swap_every_n_episodes episodes. Once all are added they
+#                  stay active for the rest of training.
+#   iterate      - Only one reward is active at a time; rotate to the next
+#                  every swap_every_n_episodes episodes (round-robin).
+#   random       - Each swap randomly selects a subset of rewards
+#                  (at least 1, up to all).
+
+mode: "gradual_add"
+
+# How often to change the active reward set (in training episodes).
+swap_every_n_iterations: 100
+
+# Seed for the random mode (reproducibility).
+seed: 42
+
+# Ordered list of reward functions available for scheduling.
+# When mode is gradual_add, rewards are added in this order.
+# When mode is iterate, the active reward cycles through this list.
+# Each entry must match a registered RewardFunction class name.
+rewards:
+  - class_name: TempReward
+    weight: 1.0
+    params:
+      diff_threshold: 0.0001
+
+  - class_name: EconomicReward
+    weight: 1.0
+    params:
+      max_power_kW: 25.0
+
+  - class_name: MinimiseEnergyConsumptionReward
+    weight: 0.2
+    params: {}
+
+  - class_name: OperatorEnergyControlReward
+    weight: 1.0
+    params: {}
+
+  - class_name: BatteryTargetReward
+    weight: 1.0
+    params: {}
+
+  - class_name: EVChargingReward
+    weight: 1.0
+    params: {}
+
+  - class_name: EVChargingOnTimeReward
+    weight: 1.0
+    params: {}

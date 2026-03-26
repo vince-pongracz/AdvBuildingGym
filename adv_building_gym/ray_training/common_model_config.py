@@ -7,21 +7,35 @@ including environment setup, resource allocation, and callback configuration.
 
 import datetime
 import logging
-from typing import List
 
 from ray.rllib.connectors.env_to_module import FlattenObservations
 from ray.rllib.algorithms.algorithm_config import AlgorithmConfig
 
 from adv_building_gym.callbacks import (
     create_data_schedule_on_train_result,
+    create_reward_switch_on_train_result,
     make_episode_metrics_callback_class,
     make_trajectory_logging_callback_class,
 )
+from adv_building_gym.config.reward_config_manager import RewardConfigManager, RewardScheduleMode
 from adv_building_gym.config.training_param_config import TrainingParamConfig
 from adv_building_gym.data_combinator import DataCombinator
 from adv_building_gym.utils import ResourceAllocation, validate_resource_allocation
 
 logger = logging.getLogger(__name__)
+
+
+def _compose_on_train_result(*fns):
+    """Compose multiple on_train_result callables into one.
+
+    RLlib's ``config.callbacks()`` accepts a single ``on_train_result``
+    callable.  This helper chains several so that both data scheduling
+    and reward switching can coexist.
+    """
+    def composed_on_train_result(*, algorithm, result, **kwargs):
+        for fn in fns:
+            fn(algorithm=algorithm, result=result, **kwargs)
+    return composed_on_train_result
 
 
 def common_model_setup(
@@ -34,11 +48,11 @@ def common_model_setup(
     # save Policy NN in
     checkpoint_callback_class: type,
     env_id: str,
-    rewards: List,
     metrics_base_dir: str = "ep_metrics",
     clip_actions: bool = True,
     data_combinator: DataCombinator | None = None,
     log_trajectories: bool = False,
+    reward_config_manager: RewardConfigManager | None = None,
 ):
     """
     Apply common RLlib configuration to an algorithm config.
@@ -65,7 +79,6 @@ def common_model_setup(
         num_gpus: Total GPUs available (from Ray/SLURM)
         checkpoint_callback_class: Callback class for checkpoint management
         env_id: Environment ID string for logging
-        rewards: List of reward functions used in the environment
         metrics_base_dir: Base directory for episode metrics (default: "ep_metrics")
         clip_actions: Whether to clip actions to action space bounds
         data_combinator: DataCombinator for iteration-aligned variant
@@ -197,7 +210,6 @@ def common_model_setup(
 
     episode_metrics_class = make_episode_metrics_callback_class(
         env_id=env_id,
-        rewards=rewards,
         metrics_base_dir=f"{metrics_base_dir}/metrics",
         exec_date=exec_date,
         dump_metrics_json=False
@@ -207,26 +219,41 @@ def common_model_setup(
     callback_classes = [checkpoint_callback_class, episode_metrics_class]
     if log_trajectories:
         trajectory_class = make_trajectory_logging_callback_class(
-            rewards=rewards,
             metrics_base_dir=f"{metrics_base_dir}/trajectories",
             exec_date=exec_date,
         )
         callback_classes.append(trajectory_class)
         logger.info("Trajectory logging enabled: per-step trajectory JSON will be saved for each episode.")
 
-    # on_train_result callable for iteration-aligned data variant scheduling (Approach D1)
-    # DataCombinator is always present; an empty one (no variants) is a safe no-op
-    # because create_data_schedule_on_train_result early-returns when variant is empty.
-    
-    callback_kwargs = {
-        "on_train_result": create_data_schedule_on_train_result(
+    # on_train_result callables — both data variant scheduling and reward
+    # switching run at iteration boundaries.  RLlib accepts a single
+    # on_train_result callable, so compose them when both are active.
+    on_train_result_fns = [
+        create_data_schedule_on_train_result(
             data_combinator, data_combinator.swap_every_n_episodes,
         ),
-    }
+    ]
     logger.info(
         "DataScheduleCallback: swap every %d iterations, %d variants",
         data_combinator.swap_every_n_episodes, len(data_combinator.variants),
     )
+
+    if (reward_config_manager is not None
+            and reward_config_manager.mode is not RewardScheduleMode.OFF):
+        on_train_result_fns.append(
+            create_reward_switch_on_train_result(reward_config_manager),
+        )
+        logger.info(
+            "RewardSwitchCallback: mode=%s, swap every %d iterations, "
+            "active rewards: %s",
+            reward_config_manager.mode,
+            reward_config_manager.swap_every_n_iterations,
+            reward_config_manager.get_active_reward_names(),
+        )
+
+    callback_kwargs = {
+        "on_train_result": _compose_on_train_result(*on_train_result_fns),
+    }
 
     # Register all callback classes + optional callable-based callbacks.
     # RLlib executes subclass callbacks in list order, then callables.

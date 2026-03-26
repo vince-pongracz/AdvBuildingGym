@@ -12,7 +12,7 @@ import os
 import json
 import logging
 import datetime
-from typing import List, Optional, Type
+from typing import Optional, Type
 
 import numpy as np
 
@@ -118,7 +118,6 @@ def _save_episode_metrics_json(
 
 def make_episode_metrics_callback_class(
     env_id: str,
-    rewards: List,
     metrics_base_dir: str,
     exec_date: Optional[datetime.datetime],
     dump_metrics_json: bool,
@@ -131,9 +130,9 @@ def make_episode_metrics_callback_class(
 
     Args:
         env_id: Environment identifier for logging.
-        rewards: List of reward objects (used to calculate max reward).
         metrics_base_dir: Base directory for saving episode metrics JSON.
         exec_date: Execution datetime for directory naming. Defaults to now.
+        dump_metrics_json: When True, save per-episode JSON files.
 
     Returns:
         A configured RLlibCallback subclass (not an instance).
@@ -146,7 +145,6 @@ def make_episode_metrics_callback_class(
     # writes land in the correct location regardless of process cwd (Ray Tune
     # changes the Trainable actor's cwd to the trial log directory).
     _env_id = env_id
-    _rewards = rewards
     _metrics_base_dir = os.path.abspath(metrics_base_dir)
     _exec_date = exec_date
 

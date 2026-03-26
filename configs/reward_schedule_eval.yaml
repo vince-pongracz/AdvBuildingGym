@@ -1,0 +1,39 @@
+# Reward schedule configuration for evaluation.
+# During evaluation all rewards should be active (mode: off) so that
+# the agent is scored on the full multi-objective reward.
+
+mode: "off"
+
+swap_every_n_iterations: 1
+seed: 42
+
+rewards:
+  - class_name: TempReward
+    weight: 1.0
+    params:
+      diff_threshold: 0.0001
+
+  - class_name: EconomicReward
+    weight: 1.0
+    params:
+      max_power_kW: 25.0
+
+  - class_name: MinimiseEnergyConsumptionReward
+    weight: 0.2
+    params: {}
+
+  - class_name: OperatorEnergyControlReward
+    weight: 1.0
+    params: {}
+
+  - class_name: BatteryTargetReward
+    weight: 1.0
+    params: {}
+
+  - class_name: EVChargingReward
+    weight: 1.0
+    params: {}
+
+  - class_name: EVChargingOnTimeReward
+    weight: 1.0
+    params: {}
