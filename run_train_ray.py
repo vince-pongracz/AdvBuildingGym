@@ -18,6 +18,7 @@ import torch
 
 import ray
 from ray import tune
+
 from ray.tune import CLIReporter
 from ray.tune.registry import register_env
 
@@ -57,6 +58,10 @@ os.environ["RAY_event_stats"] = "0"
 os.environ["RAY_DEDUP_LOGS"] = "0"
 os.environ["RAY_ACCEL_ENV_VAR_OVERRIDE_ON_ZERO"] = "0"
 # os.environ["RAY_USAGE_STATS_ENABLED"] = "0"
+# Allow evaluation_interval > 1 without crashing on iterations that skip eval.
+# Without this, tune.TuneConfig(metric="evaluation/env_runners/...") raises a
+# ValueError when the metric key is absent from a non-eval iteration's results.
+os.environ["TUNE_DISABLE_STRICT_METRIC_CHECKING"] = "1"
 
 # Apply warning filters in the main process
 setup_warning_filters()

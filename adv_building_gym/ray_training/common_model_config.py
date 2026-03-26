@@ -171,21 +171,22 @@ def common_model_setup(
         # (FlattenAction + RescaleAction) applied in env_creator.
         env_to_module_connector=lambda env, spaces, device: FlattenObservations(),  # type: ignore
     )
-    # NOTE VP 2026.03.23. : Eval during training does not really influence anything -- check whether the model checkpointing depends on this
+    # Evaluation runs the current policy without exploration noise to provide
+    # an unbiased performance signal for model selection (analogous to a
+    # validation set).  It does NOT influence gradient updates.
     # Evaluation EnvRunners get log_full_info=True so step() includes a deep
     # copy of named state in info["state"] — needed by trajectory logging.
     # Training EnvRunners are unaffected (no extra memory overhead).
     eval_env_config = {"log_full_info": True} if log_trajectories else {}
+
+    # evaluation_interval > 1 means the `evaluation/env_runners/` keys are
+    # absent from results on non-eval iterations.  Tune's strict metric check
+    # would crash, so TUNE_DISABLE_STRICT_METRIC_CHECKING must be set in the
+    # driver process (run_train_ray.py).
     config.evaluation(
-        # evaluation_interval=1 ensures `evaluation/env_runners/<metric>` is present in every
-        # iteration result, which is required by tune.TuneConfig(metric=...) — it performs a strict
-        # check and crashes if the metric is absent (as happens with interval > 1 before the first
-        # eval run). Alternative workaround: set os.environ["TUNE_DISABLE_STRICT_METRIC_CHECKING"]
-        # = "1" and keep a higher interval, but that silences all metric validation.
-        evaluation_interval=1,
+        evaluation_interval=5,
         evaluation_duration_unit="episodes",
-        evaluation_duration=2,  # e.g., 2 episodes
-        # True only if `evaluation_num_env_runners` > 0
+        evaluation_duration=2,
         evaluation_parallel_to_training=False,
         evaluation_config=AlgorithmConfig.overrides(env_config=eval_env_config),
     )

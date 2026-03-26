@@ -37,6 +37,7 @@ def create_reward_switch_on_train_result(
 
     def on_train_result(*, algorithm, result: dict, **kwargs) -> None:
         iteration: int = result.get("training_iteration", 0)
+        logger.info("RewardConfigManager iteration: %d", iteration)
         if iteration % reward_manager.swap_every_n_iterations != 0:
             return
 

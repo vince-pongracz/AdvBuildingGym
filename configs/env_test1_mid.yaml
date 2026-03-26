@@ -6,7 +6,10 @@ temp_max: 60.0
 building_props:
   mC: 300
   K: 20
-# TODO VP 2026.03.24. : Tune values, compare the 3 env_test1 configs
+# Mid config: intermediate device sizes between small and large.
+# small: battery 19 kW/14 kWh, EV 7 kW, solar 5 kW
+# mid:   battery 28 kW/20 kWh, EV 11 kW, solar 15 kW
+# large: battery 38 kW/29 kWh, EV 12/30 kW, solar 30 kW
 infras:
 - class: HP
   name: HP
@@ -15,8 +18,8 @@ infras:
   cop_cool: 2.5
 - class: BatteryTremblay
   name: battery
-  Q_electric_max: 19.0
-  cell_capacity_Ah: 3.5
+  Q_electric_max: 28.0
+  cell_capacity_Ah: 5.0
   max_charge_amps: 48.0
   max_charge_voltage: 420.0
   target_soc: 1.0
@@ -35,8 +38,8 @@ infras:
   soc_max: 0.95
 - class: LinearEVCharger
   name: ev_charger
-  Q_electric_max: 7.0
-  max_charging_kW: 7.0
+  Q_electric_max: 11.0
+  max_charging_kW: 11.0
   charger_efficiency: 0.92
   discharge_efficiency: 0.92
   v2g_enabled: true
@@ -46,8 +49,8 @@ infras:
   v2g_playroom: 0.1
 - class: SolarPanel
   name: solar
-  Q_electric_max: 5.0
-  peak_power_kW: 5.0
+  Q_electric_max: 15.0
+  peak_power_kW: 15.0
 - class: HouseholdEnergyConsumers
   name: hh_consumers
   Q_electric_max: 8.0
@@ -67,39 +70,4 @@ statesources:
   name: building_heat_loss
 - class: EVState
   name: ev_schedule
-rewards:
-- class: TempReward
-  weight: 1
-  name: temp_reward
-  diff_threshold: 0.0001
-  wrong_direction_penalty: -1.0
-  temp_const_multiplier: 5.0
-- class: EconomicReward
-  weight: 1
-  name: economic_reward
-- class: MinimiseEnergyConsumptionReward
-  weight: 0.2
-  name: E_consumption_reward
-- class: OperatorEnergyControlReward
-  weight: 1
-  max_power_kW: 10.0
-  name: operator_energy_control_reward
-  harsh_penalty: -4.0
-  soft_threshold_pct: 0.9
-  recovery_steps: 3
-- class: BatteryTargetReward
-  weight: 1
-  name: battery_target_reward
-  diff_threshold: 0.02
-  soc_diff_multiplier: 5.0
-- class: EVChargingReward
-  weight: 2
-  name: ev_charging_reward
-  diff_threshold: 0.02
-  soc_diff_multiplier: 5.0
-- class: EVChargingOnTimeReward
-  weight: 2
-  name: ev_charging_ontime_reward
-- class: ActionSmoothnessReward
-  weight: 0.5
-  name: action_smoothness
+# Rewards are configured separately in reward_schedule_train.yaml / reward_schedule_eval.yaml

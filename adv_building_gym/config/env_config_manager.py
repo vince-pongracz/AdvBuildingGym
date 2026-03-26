@@ -54,9 +54,6 @@ class EnvConfigManager:
         if config.statesources is not None:
             config_dict["statesources"] = [source.to_dict() for source in config.statesources]
 
-        # RewardConfig serializes itself
-        reward_dict = config.reward_config.to_dict()
-        config_dict.update(reward_dict)
 
         return config_dict
 
@@ -137,8 +134,6 @@ class EnvConfigManager:
                 statesources.append(source)
             config.statesources = statesources
 
-        # RewardConfig deserializes itself
-        config.reward_config = RewardConfig.from_dict(config_dict)
 
         return config
 

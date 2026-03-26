@@ -372,11 +372,11 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
             self._rng = np.random.default_rng(seed)
 
         # ======== Data variant selection logic ========
-        # Approach A: episode-count-based data variant swap
+        # Variant swapping (which CSV files to use) is handled centrally by
+        # the D1 callback (data_schedule_callback.py) which pushes the same
+        # variant to all runners at iteration boundaries.
         self.episode_count += 1
-        variant = self.data_combinator.get_variant(self.episode_count, self._rng)
-        if variant:
-            self.apply_data_variant(variant)
+        variant = None
 
         # Approach C: external override via reset(options={"data_variant": {...}})
         if options and "data_variant" in options:

@@ -12,6 +12,7 @@ infras:
   Q_electric_max: 5.0
   cop_heat: 3.0
   cop_cool: 2.5
+# TODO VP 2026.03.26. : Take a look again on the tremblay parameters
 - class: BatteryTremblay
   name: battery
   Q_electric_max: 38.0
@@ -34,7 +35,7 @@ infras:
   soc_max: 0.95
 - class: LinearEVCharger
   name: ev_charger
-  Q_electric_max: 12.0
+  Q_electric_max: 30.0
   max_charging_kW: 30.0
   charger_efficiency: 0.92
   discharge_efficiency: 0.92
@@ -49,8 +50,8 @@ infras:
   peak_power_kW: 30.0
 - class: HouseholdEnergyConsumers
   name: hh_consumers
-  Q_electric_max: 8.0
-  peak_consumption_kW: 8.0
+  Q_electric_max: 12.0
+  peak_consumption_kW: 12.0
 statesources:
 - class: EnergyPriceDataSource
   name: E_price
@@ -67,39 +68,4 @@ statesources:
 - class: EVState
   name: ev_schedule
 
-rewards:
-- class: TempReward
-  weight: 1
-  name: temp_reward
-  diff_threshold: 0.0001
-  wrong_direction_penalty: -1.0
-  temp_const_multiplier: 5.0
-- class: EconomicReward
-  weight: 1
-  name: economic_reward
-- class: MinimiseEnergyConsumptionReward
-  weight: 0.2
-  name: E_consumption_reward
-- class: OperatorEnergyControlReward
-  weight: 1
-  max_power_kW: 10.0
-  name: operator_energy_control_reward
-  harsh_penalty: -4.0
-  soft_threshold_pct: 0.9
-  recovery_steps: 3
-- class: BatteryTargetReward
-  weight: 1
-  name: battery_target_reward
-  diff_threshold: 0.02
-  soc_diff_multiplier: 5.0
-- class: EVChargingReward
-  weight: 2
-  name: ev_charging_reward
-  diff_threshold: 0.02
-  soc_diff_multiplier: 5.0
-- class: EVChargingOnTimeReward
-  weight: 2
-  name: ev_charging_ontime_reward
-- class: ActionSmoothnessReward
-  weight: 0.5
-  name: action_smoothness
+# Rewards are configured separately in reward_schedule_train.yaml / reward_schedule_eval.yaml
