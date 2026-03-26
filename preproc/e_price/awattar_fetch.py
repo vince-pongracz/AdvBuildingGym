@@ -10,10 +10,18 @@ API docs: https://www.awattar.at/services/api
 # Link: https://www.awattar.at/services/api
 
 import logging
+import sys
 from datetime import datetime, timezone
+from pathlib import Path
+
+_PROJECT_ROOT_STR = str(Path(__file__).resolve().parents[2])
+if _PROJECT_ROOT_STR not in sys.path:
+    sys.path.insert(0, _PROJECT_ROOT_STR)
 
 import pandas as pd
 import requests
+
+from preproc.utils import fetch_with_retry
 
 logger = logging.getLogger(__name__)
 
@@ -54,15 +62,14 @@ def fetch_market_data(start_date: str, end_date: str, api_url: str = API_URL) ->
     )
 
     try:
-        response = requests.get(
+        response = fetch_with_retry(
             api_url,
             params={"start": start_ms, "end": end_ms},
             timeout=30,
         )
-        response.raise_for_status()
     except requests.exceptions.RequestException as exc:
         logger.warning(
-            "Fetch failed for %s to %s: %s — returning empty DataFrame",
+            "Fetch failed for %s to %s after retries: %s — returning empty DataFrame",
             start_date, end_date, exc,
         )
         return pd.DataFrame()

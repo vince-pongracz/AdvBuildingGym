@@ -71,4 +71,8 @@ param_space.json
 # Plotting outputs
 plotting/out/**
 
+# Eval results
 eval_results/**
+
+# Preprocessing, data quality summary -- only the figure needed
+data/quality_reports/data_quality_summary.csv

@@ -13,10 +13,18 @@ License: CC BY 4.0 from Bundesnetzagentur | SMARD.de (for DE-LU)
 # Link: https://api.energy-charts.info/#/prices/day_ahead_price_price_get
 
 import logging
+import sys
 from datetime import date, timedelta
+from pathlib import Path
+
+_PROJECT_ROOT_STR = str(Path(__file__).resolve().parents[2])
+if _PROJECT_ROOT_STR not in sys.path:
+    sys.path.insert(0, _PROJECT_ROOT_STR)
 
 import pandas as pd
 import requests
+
+from preproc.utils import fetch_with_retry
 
 logger = logging.getLogger(__name__)
 
@@ -54,12 +62,11 @@ def _fetch_chunk(
     """
     # The API accepts ISO date strings directly (interpreted as local time)
     # Link: https://api.energy-charts.info/openapi.json
-    response = requests.get(
+    response = fetch_with_retry(
         api_url,
         params={"bzn": bzn, "start": start, "end": end},
         timeout=60,
     )
-    response.raise_for_status()
 
     payload = response.json()
     unix_seconds = payload.get("unix_seconds", [])

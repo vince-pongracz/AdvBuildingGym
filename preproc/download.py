@@ -9,6 +9,8 @@ from urllib.parse import urlparse
 
 import requests
 
+from preproc.utils import fetch_with_retry
+
 logger = logging.getLogger(__name__)
 
 DOWNLOAD_CHUNK_SIZE: int = 1024 * 1024
@@ -45,14 +47,14 @@ def download_file(url: str, destination: Path, overwrite: bool) -> bool:
     destination.parent.mkdir(parents=True, exist_ok=True)
 
     try:
-        with requests.get(url, stream=True, timeout=120) as response:
-            response.raise_for_status()
+        response = fetch_with_retry(url, timeout=120, stream=True)
+        with response:
             with destination.open("wb") as output_file:
                 for chunk in response.iter_content(chunk_size=DOWNLOAD_CHUNK_SIZE):
                     if chunk:
                         output_file.write(chunk)
     except requests.exceptions.RequestException as exc:
-        logger.warning("Download failed for %s: %s — skipping file", url, exc)
+        logger.warning("Download failed for %s after retries: %s — skipping file", url, exc)
         # Clean up partial download
         if destination.exists():
             destination.unlink()

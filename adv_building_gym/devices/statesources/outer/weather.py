@@ -40,6 +40,7 @@ class WeatherDataSource(StateSource):
             logger.debug("No initial data file for '%s', data source will be assigned by DataCombinator", name)
 
     def _post_load_data_processing(self) -> None:
+        # TODO VP 2026.03.26. : Deal with this, refactor...
         """Normalise weather columns after CSV load / reload.
 
         Handles common data-quality issues in DWD weather CSVs:
@@ -58,7 +59,8 @@ class WeatherDataSource(StateSource):
             if n_neg > 0:
                 logger.warning(
                     "WeatherDataSource '%s': %d negative sentinel values in "
-                    "'sun_shine' replaced with 0", self.name, n_neg,
+                    "'sun_shine' replaced with 0 (whole-year CSV)",
+                    self.name, n_neg,
                 )
                 self.ts.loc[neg_mask, "sun_shine"] = 0.0
 
@@ -70,8 +72,9 @@ class WeatherDataSource(StateSource):
                 n_nan = int(self.ts[col].isna().sum())
                 if n_nan > 0:
                     logger.warning(
-                        "WeatherDataSource '%s': %d NaN values in '%s', "
-                        "forward/back-filling", self.name, n_nan, col,
+                        "WeatherDataSource '%s': %d NaN values in '%s' "
+                        "(whole-year CSV), filling with 0",
+                        self.name, n_nan, col,
                     )
                     self.ts[col] = self.ts[col].fillna(0)
 

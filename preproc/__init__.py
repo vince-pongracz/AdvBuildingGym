@@ -10,11 +10,28 @@ from .weather.explore_hdf5 import explore_hdf5_file
 from .weather.extract_sfh_csv import extract_sfh_data
 from .weather.extract_weather_csv import extract_weather_data
 from .weather.preproc_types import SFHExtractionStats, WeatherExtractionStats
-from .utils import ensure_datetime_index, resolve_path
+from .utils import (
+    DWD_MISSING_VALUE,
+    ensure_datetime_index,
+    fetch_with_retry,
+    get_measurement_columns,
+    is_missing,
+    parse_timestamp_column,
+    parse_year_from_filename,
+    resolve_path,
+    select_columns,
+)
 
 __all__ = [
     "augment_prices",
+    "DWD_MISSING_VALUE",
     "ensure_datetime_index",
+    "fetch_with_retry",
+    "get_measurement_columns",
+    "is_missing",
+    "parse_timestamp_column",
+    "parse_year_from_filename",
+    "select_columns",
     "explore_hdf5_file",
     "extract_sfh_data",
     "extract_weather_data",

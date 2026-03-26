@@ -32,8 +32,9 @@
 #SBATCH --partition=normal
 #SBATCH --nodes=1
 #SBATCH --tasks-per-node=1
+# NOTE VP: parallelisation options...
 #SBATCH --cpus-per-task=2
-#SBATCH --time=00:10:00
+#SBATCH --time=00:30:00
 #SBATCH --output=slurm_logs/data_setup/slurm-data-setup-%j.out
 #SBATCH --error=slurm_logs/data_setup/slurm-data-setup-%j.err
 #SBATCH --job-name=data-setup-%j
@@ -55,8 +56,6 @@ echo "=== SLURM Resource Info ==="
 echo "SLURM_CPUS_PER_TASK : ${SLURM_CPUS_PER_TASK:-}"
 echo "Node                : $(hostname)"
 
-echo "=== Python Info ==="
-python slurm_scripts/util/print_env_info.py
 
 # Disable ANSI color codes and log deduplication in Ray logs
 export RAY_COLOR_PREFIX=0

@@ -174,21 +174,143 @@ API docs wetteronline: https://wetteronline.readthedocs.io/en/latest/
 
 --> WetterOnline -- rather leave it
 
-### DWD
+### Zenodo/WPuQ Preprocessing Pipeline
 
+Converts HDF5 archives from Zenodo into CSV files for the environment statesources.
 
+#### Step 1: Download and extract Zenodo archives
 
-Station map: https://www.dwd.de/DE/fachnutzer/landwirtschaft/appl/stationskarte/_node.html
+Downloads files listed in `data/weather/zenodo/ds_links.txt`, extracts zips
+into HDF5 files (`*_weather.hdf5`, `*_data_1min.hdf5`).
 
-### Weather/Zenodo pipeline via unified script
+#### Step 2: Extract weather CSV from HDF5
+
+Script: `preproc/weather/extract_weather_csv.py`
+
+Reads `WEATHER_SERVICE/IN` from the HDF5 file, merges all variables (inner
+join), drops NaN rows, renames columns, and drops unused ones.
+
+Column renames:
+
+| HDF5 variable | Renamed to | Meaning |
+|---------------|------------|---------|
+| `temperature` | `temp_amb` | Ambient temperature |
+| `relative_humidity` | `rel_humidity` | Relative humidity |
+| `solar_irradiance` | `direct_sun_shine` | Solar global radiation |
+| `wind_direction` | `wind_dir` | Wind direction |
+| `wind_speed` | `avg_wind_speed` | Wind speed |
+
+Dropped columns: `atmospheric_pressure`, `precipitation_rate`,
+`probability_of_precipitation`, `apparent_temperature`, `wind_gust_speed`
 
 ```bash
-# Download Zenodo files listed in data/weather/zenodo/ds_links.txt,
-# extract zip archives, and run weather+SFH CSV extraction
-python preproc/data_setup.py
+python preproc/weather/extract_weather_csv.py --input data/weather/zenodo/2018_weather.hdf5
+# Output: data/weather/zenodo/csvs_weather/2018_weather.csv
+```
 
-# If files are already present locally, skip download and run weather only:
+#### Step 3: Extract SFH (Single Family Home) CSV from HDF5
+
+Script: `preproc/weather/extract_sfh_csv.py`
+
+Reads `NO_PV` group: per building (SFH10, SFH11, …), keeps `_TOT` columns from
+HEATPUMP (`hp_` prefix) and HOUSEHOLD (`hh_` prefix), merges on timestamp.
+
+```bash
+python preproc/weather/extract_sfh_csv.py --input data/weather/zenodo/2018_data_1min.hdf5
+# Output: data/weather/zenodo/csvs_2018_data_1min/SFH10.csv, SFH11.csv, ...
+```
+
+#### Full example (Zenodo/WPuQ)
+
+```bash
+python preproc/data_setup.py --skip-prices
+# Or skip download if HDF5 files exist:
 python preproc/data_setup.py --skip-prices --steps zenodo-extract weather-csv sfh-csv
+```
+
+Use `preproc/weather/explore_hdf5.py` or `explore_hdf5_notebook.ipynb` to
+inspect HDF5 structure before extraction.
+
+---
+
+### DWD (Deutscher Wetterdienst)
+
+DWD CDC open-data server, 10-minute resolution.
+Link: https://opendata.dwd.de/climate_environment/CDC/observations_germany/climate/10_minutes/
+Station map: https://www.dwd.de/DE/fachnutzer/landwirtschaft/appl/stationskarte/_node.html
+Default station: **04177** (Rheinstetten). Data types: `wind`, `solar`, `air_temperature`.
+
+#### Step 1: Fetch raw data
+
+Script: `preproc/weather/dwd/dwd_fetch.py`
+
+Downloads historical + recent zip archives, extracts `produkt_*.txt` files,
+converts to CSV, concatenates and deduplicates per data type.
+
+#### Step 2: Preprocess and merge
+
+Script: `preproc/weather/dwd/dwd_preprocess.py`
+
+Selects relevant columns, merges on `MESS_DATUM` (outer join), renames, adds
+combined solar column, converts timestamp to UTC datetime, drops all-missing
+(`-999`) rows. Writes full merged CSV at 10-minute resolution.
+
+Column renames:
+
+| DWD raw | Renamed to | Meaning |
+|---------|------------|---------|
+| `MESS_DATUM` | `timestamp` | Measurement date/time |
+| `FF_10` | `avg_wind_speed` | Wind speed (m/s) |
+| `DD_10` | `wind_dir` | Wind direction (°) |
+| `GS_10` | `direct_sun_shine` | Global solar irradiance (J/cm²) |
+| `DS_10` | `diff_sun_shine` | Diffuse solar irradiance (J/cm²) |
+| `TT_10` | `temp_amb` | Ambient temperature (°C) |
+| `RF_10` | `rel_humidity` | Relative humidity (%) |
+
+Derived column: `sun_shine = direct_sun_shine + diff_sun_shine`
+
+#### Step 3: Upsample to 5-minute resolution
+
+Per-year upsample from 10-min to 5-min:
+- `average` (default): linear interpolation, skips `-999` values
+- `duplicate`: forward-fill
+
+#### Step 4 (optional): Normalize and augment
+
+- `--normalize`: absolute-max normalization to [-1, 1], `-999` → NaN
+- `--augment` (via `data_setup.py`): per-column Gaussian noise, configured in
+  `preproc/augment_config.yaml`
+
+Per-year `<YEAR>_missing_entries.txt` reports list days with `-999` values.
+
+#### Full example (DWD)
+
+```bash
+python preproc/data_setup.py --skip-prices --skip-wpuq --steps dwd-fetch dwd-preprocess
+# With normalization:
+python preproc/data_setup.py --skip-prices --skip-wpuq --steps dwd-fetch dwd-preprocess --normalize
+# Standalone:
+python preproc/weather/dwd/dwd_preprocess.py --normalize
+```
+
+### Current Weather Data Files
+
+| File / Directory | Description |
+|------------------|-------------|
+| `weather/zenodo/*_weather.hdf5` | Raw HDF5 weather archives from Zenodo |
+| `weather/zenodo/*_data_1min.hdf5` | Raw HDF5 SFH load profiles (1-min) |
+| `weather/zenodo/csvs_weather/*.csv` | Extracted weather CSVs (5-min) |
+| `weather/zenodo/csvs_<stem>/*.csv` | Extracted SFH CSVs (one per building) |
+| `weather/dwd/preprocessed/merged_04177.csv` | Full merged DWD data (10-min) |
+| `weather/dwd/preprocessed/<YEAR>_merged_04177.csv` | Per-year DWD (5-min) |
+| `weather/dwd/preprocessed/<YEAR>_merged_04177_norm.csv` | Per-year DWD (5-min, normalized) |
+
+### Weather pipeline via unified script
+
+```bash
+python preproc/data_setup.py --skip-prices                    # Full weather setup
+python preproc/data_setup.py --skip-prices --skip-dwd         # Zenodo only
+python preproc/data_setup.py --skip-prices --skip-wpuq        # DWD only
 ```
 
 ## Other Data Sources (Reference)

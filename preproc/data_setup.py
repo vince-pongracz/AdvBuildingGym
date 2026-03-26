@@ -26,7 +26,13 @@ _PROJECT_ROOT_STR = str(Path(__file__).resolve().parents[1])
 if _PROJECT_ROOT_STR not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT_STR)
 
-from preproc.pipelines import run_augmentation, run_dwd_pipeline, run_price_pipeline, run_weather_pipeline
+from preproc.pipelines import (
+    run_augmentation,
+    run_dwd_pipeline,
+    run_price_pipeline,
+    run_quality_report,
+    run_weather_pipeline,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +41,8 @@ DEFAULT_YEARS: list[int] = list(range(2017, 2027))
 ALL_PRICE_STEPS: set[str] = {"price-fetch", "price-preproc"}
 ALL_WEATHER_STEPS: set[str] = {"zenodo-download", "zenodo-extract", "weather-csv", "sfh-csv"}
 ALL_DWD_STEPS: set[str] = {"dwd-fetch", "dwd-preprocess"}
-ALL_STEPS: set[str] = ALL_PRICE_STEPS | ALL_WEATHER_STEPS | ALL_DWD_STEPS
+ALL_REPORT_STEPS: set[str] = {"data-quality-report"}
+ALL_STEPS: set[str] = ALL_PRICE_STEPS | ALL_WEATHER_STEPS | ALL_DWD_STEPS | ALL_REPORT_STEPS
 
 
 def _parse_args() -> argparse.Namespace:
@@ -183,6 +190,12 @@ def _parse_args() -> argparse.Namespace:
     )
 
     parser.add_argument(
+        "--quality-report-dir",
+        default="data/quality_reports",
+        help="Output directory for the data quality report CSV and chart",
+    )
+
+    parser.add_argument(
         "--augment",
         action="store_true",
         help="Run data augmentation (Gaussian noise) on yearly price and weather CSVs after all pipelines. "
@@ -222,7 +235,8 @@ def main() -> None:
 
     _log_settings(args)
 
-    if args.skip_prices and args.skip_wpuq and args.skip_dwd:
+    has_quality_step = "data-quality-report" in set(args.steps)
+    if args.skip_prices and args.skip_wpuq and args.skip_dwd and not has_quality_step:
         raise ValueError(
             "Nothing to do: --skip-prices, --skip-wpuq, and --skip-dwd were all set"
         )
@@ -233,6 +247,9 @@ def main() -> None:
 
     # Augmentation is the final step, applied to yearly CSVs from all pipelines
     aug_stats = run_augmentation(args, preprocessed_price_files, dwd_yearly_csvs)
+
+    # Data quality report (runs last so it covers all produced files)
+    quality_stats = run_quality_report(args)
 
     logger.info("====================")
     logger.info("Data setup complete.")
@@ -251,6 +268,8 @@ def main() -> None:
     logger.info("--- Augmentation ---")
     logger.info("  Price files augmented: %d", aug_stats["price"])
     logger.info("  Weather files augmented: %d", aug_stats["weather"])
+    logger.info("--- Data quality report ---")
+    logger.info("  Datasets analysed: %d", quality_stats["datasets"])
     logger.info("====================")
     logger.info("Data setup finished!")
 

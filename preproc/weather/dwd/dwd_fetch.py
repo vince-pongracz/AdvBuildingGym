@@ -10,11 +10,17 @@ Link: https://opendata.dwd.de/climate_environment/CDC/observations_germany/clima
 import io
 import logging
 import re
+import sys
 import zipfile
 from pathlib import Path
 
+_PROJECT_ROOT_STR = str(Path(__file__).resolve().parents[3])
+if _PROJECT_ROOT_STR not in sys.path:
+    sys.path.insert(0, _PROJECT_ROOT_STR)
+
 import pandas as pd
-import requests
+
+from preproc.utils import fetch_with_retry
 
 logger = logging.getLogger("main")
 
@@ -33,8 +39,7 @@ DOWNLOAD_DIR: Path = DWD_DIR / "downloaded"
 
 def get_zip_urls_for_station(base_url: str, station_id: str) -> list[str]:
     """Parse the DWD directory listing and return zip URLs matching station_id."""
-    response = requests.get(base_url, timeout=60)
-    response.raise_for_status()
+    response = fetch_with_retry(base_url, timeout=60)
 
     # DWD listing is plain HTML with <a href="filename.zip"> links
     # Historical: 10minutenwerte_TU_04177_20081101_20091231_hist.zip
@@ -55,8 +60,7 @@ def get_zip_urls_for_station(base_url: str, station_id: str) -> list[str]:
 def download_and_extract(url: str, output_dir: Path) -> list[Path]:
     """Download a zip from url and extract to output_dir. Return extracted paths."""
     logger.info("Downloading %s", url)
-    response = requests.get(url, timeout=120)
-    response.raise_for_status()
+    response = fetch_with_retry(url, timeout=120)
 
     extracted_paths: list[Path] = []
     with zipfile.ZipFile(io.BytesIO(response.content)) as zf:

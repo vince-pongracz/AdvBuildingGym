@@ -11,6 +11,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from preproc.utils import DWD_MISSING_VALUE, get_measurement_columns, select_columns
 from preproc.weather.dwd.dwd_fetch import STATION_ID, DWD_DIR, fetch_all
 
 PREPROCESS_DIR: Path = DWD_DIR / "preprocessed"
@@ -27,16 +28,6 @@ RENAME_COLUMNS: dict[str, str] = {
     "TT_10": "temp_amb",
     "RF_10": "rel_humidity",
 }
-MISSING_VALUE: float = -999.0
-
-
-def select_columns(df: pd.DataFrame, keep_columns: list[str]) -> pd.DataFrame:
-    """Keep only the requested columns from a DataFrame."""
-    available = [col for col in keep_columns if col in df.columns]
-    missing = set(keep_columns) - set(available)
-    if missing:
-        logger.warning("Columns not found in DataFrame: %s", missing)
-    return df[available]
 
 
 def merge_dataframes(dataframes: dict[str, pd.DataFrame]) -> pd.DataFrame | None:
@@ -58,21 +49,36 @@ def merge_dataframes(dataframes: dict[str, pd.DataFrame]) -> pd.DataFrame | None
     merged.reset_index(drop=True, inplace=True)
     merged.rename(columns=RENAME_COLUMNS, inplace=True)
 
-    # Sum direct and diffuse solar irradiance into a combined column
-    merged["sun_shine"] = merged["direct_sun_shine"] + merged["diff_sun_shine"]
-
     # Convert timestamp from YYYYMMDDHHmm integer to UTC datetime
     merged["timestamp"] = pd.to_datetime(
         merged["timestamp"].astype(str), format="%Y%m%d%H%M", utc=True,
     )
 
-    # Drop rows where all measurement columns have the DWD missing value (-999)
-    measurement_cols = [c for c in merged.columns if c != "timestamp"]
-    all_missing = (merged[measurement_cols] == MISSING_VALUE).all(axis=1)
-    n_dropped = all_missing.sum()
+    # Replace -999 sentinel values with NaN before computing derived columns,
+    # so that sums like sun_shine = direct + diffuse don't produce bogus
+    # negative values (e.g. -1998) from sentinel arithmetic.
+    measurement_cols = get_measurement_columns(merged)
+    sentinel_mask = merged[measurement_cols] == DWD_MISSING_VALUE
+    n_sentinels = int(sentinel_mask.sum().sum())
+    if n_sentinels > 0:
+        merged[measurement_cols] = merged[measurement_cols].where(~sentinel_mask)
+        logger.info("Replaced %d sentinel values (-999) with NaN", n_sentinels)
+
+    # Drop rows where all measurement columns are NaN
+    all_missing = merged[measurement_cols].isna().all(axis=1)
+    n_dropped = int(all_missing.sum())
     if n_dropped > 0:
         merged = merged[~all_missing].reset_index(drop=True)
-        logger.info("Dropped %d rows where all measurements were missing (-999)", n_dropped)
+        logger.info("Dropped %d rows where all measurements were NaN", n_dropped)
+
+    # Sum direct and diffuse solar irradiance into a combined column.
+    # Treat NaN as 0 so a partial sum is still usable (only NaN if both are NaN).
+    merged["sun_shine"] = (
+        merged["direct_sun_shine"].fillna(0) + merged["diff_sun_shine"].fillna(0)
+    )
+    # If both components are NaN, set the sum to NaN too
+    both_nan = merged["direct_sun_shine"].isna() & merged["diff_sun_shine"].isna()
+    merged.loc[both_nan, "sun_shine"] = np.nan
 
     return merged
 
@@ -95,15 +101,10 @@ def upsample_to_5min(df: pd.DataFrame, method: str = "average") -> pd.DataFrame:
     upsampled = df.resample("5min").asfreq()
 
     if method == "average":
-        # Linearly interpolate NaN slots (the new 5-min midpoints)
-        # but do not interpolate across -999 missing values
-        mask = df[measurement_cols] == MISSING_VALUE
-        df_clean = df.copy()
-        df_clean[mask] = float("nan")
-        upsampled_clean = df_clean.resample("5min").asfreq()
-        upsampled_clean = upsampled_clean.interpolate(method="linear", limit=1)
-        # Restore -999 for originally missing values (keep them as-is)
-        upsampled[measurement_cols] = upsampled_clean[measurement_cols]
+        # Linearly interpolate NaN slots (the new 5-min midpoints).
+        # Sentinels are already replaced with NaN in merge_dataframes(),
+        # so limit=1 avoids interpolating across multi-row gaps.
+        upsampled = upsampled.interpolate(method="linear", limit=1)
     elif method == "duplicate":
         # Forward-fill: each new 5-min row gets the previous 10-min value
         upsampled = upsampled.ffill(limit=1)
@@ -121,13 +122,12 @@ def normalize_abs_min_max(df: pd.DataFrame, measurement_cols: list[str]) -> pd.D
 
     norm = val / max(|min|, |max|)
 
-    Rows with MISSING_VALUE (-999) are excluded from min/max computation
-    and set to NaN in the normalised output.
+    NaN values are excluded from min/max computation and stay NaN.
     """
     norm_df = df.copy()
     for col in measurement_cols:
         series = df[col].copy()
-        valid = series[series != MISSING_VALUE]
+        valid = series.dropna()
         if valid.empty:
             norm_df[col] = np.nan
             continue
@@ -135,9 +135,7 @@ def normalize_abs_min_max(df: pd.DataFrame, measurement_cols: list[str]) -> pd.D
         if abs_max == 0:
             norm_df[col] = 0.0
         else:
-            norm_df[col] = series.where(series == MISSING_VALUE, series / abs_max)
-        # Replace MISSING_VALUE entries with NaN in normalised output
-        norm_df.loc[norm_df[col] == MISSING_VALUE, col] = np.nan
+            norm_df[col] = series / abs_max
     return norm_df
 
 
@@ -156,7 +154,7 @@ def split_by_year(
       3. Write upsampled CSV
       4. (Optional) Normalise and write normalised CSV
     """
-    measurement_cols = [c for c in merged.columns if c != "timestamp"]
+    measurement_cols = get_measurement_columns(merged)
     years = merged["timestamp"].dt.year
     merged = merged.copy()
     merged["year"] = years
@@ -165,7 +163,8 @@ def split_by_year(
         year_df = year_df.drop(columns=["year"])
 
         # 1. Missing-entry report (on original 10-min data, before upsampling)
-        has_missing = (year_df[measurement_cols] == MISSING_VALUE).any(axis=1)
+        # Sentinels are already replaced with NaN in merge_dataframes()
+        has_missing = year_df[measurement_cols].isna().any(axis=1)
         year_df_with_date = year_df.loc[has_missing].copy()
         year_df_with_date["date"] = year_df_with_date["timestamp"].dt.date
         days_with_missing = year_df_with_date["date"].unique()
@@ -175,7 +174,7 @@ def split_by_year(
             f.write(f"Year {year}: {len(days_with_missing)} day(s) with at least one missing measurement\n\n")
             for day in sorted(days_with_missing):
                 day_rows = year_df_with_date[year_df_with_date["date"] == day]
-                missing_cols_per_row = (day_rows[measurement_cols] == MISSING_VALUE).sum(axis=0)
+                missing_cols_per_row = day_rows[measurement_cols].isna().sum(axis=0)
                 cols_affected = [c for c in measurement_cols if missing_cols_per_row[c] > 0]
                 f.write(f"  {day}: {len(day_rows)} missing row(s), columns: {', '.join(cols_affected)}\n")
         logger.info("Missing report: %s (%d days)", report_path.name, len(days_with_missing))

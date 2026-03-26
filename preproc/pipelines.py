@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import logging
-import re
 from pathlib import Path
 
 from preproc.download import download_links, extract_zip_files
@@ -20,6 +19,8 @@ from preproc.augment import (
     augment_prices,
     augment_weather,
 )
+from preproc.data_quality_report import run_data_quality_report
+from preproc.utils import parse_year_from_filename, resolve_path
 from preproc.weather.dwd.dwd_fetch import fetch_all as dwd_fetch_all
 from preproc.weather.dwd.dwd_preprocess import preprocess as dwd_preprocess
 from preproc.weather.extract_sfh_csv import extract_sfh_data
@@ -37,18 +38,8 @@ SOURCE_SUBDIRS: dict[str, str] = {
 
 def resolve_setup_path(path: str | Path) -> Path:
     """Resolve path relative to repository root if needed."""
-    candidate = Path(path)
-    if candidate.is_absolute():
-        return candidate
-    return PROJECT_ROOT / candidate
+    return resolve_path(path, PROJECT_ROOT)
 
-
-def parse_year_from_filename(file_path: Path) -> int:
-    """Extract a year token (e.g. 2025) from a filename."""
-    match = re.search(r"(20\d{2})", file_path.name)
-    if match is None:
-        raise ValueError(f"Could not infer year from filename: {file_path}")
-    return int(match.group(1))
 
 
 def _source_dir(base_dir: Path, source: str) -> Path:
@@ -429,3 +420,29 @@ def run_augmentation(
     logger.info("Augmentation complete: %d price, %d weather file(s).",
                 stats["price"], stats["weather"])
     return stats
+
+
+def run_quality_report(args: argparse.Namespace) -> dict[str, int]:
+    """Run the data-quality-report step if requested.
+
+    Returns:
+        Dict with count of datasets analysed.
+    """
+    active_steps = set(args.steps)
+    if "data-quality-report" not in active_steps:
+        return {"datasets": 0}
+
+    dwd_dir = resolve_setup_path(args.dwd_output_dir) / "preprocessed"
+    zenodo_dir = resolve_setup_path(args.weather_csv_dir)
+    price_dir = resolve_setup_path(args.price_output_dir)
+    output_dir = resolve_setup_path(
+        getattr(args, "quality_report_dir", "data/quality_reports")
+    )
+
+    reports = run_data_quality_report(
+        dwd_dir=dwd_dir,
+        zenodo_weather_dir=zenodo_dir,
+        price_dir=price_dir,
+        output_dir=output_dir,
+    )
+    return {"datasets": len(reports)}
