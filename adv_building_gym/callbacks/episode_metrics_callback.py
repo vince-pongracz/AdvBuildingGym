@@ -113,7 +113,7 @@ def _save_episode_metrics_json(
         json.dump(dump, f, cls=CustomJSONEncoder, indent=4)
 
 
-def make_episode_metrics_callback_class(
+def make_episode_metrics_cb_class(
     metrics_base_dir: str,
     exec_date: Optional[datetime.datetime],
     dump_metrics_json: bool,

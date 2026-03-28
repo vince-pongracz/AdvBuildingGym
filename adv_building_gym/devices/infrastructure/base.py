@@ -1,4 +1,5 @@
 import logging
+from collections import OrderedDict
 from typing import Any, ClassVar, Dict, Set, Type, TypeVar
 
 from adv_building_gym.utils import EnvSyncInterface
@@ -20,17 +21,34 @@ class Infrastructure(EnvSyncInterface, Serializable):
 
     def __init__(self,
                 name: str,
-                Q_electric_max: float
+                max_power_kW: float
                 ) -> None:
         super().__init__()
 
         self.name = name
-        self.Q_electric_max = Q_electric_max  # ~ power consumption max
+        self.max_power_kW = max_power_kW  # ~ rated power capacity
 
-    # TODO VP 2026.03.27. : Add type annotations...
+    @property
+    def max_consumption_kW(self) -> float:
+        """Maximum power this component can draw from the grid (kW).
+
+        Defaults to max_power_kW (consumption-only device).
+        Override in subclasses with different power flow directions.
+        """
+        return self.max_power_kW
+
+    @property
+    def max_export_kW(self) -> float:
+        """Maximum power this component can export to the grid (kW).
+
+        Defaults to 0 (consumption-only device).
+        Override in subclasses that can produce or discharge.
+        """
+        return 0.0
+
     def setup_spaces(self,
-                    state_spaces,
-                    action_spaces):
+                    state_spaces: OrderedDict,
+                    action_spaces: OrderedDict) -> tuple[OrderedDict, OrderedDict]:
         """Setup observation and action spaces. Implement in derived classes."""
         return state_spaces, action_spaces
 
@@ -38,19 +56,22 @@ class Infrastructure(EnvSyncInterface, Serializable):
         """Set target for infrastructure component."""
         pass
 
-    def exec_action(self, actions, states, info: dict | None = None) -> None:
+    def exec_action(self, actions: Dict, states: Dict, info: dict | None = None) -> None:
         """Execute action of the infrastructure.
 
         Args:
-            actions (Dict): contains actions
-            states (Dict): should be treated as immutable, holds information for the action execution
+            actions: Action dict keyed by component action name.
+            states: Observable state dict; treat as immutable during action execution.
             info: Shared dict for inter-component data that is not part of
                 the observation space (e.g., EV schedule parameters).
         """
         pass
 
     def update_state(self, states: Dict, info: dict | None = None) -> None:
-        """Update state based on current iteration. Implement in derived classes.
+        """Update state based on current iteration.
+
+        Subclasses must call ``super().update_state(states, info)`` so
+        that base-class bookkeeping (power bound publication) runs.
 
         **Note**: Called after ``exec_action`` to update observable states,
         and only to update them, not to perform actions.
@@ -60,7 +81,7 @@ class Infrastructure(EnvSyncInterface, Serializable):
             info: Shared dict for inter-component data that is not part of
                 the observation space.
         """
-        pass
+        info = self._publish_power_bounds(info)
 
     def reset(self, states: Dict, info: dict | None = None) -> None:
         """Populate initial state at episode start (after data reloads).
@@ -71,10 +92,22 @@ class Infrastructure(EnvSyncInterface, Serializable):
         """
         self.update_state(states, info)
 
+    def _publish_power_bounds(self, info: dict | None = None) -> dict:
+        """Accumulate this component's directional power bounds into *info*.
+
+        Creates a new dict if *info* is ``None`` so the bounds are always
+        available via the returned value.
+        """
+        if info is None:
+            info = {}
+        info["max_consumption_kW"] = info.get("max_consumption_kW", 0.0) + self.max_consumption_kW
+        info["max_export_kW"] = info.get("max_export_kW", 0.0) + self.max_export_kW
+        return info
+
     def get_electric_consumption(self, actions: Dict) -> float:
         """Get current electric energy consumption in kW.
 
-        Default implementation: extracts action for this component and scales by Q_electric_max.
+        Default implementation: extracts action for this component and scales by max_power_kW.
         Override in derived classes for more complex calculations.
 
         Args:

@@ -40,7 +40,7 @@ class SolarPanel(Infrastructure):
 
     def __init__(self,
                 name: str,
-                Q_electric_max: float,
+                max_power_kW: float,
                 peak_power_kW: float,
                 control_step: int = 300
                 ) -> None:
@@ -48,11 +48,11 @@ class SolarPanel(Infrastructure):
 
         Args:
             name: Component identifier
-            Q_electric_max: Maximum power production in kW (typically = peak_power_kW)
+            max_power_kW: Maximum power production in kW (typically = peak_power_kW)
             peak_power_kW: Peak power output under standard test conditions (STC)
             control_step: Control timestep in seconds (stored for future use)
         """
-        super().__init__(name, Q_electric_max)
+        super().__init__(name, max_power_kW)
 
         # NOTE VP 2026.01.24. : Inverter efficiency is not considered,
         # peak power means peak output power, produced by the solar panel
@@ -63,6 +63,13 @@ class SolarPanel(Infrastructure):
         self.irradiance_norm = 0.0  # Normalized irradiance [0, 1]
         self.current_production_kW = 0.0  # Actual power production in kW
 
+    @property
+    def max_consumption_kW(self) -> float:
+        return 0.0
+
+    @property
+    def max_export_kW(self) -> float:
+        return self.max_power_kW
 
     def setup_spaces(self,
                     state_spaces,

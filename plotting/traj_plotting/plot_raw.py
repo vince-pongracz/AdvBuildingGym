@@ -26,6 +26,26 @@ _UNIT_LABELS: dict[str, str] = {
     "E_price_max_raw": "Price (€/kWh)",
 }
 
+# Suffix-based fallback for keys not in _UNIT_LABELS (auto-discovered _raw attrs).
+_SUFFIX_UNITS: list[tuple[str, str]] = [
+    ("_temp_", "Temperature (°C)"),
+    ("_price_", "Price (€/kWh)"),
+    ("_kW_", "Power (kW)"),
+    ("_kWh_", "Energy (kWh)"),
+]
+
+
+def _unit_label(key: str) -> str:
+    """Return a y-axis unit label for *key*, falling back to suffix heuristics."""
+    label = _UNIT_LABELS.get(key)
+    if label is not None:
+        return label
+    lower = key.lower()
+    for fragment, unit in _SUFFIX_UNITS:
+        if fragment in f"_{lower}_":
+            return unit
+    return "Value"
+
 
 def plot_raw(episode: EpisodeData) -> list[go.Figure]:
     """One plot per raw physical value (or group of values) over a 24-hour day.
@@ -48,6 +68,7 @@ def plot_raw(episode: EpisodeData) -> list[go.Figure]:
     plot_cfg = load_plot_config().get("raw", {})
     grouped_keys: list[list[str]] = plot_cfg.get("grouped_keys", [
         ["temp_out_raw", "temp_in_raw", "desired_temp_in_raw"],
+        ["E_price_raw", "E_price_max_raw"],
     ])
     skip_keys: set[str] = set(plot_cfg.get("skip_keys", []))
 
@@ -74,7 +95,7 @@ def plot_raw(episode: EpisodeData) -> list[go.Figure]:
         fig = go.Figure()
         title = " + ".join(keys)
         # Use the unit label of the first key in the group
-        y_label = _UNIT_LABELS.get(keys[0], "Value")
+        y_label = _unit_label(keys[0])
 
         for i, key in enumerate(keys):
             if key not in raw:

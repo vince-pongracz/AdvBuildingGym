@@ -100,7 +100,7 @@ class EnvConfig:
         return [
             HP(
                 name="HP",
-                Q_electric_max=5.0,  # kW (consistent with battery 19 kW, EV 7 kW, solar 5 kW)
+                max_power_kW=5.0,  # kW (consistent with battery 19 kW, EV 7 kW, solar 5 kW)
                 K=self.building_props.K,
                 mC=self.building_props.mC,
                 cop_heat=3.0,
@@ -110,19 +110,19 @@ class EnvConfig:
             BatteryTremblay("battery", control_step=self.CONTROL_STEP),
             LinearEVCharger(
                 "ev_charger",
-                Q_electric_max=7.0,
+                max_power_kW=7.0,
                 max_charging_kW=7.0,
                 control_step=self.CONTROL_STEP
             ),
             SolarPanel(
                 "solar",
-                Q_electric_max=5.0,
+                max_power_kW=5.0,
                 peak_power_kW=5.0,
                 control_step=self.CONTROL_STEP
             ),
             HouseholdEnergyConsumers(
                 "hh_consumers",
-                Q_electric_max=8.0,
+                max_power_kW=8.0,
                 peak_consumption_kW=8.0,
                 control_step=self.CONTROL_STEP
             ),

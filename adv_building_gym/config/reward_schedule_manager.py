@@ -14,7 +14,7 @@ Modes:
 
 Usage::
 
-    manager = RewardConfigManager.from_yaml("configs/reward_schedule_train.yaml")
+    manager = RewardScheduleManager.from_yaml("configs/reward_schedule_train.yaml")
     rewards = manager.create_active_rewards()   # initial set
     manager.advance()                           # next swap
     rewards = manager.create_active_rewards()   # updated set
@@ -44,7 +44,7 @@ class RewardScheduleMode(Enum):
     RANDOM = "random"
 
 
-class RewardConfigManager:
+class RewardScheduleManager:
     """Stateful reward schedule service.
 
     Loads a reward schedule YAML, tracks swap position, and creates
@@ -86,8 +86,8 @@ class RewardConfigManager:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def from_yaml(path: str | Path) -> RewardConfigManager:
-        """Build a RewardConfigManager from a YAML config file.
+    def from_yaml(path: str | Path) -> RewardScheduleManager:
+        """Build a RewardScheduleManager from a YAML config file.
 
         Args:
             path: Path to the reward schedule YAML
@@ -110,7 +110,7 @@ class RewardConfigManager:
                 "params": entry.get("params", {}),
             })
 
-        manager = RewardConfigManager(
+        manager = RewardScheduleManager(
             mode=RewardScheduleMode(cfg["mode"]),
             swap_every_n_iterations=cfg.get("swap_every_n_iterations", 50),
             seed=cfg.get("seed", 42),

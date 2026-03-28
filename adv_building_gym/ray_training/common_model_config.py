@@ -12,12 +12,12 @@ from ray.rllib.connectors.env_to_module import FlattenObservations
 from ray.rllib.algorithms.algorithm_config import AlgorithmConfig
 
 from adv_building_gym.callbacks import (
-    create_data_schedule_on_train_result,
-    create_reward_switch_on_train_result,
-    make_episode_metrics_callback_class,
-    make_trajectory_logging_callback_class,
+    create_data_schedule_on_train_result_cb,
+    create_reward_switch_on_train_result_cb,
+    make_episode_metrics_cb_class,
+    make_trajectory_logging_cb_class,
 )
-from adv_building_gym.config.reward_config_manager import RewardConfigManager, RewardScheduleMode
+from adv_building_gym.config.reward_schedule_manager import RewardScheduleManager, RewardScheduleMode
 from adv_building_gym.config.training_param_config import TrainingParamConfig
 from adv_building_gym.data_combinator import DataCombinator
 from adv_building_gym.utils import ResourceAllocation, SlurmResources, validate_resource_allocation
@@ -46,7 +46,7 @@ def common_model_setup(
     clip_actions: bool = True,
     data_combinator: DataCombinator | None = None,
     log_trajectories: bool = False,
-    reward_config_manager: RewardConfigManager | None = None,
+    reward_schedule_manager: RewardScheduleManager | None = None,
 ):
     """
     Apply common RLlib configuration to an algorithm config.
@@ -194,7 +194,7 @@ def common_model_setup(
     # Link: https://docs.ray.io/en/latest/rllib/rllib-callback.html
     exec_date = datetime.datetime.now()
 
-    episode_metrics_class = make_episode_metrics_callback_class(
+    episode_metrics_class = make_episode_metrics_cb_class(
         metrics_base_dir=f"{metrics_base_dir}/metrics",
         exec_date=exec_date,
         dump_metrics_json=False
@@ -203,7 +203,7 @@ def common_model_setup(
     # Assemble the callbacks_class list: metrics (always), trajectory (optional)
     callback_classes = [episode_metrics_class]
     if log_trajectories:
-        trajectory_class = make_trajectory_logging_callback_class(
+        trajectory_class = make_trajectory_logging_cb_class(
             metrics_base_dir=f"{metrics_base_dir}/trajectories",
             exec_date=exec_date,
         )
@@ -214,7 +214,7 @@ def common_model_setup(
     # switching run at iteration boundaries.  RLlib accepts a single
     # on_train_result callable, so compose them when both are active.
     on_train_result_fns = [
-        create_data_schedule_on_train_result(
+        create_data_schedule_on_train_result_cb(
             data_combinator, data_combinator.swap_every_n_episodes,
         ),
     ]
@@ -223,17 +223,17 @@ def common_model_setup(
         data_combinator.swap_every_n_episodes, len(data_combinator.variants),
     )
 
-    if (reward_config_manager is not None
-            and reward_config_manager.mode is not RewardScheduleMode.OFF):
+    if (reward_schedule_manager is not None
+            and reward_schedule_manager.mode is not RewardScheduleMode.OFF):
         on_train_result_fns.append(
-            create_reward_switch_on_train_result(reward_config_manager),
+            create_reward_switch_on_train_result_cb(reward_schedule_manager),
         )
         logger.info(
             "RewardSwitchCallback: mode=%s, swap every %d iterations, "
             "active rewards: %s",
-            reward_config_manager.mode,
-            reward_config_manager.swap_every_n_iterations,
-            reward_config_manager.get_active_reward_names(),
+            reward_schedule_manager.mode,
+            reward_schedule_manager.swap_every_n_iterations,
+            reward_schedule_manager.get_active_reward_names(),
         )
 
     callback_kwargs = {

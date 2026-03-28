@@ -33,7 +33,7 @@ class LinearEVCharger(Infrastructure):
 
     def __init__(self,
                  name: str,
-                 Q_electric_max: float,
+                 max_power_kW: float,
                  max_charging_kW: float,
                  max_cap_kWh: float = 60.0,
                  charger_efficiency: float = 0.92,
@@ -50,7 +50,7 @@ class LinearEVCharger(Infrastructure):
 
         Args:
             name: Component identifier
-            Q_electric_max: Maximum power consumption in kW
+            max_power_kW: Maximum power consumption in kW
 
             max_charging_kW: Maximum charging power in kW
             max_cap_kWh: EV battery capacity in kWh
@@ -64,7 +64,7 @@ class LinearEVCharger(Infrastructure):
             target_soc: Target state of charge [0, 1]
             max_charge_time_hrs: Maximum charging time in hours (for capping and normalization)
         """
-        super().__init__(name, Q_electric_max)
+        super().__init__(name, max_power_kW)
 
         self.max_charging_kW = max_charging_kW
         self.max_cap_kWh = max_cap_kWh
@@ -86,6 +86,10 @@ class LinearEVCharger(Infrastructure):
             raise ValueError("charger_efficiency must be in (0, 1].")
         if discharge_efficiency <= 0 or discharge_efficiency > 1:
             raise ValueError("discharge_efficiency must be in (0, 1].")
+
+    @property
+    def max_export_kW(self) -> float:
+        return self.max_power_kW if self.v2g_enabled else 0.0
 
     def setup_spaces(self,
                      state_spaces,
@@ -256,6 +260,7 @@ class LinearEVCharger(Infrastructure):
 
     def update_state(self, states: Dict, info=None) -> None:
         """Update observable state."""
+        super().update_state(states, info)
         states["ev_soc"][0] = np.float32(self.soc)
         states["ev_target_soc"][0] = np.float32(self.target_soc)
         states["ev_connected"][0] = np.float32(1.0 if self.ev_connected else 0.0)

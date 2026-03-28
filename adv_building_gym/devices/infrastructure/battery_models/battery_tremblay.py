@@ -83,7 +83,7 @@ class BatteryTremblay(Infrastructure):
     }
 
     def __init__(self, name: str,
-                 Q_electric_max: float = 19.0,  # Max charge/discharge power in kW (400V × 48A)
+                 max_power_kW: float = 19.0,  # Max charge/discharge power in kW (400V × 48A)
                  cell_capacity_Ah: float = 3.5,  # Single cell capacity in Ah (typical 21700)
                  max_charge_amps: float = 48.0,  # Max pack current in A
                  max_charge_voltage: float = 420.0,  # Max pack voltage in V
@@ -109,7 +109,7 @@ class BatteryTremblay(Infrastructure):
                  soc_min: float = 0.1,  # Minimum SoC to prevent damage
                  soc_max: float = 0.95,  # Maximum SoC to prevent damage
                  ) -> None:
-        super().__init__(name, Q_electric_max)
+        super().__init__(name, max_power_kW)
 
         self.cell_capacity_Ah = cell_capacity_Ah
         self.max_charge_amps = max_charge_amps
@@ -160,6 +160,9 @@ class BatteryTremblay(Infrastructure):
         self.actual_voltage = self._calculate_terminal_voltage(self.soc, 0.0)
         self.actual_power_kW = 0.0  # Track actual power for consumption reporting
 
+    @property
+    def max_export_kW(self) -> float:
+        return self.max_power_kW
 
     def setup_spaces(self,
                     state_spaces,
@@ -275,7 +278,7 @@ class BatteryTremblay(Infrastructure):
             - Positive: charge battery (consume power from grid)
             - Negative: discharge battery (provide power to grid)
 
-        The action represents fraction of max power (Q_electric_max).
+        The action represents fraction of max power (max_power_kW).
         """
         action = float(np.atleast_1d(actions["battery_action"])[0])
 
@@ -283,7 +286,7 @@ class BatteryTremblay(Infrastructure):
         is_charging = action > 0
 
         # Calculate requested power in kW
-        requested_power_kW = abs(action) * self.Q_electric_max
+        requested_power_kW = abs(action) * self.max_power_kW
 
         # Get current terminal voltage for power-to-current conversion
         # Use small test current in the right direction to estimate voltage
@@ -341,10 +344,11 @@ class BatteryTremblay(Infrastructure):
             self.actual_power_kW = -self.actual_power_kW
 
         # Update the action dict to reflect actual (clipped) action
-        actual_action = self.actual_power_kW / self.Q_electric_max if self.Q_electric_max > 0 else 0.0
+        actual_action = self.actual_power_kW / self.max_power_kW if self.max_power_kW > 0 else 0.0
         actions["battery_action"] = np.array([np.float32(actual_action)], dtype=np.float32)
 
     def update_state(self, states: Dict, info=None) -> None:
+        super().update_state(states, info)
         # Ensure float32 dtype for all updates
         states["battery_pct"][0] = np.float32(self.soc)
         states["battery_target_pct"][0] = np.float32(self.target_soc)

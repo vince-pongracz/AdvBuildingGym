@@ -1,3 +1,4 @@
+from collections import OrderedDict
 import logging
 from typing import ClassVar, Set
 
@@ -30,7 +31,7 @@ class HP(Infrastructure):
 
     def __init__(self,
                  name: str,
-                 Q_electric_max: float,
+                 max_power_kW: float,
                  K: float,
                  mC: float,
                  cop_heat: float = 1.0,
@@ -38,7 +39,7 @@ class HP(Infrastructure):
                  # TODO VP 2026.03.24. : Control step should not be default here -- get it from caller
                  control_step: int = 300
                  ) -> None:
-        super().__init__(name, Q_electric_max)
+        super().__init__(name, max_power_kW)
 
         # NOTE VP 2026.01.20. : COP, link: https://en.wikipedia.org/wiki/Coefficient_of_performance
         # COP = Q_thermal / P_electric => Q_thermal = P_electric * COP
@@ -55,8 +56,8 @@ class HP(Infrastructure):
             raise ValueError("cop_heat and cop_cool must be positive.")
 
     def setup_spaces(self,
-                    state_spaces,
-                    action_spaces):
+                    state_spaces: OrderedDict,
+                    action_spaces: OrderedDict) -> tuple[OrderedDict, OrderedDict]:
         # HP action is 2D: [energy, mode]
         # - energy: [0, 1] - HP always consumes energy (positive = consumption)
         # - mode: [0, 1] - <0.4: cooling, >0.6: heating, [0.4, 0.6]: no action
@@ -82,16 +83,16 @@ class HP(Infrastructure):
 
         # NOTE VP 2026.01.20. : Thermal model is 1R1C, same as links below
         # Determine mode: cooling (<0.4), heating (>0.6), or no action ([0.4, 0.6])
-        # energy is in [0, 1], thermal power Q_thermal = energy * Q_electric_max * COP
+        # energy is in [0, 1], thermal power Q_thermal = energy * max_power_kW * COP
         if mode < 0.4:
             # Cooling mode: remove heat from building (negative q_hp)
             cop = self.cop_cool
-            q_hp = -energy * self.Q_electric_max * cop  # heat removed from building
+            q_hp = -energy * self.max_power_kW * cop  # heat removed from building
             mode = 0.0
         elif mode > 0.6:
             # Heating mode: add heat to building (positive q_hp)
             cop = self.cop_heat
-            q_hp = energy * self.Q_electric_max * cop  # heat added to building
+            q_hp = energy * self.max_power_kW * cop  # heat added to building
             mode = 1.0
         else:
             # No action zone [0.4, 0.6]
@@ -148,13 +149,13 @@ class HP(Infrastructure):
 
             # Back-calculate actual energy from actual q_hp
             if mode < 0.4:
-                # Cooling: q_hp = -energy * Q_electric_max * cop
-                # => energy = -q_hp / (Q_electric_max * cop)
-                actual_energy = -actual_q_hp / (self.Q_electric_max * cop) if (self.Q_electric_max * cop) > 0 else 0.0
+                # Cooling: q_hp = -energy * max_power_kW * cop
+                # => energy = -q_hp / (max_power_kW * cop)
+                actual_energy = -actual_q_hp / (self.max_power_kW * cop) if (self.max_power_kW * cop) > 0 else 0.0
             else:  # mode > 0.6 (heating)
-                # Heating: q_hp = energy * Q_electric_max * cop
-                # => energy = q_hp / (Q_electric_max * cop)
-                actual_energy = actual_q_hp / (self.Q_electric_max * cop) if (self.Q_electric_max * cop) > 0 else 0.0
+                # Heating: q_hp = energy * max_power_kW * cop
+                # => energy = q_hp / (max_power_kW * cop)
+                actual_energy = actual_q_hp / (self.max_power_kW * cop) if (self.max_power_kW * cop) > 0 else 0.0
 
             # Clamp to valid range — HP can only consume energy, never produce
             actual_energy = np.clip(actual_energy, 0.0, 1.0)
@@ -170,6 +171,7 @@ class HP(Infrastructure):
             self.temp_in_norm_change = dTemp
 
     def update_state(self, states, info=None) -> None:
+        super().update_state(states, info)
         new_temp = states["temp_in_norm"][0] + self.temp_in_norm_change
         # Clipping ensured in exec_action -- maybe reintroduction needed later
         states["temp_in_norm"][0] = np.float32(new_temp)
@@ -179,7 +181,7 @@ class HP(Infrastructure):
 
         HP action is [energy, mode] where energy is in [0, 1].
         Positive value indicates consumption from grid.
-        Actual consumption is energy * Q_electric_max.
+        Actual consumption is energy * max_power_kW.
         """
         if "HP_action" not in actions:
             return 0.0
@@ -187,7 +189,7 @@ class HP(Infrastructure):
         action = actions["HP_action"]
         energy = float(np.atleast_1d(action)[0])
         # Energy is positive ([0, 1]), consumption from grid
-        return energy * self.Q_electric_max
+        return energy * self.max_power_kW
 
 
 # Register HP with the component registry

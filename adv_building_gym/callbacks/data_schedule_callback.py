@@ -21,7 +21,7 @@ from adv_building_gym.envs.data_variant import DataVariantProvider
 logger = logging.getLogger(__name__)
 
 
-def create_data_schedule_on_train_result(
+def create_data_schedule_on_train_result_cb(
     combinator: DataCombinator,
     swap_every_n_iterations: int,
 ):

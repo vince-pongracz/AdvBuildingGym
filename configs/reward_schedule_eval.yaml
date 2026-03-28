@@ -17,8 +17,7 @@ rewards:
 
   - class_name: EconomicReward
     weight: 1.0
-    params:
-      max_power_kW: 25.0
+    params: {}
 
   - class_name: MinimiseEnergyConsumptionReward
     weight: 0.2

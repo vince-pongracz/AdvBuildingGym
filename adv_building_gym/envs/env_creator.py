@@ -37,7 +37,7 @@ def adv_building_env_creator(config: dict) -> gymnasium.Env:
 
     Args:
         config: Configuration dict passed by Ray Tune. Required keys:
-            - ``reward_config_manager``: RewardConfigManager instance.
+            - ``reward_schedule_manager``: RewardScheduleManager instance.
               Rewards are created from the manager's active subset
               (mode=OFF returns all rewards).
           Optional keys:
@@ -56,8 +56,8 @@ def adv_building_env_creator(config: dict) -> gymnasium.Env:
     infras = env_config.create_infras()
     statesources = env_config.create_statesources()
 
-    # Rewards always come from the RewardConfigManager (mode=OFF returns all).
-    reward_manager = config["reward_config_manager"]
+    # Rewards always come from the RewardScheduleManager (mode=OFF returns all).
+    reward_manager = config["reward_schedule_manager"]
     rewards = reward_manager.create_active_rewards()
 
     env = AdvBuildingGym(

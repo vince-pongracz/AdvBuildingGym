@@ -13,12 +13,12 @@ building_props:
 infras:
 - class: HP
   name: HP
-  Q_electric_max: 5.0
+  max_power_kW: 5.0
   cop_heat: 3.0
   cop_cool: 2.5
 - class: BatteryTremblay
   name: battery
-  Q_electric_max: 28.0
+  max_power_kW: 28.0
   cell_capacity_Ah: 5.0
   max_charge_amps: 48.0
   max_charge_voltage: 420.0
@@ -38,7 +38,7 @@ infras:
   soc_max: 0.95
 - class: LinearEVCharger
   name: ev_charger
-  Q_electric_max: 11.0
+  max_power_kW: 11.0
   max_charging_kW: 11.0
   charger_efficiency: 0.92
   discharge_efficiency: 0.92
@@ -49,11 +49,11 @@ infras:
   v2g_playroom: 0.1
 - class: SolarPanel
   name: solar
-  Q_electric_max: 15.0
+  max_power_kW: 15.0
   peak_power_kW: 15.0
 - class: HouseholdEnergyConsumers
   name: hh_consumers
-  Q_electric_max: 8.0
+  max_power_kW: 8.0
   peak_consumption_kW: 8.0
 statesources:
 - class: EnergyPriceDataSource

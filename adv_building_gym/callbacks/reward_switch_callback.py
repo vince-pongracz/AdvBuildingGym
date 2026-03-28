@@ -2,7 +2,7 @@
 
 Pushes a new reward function subset to all env_runners (training AND
 evaluation) at training iteration boundaries.  The active subset is
-determined by the RewardConfigManager's mode and swap index.
+determined by the RewardScheduleManager's mode and swap index.
 
 Pattern mirrors ``data_schedule_callback.py`` (Approach D1).
 
@@ -13,13 +13,13 @@ to ``config.callbacks(ExistingClass, on_train_result=func)``.
 
 import logging
 
-from adv_building_gym.config.reward_config_manager import RewardConfigManager
+from adv_building_gym.config.reward_schedule_manager import RewardScheduleManager
 
 logger = logging.getLogger(__name__)
 
 
-def create_reward_switch_on_train_result(
-    reward_manager: RewardConfigManager,
+def create_reward_switch_on_train_result_cb(
+    reward_manager: RewardScheduleManager,
 ):
     """Factory that returns an ``on_train_result`` callable.
 
@@ -31,13 +31,13 @@ def create_reward_switch_on_train_result(
         )
 
     Args:
-        reward_manager: Stateful RewardConfigManager that tracks the
+        reward_manager: Stateful RewardScheduleManager that tracks the
             schedule position and creates reward subsets.
     """
 
     def on_train_result(*, algorithm, result: dict, **kwargs) -> None:
         iteration: int = result.get("training_iteration", 0)
-        logger.info("RewardConfigManager iteration: %d", iteration)
+        logger.info("RewardScheduleManager iteration: %d", iteration)
         if iteration % reward_manager.swap_every_n_iterations != 0:
             return
 
@@ -52,7 +52,7 @@ def create_reward_switch_on_train_result(
 
 def _push_rewards_to_runners(
     algorithm,
-    reward_manager: RewardConfigManager,
+    reward_manager: RewardScheduleManager,
 ) -> None:
     """Create fresh reward instances and set them on all live envs.
 

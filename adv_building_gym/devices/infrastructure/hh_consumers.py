@@ -37,7 +37,7 @@ class HouseholdEnergyConsumers(Infrastructure):
 
     def __init__(self,
                 name: str,
-                Q_electric_max: float,
+                max_power_kW: float,
                 peak_consumption_kW: float = 8.0,
                 control_step: int = 300
                 ) -> None:
@@ -45,11 +45,11 @@ class HouseholdEnergyConsumers(Infrastructure):
 
         Args:
             name: Component identifier
-            Q_electric_max: Maximum power consumption in kW (typically = peak_consumption_kW)
+            max_power_kW: Maximum power consumption in kW (typically = peak_consumption_kW)
             peak_consumption_kW: Peak household consumption in kW
             control_step: Control timestep in seconds
         """
-        super().__init__(name, Q_electric_max)
+        super().__init__(name, max_power_kW)
 
         self.peak_consumption_kW = peak_consumption_kW
         self.control_step = control_step
@@ -101,6 +101,7 @@ class HouseholdEnergyConsumers(Infrastructure):
 
     def update_state(self, states: Dict, info=None) -> None:
         """Write current normalized consumption into states for observation."""
+        super().update_state(states, info)
         states["hh_consumption_norm"][0] = np.float32(self.consumption_norm)
 
     def _synthetic_consumption(self, states: Dict) -> float:

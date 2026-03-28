@@ -27,7 +27,7 @@ from ..utils.trajectory_utils import extract_trajectory_from_infos, write_episod
 logger = logging.getLogger(__name__)
 
 
-def make_trajectory_logging_callback_class(
+def make_trajectory_logging_cb_class(
     metrics_base_dir: str = "ep_metrics",
     exec_date: Optional[datetime.datetime] = None,
 ) -> Type["TrajectoryLoggingCallback"]:

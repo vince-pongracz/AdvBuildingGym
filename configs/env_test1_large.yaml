@@ -9,13 +9,13 @@ building_props:
 infras:
 - class: HP
   name: HP
-  Q_electric_max: 5.0
+  max_power_kW: 5.0
   cop_heat: 3.0
   cop_cool: 2.5
 # TODO VP 2026.03.26. : Take a look again on the tremblay parameters
 - class: BatteryTremblay
   name: battery
-  Q_electric_max: 38.0
+  max_power_kW: 38.0
   cell_capacity_Ah: 7.2
   max_charge_amps: 48.0
   max_charge_voltage: 420.0
@@ -35,7 +35,7 @@ infras:
   soc_max: 0.95
 - class: LinearEVCharger
   name: ev_charger
-  Q_electric_max: 30.0
+  max_power_kW: 30.0
   max_charging_kW: 30.0
   charger_efficiency: 0.92
   discharge_efficiency: 0.92
@@ -46,11 +46,11 @@ infras:
   v2g_playroom: 0.1
 - class: SolarPanel
   name: solar
-  Q_electric_max: 30.0
+  max_power_kW: 30.0
   peak_power_kW: 30.0
 - class: HouseholdEnergyConsumers
   name: hh_consumers
-  Q_electric_max: 12.0
+  max_power_kW: 12.0
   peak_consumption_kW: 12.0
 statesources:
 - class: EnergyPriceDataSource

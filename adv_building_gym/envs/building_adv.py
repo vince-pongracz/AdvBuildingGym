@@ -508,6 +508,9 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
             sync.synchronise(self.iteration)
 
         # 3. Update observable states for the new iteration
+        # Reset directional power bound accumulators before infras publish.
+        self._component_info["max_consumption_kW"] = 0.0
+        self._component_info["max_export_kW"] = 0.0
         for infr in self.infras:
             infr.update_state(self.state, info=self._component_info)
         for ds in self.statesources:
@@ -527,9 +530,6 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         # access it without holding infrastructure references.
         self._component_info["power_breakdown"] = power_breakdown
         self._component_info["net_power_kW"] = total_power_kW
-        self._component_info["max_power_kW"] = sum(
-            infra.Q_electric_max for infra in self.infras
-        )
 
         # Calculate reward with per-function breakdown
         reward: float = 0
@@ -606,7 +606,6 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         # To this, implement a history collector -- collect specified timesteps from the past, according to the current simulation time: t-6h, t-4h, etc... -- can be generalised, it only needs the spec, the time series and the current simulation time.
         # Maybe not only for states, but for trajectory as well -- so that complete (s, a, r, s') tuples caputured from the past...
         # TODO VP 2026.03.23. : Eval script -- Plot all (reward, cum_E_usage) eval curves together -- with avg and variance
-        # TODO VP 2026.03.23. : At raw value plotting, only temp is plotted -- what about the other stuff, energy for each element?
         # TODO VP 2026.03.23. : Remove default values from methods and functions where it is not needed
         # TODO VP 2026.03.23. : Check whether currently passed params really needed for the functions/methods
         # TODO VP 2026.03.23. : Add standalone input and output heads for the policy NN, fix the core policy NN -- investigate this option

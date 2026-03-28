@@ -10,7 +10,7 @@ a circular dependency chain:
   → env_config       (imports devices/rewards at module level)
   → devices/statesources/base.py
   → config.utils.serializable  (triggers config/__init__.py again
-                                 while it is still partially initialized)
+                                while it is still partially initialized)
 
 Because ``from adv_building_gym.config.utils.serializable import …`` causes
 Python to execute ``config/__init__.py`` the first time the config package
@@ -43,7 +43,8 @@ if TYPE_CHECKING:
     from .env_config import EnvConfig as EnvConfig, config as config
     from .reward_config import RewardConfig as RewardConfig
     from .env_config_manager import EnvConfigManager as EnvConfigManager
-    from .reward_config_manager import RewardConfigManager as RewardConfigManager
+    from .reward_schedule_manager import RewardScheduleManager as RewardScheduleManager
+    from .reward_config_serializer import RewardConfigSerializer as RewardConfigSerializer
     from .data_config import load_data_combinator_config as load_data_combinator_config
 
 
@@ -61,9 +62,12 @@ def __getattr__(name):
     elif name == "EnvConfigManager":
         from .env_config_manager import EnvConfigManager
         return EnvConfigManager
-    elif name == "RewardConfigManager":
-        from .reward_config_manager import RewardConfigManager
-        return RewardConfigManager
+    elif name == "RewardScheduleManager":
+        from .reward_schedule_manager import RewardScheduleManager
+        return RewardScheduleManager
+    elif name == "RewardConfigSerializer":
+        from .reward_config_serializer import RewardConfigSerializer
+        return RewardConfigSerializer
     elif name == "DataCombinator":
         from adv_building_gym.data_combinator import DataCombinator
         return DataCombinator
@@ -78,7 +82,8 @@ __all__ = [
     "config",
     "RewardConfig",
     "EnvConfigManager",
-    "RewardConfigManager",
+    "RewardScheduleManager",
+    "RewardConfigSerializer",
     "DataCombinator",
     "load_data_combinator_config",
     "Serializable",

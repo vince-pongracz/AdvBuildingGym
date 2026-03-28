@@ -10,7 +10,6 @@ from pathlib import Path
 
 import yaml
 
-# TODO VP 2026.03.25. : At each dataclass, separate the class holding the data and its serialisation -- separation of concerns?
 
 @dataclass
 class TrainingParamConfig:

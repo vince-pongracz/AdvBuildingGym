@@ -18,12 +18,12 @@ class BatteryLinear(Infrastructure):
     or efficiency losses are modeled - it's an ideal battery.
 
     Power-based action:
-        - action in [-1, 1] maps to [-Q_electric_max, Q_electric_max] kW
+        - action in [-1, 1] maps to [-max_power_kW, max_power_kW] kW
         - Positive action: charge battery (consume power from grid)
         - Negative action: discharge battery (provide power to grid)
 
     Energy change per timestep:
-        delta_E (kWh) = action * Q_electric_max (kW) * control_step (s) / 3600
+        delta_E (kWh) = action * max_power_kW (kW) * control_step (s) / 3600
         delta_SoC = delta_E / max_cap_kWh
     """
 
@@ -34,7 +34,7 @@ class BatteryLinear(Infrastructure):
     }
 
     def __init__(self, name: str,
-                 Q_electric_max: float,
+                 max_power_kW: float,
                  max_cap_kWh: float,
                  start_soc_percentage: float = 0.3,
                  target_soc: float = 0.95,
@@ -47,7 +47,7 @@ class BatteryLinear(Infrastructure):
 
         Args:
             name: Component identifier
-            Q_electric_max: Maximum charge/discharge power in kW
+            max_power_kW: Maximum charge/discharge power in kW
             max_cap_kWh: Battery capacity in kWh
             start_soc_percentage: Initial state of charge [0, 1]
             target_soc: Target state of charge [0, 1]
@@ -56,7 +56,7 @@ class BatteryLinear(Infrastructure):
             soc_min: Minimum allowed SoC to prevent damage
             soc_max: Maximum allowed SoC to prevent damage
         """
-        super().__init__(name, Q_electric_max)
+        super().__init__(name, max_power_kW)
 
         self.max_cap_kWh = max_cap_kWh
         self.soc = start_soc_percentage
@@ -68,6 +68,10 @@ class BatteryLinear(Infrastructure):
         self.soc_max = soc_max
 
         self.actual_power_kW = 0.0
+
+    @property
+    def max_export_kW(self) -> float:
+        return self.max_power_kW
 
     def setup_spaces(self,
                      state_spaces,
@@ -95,12 +99,12 @@ class BatteryLinear(Infrastructure):
             - Positive: charge battery (consume power from grid)
             - Negative: discharge battery (provide power to grid)
 
-        The action represents fraction of max power (Q_electric_max).
+        The action represents fraction of max power (max_power_kW).
         """
         action = float(np.atleast_1d(actions["battery_action"])[0])
 
         # Calculate requested power in kW
-        requested_power_kW = action * self.Q_electric_max
+        requested_power_kW = action * self.max_power_kW
 
         # Calculate energy change in this timestep
         # E (kWh) = P (kW) * t (h)
@@ -123,10 +127,11 @@ class BatteryLinear(Infrastructure):
         self.actual_power_kW = actual_energy_kWh / time_hours if time_hours > 0 else 0.0
 
         # Update the action dict to reflect actual (clipped) action
-        actual_action = self.actual_power_kW / self.Q_electric_max if self.Q_electric_max > 0 else 0.0
+        actual_action = self.actual_power_kW / self.max_power_kW if self.max_power_kW > 0 else 0.0
         actions["battery_action"] = np.array([np.float32(actual_action)], dtype=np.float32)
 
     def update_state(self, states: Dict, info=None) -> None:
+        super().update_state(states, info)
         states["battery_pct"][0] = np.float32(self.soc)
         states["battery_target_pct"][0] = np.float32(self.target_soc)
 
