@@ -8,6 +8,13 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
+class SlurmResources:
+    """SLURM-allocated hardware resources detected from environment variables."""
+    num_cpus: int
+    num_gpus: int
+
+
+@dataclass
 class ResourceAllocation:
     """Container for computed resource allocation."""
     total_cpu_usage: int

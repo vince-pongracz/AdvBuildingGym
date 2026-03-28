@@ -11,7 +11,6 @@ from .data_combinator import DataCombinator
 from .callbacks import (
     make_episode_metrics_callback_class,
     make_trajectory_logging_callback_class,
-    make_checkpoint_callback_class,
 )
 from .evaluation import evaluate_model, EvalResults
 
@@ -59,7 +58,6 @@ __all__ = [
     "PIDController",
     "make_episode_metrics_callback_class",
     "make_trajectory_logging_callback_class",
-    "make_checkpoint_callback_class",
     "DataCombinator",
     "evaluate_model",
     "EvalResults",

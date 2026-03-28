@@ -20,7 +20,7 @@ from adv_building_gym.callbacks import (
 from adv_building_gym.config.reward_config_manager import RewardConfigManager, RewardScheduleMode
 from adv_building_gym.config.training_param_config import TrainingParamConfig
 from adv_building_gym.data_combinator import DataCombinator
-from adv_building_gym.utils import ResourceAllocation, validate_resource_allocation
+from adv_building_gym.utils import ResourceAllocation, SlurmResources, validate_resource_allocation
 
 logger = logging.getLogger(__name__)
 
@@ -40,14 +40,8 @@ def _compose_on_train_result(*fns):
 
 def common_model_setup(
     config: AlgorithmConfig,
-    episode_length: int,
-    num_cpus: int,
-    num_gpus: int,
+    slurm_resources: SlurmResources,
     training_config: TrainingParamConfig,
-    # TODO VP 2026.01.13. : Improve checkpoint directory structure
-    # save Policy NN in
-    checkpoint_callback_class: type,
-    env_id: str,
     metrics_base_dir: str = "ep_metrics",
     clip_actions: bool = True,
     data_combinator: DataCombinator | None = None,
@@ -68,17 +62,12 @@ def common_model_setup(
     - Env runner resources and connectors
     - Evaluation settings
     - Logger configuration
-    - Callbacks (EpisodeMetricsCallback, TrajectoryLoggingCallback, checkpoint)
+    - Callbacks (EpisodeMetricsCallback, TrajectoryLoggingCallback)
     - Resource validation
 
     Args:
         config: Algorithm config object (e.g., PPOConfig instance)
-        action_space: Flat Box action space for the RL module
-        episode_length: Episode length in timesteps (used for rollout_fragment_length)
-        num_cpus: Total CPUs available (from Ray/SLURM)
-        num_gpus: Total GPUs available (from Ray/SLURM)
-        checkpoint_callback_class: Callback class for checkpoint management
-        env_id: Environment ID string for logging
+        slurm_resources: SLURM-allocated CPU/GPU resources
         metrics_base_dir: Base directory for episode metrics (default: "ep_metrics")
         clip_actions: Whether to clip actions to action space bounds
         data_combinator: DataCombinator for iteration-aligned variant
@@ -94,17 +83,17 @@ def common_model_setup(
         data_combinator = DataCombinator()
 
     # Resource allocation:
-    # - Learners: one per GPU, each gets 1 GPU and 1 CPU
+    # - Learners: one per GPU, each gets 1 GPU and 1 CPU -- it needs CPU for orchestration
     # - Driver: 1 CPU (taken from env_runners pool)
     # - Env runners: remaining CPUs after learners and driver
-    num_learners = max(1, num_gpus)  # At least 1 learner even without GPU
-    num_gpus_per_learner = 1 if num_gpus > 0 else 0
+    num_learners = max(1, slurm_resources.num_gpus)  # At least 1 learner even without GPU
+    num_gpus_per_learner = 1 if slurm_resources.num_gpus > 0 else 0
     num_cpus_per_learner = 1
     num_cpus_per_env_runner = 1
 
     driver_cpus = 1
     learner_total_cpus = num_learners * num_cpus_per_learner
-    remaining_cpus = num_cpus - learner_total_cpus - driver_cpus
+    remaining_cpus = slurm_resources.num_cpus - learner_total_cpus - driver_cpus
     num_env_runners = max(1, remaining_cpus // num_cpus_per_env_runner)
 
     logger.info(
@@ -161,10 +150,6 @@ def common_model_setup(
         num_envs_per_env_runner=1, # NOTE VP 2026.02.11. : Maybe worth running multiple envs on a single ray envrunner node...
         num_cpus_per_env_runner=num_cpus_per_env_runner,
         num_gpus_per_env_runner=0,
-        # Collect complete episodes before returning to learner.
-        # Without this, off-policy algorithms (SAC) default to 1, causing
-        # training episodes to be reported as length = 1 in callbacks.
-        rollout_fragment_length=episode_length,
         episode_lookback_horizon=training_config.episode_lookback_horizon_steps,
         # Flatten dict observation space into a single vector for the RL module.
         # Action space flattening + rescaling is handled by env wrappers
@@ -210,14 +195,13 @@ def common_model_setup(
     exec_date = datetime.datetime.now()
 
     episode_metrics_class = make_episode_metrics_callback_class(
-        env_id=env_id,
         metrics_base_dir=f"{metrics_base_dir}/metrics",
         exec_date=exec_date,
         dump_metrics_json=False
     )
 
-    # Assemble the callbacks_class list: checkpoint + metrics (always), trajectory (optional)
-    callback_classes = [checkpoint_callback_class, episode_metrics_class]
+    # Assemble the callbacks_class list: metrics (always), trajectory (optional)
+    callback_classes = [episode_metrics_class]
     if log_trajectories:
         trajectory_class = make_trajectory_logging_callback_class(
             metrics_base_dir=f"{metrics_base_dir}/trajectories",
@@ -264,7 +248,7 @@ def common_model_setup(
     driver_cpus = 1
     learner_total_cpus = num_learners * num_cpus_per_learner
     total_cpu_usage = driver_cpus + learner_total_cpus + (num_env_runners * num_cpus_per_env_runner)
-    unused_cpus = num_cpus - total_cpu_usage
+    unused_cpus = slurm_resources.num_cpus - total_cpu_usage
 
     allocation = ResourceAllocation(
         total_cpu_usage=total_cpu_usage,
@@ -275,8 +259,8 @@ def common_model_setup(
         learner_total_cpus=learner_total_cpus,
         actual_env_runners=num_env_runners,
         cpus_per_env_runner=num_cpus_per_env_runner,
-        slurm_cpus=num_cpus,
-        slurm_gpus=num_gpus,
+        slurm_cpus=slurm_resources.num_cpus,
+        slurm_gpus=slurm_resources.num_gpus,
     )
 
     # Convert config to dict for validation

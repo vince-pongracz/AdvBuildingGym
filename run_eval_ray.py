@@ -11,7 +11,8 @@ import sys
 
 from adv_building_gym import EnvConfigManager, evaluate_model
 from adv_building_gym.config import config as default_config
-from adv_building_gym.utils import resolve_checkpoint_path, setup_warning_filters
+from adv_building_gym.config.data_config import load_data_combinator_config
+from adv_building_gym.utils import resolve_checkpoint_path, RngService, setup_warning_filters
 
 # Apply warning filters
 setup_warning_filters()
@@ -117,6 +118,9 @@ def main() -> None:
     # Initialise singleton component instances in the main process before use.
     active_config.init_singletons()
 
+    # Initialize centralized RNG service for all components
+    RngService.initialize(args.seed)
+
     config_name = (
         args.config_name
         if args.config_name is not None
@@ -126,8 +130,6 @@ def main() -> None:
     # Build DataCombinator from YAML if specified
     data_combinator = None
     if args.data_config:
-        from adv_building_gym.config.data_config import load_data_combinator_config
-
         data_combinator = load_data_combinator_config(args.data_config, seed_override=args.seed)
         if args.data_mode is not None:
             data_combinator.mode = args.data_mode

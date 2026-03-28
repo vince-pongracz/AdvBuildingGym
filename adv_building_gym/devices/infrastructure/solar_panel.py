@@ -6,6 +6,7 @@ from gymnasium.spaces import Box
 
 from .base import Infrastructure
 from adv_building_gym.config.utils.serializable import ComponentRegistry
+from adv_building_gym.utils.seed_provider import RngService
 
 logger = logging.getLogger(__name__)
 
@@ -29,20 +30,18 @@ class SolarPanel(Infrastructure):
     - Synthetic time-based profile (default)
     """
 
-    # control_step and seed come from config context
-    _context_params: ClassVar[Set[str]] = {'control_step', 'seed'}
+    # control_step comes from config context
+    _context_params: ClassVar[Set[str]] = {'control_step'}
 
     # Internal state variables - don't serialize
     _exclude_params: ClassVar[Set[str]] = {
-        'iteration', 'irradiance_norm', 'current_production_kW', '_base_seed'
+        'iteration', 'irradiance_norm', 'current_production_kW'
     }
 
     def __init__(self,
                 name: str,
                 Q_electric_max: float,
                 peak_power_kW: float,
-                # TODO VP 2026.03.17. : Solar panel seed -- channel global seed in.
-                seed: int = 42,
                 control_step: int = 300
                 ) -> None:
         """Initialize Solar Panel infrastructure.
@@ -51,29 +50,19 @@ class SolarPanel(Infrastructure):
             name: Component identifier
             Q_electric_max: Maximum power production in kW (typically = peak_power_kW)
             peak_power_kW: Peak power output under standard test conditions (STC)
-            seed: Random seed for reproducible noise generation
             control_step: Control timestep in seconds (stored for future use)
         """
         super().__init__(name, Q_electric_max)
 
-        # NOTE VP 2026.01.24. : Inverter efficiency is not considered, 
+        # NOTE VP 2026.01.24. : Inverter efficiency is not considered,
         # peak power means peak output power, produced by the solar panel
         self.peak_power_kW = peak_power_kW # -1.0 at actions means the peak power
-        self._base_seed = seed
-        self.rng = np.random.default_rng(seed=seed)
         self.control_step = control_step
 
         # State variables
         self.irradiance_norm = 0.0  # Normalized irradiance [0, 1]
         self.current_production_kW = 0.0  # Actual power production in kW
 
-
-    def synchronise(self, iteration: int, row_offset: int | None = None) -> None:
-        super().synchronise(iteration, row_offset)
-        # Reseed RNG at episode reset (row_offset is only passed on reset, not
-        # per-step) so that solar noise is reproducible per episode.
-        if row_offset is not None:
-            self.rng = np.random.default_rng(seed=self._base_seed + row_offset)
 
     def setup_spaces(self,
                     state_spaces,
@@ -141,7 +130,8 @@ class SolarPanel(Infrastructure):
         base_irradiance = np.sin(hour_fraction * np.pi)
 
         # Add Gaussian noise for realistic cloud cover variations
-        noise = self.rng.normal(loc=0.0, scale=0.05)
+        seed = RngService.get().get_random(self.name)
+        noise = np.random.default_rng(seed).normal(loc=0.0, scale=0.05)
         irradiance = base_irradiance + noise
 
         return float(np.clip(irradiance, 0.0, 1.0))

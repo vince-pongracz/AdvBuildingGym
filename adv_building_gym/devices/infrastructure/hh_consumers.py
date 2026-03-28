@@ -6,6 +6,7 @@ from gymnasium.spaces import Box
 
 from .base import Infrastructure
 from adv_building_gym.config.utils.serializable import ComponentRegistry
+from adv_building_gym.utils.seed_provider import RngService
 
 logger = logging.getLogger(__name__)
 
@@ -26,46 +27,36 @@ class HouseholdEnergyConsumers(Infrastructure):
     hh_consumption_action value: 0 = no consumption, 1 = peak consumption.
     """
 
-    # control_step and seed come from config context
-    _context_params: ClassVar[Set[str]] = {'control_step', 'seed'}
+    # control_step comes from config context
+    _context_params: ClassVar[Set[str]] = {'control_step'}
 
     # Internal state variables — don't serialize
     _exclude_params: ClassVar[Set[str]] = {
-        'iteration', 'consumption_norm', 'current_consumption_kW', '_base_seed'
+        'iteration', 'consumption_norm', 'current_consumption_kW'
     }
 
     def __init__(self,
-                 name: str,
-                 Q_electric_max: float,
-                 peak_consumption_kW: float = 8.0,
-                 seed: int = 42,
-                 control_step: int = 300
-                 ) -> None:
+                name: str,
+                Q_electric_max: float,
+                peak_consumption_kW: float = 8.0,
+                control_step: int = 300
+                ) -> None:
         """Initialize household energy consumers infrastructure.
 
         Args:
             name: Component identifier
             Q_electric_max: Maximum power consumption in kW (typically = peak_consumption_kW)
             peak_consumption_kW: Peak household consumption in kW
-            seed: Random seed for reproducible noise generation
             control_step: Control timestep in seconds
         """
         super().__init__(name, Q_electric_max)
 
         self.peak_consumption_kW = peak_consumption_kW
-        self._base_seed = seed
-        self.rng = np.random.default_rng(seed=seed)
         self.control_step = control_step
 
         # State variables
         self.consumption_norm = 0.0  # Normalized consumption [0, 1]
         self.current_consumption_kW = 0.0  # Actual consumption in kW
-
-    def synchronise(self, iteration: int, row_offset: int | None = None) -> None:
-        super().synchronise(iteration, row_offset)
-        # Reseed RNG at episode reset so noise is reproducible per episode
-        if row_offset is not None:
-            self.rng = np.random.default_rng(seed=self._base_seed + row_offset)
 
     def setup_spaces(self,
                     state_spaces,
@@ -131,7 +122,8 @@ class HouseholdEnergyConsumers(Infrastructure):
         else:
             base = 0.3   # Late evening
 
-        noise = self.rng.normal(loc=0.0, scale=0.05)
+        seed = RngService.get().get_random(self.name)
+        noise = np.random.default_rng(seed).normal(loc=0.0, scale=0.05)
         return float(np.clip(base + noise, 0.0, 1.0))
 
     def get_electric_consumption(self, actions: Dict) -> float:

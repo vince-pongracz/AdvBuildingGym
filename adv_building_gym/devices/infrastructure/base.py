@@ -19,18 +19,18 @@ class Infrastructure(EnvSyncInterface, Serializable):
     _exclude_params: ClassVar[Set[str]] = {'iteration', 'row_offset'}
 
     def __init__(self,
-                 name: str,
-                 Q_electric_max: float
-                 ) -> None:
+                name: str,
+                Q_electric_max: float
+                ) -> None:
         super().__init__()
 
         self.name = name
         self.Q_electric_max = Q_electric_max  # ~ power consumption max
 
+    # TODO VP 2026.03.27. : Add type annotations...
     def setup_spaces(self,
-                     state_spaces,
-                     action_spaces
-                     ):
+                    state_spaces,
+                    action_spaces):
         """Setup observation and action spaces. Implement in derived classes."""
         return state_spaces, action_spaces
 

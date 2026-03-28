@@ -71,7 +71,6 @@ def _extract_clipped_actions(episode: "SingleAgentEpisode") -> list | None:
 
 def _save_episode_metrics_json(
     episode: SingleAgentEpisode,
-    env_id: str,
     ep_metrics_file: str,
     ep_length: int,
     ep_achieved_reward: float,
@@ -83,7 +82,6 @@ def _save_episode_metrics_json(
 
     Args:
         episode: The completed episode.
-        env_id: Environment identifier.
         ep_metrics_file: Output file path.
         ep_length: Number of steps in the episode.
         ep_achieved_reward: Total reward achieved.
@@ -95,7 +93,6 @@ def _save_episode_metrics_json(
 
     dump = {
         "id": episode.id_[:6],
-        "env_id": env_id,
         "length": ep_length,
         # NOTE VP 2026.01.12. : episode_return_mean is not available here, only in result dict.
         "achieved_reward": float(ep_achieved_reward),
@@ -117,7 +114,6 @@ def _save_episode_metrics_json(
 
 
 def make_episode_metrics_callback_class(
-    env_id: str,
     metrics_base_dir: str,
     exec_date: Optional[datetime.datetime],
     dump_metrics_json: bool,
@@ -129,7 +125,6 @@ def make_episode_metrics_callback_class(
     JSON dumps with observations, actions, and rewards.
 
     Args:
-        env_id: Environment identifier for logging.
         metrics_base_dir: Base directory for saving episode metrics JSON.
         exec_date: Execution datetime for directory naming. Defaults to now.
         dump_metrics_json: When True, save per-episode JSON files.
@@ -144,7 +139,6 @@ def make_episode_metrics_callback_class(
     # Resolve metrics_base_dir to absolute path at factory time so that file
     # writes land in the correct location regardless of process cwd (Ray Tune
     # changes the Trainable actor's cwd to the trial log directory).
-    _env_id = env_id
     _metrics_base_dir = os.path.abspath(metrics_base_dir)
     _exec_date = exec_date
 
@@ -216,7 +210,6 @@ def make_episode_metrics_callback_class(
 
                 _save_episode_metrics_json(
                     episode=episode,
-                    env_id=_env_id,
                     ep_metrics_file=ep_metrics_file,
                     ep_length=ep_length,
                     ep_achieved_reward=float(ep_achieved_reward),

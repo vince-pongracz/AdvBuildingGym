@@ -30,7 +30,7 @@ from ray.tune.registry import register_env
 from adv_building_gym.utils import setup_warning_filters
 
 # Trigger registration of the custom Gym IDs
-from adv_building_gym import make_checkpoint_callback_class, EnvConfigManager
+from adv_building_gym import EnvConfigManager
 from adv_building_gym.config import config as default_config, load_data_combinator_config
 from adv_building_gym.config.reward_config_manager import RewardConfigManager, RewardScheduleMode
 from adv_building_gym.envs import adv_building_env_creator
@@ -38,6 +38,8 @@ from adv_building_gym.ray_training import common_model_setup, select_model
 from adv_building_gym.config.training_param_config import TrainingParamConfig
 from adv_building_gym.utils import (
     CustomJSONEncoder,
+    RngService,
+    SlurmResources,
     trial_dirname_creator,
 )
 
@@ -81,9 +83,6 @@ runtime_env_vars = {
 }
 
 logger.info("Runtime environment variables for Ray workers: %s", runtime_env_vars)
-
-
-ENV_ID: str = "AdvBuilding"
 
 
 # Main
@@ -184,7 +183,10 @@ def main():
         training_param_config.seed = args.seed
     else:
         args.seed = training_param_config.seed
-    
+
+    # Initialize centralized RNG service for all components
+    RngService.initialize(args.seed)
+
     # Load config from file if specified, otherwise use default
     if args.load_config:
         logger.info("Loading config from: %s", args.load_config)
@@ -286,12 +288,13 @@ def main():
         logger.error("Exiting.")
         sys.exit(1)
 
-    logger.info("Training on device: cuda (%d GPU(s) from SLURM)", gpus)
+    slurm_resources = SlurmResources(num_cpus=cpus, num_gpus=gpus)
+    logger.info("Training on device: cuda (%d GPU(s) from SLURM)", slurm_resources.num_gpus)
 
-    logger.info("Initializing Ray with cpus=%s gpus=%s (from SLURM/CUDA env)", cpus, gpus)
+    logger.info("Initializing Ray with cpus=%s gpus=%s (from SLURM/CUDA env)", slurm_resources.num_cpus, slurm_resources.num_gpus)
     ray.init(
-        num_cpus=cpus,
-        num_gpus=gpus,
+        num_cpus=slurm_resources.num_cpus,
+        num_gpus=slurm_resources.num_gpus,
         ignore_reinit_error=True,
         # Propagate warning suppression and color settings to all Ray workers
         runtime_env={"env_vars": runtime_env_vars},
@@ -305,31 +308,12 @@ def main():
     storage_path = os.path.abspath(f"models/{args.config_name}/ray/{args.algorithm}")
     os.makedirs(storage_path, exist_ok=True)
 
-    # Checkpoint directory path for callback-level checkpointing (similar to SB3)
-    # Note: Directory will be created lazily by BestModelCheckpointCallback when first checkpoint is saved
-    checkpoint_dir = os.path.abspath(f"{storage_path}/checkpoints_{run_name}")
-
-    # Create checkpoint callback class for best model tracking -- easier to hand it over already instantiated, like this
-    # NOTE: episode_length is required to calculate episode count from timesteps.
-    # This is needed because off-policy algorithms (SAC) don't reliably report
-    # num_episodes_lifetime, but num_env_steps_sampled_lifetime is always accurate.
-    # NOTE VP 2026.02.24. : Callback is here because it needs checkpoint_dir and run_name, these are CLI argument dependent.
-    checkpoint_callback_class = make_checkpoint_callback_class(
-        checkpoint_dir=checkpoint_dir,
-        checkpoint_frequency=args.checkpoint_frequency_episodes,
-        num_to_keep=1,  # Only keep best checkpoint at callback level
-        metric=args.metric,
-        episode_length=active_config.EPISODE_LENGTH,
-    )
-
     env_creator_config = {
         "data_combinator": data_combinator,
         "reward_config_manager": reward_manager,
     }
     register_env("AdvBuilding", lambda cfg: adv_building_env_creator({**env_creator_config, **cfg}))
 
-    # TODO VP 2026.02.20. : It is not a nice thing that episode_length is needed in multiple places
-    # (common_model_config, select_model)
     # Build algorithm-specific config
     algo_config = select_model(
         algorithm=args.algorithm,
@@ -341,12 +325,8 @@ def main():
     # Apply common RLlib configuration (resource allocation, action space, and callbacks)
     algo_config = common_model_setup(
         config=algo_config,
-        episode_length=active_config.EPISODE_LENGTH,
         training_config=training_param_config,
-        num_cpus=cpus,
-        num_gpus=gpus,
-        checkpoint_callback_class=checkpoint_callback_class,
-        env_id=ENV_ID,
+        slurm_resources=slurm_resources,
         metrics_base_dir="ep_metrics",
         clip_actions=True,
         data_combinator=data_combinator,
@@ -363,30 +343,25 @@ def main():
         # that is why the model dict contains the default values and _model_config the true specification
         json.dump(param_space, f, cls=CustomJSONEncoder, indent=4)
 
-    # Calculate checkpoint frequency in training iterations based on episodes.
-    # train_batch_size_per_learner drives how many timesteps RLlib processes per
-    # training iteration — but its meaning differs by algorithm:
+    # Convert episode-based checkpoint frequency to training iterations.
+    # train_batch_size_per_learner drives how many timesteps RLlib processes
+    # per training iteration — but its meaning differs by algorithm:
     #   PPO  — ppo_episodes_per_iteration × EPISODE_LENGTH (on-policy batch)
     #   SAC  — sac_replay_batch_size (off-policy replay buffer sample)
-    # We compute it from training_config directly (not from param_space, where
-    # RLlib serializes it under a different key: _train_batch_size_per_learner).
-    timesteps_per_episode = active_config.EPISODE_LENGTH  # 288 timesteps
+    timesteps_per_episode = active_config.EPISODE_LENGTH
     if args.algorithm == "ppo":
         timesteps_per_iteration = training_param_config.ppo_episodes_per_iteration * active_config.EPISODE_LENGTH
     else:
         timesteps_per_iteration = training_param_config.sac_replay_batch_size
-    checkpoint_freq_iterations = max(1, int((args.checkpoint_frequency_episodes * timesteps_per_episode) / timesteps_per_iteration))
+    checkpoint_freq_iterations = max(1, int(
+        (args.checkpoint_frequency_episodes * timesteps_per_episode) / timesteps_per_iteration
+    ))
 
-    logger.info("Checkpoint configuration:")
-    logger.info("  Callback-level (best model): every %d episodes, metric=%s, dir=%s",
+    logger.info(
+        "Checkpoint configuration: every %d iterations (~%d episodes), metric=%s",
+        checkpoint_freq_iterations,
         args.checkpoint_frequency_episodes,
         args.metric,
-        checkpoint_dir
-    )
-    logger.info("  Ray Tune-level: every %d iterations (%.1f timesteps/episode, %d timesteps/iteration), num_to_keep=5",
-        checkpoint_freq_iterations,
-        timesteps_per_episode,
-        timesteps_per_iteration
     )
 
     # Setup stopping criteria and run configuration for the tuner
@@ -431,16 +406,16 @@ def main():
             name=run_name,
             storage_path=storage_path,
             stop=stop_criteria,
+            # Ray Tune handles both periodic and best-model checkpointing.
+            # checkpoint_score_attribute selects the best checkpoint by metric.
+            # Link: https://docs.ray.io/en/latest/tune/api/doc/ray.tune.CheckpointConfig.html
             checkpoint_config=tune.CheckpointConfig(
                 checkpoint_at_end=True,
-                checkpoint_frequency=checkpoint_freq_iterations,  # Based on episode frequency
-                num_to_keep=5,  # Keep 5 checkpoints to reduce experiment state snapshot frequency
-                # Increasing num_to_keep reduces Ray Tune's experiment state snapshotting overhead
-                # (see TUNE_WARN_EXCESSIVE_EXPERIMENT_CHECKPOINT_SYNC_THRESHOLD_S warning)
-                # Best model tracking is handled by BestModelCheckpointCallback at callback level
+                checkpoint_frequency=checkpoint_freq_iterations,
+                num_to_keep=3,
                 checkpoint_score_attribute=args.metric,
                 checkpoint_score_order="max",
-                ),
+            ),
             progress_reporter=progress_reporter,
             verbose=2,  # 0=silent, 1=less, 2=default, 3=verbose
         ),
@@ -474,15 +449,10 @@ def main():
             logger.info("Best trial results:")
             logger.info("  Trial directory: %s", best_result.path)
 
-            # Get checkpoint information (Ray Tune-level)
             if best_result.checkpoint:
-                checkpoint_path = best_result.checkpoint.path
-                logger.info("  Ray Tune checkpoint: %s", checkpoint_path)
+                logger.info("  Best checkpoint: %s", best_result.checkpoint.path)
             else:
-                logger.warning("  No Ray Tune checkpoint available for best trial")
-
-            # Callback-level checkpoint (best model only)
-            logger.info("  Callback checkpoint (best model): %s", checkpoint_dir)
+                logger.warning("  No checkpoint available for best trial")
             logger.info("  Storage path: %s", storage_path)
             logger.info("=" * 70)
 
