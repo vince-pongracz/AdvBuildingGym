@@ -1,6 +1,6 @@
 from typing import Any, ClassVar, Dict, Set, Type, TypeVar
 
-from adv_building_gym.config.utils.serializable import Serializable, ComponentRegistry
+from adv_building_gym.utils.serializable import Serializable, ComponentRegistry
 
 T = TypeVar('T', bound='RewardFunction')
 

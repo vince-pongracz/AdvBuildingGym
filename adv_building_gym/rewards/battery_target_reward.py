@@ -3,7 +3,7 @@
 import numpy as np
 
 from .base import RewardFunction
-from adv_building_gym.config.utils.serializable import ComponentRegistry
+from adv_building_gym.utils.serializable import ComponentRegistry
 
 
 # NOTE VP 2026.03.20. : Create a general TargetReward class, which provides some reward modes, but basically rewards getting closer to a target

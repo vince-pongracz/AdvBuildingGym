@@ -1,7 +1,7 @@
 import numpy as np
 
 from .base import RewardFunction
-from adv_building_gym.config.utils.serializable import ComponentRegistry
+from adv_building_gym.utils.serializable import ComponentRegistry
 
 
 # TODO VP 2026.03.16. : New reward idea -- temperature user stress/discomfort: if temp diff is greater than X for N consecutive iterations (for M minutes)

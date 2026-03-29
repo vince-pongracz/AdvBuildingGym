@@ -3,7 +3,7 @@ from collections import OrderedDict
 from typing import Any, ClassVar, Dict, Set, Type, TypeVar
 
 from adv_building_gym.utils import EnvSyncInterface
-from adv_building_gym.config.utils.serializable import Serializable, ComponentRegistry
+from adv_building_gym.utils.serializable import Serializable, ComponentRegistry
 
 logger = logging.getLogger(__name__)
 

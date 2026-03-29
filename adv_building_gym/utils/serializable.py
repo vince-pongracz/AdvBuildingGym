@@ -1,7 +1,10 @@
-"""Serialization utilities for config components.
+"""Serialization utilities for pluggable components.
 
 This module provides a flexible serialization system for Infrastructure, StateSource,
 and RewardFunction components that doesn't hard-code specific attributes.
+
+Lives in ``utils`` (not ``config``) so that device and reward modules can
+import it without triggering the config package's heavy env_config imports.
 """
 
 import inspect

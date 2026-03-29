@@ -6,7 +6,7 @@ import numpy as np
 from gymnasium.spaces import Box
 
 from .base import Infrastructure
-from adv_building_gym.config.utils.serializable import ComponentRegistry
+from adv_building_gym.utils.serializable import ComponentRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -30,15 +30,15 @@ class HP(Infrastructure):
     _exclude_params: ClassVar[Set[str]] = {'iteration', 'temp_in_norm', 'temp_in_norm_change', 'control_step'}
 
     def __init__(self,
-                 name: str,
-                 max_power_kW: float,
-                 K: float,
-                 mC: float,
-                 cop_heat: float = 1.0,
-                 cop_cool: float = 1.0,
-                 # TODO VP 2026.03.24. : Control step should not be default here -- get it from caller
-                 control_step: int = 300
-                 ) -> None:
+                name: str,
+                max_power_kW: float,
+                K: float,
+                mC: float,
+                cop_heat: float = 1.0,
+                cop_cool: float = 1.0,
+                # TODO VP 2026.03.24. : Control step should not be default here -- get it from caller
+                control_step: int = 300
+                ) -> None:
         super().__init__(name, max_power_kW)
 
         # NOTE VP 2026.01.20. : COP, link: https://en.wikipedia.org/wiki/Coefficient_of_performance

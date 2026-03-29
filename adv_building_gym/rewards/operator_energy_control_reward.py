@@ -2,7 +2,7 @@ import logging
 import numpy as np
 
 from .base import RewardFunction
-from adv_building_gym.config.utils.serializable import ComponentRegistry
+from adv_building_gym.utils.serializable import ComponentRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -33,13 +33,13 @@ class OperatorEnergyControlReward(RewardFunction):
     _DECAY_SCALE: float = 5.0
 
     def __init__(self,
-                 weight: float,
-                 max_power_kW: float = 10.0,
-                 name: str = "operator_energy_control_reward",
-                 harsh_penalty: float = -4.0,
-                 soft_threshold_pct: float = 0.9,
-                 recovery_steps: int = 3,
-                 ) -> None:
+                weight: float,
+                max_power_kW: float = 10.0,
+                name: str = "operator_energy_control_reward",
+                harsh_penalty: float = -4.0,
+                soft_threshold_pct: float = 0.9,
+                recovery_steps: int = 3,
+                ) -> None:
         """Initialize OperatorEnergyControlReward.
 
         Args:

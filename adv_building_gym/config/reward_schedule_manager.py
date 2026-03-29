@@ -30,7 +30,7 @@ from typing import Any
 import numpy as np
 import yaml
 
-from adv_building_gym.config.utils.serializable import ComponentRegistry
+from adv_building_gym.utils.serializable import ComponentRegistry
 
 logger = logging.getLogger(__name__)
 

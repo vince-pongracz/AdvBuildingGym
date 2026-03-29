@@ -6,7 +6,7 @@ import numpy as np
 from gymnasium.spaces import Box
 
 from ..base import StateSource
-from adv_building_gym.config.utils.serializable import ComponentRegistry
+from adv_building_gym.utils.serializable import ComponentRegistry
 
 logger = logging.getLogger(__name__)
 

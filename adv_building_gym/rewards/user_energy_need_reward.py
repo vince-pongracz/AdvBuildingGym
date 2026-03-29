@@ -1,7 +1,7 @@
 import numpy as np
 
 from .base import RewardFunction
-from adv_building_gym.config.utils.serializable import ComponentRegistry
+from adv_building_gym.utils.serializable import ComponentRegistry
 
 
 class UserEnergyNeedReward(RewardFunction):

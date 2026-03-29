@@ -14,6 +14,7 @@ from .checkpoint_finder import (
 from .normalisation import Normalisation, normalise_series
 from .seed_provider import RngService
 from .space_check import check_space_compatibility
+from .serializable import Serializable, ComponentRegistry
 
 __all__ = [
     "EnvSyncInterface",
@@ -32,4 +33,6 @@ __all__ = [
     "normalise_series",
     "RngService",
     "check_space_compatibility",
+    "Serializable",
+    "ComponentRegistry",
 ]

@@ -5,7 +5,7 @@ from typing import Any, ClassVar, Dict, Set, Type, TypeVar
 import pandas as pd
 
 from adv_building_gym.utils import EnvSyncInterface
-from adv_building_gym.config.utils.serializable import Serializable, ComponentRegistry
+from adv_building_gym.utils.serializable import Serializable, ComponentRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -25,10 +25,10 @@ class StateSource(EnvSyncInterface, Serializable):
     _exclude_params: ClassVar[Set[str]] = {'iteration', 'row_offset', 'ts'}
 
     def __init__(self,
-                 name: str,
-                 ds_path: str | None = None,
-                 control_step: float = 300.0,
-                 ) -> None:
+                name: str,
+                ds_path: str | None = None,
+                control_step: float = 300.0,
+                ) -> None:
         super().__init__()
 
         self.name = name

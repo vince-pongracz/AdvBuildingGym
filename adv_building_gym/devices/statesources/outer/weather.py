@@ -7,7 +7,7 @@ import pandas as pd
 from gymnasium.spaces import Box
 
 from ..base import StateSource
-from adv_building_gym.config.utils.serializable import ComponentRegistry
+from adv_building_gym.utils.serializable import ComponentRegistry
 from adv_building_gym.utils.normalisation import Normalisation, normalise_series
 
 logger = logging.getLogger(__name__)

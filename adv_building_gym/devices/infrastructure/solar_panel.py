@@ -5,7 +5,7 @@ import numpy as np
 from gymnasium.spaces import Box
 
 from .base import Infrastructure
-from adv_building_gym.config.utils.serializable import ComponentRegistry
+from adv_building_gym.utils.serializable import ComponentRegistry
 from adv_building_gym.utils.seed_provider import RngService
 
 logger = logging.getLogger(__name__)

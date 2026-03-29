@@ -7,7 +7,7 @@ import numpy as np
 from gymnasium.spaces import Box
 
 from ..base import Infrastructure
-from adv_building_gym.config.utils.serializable import ComponentRegistry
+from adv_building_gym.utils.serializable import ComponentRegistry
 from .ev_spec import EvSpec
 
 logger = logging.getLogger(__name__)

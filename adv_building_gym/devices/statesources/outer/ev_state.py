@@ -8,7 +8,7 @@ import pandas as pd
 from gymnasium.spaces import Box
 
 from ..base import StateSource
-from adv_building_gym.config.utils.serializable import ComponentRegistry
+from adv_building_gym.utils.serializable import ComponentRegistry
 from ...infrastructure.ev_charger.ev_spec import EvSpec
 
 logger = logging.getLogger(__name__)

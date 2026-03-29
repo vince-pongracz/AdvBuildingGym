@@ -1,7 +1,7 @@
 import numpy as np
 
 from .base import RewardFunction
-from adv_building_gym.config.utils.serializable import ComponentRegistry
+from adv_building_gym.utils.serializable import ComponentRegistry
 
 
 # TODO VP 2026.01.14. : Add battery life saving reward
