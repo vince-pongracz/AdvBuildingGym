@@ -68,4 +68,4 @@ statesources:
 - class: EVState
   name: ev_schedule
 
-# Rewards are configured separately in reward_schedule_train.yaml / reward_schedule_eval.yaml
+# Rewards are configured separately in reward_cfg/rewards.yaml and reward_cfg/reward_schedule_*.yaml

@@ -168,7 +168,7 @@ def main():
     parser.add_argument(
         "--reward-schedule", type=str, default=None,
         help="Path to reward schedule YAML config "
-            "(default: configs/reward_schedule_train.yaml)"
+            "(default: configs/reward_cfg/reward_schedule_train.yaml)"
     )
 
     # Load configs:
@@ -206,7 +206,7 @@ def main():
     # (gradual_add / iterate / random).  Otherwise mode is forced to "off"
     # (all rewards active, no swapping).
     reward_schedule_path = args.reward_schedule or str(
-        Path(__file__).resolve().parent / "configs" / "reward_schedule_train.yaml"
+        Path(__file__).resolve().parent / "configs" / "reward_cfg" / "reward_schedule_train.yaml"
     )
     reward_manager = RewardScheduleManager.from_yaml(reward_schedule_path)
     if not args.grad_train:

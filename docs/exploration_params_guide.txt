@@ -30,7 +30,7 @@
   agent doesn't exploit a single easy objective.
 
   5. Reward schedule (you already have this)
-  - Your reward_schedule_train.yaml can start with low weights, letting the
+  - Your reward_cfg/reward_schedule_train.yaml can start with low weights, letting the
   agent explore before rewards sharpen. Gradually increasing weights encourages
   broad exploration early on.
 

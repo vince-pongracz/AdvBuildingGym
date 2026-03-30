@@ -14,7 +14,7 @@ Modes:
 
 Usage::
 
-    manager = RewardScheduleManager.from_yaml("configs/reward_schedule_train.yaml")
+    manager = RewardScheduleManager.from_yaml("configs/reward_cfg/reward_schedule_train.yaml")
     rewards = manager.create_active_rewards()   # initial set
     manager.advance()                           # next swap
     rewards = manager.create_active_rewards()   # updated set
@@ -91,7 +91,10 @@ class RewardScheduleManager:
 
         Args:
             path: Path to the reward schedule YAML
-                  (e.g. ``configs/reward_schedule_train.yaml``).
+                  (e.g. ``configs/reward_cfg/reward_schedule_train.yaml``).
+
+        The schedule YAML must reference an external rewards file via
+        ``rewards_file:`` (resolved relative to the schedule YAML).
         """
         path = Path(path)
         if not path.exists():
@@ -102,8 +105,24 @@ class RewardScheduleManager:
         with open(path, "r") as f:
             cfg = yaml.safe_load(f)
 
+        if "rewards_file" not in cfg:
+            raise ValueError(
+                f"Reward schedule YAML {path.name} must contain a "
+                f"'rewards_file' key pointing to the rewards definition file"
+            )
+
+        rewards_path = path.parent / cfg["rewards_file"]
+        if not rewards_path.exists():
+            raise FileNotFoundError(
+                f"Rewards YAML referenced by {path.name} not found: "
+                f"{rewards_path}"
+            )
+        with open(rewards_path, "r") as f:
+            rewards_cfg = yaml.safe_load(f)
+        reward_entries = rewards_cfg["rewards"]
+
         reward_specs: list[dict[str, Any]] = []
-        for entry in cfg["rewards"]:
+        for entry in reward_entries:
             reward_specs.append({
                 "class_name": entry["class_name"],
                 "weight": entry["weight"],
