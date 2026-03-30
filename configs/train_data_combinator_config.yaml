@@ -52,3 +52,6 @@ variable:
     - data/inside_temp/inside_temp_0.csv
     - data/inside_temp/inside_temp_1.csv
     - data/inside_temp/inside_temp_2.csv
+  user_energy_need:
+    - data/hh_consumption/wpuq/2020_SFH10.csv
+    - data/hh_consumption/wpuq/2020_SFH30.csv

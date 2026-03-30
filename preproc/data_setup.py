@@ -29,6 +29,7 @@ if _PROJECT_ROOT_STR not in sys.path:
 from preproc.pipelines import (
     run_augmentation,
     run_dwd_pipeline,
+    run_hh_consumption_pipeline,
     run_price_pipeline,
     run_quality_report,
     run_weather_pipeline,
@@ -39,7 +40,7 @@ logger = logging.getLogger(__name__)
 DEFAULT_YEARS: list[int] = list(range(2017, 2027))
 
 ALL_PRICE_STEPS: set[str] = {"price-fetch", "price-preproc"}
-ALL_WEATHER_STEPS: set[str] = {"zenodo-download", "zenodo-extract", "weather-csv", "sfh-csv"}
+ALL_WEATHER_STEPS: set[str] = {"zenodo-download", "zenodo-extract", "weather-csv", "sfh-csv", "hh-consumption"}
 ALL_DWD_STEPS: set[str] = {"dwd-fetch", "dwd-preprocess"}
 ALL_REPORT_STEPS: set[str] = {"data-quality-report"}
 ALL_STEPS: set[str] = ALL_PRICE_STEPS | ALL_WEATHER_STEPS | ALL_DWD_STEPS | ALL_REPORT_STEPS
@@ -172,6 +173,12 @@ def _parse_args() -> argparse.Namespace:
     )
 
     parser.add_argument(
+        "--hh-consumption-output-dir",
+        default="data/hh_consumption/wpuq",
+        help="Output directory for household consumption CSVs (default: data/hh_consumption/wpuq)",
+    )
+
+    parser.add_argument(
         "--steps",
         nargs="+",
         default=sorted(ALL_STEPS),
@@ -244,6 +251,7 @@ def main() -> None:
     raw_price_files, preprocessed_price_files = run_price_pipeline(args)
     weather_stats = run_weather_pipeline(args)
     dwd_stats, dwd_yearly_csvs = run_dwd_pipeline(args)
+    hh_stats = run_hh_consumption_pipeline(args)
 
     # Augmentation is the final step, applied to yearly CSVs from all pipelines
     aug_stats = run_augmentation(args, preprocessed_price_files, dwd_yearly_csvs)
@@ -265,6 +273,8 @@ def main() -> None:
     logger.info("  Data types fetched: %d", dwd_stats["data_types"])
     logger.info("  Merged rows (10-min): %d", dwd_stats["merged_rows"])
     logger.info("  Years processed: %d", dwd_stats["years"])
+    logger.info("--- Household consumption pipeline ---")
+    logger.info("  Files produced: %d", hh_stats["files"])
     logger.info("--- Augmentation ---")
     logger.info("  Price files augmented: %d", aug_stats["price"])
     logger.info("  Weather files augmented: %d", aug_stats["weather"])

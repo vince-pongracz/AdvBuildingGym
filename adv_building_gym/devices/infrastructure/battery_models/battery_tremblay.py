@@ -83,13 +83,13 @@ class BatteryTremblay(Infrastructure):
     }
 
     def __init__(self, name: str,
+                 control_step: int,  # Timesteps in seconds
                  max_power_kW: float = 19.0,  # Max charge/discharge power in kW (400V × 48A)
                  cell_capacity_Ah: float = 3.5,  # Single cell capacity in Ah (typical 21700)
                  max_charge_amps: float = 48.0,  # Max pack current in A
                  max_charge_voltage: float = 420.0,  # Max pack voltage in V
                  start_soc_percentage: float = 0.3,  # Initial SoC [0, 1]
                  target_soc: float = 1.0,  # Target SoC
-                 control_step: int = 300,  # Timesteps in seconds
                  max_charge_rate: float = 1.5,  # C-rate limit
                  history_length: int = 4,  # Number of past SoC values to track
                  # Tremblay model parameters (Li-ion LFP defaults, per cell)

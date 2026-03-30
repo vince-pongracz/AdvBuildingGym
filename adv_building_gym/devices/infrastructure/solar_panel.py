@@ -42,7 +42,7 @@ class SolarPanel(Infrastructure):
                 name: str,
                 max_power_kW: float,
                 peak_power_kW: float,
-                control_step: int = 300
+                control_step: int
                 ) -> None:
         """Initialize Solar Panel infrastructure.
 

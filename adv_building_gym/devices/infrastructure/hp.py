@@ -34,10 +34,9 @@ class HP(Infrastructure):
                 max_power_kW: float,
                 K: float,
                 mC: float,
+                control_step: int,
                 cop_heat: float = 1.0,
                 cop_cool: float = 1.0,
-                # TODO VP 2026.03.24. : Control step should not be default here -- get it from caller
-                control_step: int = 300
                 ) -> None:
         super().__init__(name, max_power_kW)
 

@@ -38,8 +38,8 @@ class HouseholdEnergyConsumers(Infrastructure):
     def __init__(self,
                 name: str,
                 max_power_kW: float,
-                peak_consumption_kW: float = 8.0,
-                control_step: int = 300
+                control_step: int,
+                peak_consumption_kW: float = 8.0
                 ) -> None:
         """Initialize household energy consumers infrastructure.
 

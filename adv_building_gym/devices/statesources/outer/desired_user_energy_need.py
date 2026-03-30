@@ -7,17 +7,25 @@ from gymnasium.spaces import Box
 
 from ..base import StateSource
 from adv_building_gym.utils.serializable import ComponentRegistry
+from adv_building_gym.utils.normalisation import Normalisation, normalise_series
 
 logger = logging.getLogger(__name__)
 
-# TODO VP 2026.01.08. : Search for energy need profile data during a day. Pay attention to weekdays, weekends, etc... 
-# -- it is in the WPuQ datasources, without PV and HP hopefully
-# TODO VP 2026.01.08. : add reward function to this
+# CSV column produced by preproc/hh_consumption/extract_hh_consumption.py
+SOURCE_COLUMN: str = "hh_consumption_kW"
+
+# Normalised column name added by _post_load_data_processing
+NORM_COLUMN: str = "desired_energy_need_norm"
+
 
 class DesiredUserEnergyNeed(StateSource):
-    """
-    Data source for desired user energy need information.
-    
+    """Data source for desired user energy need information.
+
+    When a CSV is provided (via ``ds_path``), reads the ``hh_consumption_kW``
+    column produced by the WPuQ household consumption preprocessing pipeline,
+    normalises it to [0, 1] using min-max scaling, and exposes it as the
+    ``desired_energy_need`` observation.
+
     state key: desired_energy_need
     Definition desired_energy_need:
     - positive: user consumes E.
@@ -25,15 +33,35 @@ class DesiredUserEnergyNeed(StateSource):
     - zero: user does not need E.
     """
 
-    def __init__(self, name: str, ds_path: str | None = None) -> None:
+    # consumption_max is derived from data, don't serialize
+    _exclude_params: ClassVar[Set[str]] = {'iteration', 'ts', 'consumption_max'}
+
+    def __init__(self, name: str, ds_path: str | None = None,
+                 normalise: Normalisation | str | None = Normalisation.MIN_MAX_SCALING) -> None:
         super().__init__(name, ds_path)
+
+        normalise = Normalisation.init(normalise)
+        self.normalise = normalise
 
         if self.ts is not None:
             logger.info("Use data file: %s", ds_path)
-            # TODO VP: Add column name and normalization logic if needed
-            # Example: self.energy_need_max = float(self.ts["energy_need"].max())
+            self._post_load_data_processing()
         else:
+            self.consumption_max = 1.0
             logger.debug("No initial data file for '%s', using synthetic energy need profile", name)
+
+    def _post_load_data_processing(self) -> None:
+        """Normalise the hh_consumption_kW column and cache the raw maximum."""
+        if self.ts is not None:
+            if SOURCE_COLUMN not in self.ts.columns:
+                raise ValueError(
+                    f"CSV must contain a '{SOURCE_COLUMN}' column. "
+                    f"Found: {list(self.ts.columns)}"
+                )
+            self.consumption_max = float(self.ts[SOURCE_COLUMN].max())
+            self.ts[NORM_COLUMN] = normalise_series(
+                self.ts[SOURCE_COLUMN], self.normalise
+            )
 
     def setup_spaces(self,
                     state_spaces: OrderedDict,
@@ -54,17 +82,12 @@ class DesiredUserEnergyNeed(StateSource):
     def update_state(self, states, info=None) -> None:
         """Update desired energy need state based on current iteration."""
         if self.ts is not None:
-            if self.effective_index < len(self.ts):
-                # TODO VP 2026.01.14. : Update with actual column name from CSV
-                # desired_energy = float(self.ts.iloc[self.effective_index]["energy_need_normalized"])
-                desired_energy = 0.0  # Placeholder
-            else:
-                # desired_energy = float(self.ts.iloc[-1]["energy_need_normalized"])
-                desired_energy = 0.0  # Placeholder
+            row = self.ts.iloc[min(self.effective_index, len(self.ts) - 1)]
+            desired_energy = float(row[NORM_COLUMN])
         else:
             current_sim_hour = states.get("sim_hour", np.zeros(shape=(1,), dtype=np.float32))[0]
             current_sim_hour = current_sim_hour % 24
-            # Apply a simple time-based energy need profile if no CSV data is provided
+            # Synthetic time-based energy need profile when no CSV data is provided
             if current_sim_hour < 6:
                 desired_energy = 0.2  # Low demand during night
             elif current_sim_hour < 9:
@@ -73,14 +96,21 @@ class DesiredUserEnergyNeed(StateSource):
                 desired_energy = 0.4  # Daytime moderate
             elif current_sim_hour < 21:
                 desired_energy = 0.8  # Evening peak
-            elif current_sim_hour < 24:
-                desired_energy = 0.3  # Evening low
             else:
-                desired_energy = 0.2  # Default
+                desired_energy = 0.3  # Evening low
 
-        # Ensure float32 dtype for all updates
-        desired_energy = np.float32(desired_energy)
-        states["desired_energy_need"][0] = desired_energy
+        states["desired_energy_need"][0] = np.float32(desired_energy)
+
+    @property
+    def consumption_max_raw(self) -> float:
+        """Raw (unnormalised) maximum consumption in kW."""
+        return float(self.consumption_max)
+
+    def _get_serialize_value(self, param_name: str, value):
+        """Handle enum serialization for normalise parameter."""
+        if param_name == 'normalise' and isinstance(value, Normalisation):
+            return value.value
+        return super()._get_serialize_value(param_name, value)
 
 
 # Register DesiredUserEnergyNeed with the component registry

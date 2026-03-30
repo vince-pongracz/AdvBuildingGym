@@ -23,6 +23,7 @@ from preproc.data_quality_report import run_data_quality_report
 from preproc.utils import parse_year_from_filename, resolve_path
 from preproc.weather.dwd.dwd_fetch import fetch_all as dwd_fetch_all
 from preproc.weather.dwd.dwd_preprocess import preprocess as dwd_preprocess
+from preproc.hh_consumption.extract_hh_consumption import extract_hh_consumption
 from preproc.weather.extract_sfh_csv import extract_sfh_data
 from preproc.weather.extract_weather_csv import extract_weather_data
 
@@ -419,6 +420,53 @@ def run_augmentation(
 
     logger.info("Augmentation complete: %d price, %d weather file(s).",
                 stats["price"], stats["weather"])
+    return stats
+
+
+def run_hh_consumption_pipeline(args: argparse.Namespace) -> dict[str, int]:
+    """Extract household consumption CSVs from SFH data.
+
+    Reads 1-min SFH CSVs (produced by sfh-csv step), resamples to 5-min,
+    converts W to kW, and writes per-building + aggregated CSVs.
+
+    Returns:
+        Dict with count of files produced.
+    """
+    stats = {"files": 0}
+    if getattr(args, "skip_wpuq", False):
+        logger.info("Skipping hh-consumption pipeline (--skip-wpuq).")
+        return stats
+
+    active_steps = set(args.steps)
+    if "hh-consumption" not in active_steps:
+        logger.info("Skipping hh-consumption (hh-consumption not in --steps).")
+        return stats
+
+    zenodo_dir = resolve_setup_path(args.zenodo_dir)
+    output_dir = resolve_setup_path(args.hh_consumption_output_dir)
+
+    # Discover all csvs_<year>_data_1min directories
+    sfh_dirs = sorted(zenodo_dir.glob("csvs_*_data_1min"))
+    if not sfh_dirs:
+        logger.warning("No csvs_*_data_1min directories found in %s", zenodo_dir)
+        return stats
+
+    logger.info("Found %d SFH data directories to process", len(sfh_dirs))
+
+    for sfh_dir in sfh_dirs:
+        logger.info("Extracting hh consumption from %s", sfh_dir.name)
+        try:
+            result = extract_hh_consumption(
+                input_dir=sfh_dir,
+                output_dir=output_dir,
+            )
+            stats["files"] += len(result.get("files_created", []))
+        except Exception as exc:
+            logger.warning(
+                "hh-consumption extraction failed for %s: %s — skipping",
+                sfh_dir.name, exc,
+            )
+
     return stats
 
 

@@ -55,6 +55,7 @@ data/weather/**/10min**
 data/weather/**/produkt_zehn**
 data/weather/dwd/downloaded/**
 data/weather/dwd/preprocessed/**
+data/hh_consumption/**
 # Energy price data -- ignore all, scripts are there for fetching and preprocessing the data.
 data/e_price/**
 
