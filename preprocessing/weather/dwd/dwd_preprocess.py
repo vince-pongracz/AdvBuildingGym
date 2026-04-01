@@ -11,8 +11,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from preproc.utils import DWD_MISSING_VALUE, get_measurement_columns, select_columns
-from preproc.weather.dwd.dwd_fetch import STATION_ID, DWD_DIR, fetch_all
+from preprocessing.utils import DWD_MISSING_VALUE, get_measurement_columns, select_columns
+from preprocessing.weather.dwd.dwd_fetch import STATION_ID, DWD_DIR, fetch_all
 
 PREPROCESS_DIR: Path = DWD_DIR / "preprocessed"
 

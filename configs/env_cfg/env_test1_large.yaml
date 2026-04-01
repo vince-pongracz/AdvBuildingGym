@@ -12,10 +12,12 @@ infras:
   max_power_kW: 5.0
   cop_heat: 3.0
   cop_cool: 2.5
-# TODO VP 2026.03.26. : Take a look again on the tremblay parameters
+# NOTE VP 2026.04.01. : Tremblay cell params (E0, K, A, B, R_cell) verified against
+# literature — plausible for LFP chemistry. Pack power is set by 48A × 400V ≈ 19 kW
+# across all config sizes; only cell_capacity_Ah (and thus kWh) varies.
 - class: BatteryTremblay
   name: battery
-  max_power_kW: 38.0
+  max_power_kW: 19.0
   cell_capacity_Ah: 7.2
   max_charge_amps: 48.0
   max_charge_voltage: 420.0
@@ -23,9 +25,9 @@ infras:
   max_charge_rate: 1.5
   history_length: 4
   E0: 3.2
-  K: 0.009
+  K: 0.0044
   A: 0.468
-  B: 3.529
+  B: 1.715
   R_cell: 0.01
   n_series: 125
   n_parallel: 10

@@ -21,7 +21,7 @@ if _PROJECT_ROOT_STR not in sys.path:
 import pandas as pd
 import requests
 
-from preproc.utils import fetch_with_retry
+from preprocessing.utils import fetch_with_retry
 
 logger = logging.getLogger(__name__)
 

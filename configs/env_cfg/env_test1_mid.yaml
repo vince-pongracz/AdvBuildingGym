@@ -7,9 +7,10 @@ building_props:
   mC: 300
   K: 20
 # Mid config: intermediate device sizes between small and large.
+# Battery power is the same (19 kW) across all sizes; only capacity (kWh) varies.
 # small: battery 19 kW/14 kWh, EV 7 kW, solar 5 kW
-# mid:   battery 28 kW/20 kWh, EV 11 kW, solar 15 kW
-# large: battery 38 kW/29 kWh, EV 12/30 kW, solar 30 kW
+# mid:   battery 19 kW/20 kWh, EV 11 kW, solar 15 kW
+# large: battery 19 kW/29 kWh, EV 30 kW, solar 30 kW
 infras:
 - class: HP
   name: HP
@@ -18,7 +19,7 @@ infras:
   cop_cool: 2.5
 - class: BatteryTremblay
   name: battery
-  max_power_kW: 28.0
+  max_power_kW: 19.0
   cell_capacity_Ah: 5.0
   max_charge_amps: 48.0
   max_charge_voltage: 420.0
@@ -26,9 +27,9 @@ infras:
   max_charge_rate: 1.5
   history_length: 4
   E0: 3.2
-  K: 0.009
+  K: 0.0063
   A: 0.468
-  B: 3.529
+  B: 2.470
   R_cell: 0.01
   n_series: 125
   n_parallel: 10

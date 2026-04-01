@@ -1,8 +1,6 @@
 # Trajectory Logging & Metrics Tracking — Design & Implementation
 
-TODO VP: continue here
-
-**Status: Fully implemented.** All steps described in this document have been completed. The document is retained as a design reference explaining the rationale, RLlib background research, and architectural decisions behind the trajectory logging system.
+**Status: Fully implemented.** All steps in document are completed. The document is retained as a design reference explaining the rationale, RLlib background research, and architectural decisions behind the trajectory logging system.
 
 ### Key files
 

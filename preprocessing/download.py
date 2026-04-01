@@ -9,7 +9,7 @@ from urllib.parse import urlparse
 
 import requests
 
-from preproc.utils import fetch_with_retry
+from preprocessing.utils import fetch_with_retry
 
 logger = logging.getLogger(__name__)
 

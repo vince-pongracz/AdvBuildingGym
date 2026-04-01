@@ -26,7 +26,7 @@ _PROJECT_ROOT_STR = str(Path(__file__).resolve().parents[1])
 if _PROJECT_ROOT_STR not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT_STR)
 
-from preproc.pipelines import (
+from preprocessing.pipelines import (
     run_augmentation,
     run_dwd_pipeline,
     run_hh_consumption_pipeline,

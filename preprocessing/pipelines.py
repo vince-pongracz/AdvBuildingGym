@@ -6,26 +6,26 @@ import argparse
 import logging
 from pathlib import Path
 
-from preproc.download import download_links, extract_zip_files
-from preproc.e_price.awattar_fetch import fetch_market_data as fetch_awattar_market_data
-from preproc.e_price.awattar_price_preproc import preprocess_prices
-from preproc.e_price.energy_charts_fetch import (
+from preprocessing.download import download_links, extract_zip_files
+from preprocessing.e_price.awattar_fetch import fetch_market_data as fetch_awattar_market_data
+from preprocessing.e_price.awattar_price_preproc import preprocess_prices
+from preprocessing.e_price.energy_charts_fetch import (
     fetch_market_data as fetch_energy_charts_market_data,
 )
-from preproc.augment import (
+from preprocessing.augment import (
     DEFAULT_SEED,
     PRICE_NOISE_STD,
     WEATHER_NOISE_STD,
     augment_prices,
     augment_weather,
 )
-from preproc.data_quality_report import run_data_quality_report
-from preproc.utils import parse_year_from_filename, resolve_path
-from preproc.weather.dwd.dwd_fetch import fetch_all as dwd_fetch_all
-from preproc.weather.dwd.dwd_preprocess import preprocess as dwd_preprocess
-from preproc.hh_consumption.extract_hh_consumption import extract_hh_consumption
-from preproc.weather.extract_sfh_csv import extract_sfh_data
-from preproc.weather.extract_weather_csv import extract_weather_data
+from preprocessing.data_quality_report import run_data_quality_report
+from preprocessing.utils import parse_year_from_filename, resolve_path
+from preprocessing.weather.dwd.dwd_fetch import fetch_all as dwd_fetch_all
+from preprocessing.weather.dwd.dwd_preprocess import preprocess as dwd_preprocess
+from preprocessing.hh_consumption.extract_hh_consumption import extract_hh_consumption
+from preprocessing.weather.extract_sfh_csv import extract_sfh_data
+from preprocessing.weather.extract_weather_csv import extract_weather_data
 
 logger = logging.getLogger(__name__)
 

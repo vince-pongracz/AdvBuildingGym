@@ -29,7 +29,7 @@ if _PROJECT_ROOT_STR not in sys.path:
 import matplotlib.pyplot as plt
 import pandas as pd
 
-from preproc.utils import (
+from preprocessing.utils import (
     get_measurement_columns,
     is_missing,
     parse_timestamp_column,
