@@ -6,6 +6,7 @@ RewardConfig itself as a pure data + factory class.
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict
 
@@ -14,6 +15,7 @@ import yaml
 if TYPE_CHECKING:
     from adv_building_gym.config.reward_config import RewardConfig
 
+logger = logging.getLogger(__name__)
 
 class RewardConfigSerializer:
     """Handles serialization and deserialization of RewardConfig objects.
@@ -63,6 +65,7 @@ class RewardConfigSerializer:
                 reward = RewardFunction.from_dict(reward_dict)
                 rewards.append(reward)
             reward_config.rewards = rewards
+            logger.info(f"Deserialized {len(rewards)} rewards from config, including: {[r.name for r in rewards]}")
         return reward_config
 
     @staticmethod

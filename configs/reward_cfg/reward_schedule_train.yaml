@@ -15,7 +15,7 @@
 # Path to the shared reward definitions (relative to this file).
 rewards_file: rewards.yaml
 
-mode: "gradual_add"
+mode: "off"
 
 # How often to change the active reward set (in training episodes).
 swap_every_n_iterations: 100

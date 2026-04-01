@@ -135,7 +135,7 @@ To simulate real-world uncertainty, the environment includes:
 
 These features support the evaluation under uncertainty and help assess the robustness of control strategies.
 
-### Papers
+### Papers -- literature research
 
 #### Reinforcement Learning-Based Energy Management of Smart Home with Rooftop Solar Photovoltaic System, Energy Storage System, and Home Appliances. 
 Link: https://www.mdpi.com/1424-8220/19/18/3937
@@ -225,6 +225,59 @@ Conclusion:
 
 TODO VP: look up KIT EnergyLab 2.0 data sources for weather data -- is it existing, can I use it?
 TODO VP: check actual data and simulated control -- how are the differences? If only linear transformation is the difference --> it's okay, it's mimicing the actual item
+
+#### Reinforcement Learning-based Home Energy Management with Heterogeneous Batteries and Stochastic EV Behaviour
+
+Link: https://www.researchgate.net/publication/400459460_Reinforcement_Learning-based_Home_Energy_Management_with_Heterogeneous_Batteries_and_Stochastic_EV_Behaviour
+
+Arxiv: https://arxiv.org/abs/2602.04578
+
+Summary:
+- EV, battery, PV -- focus on the exact battery degradation and on its simulation
+- DRL, constrained Markov decision process (CMDP) and Lagrangian SAC
+- HVAC included
+- has different battery degradation dynamics
+- primary and secondary constraints... -- ESS, cost opt and comfort, EV constraints
+- benchmarks against 2 rule based controllers...
+- nice, but no code available publically
+
+Conclusion:
+- in my framework battery deg can be built in (however it's not) -- only using a different battery class is needed
+- they covered almost everything...
+- no wind energy
+- no TL, no generalisation -- only a single building
+--> My project: TL and generalisation across configurations -- can we find such representation of the states, which is infrastructure independent and general for a lot of building charachteristics?
+Finding the: "General controller" -- is it possble?
+
+#### A comparative analysis of PPO and SAC algorithms for energy optimization with country-level energy consumption insights
+
+Paper: https://www.sciencedirect.com/science/article/pii/S2468601825000501
+
+Summary:
+- rather larger scale: national-scale energy optimization
+- PPO vs. SAC evaluation
+- multi-phase evaluation strategy -- TODO VP: what do they mean by that?
+
+Conclusion:
+- not really relevant
+- controlled thing is not clear (share of renewables and fossiles in the energy mix -- renewables are not controllable for the most of the time...)
+
+#### A deep reinforcement learning approach based energy management strategy for home energy system considering the time-of-use price and real-time control of energy storage system
+
+Link: https://www.sciencedirect.com/science/article/pii/S2352484724001501
+
+Summary:
+- 
+
+Conclusion:
+
+
+
+
+#### Deep Reinforcement Learning for Real-Time Energy Management in Smart Home
+
+Link: https://ieeexplore.ieee.org/document/10066193
+
 
 
 

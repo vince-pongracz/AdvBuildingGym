@@ -122,7 +122,7 @@ them to the scenario pool (see section 2.3).
 
 ## 2. Training
 
-### 2.1 Environment config — `configs/env_test1_{s/m/l}.yaml`
+### 2.1 Environment config — `configs/env_cfg/env_test1_{s/m/l}.yaml`
 
 Defines the **environment topology**: which infrastructure, statesources, and reward
 functions are instantiated, along with their parameters. This config is shared with
@@ -137,7 +137,7 @@ evaluation — pass the same YAML to `run_eval_ray.py` via `--load-config`.
 | `statesources` | Observation providers | Weather, EnergyPrice, InsideTemp, EVState, ... |
 | `rewards` | Objective functions | TempReward, EconomicReward, ... (each with `weight`) |
 
-Load with `--load-config configs/env_test1_{s/m/l}.yaml` on training or eval scripts.
+Load with `--load-config configs/env_cfg/env_test1_{s/m/l}.yaml` on training or eval scripts.
 Save a modified config with `--save-config configs/my_run.yaml` on the training script.
 
 ### 2.2 Training hyperparameters — `configs/training_param_config.yaml`
@@ -212,7 +212,7 @@ sbatch slurm_scripts/slurm_train_ray.sh --algorithm ppo --episodes 3500
 sbatch slurm_scripts/slurm_train_ray.sh --algorithm sac --seed 18 --episodes 5000
 
 # Load a custom environment config
-sbatch slurm_scripts/slurm_train_ray.sh --algorithm ppo --load-config configs/env_test1_{s/m/l}.yaml --episodes 3500
+sbatch slurm_scripts/slurm_train_ray.sh --algorithm ppo --load-config configs/env_cfg/env_test1_{s/m/l}.yaml --episodes 3500
 
 # Enable trajectory logging during training eval
 sbatch slurm_scripts/slurm_train_ray.sh --algorithm ppo --episodes 3500 --log-trajectories

@@ -7,6 +7,7 @@ from gymnasium.spaces import Box
 
 from ..base import StateSource
 from adv_building_gym.utils.serializable import ComponentRegistry
+from adv_building_gym.utils.rng_service import RngService
 
 logger = logging.getLogger(__name__)
 
@@ -89,26 +90,17 @@ class InsideTemperature(StateSource):
             # sim_hour is actual hour of day (0–24)
             sim_hour = float(states.get("sim_hour", np.zeros(shape=(1,), dtype=np.float32))[0])
             sim_hour = sim_hour % 24
-            # Synthetic setpoint profile — values on the same normalised
-            # scale as the synthetic weather temp_out_norm (0.0–0.5).
-            # temp_in_norm starts at 0 and drifts toward temp_out_norm via
-            # BuildingHeatLoss, so desired values should be in that range.
-            if sim_hour < 6:          # Night
-                desired_temp_in_norm = 0.15
-            elif sim_hour < 8:        # Morning
-                desired_temp_in_norm = 0.25
-            elif sim_hour < 12:       # Mid-morning
-                desired_temp_in_norm = 0.30
-            elif sim_hour < 17:       # Afternoon
-                desired_temp_in_norm = 0.35
-            elif sim_hour < 22:       # Evening
-                desired_temp_in_norm = 0.30
-            elif sim_hour < 24:       # Late evening
-                desired_temp_in_norm = 0.20
-            else:
-                desired_temp_in_norm = 0.25
-            # Denormalise for raw-value logging (mirrors CSV path line 82)
-            self.desired_temp_in_raw = desired_temp_in_norm * temp_abs_max
+            # Synthetic setpoint profile — realistic °C values matching
+            # the CSV profiles (inside_temp_0.csv as reference: 17 °C
+            # night setback, 21 °C daytime comfort).
+            if sim_hour < 8:          # Night / early morning
+                raw_temp = 18.5
+            elif sim_hour < 19:       # Day (occupied hours)
+                raw_temp = 21.3
+            else:                     # Evening / night
+                raw_temp = 18.5
+            self.desired_temp_in_raw = raw_temp
+            desired_temp_in_norm = raw_temp / temp_abs_max if temp_abs_max != 0 else 0.0
 
         # Ensure float32 dtype and clip to bounds
         desired_temp_in_norm = np.float32(np.clip(desired_temp_in_norm, -1.0, 1.0))
@@ -117,12 +109,22 @@ class InsideTemperature(StateSource):
     def reset(self, states, info=None) -> None:
         """Populate initial desired temperature and seed temp_in_norm.
 
-        At episode start the indoor temperature should equal the desired
-        setpoint so the agent begins in a comfortable state.
+        At episode start the indoor temperature starts near the desired
+        setpoint with a small random offset so the agent does not always
+        begin in a perfectly comfortable state.
         """
         self.update_state(states, info)
         if "temp_in_norm" in states and "desired_temp_in_norm" in states:
-            states["temp_in_norm"][0] = states["desired_temp_in_norm"][0]
+            # ±2 °C variance in normalised space (temp_abs_max default 60 °C
+            # ⇒ 2/60 ≈ 0.033 normalised units)
+            temp_abs_max = float((info or {}).get("_temp_abs_max", 60.0))
+            max_offset_norm = 2.0 / temp_abs_max if temp_abs_max != 0 else 0.0
+            rng = np.random.default_rng(RngService.get().get_random(self.name))
+            variance = rng.uniform(-max_offset_norm, max_offset_norm)
+            
+            states["temp_in_norm"][0] = np.float32(np.clip(
+                states["desired_temp_in_norm"][0] + variance, -1.0, 1.0
+            ))
 
 
 # Register InsideTemperature with the component registry

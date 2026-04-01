@@ -46,7 +46,7 @@ def load_data_combinator_config(
     years = cfg["years"]
     include_augmented = cfg["include_augmented"]
 
-    # Build scenario list from templates x years
+    # Build scenario list from templates x years, skipping missing files
     scenarios: list[dict[str, str]] = []
     for source_template in cfg["scenario_sources"]:
         for year in years:
@@ -54,7 +54,11 @@ def load_data_combinator_config(
                 name: pattern.format(year=year)
                 for name, pattern in source_template.items()
             }
-            scenarios.append(scenario)
+            if all(Path(p).exists() for p in scenario.values()):
+                scenarios.append(scenario)
+            else:
+                missing = [p for p in scenario.values() if not Path(p).exists()]
+                logger.debug("Skipping scenario for year %d: missing %s", year, missing)
 
     # Auto-discover augmented scenarios
     if include_augmented:

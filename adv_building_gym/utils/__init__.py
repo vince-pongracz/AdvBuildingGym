@@ -12,7 +12,7 @@ from .checkpoint_finder import (
     resolve_checkpoint_path,
 )
 from .normalisation import Normalisation, normalise_series
-from .seed_provider import RngService
+from .rng_service import RngService
 from .space_check import check_space_compatibility
 from .serializable import Serializable, ComponentRegistry
 

@@ -1,17 +1,28 @@
-# Trajectory Logging & Metrics Tracking — Implementation Plan
+# Trajectory Logging & Metrics Tracking — Design & Implementation
 
-TODO VP: check this document, adjust its state to the current repo state
+TODO VP: continue here
 
+**Status: Fully implemented.** All steps described in this document have been completed. The document is retained as a design reference explaining the rationale, RLlib background research, and architectural decisions behind the trajectory logging system.
+
+### Key files
+
+| File | Role |
+|------|------|
+| `adv_building_gym/utils/trajectory_utils.py` | Core `extract_trajectory_from_infos()` + `write_episode_to_hdf5()` |
+| `adv_building_gym/utils/trajectory_collector.py` | `TrajectoryCollector` class for standalone eval |
+| `adv_building_gym/callbacks/trajectory_logging_callback.py` | RLlib callback for training-time eval trajectory logging |
+| `adv_building_gym/callbacks/episode_metrics_callback.py` | Scalar metrics callback (formerly `episode_callbacks.py`) |
+| `adv_building_gym/envs/building_adv.py` | `log_full_info` flag, `reward_breakdown`/`power_breakdown`/`raw` in info |
+| `adv_building_gym/evaluation/eval_runner.py` | `evaluate_model()` using `TrajectoryCollector` |
+| `run_eval_ray.py` | CLI with `--log-trajectories` flag |
 
 ## Motivation
 
-Currently, evaluation-time data collection is limited:
-- **`episode_callbacks.py`** (training): Saves flat observations, clipped actions, and raw policy actions per episode as JSON. However, observations are opaque flat arrays — there's no mapping back to named state variables (e.g., `temp_in_norm`, `E_price`, `solar_irradiance`).
-- **`run_eval_ray.py`** (evaluation): Collects only per-episode aggregates (total reward, reward rate, length). Step-level trajectories are discarded (`step_info` is not preserved — there's even a TODO for this).
-- **`run_evaluation.py`** (SB3 eval): Records per-step data into a DataFrame, but this is for `BaseBuildingGym` only, not `AdvBuildingGym`. Out of scope for this plan.
+Before this work, evaluation-time data collection was limited:
+- **`episode_callbacks.py`** (training): Saved flat observations, clipped actions, and raw policy actions per episode as JSON. However, observations were opaque flat arrays — no mapping back to named state variables (e.g., `temp_in_norm`, `E_price`, `solar_irradiance`).
+- **`run_eval_ray.py`** (evaluation): Collected only per-episode aggregates (total reward, reward rate, length). Step-level trajectories were discarded.
 
-**What's missing:** A structured, per-step trajectory log during evaluation that tracks every state variable by name, every action component by name, per-reward-function breakdowns, and energy metrics — all in a format ready for analysis and plotting. 
-Store the data variant along the trajectory log as well.
+**What was needed:** A structured, per-step trajectory log during evaluation that tracks every state variable by name, every action component by name, per-reward-function breakdowns, and energy metrics — all in a format ready for analysis and plotting. The data variant is stored along the trajectory log as well.
 
 ---
 
@@ -142,12 +153,12 @@ RLlib has a built-in offline data recording system (`config.offline_data(output=
 
 **Since `on_episode_end` already gives access to the full trajectory via `episode.get_infos()`,** the callback-based approach is the natural primary solution for both training-time eval and standalone eval. The same `extract_trajectory_from_infos()` utility serves both:
 
-1. **Callback-based logging** (Option B — primary for training-time eval): Extract trajectory from `episode.get_infos()` at `on_episode_end`, gated by `env_runner.config.in_evaluation` + configurable flag.
-2. **Standalone eval script** (Option A): Use the same extraction utility, but fed from step-by-step `info` dicts collected in the eval loop. Needed because `run_eval_ray.py` does not use RLlib callbacks — it runs its own `env.step()` loop.
+1. **Callback-based logging** (Option B — `trajectory_logging_callback.py`): Extracts trajectory from `episode.get_infos()` at `on_episode_end`, gated by `env_runner.config.in_evaluation`. Saves JSON and HDF5.
+2. **Standalone eval script** (Option A — `TrajectoryCollector`): Uses the same extraction utility, fed from step-by-step `info` dicts collected in `eval_runner.py`'s `env.step()` loop.
 
 ---
 
-## Current Architecture Summary
+## Architecture Summary
 
 ### Data flow in `AdvBuildingGym.step()`
 1. Flat action → clipped → converted to `Dict[str, np.ndarray]` via `_flat_action_to_dict()`
@@ -156,7 +167,7 @@ RLlib has a built-in offline data recording system (`config.offline_data(output=
 4. `state["prev_action"]` updated
 5. Energy accumulated: `cum_E_kWh`
 6. Reward computed: sum over `reward_funcs`
-7. `info` dict returned with: `action` (dict format), `reward`, `reward_breakdown`, `cum_E_kWh`, and conditionally `state` (deep copy, only when `log_full_info=True`)
+7. `info` dict returned with: `action` (dict format), `reward`, `reward_breakdown`, `max_reward_step`, `cum_E_kWh`, `step_power_kW`, `power_breakdown`, `raw`, and conditionally `state` (deep copy, only when `log_full_info=True`)
 
 ### Key observation
 The `info["state"]` contains a full deep copy of all named state variables at each step — but only when `log_full_info=True` (evaluation mode). During training, this deep copy is skipped to save memory. For trajectory logging, the flag must be enabled on evaluation EnvRunners.
@@ -172,7 +183,7 @@ The `info["state"]` contains a full deep copy of all named state variables at ea
 
 ---
 
-## Plan
+## Design
 
 ### Core utility: `extract_trajectory_from_infos()`
 
@@ -240,8 +251,11 @@ def extract_trajectory_from_infos(
 | **Actions (raw policy)** | Flat raw action from policy output | `episode.get_actions()` or eval loop. Added by caller, not by `extract_trajectory_from_infos()`. |
 | **Reward** | Total reward | `info["reward"]` |
 | **Per-reward breakdown** | Nested under `"reward_breakdown"` dict, one entry per reward function (e.g., `reward_breakdown.temp_reward`) | `info["reward_breakdown"]` |
-| **Energy** | `cum_E_kWh`, `step_power_kW` | `info["cum_E_kWh"]` (raw cumulative values stored as-is). `step_power_kW` derived inside `extract_trajectory_from_infos()` as `(cum_E_kWh[t] - cum_E_kWh[t-1]) / control_step_hours`. For step 0 (or when no `initial_info`), uses `cum_E_kWh[0] / control_step_hours`. |
-| **Metadata** | `step`, `episode_id`, `seed` | From caller |
+| **Max reward per step** | `max_reward_step` | `info["max_reward_step"]` |
+| **Energy** | `cum_E_kWh`, `step_power_kW` | `info["cum_E_kWh"]` (raw cumulative values stored as-is). `step_power_kW` from `info["step_power_kW"]`. |
+| **Power breakdown** | Nested under `"power_breakdown"` dict, one entry per infrastructure | `info["power_breakdown"]` |
+| **Raw values** | Nested under `"raw"` dict, unnormalised physical values (e.g., temperatures in Celsius) | `info["raw"]` |
+| **Metadata** | `step`, `episode_id`, `seed`, `episode_date`, `data_variant` | From caller / `reset()` info |
 
 ### Option A: TrajectoryCollector (standalone, for eval scripts)
 
@@ -308,7 +322,7 @@ for ep in range(num_episodes):
 
 ### Option B: Callback-based logging (training-time, configurable)
 
-Enhance `episode_callbacks.py` to optionally save full named trajectories during training evaluation episodes. This is simpler than initially expected because `episode.get_infos()` already gives us all the info dicts at once — no per-step accumulation needed.
+Implemented in a dedicated `trajectory_logging_callback.py` (not merged into the metrics callback). Saves full named trajectories during training evaluation episodes. Simpler than initially expected because `episode.get_infos()` already gives us all the info dicts at once — no per-step accumulation needed.
 
 **Why `episode.get_infos()` works directly:**
 - `on_episode_end` fires **before** `to_numpy()` / `finalize()`, so `get_infos()` returns a plain `list[dict]`
@@ -348,16 +362,11 @@ def on_episode_end(self, *, episode, env_runner, metrics_logger, env, **kwargs):
             json.dump(dump, f, cls=CustomJSONEncoder, indent=4)
 ```
 
-**Configuration:** A `log_trajectories` boolean flag passed to the callback factory:
+**Configuration:** The trajectory logging callback is a separate `RLlibCallback` subclass created by a factory function:
 
 ```python
-def create_on_episode_end_callback(
-    env_id: str,
-    rewards: List,
-    metrics_base_dir: str = "ep_metrics",
-    exec_date: Optional[datetime.datetime] = None,
-    log_trajectories: bool = False,  # NEW: configurable trajectory logging
-):
+# adv_building_gym/callbacks/trajectory_logging_callback.py
+make_trajectory_logging_cb_class(output_dir, ...)
 ```
 
 **Behaviour:**
@@ -366,12 +375,12 @@ def create_on_episode_end_callback(
   - If `env_runner.config.in_evaluation`: Extract full trajectory from `episode.get_infos()` + `episode.get_actions()`, save as JSON alongside the existing metrics JSON
   - If training episode: Skip trajectory logging (only scalar metrics) — avoids I/O overhead during training
 
-### Per-reward breakdown and info cleanup
+### Per-reward breakdown and info cleanup (implemented)
 
-To log individual reward components, extend `AdvBuildingGym.step()` to include per-reward values in `info`:
+Individual reward components are logged via `info["reward_breakdown"]` in `AdvBuildingGym.step()`:
 
 ```python
-# In step(), replace the existing reward loop:
+# In step():
 reward: float = 0
 reward_breakdown = {}
 for rew_f in self.reward_funcs:
@@ -379,17 +388,14 @@ for rew_f in self.reward_funcs:
     reward_breakdown[rew_f.name] = rew_val
     reward += rew_val
 
-# Add to info:
 info["reward_breakdown"] = reward_breakdown
 ```
 
-Also remove `info["clipped_action"]` (the flat clipped action array) from `step()`. It is redundant with `info["action"]` which provides the same clipped values in the more useful dict format. Only `info["action"]` is logged in trajectories.
+The old `info["clipped_action"]` (flat clipped action array) was removed — `info["action"]` (dict format) is the only action representation.
 
-This is a small, low-overhead change that makes reward debugging much easier.
+### Conditional state in info (implemented)
 
-### Conditional state in info (training memory optimisation)
-
-During training, RLlib's `InfiniteLookbackBuffer` stores every `info` dict from every step. The deep copy of the full state dict (`info["state"]`) is expensive in memory when accumulated across thousands of training episodes. To avoid this:
+During training, RLlib's `InfiniteLookbackBuffer` stores every `info` dict from every step. The deep copy of the full state dict (`info["state"]`) is expensive in memory when accumulated across thousands of training episodes. This is avoided via the `log_full_info` flag:
 
 ```python
 # In AdvBuildingGym:
@@ -400,65 +406,52 @@ info = {
     "action": action,
     "reward": reward,
     "reward_breakdown": reward_breakdown,
+    "max_reward_step": max_reward_step,
     "cum_E_kWh": self.cum_E_kWh,
+    "step_power_kW": step_power_kW,
+    "power_breakdown": power_breakdown,
+    "raw": self._get_raw_state_values(),
 }
 if self.log_full_info:
     info["state"] = {k: np.array(v, copy=True) for k, v in self.state.items()}
 ```
 
-The flag is set to `True` by the eval script (before the eval loop) and by the callback setup (on evaluation EnvRunners via `on_environment_created`). Training EnvRunners leave it `False`, avoiding the per-step deep copy overhead.
+The flag is set to `True` by `eval_runner.py` (before the eval loop) and by the callback setup (on evaluation EnvRunners). Training EnvRunners leave it `False`, avoiding the per-step deep copy overhead.
 
 ---
 
-## Implementation Steps
+## Implementation Steps (all completed)
 
-### Step 1: Extend `info` dicts in `building_adv.py`
+### Step 1: Extend `info` dicts in `building_adv.py` — Done
 - **File:** `adv_building_gym/envs/building_adv.py`
-- **Changes:**
-  1. In `step()`, compute rewards individually into a `reward_breakdown` dict and add `info["reward_breakdown"]`. Remove `info["clipped_action"]` (redundant — same data as `info["action"]` in dict format).
-  2. In `reset()`, add `info["state"]` with a deep copy of the initial state (same pattern as `step()`), so the reset info captures starting conditions. The seed is already present (`info = {"seed": seed}`).
-  3. Make `info["state"]` in `step()` conditional on evaluation mode: add a `self.log_full_info: bool` flag (default `False`). When `False`, `step()` omits the expensive deep copy of state into info. When `True` (set during evaluation), the full `info["state"]` is included. This avoids memory pressure from RLlib's `InfiniteLookbackBuffer` storing deep-copied state dicts for every training step across all episodes.
-- **Impact:** Minimal — restructuring existing computation. The `log_full_info` flag is toggled by the eval script and the callback setup.
+- **What was done:**
+  1. `step()` computes rewards individually into `reward_breakdown` dict and includes it in `info["reward_breakdown"]`. The old `info["clipped_action"]` was removed (redundant with `info["action"]` in dict format).
+  2. `reset()` includes `info["state"]` (conditional on `log_full_info`), plus `episode_date`, `episode_day_mode`, `data_variant`, and `raw` values.
+  3. `self.log_full_info: bool = False` gates the expensive deep copy of state into info. Additional info keys beyond the original plan: `max_reward_step`, `step_power_kW`, `power_breakdown` (per-infrastructure), `raw` (unnormalised physical values).
 
-### Step 2: Create trajectory extraction utility
+### Step 2: Create trajectory extraction utility — Done
 - **File:** `adv_building_gym/utils/trajectory_utils.py`
-- **Function:** `extract_trajectory_from_infos(infos, initial_info, state_keys, action_keys) -> dict`
-- **Purpose:** Shared logic for converting a list of step `info` dicts into a structured columnar dict with named keys. When `initial_info` (from `reset()`) is provided, the initial state is prepended as step 0 with zero actions/reward — preserving starting conditions. Also computes `step_power_kW` from consecutive `cum_E_kWh` differences. Used by both `TrajectoryCollector` (Option A) and the callback (Option B).
-- **Exports:** Add to `adv_building_gym/utils/__init__.py`
+- **Functions:** `extract_trajectory_from_infos()` and `write_episode_to_hdf5()`
+- Both exported from `adv_building_gym/utils/__init__.py`
 
-### Step 3: Extend episode callbacks with configurable trajectory logging (Option B)
-- **File:** `adv_building_gym/callbacks/episode_callbacks.py`
-- **Changes:**
-  - Add `log_trajectories: bool = False` parameter to `create_on_episode_end_callback()`
-  - Inside `on_episode_end`, when `log_trajectories=True` and `env_runner.config.in_evaluation`:
-    - Split `episode.get_infos()` into `initial_info = infos[0]` (reset) and `step_infos = infos[1:]` (steps)
-    - Call `extract_trajectory_from_infos(step_infos, initial_info=initial_info)`
-    - Add raw policy actions from `episode.get_actions()` (with a zero-padding entry for the initial-conditions row)
-    - Ensure output directory exists with `os.makedirs(ep_metrics_dir, exist_ok=True)` before writing
-    - Save JSON to the episode metrics directory
-  - Training episodes: unchanged (only scalar metrics)
-- **Training script integration:** Pass `log_trajectories=True/False` from training config or CLI flag. When `log_trajectories=True`, the training script also sets `env.log_full_info = True` on evaluation EnvRunners (via `on_environment_created` callback or env config) so that `step()` includes `info["state"]`.
+### Step 3: Trajectory logging callback (Option B) — Done
+- **File:** `adv_building_gym/callbacks/trajectory_logging_callback.py` (separate file, not merged into the old `episode_callbacks.py`)
+- Factory function `make_trajectory_logging_cb_class()` creates an `RLlibCallback` subclass
+- Gated by `env_runner.config.in_evaluation`; saves per-episode JSON and appends to shared HDF5
+- The old `episode_callbacks.py` was renamed to `episode_metrics_callback.py` and handles only scalar metrics
 
-### Step 4: Create `TrajectoryCollector` (Option A)
+### Step 4: Create `TrajectoryCollector` (Option A) — Done
 - **File:** `adv_building_gym/utils/trajectory_collector.py`
-- **Class:** `TrajectoryCollector` — wraps the extraction utility, manages per-episode accumulation, JSON serialisation
-- **Purpose:** For `run_eval_ray.py` which uses its own `env.step()` loop without RLlib callbacks
-- **Exports:** Add to `adv_building_gym/utils/__init__.py`
-- **Dependencies:** `numpy`, `json` (no new deps)
+- Full class with `on_reset()`, `on_step()`, `on_episode_end()`, `to_dict()`, `save_json()`, `save_hdf5()`, `reset()`
+- Exported from `adv_building_gym/utils/__init__.py`
 
-### Step 5: Integrate into `run_eval_ray.py`
-- **File:** `run_eval_ray.py`
-- **Changes:**
-  - Set `env.log_full_info = True` before the eval loop (so `step()` includes `info["state"]`)
-  - Instantiate `TrajectoryCollector`
-  - Call `collector.on_reset(reset_info)` after `env.reset()`
-  - Call `collector.on_step()` in eval loop
-  - Save JSON per episode under `<output_dir>/<run_id>/episode_<N>_trajectory.json`
-  - Save existing summary JSON/CSV alongside in the same run directory
-- **New CLI flag:** `--log-trajectories` (default: True for eval)
+### Step 5: Integrate into `run_eval_ray.py` — Done
+- Evaluation logic moved to `adv_building_gym/evaluation/eval_runner.py` (`evaluate_model()`)
+- `run_eval_ray.py` has `--log-trajectories` flag (default: `True`)
+- `eval_runner.py` sets `env.log_full_info = True` and uses `TrajectoryCollector`
 
-### ~~Step 6: Integrate into `run_evaluation.py`~~ — Removed
-`BaseBuildingGym` integration is out of scope for this plan.
+### ~~Step 6: Integrate into `run_evaluation.py`~~ — Out of scope
+`BaseBuildingGym` integration was out of scope for this work.
 
 ---
 
@@ -518,12 +511,21 @@ ep_metrics/
     "raw_policy_action_0": [0.32, 0.41, 0.53, ...],
     "raw_policy_action_1": [0.68, 0.79, 0.88, ...],
     "reward": [0.9, 0.85, 0.88, ...],
+    "max_reward_step": [1.0, 1.0, 1.0, ...],
     "reward_breakdown": {
       "temp_reward": [0.8, 0.75, 0.78, ...],
       "economic_reward": [0.1, 0.1, 0.1, ...]
     },
     "cum_E_kWh": [0.04, 0.08, 0.12, ...],
-    "step_power_kW": [0.5, 0.5, 0.6, ...]
+    "step_power_kW": [0.5, 0.5, 0.6, ...],
+    "power_breakdown": {
+      "hp": [0.4, 0.4, 0.5, ...],
+      "battery": [0.1, 0.1, 0.1, ...]
+    },
+    "raw": {
+      "temp_in_celsius": [20.5, 20.6, 20.7, ...],
+      "temp_out_celsius": [5.0, 5.0, 5.1, ...]
+    }
   }
 }
 ```

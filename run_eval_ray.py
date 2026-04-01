@@ -9,9 +9,12 @@ import argparse
 import logging
 import sys
 
+from pathlib import Path
+
 from adv_building_gym import EnvConfigManager, evaluate_model
 from adv_building_gym.config import config as default_config
 from adv_building_gym.config.data_config import load_data_combinator_config
+from adv_building_gym.config.reward_schedule_manager import RewardScheduleManager
 from adv_building_gym.utils import resolve_checkpoint_path, RngService, setup_warning_filters
 
 # Apply warning filters
@@ -85,6 +88,11 @@ def parse_args() -> argparse.Namespace:
         help="Override day mode: 'each', 'random', or a date string like '2022-07-15'",
     )
     parser.add_argument(
+        "--reward-schedule", type=str, default=None,
+        help="Path to reward schedule YAML config "
+            "(default: configs/reward_cfg/reward_schedule_eval.yaml)",
+    )
+    parser.add_argument(
         "--plot", action="store_true", default=False,
         help="Plot the best episode's trajectory after evaluation (implies --log-trajectories)",
     )
@@ -115,7 +123,21 @@ def main() -> None:
     else:
         active_config = default_config
 
-    # Initialise singleton component instances in the main process before use.
+    # Load reward functions from reward schedule YAML (same rewards.yaml used
+    # by training) so evaluation always matches the training reward definition.
+    reward_schedule_path = args.reward_schedule or str(
+        Path(__file__).resolve().parent / "configs" / "reward_cfg" / "reward_schedule_eval.yaml"
+    )
+    reward_manager = RewardScheduleManager.from_yaml(reward_schedule_path)
+    active_config.reward_config.rewards = reward_manager.create_active_rewards()
+    logger.info(
+        "Eval rewards loaded from schedule: %s",
+        reward_manager.get_active_reward_names(),
+    )
+
+    # Initialise singleton component instances (infras, statesources) in the
+    # main process.  Rewards are already set above, so init_singletons() will
+    # keep them as-is.
     active_config.init_singletons()
 
     # Initialize centralized RNG service for all components

@@ -23,15 +23,21 @@ include_augmented: true
 # Each source maps a statesource name to a directory + filename pattern.
 # The pattern must contain {year} which is replaced with each year.
 scenario_sources:
+  # DWD weather (all years in the 'years' list)
   - weather: data/weather/dwd/preprocessed/{year}_merged_04177.csv
     E_price: data/e_price/awattar/price_data_{year}.csv
   - weather: data/weather/dwd/preprocessed/{year}_merged_04177.csv
     E_price: data/e_price/e_charts/price_data_{year}.csv
+  # WPuQ/Zenodo weather (only 2018–2020 available; missing years are
+  # filtered out at load time by data_config.py)
+  - weather: data/weather/zenodo/csvs_weather/{year}_weather.csv
+    E_price: data/e_price/awattar/price_data_{year}.csv
+  - weather: data/weather/zenodo/csvs_weather/{year}_weather.csv
+    E_price: data/e_price/e_charts/price_data_{year}.csv
 
 # Augmented data discovery paths (used when include_augmented is true)
 augmented_paths:
-  # TODO VP 2026.03.13. : add WPuQ weather data as well to the data combinator config
-  # TODO VP 2026.03.13. : A combinator would be needed as well for the infra items config -- 
+  # TODO VP 2026.03.13. : A combinator would be needed as well for the infra items config --
   # only 1 infra element should change at a time.
   # for N episodes a config is fixed, then 1 aspect changes in it -- trains on that as well, then another aspect changes -- trains again...
   weather_dir: data/weather/dwd/preprocessed
