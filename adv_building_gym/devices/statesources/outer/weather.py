@@ -151,6 +151,10 @@ class WeatherDataSource(StateSource):
                 temp_out_norm = 0.1
             else:
                 temp_out_norm = 0.3
+            # Compute raw °C from the synthetic normalised value so that
+            # get_raw_values() reports a physically consistent temperature.
+            self.temp_out_raw = temp_out_norm * self.temp_abs_max
+
             # NOTE VP 2026.03.10. : Maybe add synthetic data to the other variables as well
             solar_irradiance_norm = 0.0
             avg_wind_speed_norm = 0.0
@@ -165,6 +169,9 @@ class WeatherDataSource(StateSource):
         # Not in observation space — raw °C value would destabilise the NN.
         if info is not None:
             info["_temp_abs_max"] = self.temp_abs_max
+
+    def get_raw_values(self) -> dict[str, float]:
+        return {"temp_out_raw": self.temp_out_raw}
 
     def _get_serialize_value(self, param_name: str, value):
         """Handle enum serialization for normalise parameter."""

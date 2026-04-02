@@ -100,7 +100,7 @@ def select_model(
             },
             # SAC-specific hyperparameters
             twin_q=True,  # Use twin Q-networks to reduce overestimation bias
-            initial_alpha=0.3,  # Initial entropy coefficient (auto-tuned via alpha_lr)
+            initial_alpha=1.0,  # Initial entropy coefficient (auto-tuned via alpha_lr)
             target_network_update_freq=4,  # Update target networks every step
             tau=0.005,  # Soft update coefficient for target networks (at Polyak averaging)
             train_batch_size_per_learner=training_config.sac_replay_batch_size,

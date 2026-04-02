@@ -5,7 +5,7 @@ rewards:
     weight: 1.0
     params:
       wrong_direction_penalty: -1.0
-      temp_const_multiplier: 5.0
+      temp_const_multiplier: 10.0
 
   # - class_name: EconomicReward
   #   weight: 1.0

@@ -121,6 +121,9 @@ class InsideTemperature(StateSource):
                 states["desired_temp_in_norm"][0] + variance, -1.0, 1.0
             ))
 
+    def get_raw_values(self) -> dict[str, float]:
+        return {"desired_temp_in_raw": self.desired_temp_in_raw}
+
 
 # Register InsideTemperature with the component registry
 ComponentRegistry.register('statesource', InsideTemperature)

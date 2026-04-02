@@ -1,0 +1,18 @@
+# Infrastructure schedule configuration
+# Controls which env config YAML is active during training.
+# Only the "infras" and "building_props" sections are used from each config.
+#
+# Constraint: consecutive entries must differ in at most ONE aspect
+# (one infrastructure component's parameters OR building_props).
+# Validated at load time -- training will fail fast if violated.
+mode: cycle                    # "cycle" = round-robin through configs, "off" = disabled
+swap_every_n_iterations: 300   # hold each config for N training iterations
+
+# Ordered list of env config YAML files to cycle through.
+# NOTE: the existing small/mid/large configs change multiple infras
+# simultaneously (battery, EV, solar all differ).  Intermediate YAML
+# files should be created to satisfy the one-change-at-a-time constraint.
+configs:
+  - configs/env_cfg/env_test1_small.yaml
+  - configs/env_cfg/env_test1_mid.yaml
+  - configs/env_cfg/env_test1_large.yaml

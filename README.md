@@ -128,13 +128,6 @@ It features a custom <a href="https://github.com/Farama-Foundation/Gymnasium" ta
 The **[adv_building_gym.py](adv_building_gym/envs/adv_building_gym.py)** simulates thermal building dynamics with heat pump control in 5-minute intervals.
 This framework leverages the **[Gymnasium](https://github.com/Farama-Foundation/Gymnasium)** and **[Pyomo](https://github.com/Pyomo/pyomo)** libraries, making it suitable for both reinforcement learning agents and advanced control strategies.
 
-To simulate real-world uncertainty, the environment includes:
-
-- **Wiener Process Noise** introduces random fluctuations into the outdoor temperature
-- **Sensor Noise** simulates inaccurate indoor and outdoor temperature measurements
-
-These features support the evaluation under uncertainty and help assess the robustness of control strategies.
-
 ### Papers -- literature research
 
 #### Reinforcement Learning-Based Energy Management of Smart Home with Rooftop Solar Photovoltaic System, Energy Storage System, and Home Appliances. 
@@ -271,6 +264,27 @@ Summary:
 
 Conclusion:
 
+
+#### Deep reinforcement learning for energy management in a microgrid with flexible demand
+
+Link: https://www.sciencedirect.com/science/article/pii/S2352467720303441
+
+Summary:
+- Energy management of a microgrid -- wind turbine, ESS, HVAC, grid
+- flexible resources, schedule them (e.g.: directly controllable loads, thermostatically controlled loads, price responsive loads, EVs)
+- Electricity prices considered
+- "increase the flexibility in demand by combining groups of TCLs and price-responsive loads participating in a demand response (DR) program, alongside a shared ESS, a wind power resource"
+- writes about model based and model free methods, MPC and RL
+- 7 SOTA RL algo, like A3C, PPO -- they improve these 2 algorihtms as well
+- E_price and renewable production data from Finland
+- optimisation on "gross energy profit from operations, and optimal use of local resources and flexibility components"
+- they use real multi agent setup (with 3 layer architecture: control, information and physical layers)
+- TODO VP: continue
+
+Conclusion:
+- 
+
+TODO VP: Fingrid datasets, maybe something useful, but it rather seems like they rather have energy time series than weather and price time series -- https://data.fingrid.fi/en -- but they gather a lots of data with any kind, so can be useful.
 
 
 

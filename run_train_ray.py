@@ -175,6 +175,13 @@ def main():
         help="Path to reward schedule YAML config "
             "(default: configs/reward_cfg/reward_schedule_train.yaml)"
     )
+    parser.add_argument(
+        "--infra-schedule", type=str, default=None,
+        help="Path to infra schedule YAML config "
+            "(e.g. 'configs/infra_schedule/infra_schedule_train.yaml'). "
+            "When provided, infrastructure parameters cycle according "
+            "to the schedule. When omitted, a single config is used."
+    )
 
     # Load configs:
     # Load training hyperparameters (shared across select_model and checkpoint calc)
@@ -218,6 +225,19 @@ def main():
         logger.info(
             "Gradual training enabled: mode=%s, swap every %d iterations",
             reward_manager.mode, reward_manager.swap_every_n_iterations,
+        )
+
+    # Load infrastructure schedule config (optional).
+    # When provided, infrastructure parameters cycle according to the schedule.
+    infra_combinator = None
+    if args.infra_schedule:
+        from adv_building_gym.infra_combinator import InfraCombinator
+        infra_combinator = InfraCombinator.from_yaml(args.infra_schedule)
+        logger.info(
+            "Infrastructure schedule enabled: mode=%s, %d configs, "
+            "swap every %d iterations",
+            infra_combinator.mode, len(infra_combinator.config_paths),
+            infra_combinator.swap_every_n_iterations,
         )
 
     # Resolve stopping criterion: --episodes takes precedence over --timesteps.
@@ -338,6 +358,7 @@ def main():
         data_combinator=data_combinator,
         log_trajectories=args.log_trajectories,
         reward_schedule_manager=reward_manager,
+        infra_combinator=infra_combinator,
     )
 
     # Convert the RLlib config into a Tune param space

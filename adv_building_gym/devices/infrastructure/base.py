@@ -104,6 +104,14 @@ class Infrastructure(EnvSyncInterface, Serializable):
         info["max_export_kW"] = info.get("max_export_kW", 0.0) + self.max_export_kW
         return info
 
+    def get_raw_values(self) -> dict[str, float]:
+        """Return raw (unnormalised) physical values for logging.
+
+        Override in subclasses that track raw values.
+        Default returns an empty dict.
+        """
+        return {}
+
     def get_electric_consumption(self, actions: Dict) -> float:
         """Get current electric energy consumption in kW.
 

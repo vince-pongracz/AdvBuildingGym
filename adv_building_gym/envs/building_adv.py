@@ -15,6 +15,7 @@ from adv_building_gym.devices.statesources import StateSource
 from adv_building_gym.rewards import RewardFunction
 from adv_building_gym.devices.infrastructure import Infrastructure
 
+from adv_building_gym.utils.episode_date import resolve_episode_date
 from adv_building_gym.utils.warning_filters import setup_warning_filters
 from adv_building_gym.envs.data_variant import DataVariantProvider
 from adv_building_gym.envs.utils import BuildingProps
@@ -298,18 +299,11 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         # Ray evaluation env_config) rather than at construction time.
         self.log_full_info: bool = False
 
-        # Cache raw-attribute names for _get_raw_state_values().
-        # Scanned once at init rather than using dir() every step.
-        self._raw_attr_cache: list[tuple[object, str]] = []
-        self._temp_abs_max_source: object | None = None
-        for src in self.statesources + self.infras:
-            for attr_name in dir(src):
-                if attr_name.endswith("_raw") and not attr_name.startswith("_"):
-                    val = getattr(src, attr_name, None)
-                    if val is not None and not callable(val):
-                        self._raw_attr_cache.append((src, attr_name))
-            if hasattr(src, "temp_abs_max"):
-                self._temp_abs_max_source = src
+        # Cache the WeatherDataSource for temp_in_raw denormalisation.
+        self._weather_source = next(
+            (src for src in self.statesources if hasattr(src, "temp_abs_max")),
+            None,
+        )
 
         logger.debug("AdvBuildingGym created!")
         logger.debug("  Objectives: %s", [rew.name for rew in rewards])
@@ -331,6 +325,50 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
             [r.name for r in rewards],
         )
 
+    def set_infras(
+        self,
+        infras: list[Infrastructure],
+        building_props: BuildingProps | None = None,
+    ) -> None:
+        """Hot-swap infrastructure components.
+
+        Called by the infra_schedule callback to change which
+        infrastructure configuration the environment uses.  Only
+        parameters differ -- names and types must match.  Spaces are
+        invariant (all infra ``setup_spaces`` use normalised bounds).
+
+        When *building_props* is provided, also updates
+        ``self.building_props`` and propagates K/mC to statesources
+        that depend on them (e.g. BuildingHeatLoss).
+
+        Args:
+            infras: New Infrastructure instances.  Must have the same
+                names in the same order as the current infras.
+            building_props: Updated building thermal properties.  When
+                ``None`` the existing props are kept.
+        """
+        old_names = [i.name for i in self.infras]
+        new_names = [i.name for i in infras]
+        if old_names != new_names:
+            raise ValueError(
+                f"Infrastructure names must match. "
+                f"Old: {old_names}, New: {new_names}"
+            )
+        self.infras = infras
+
+        # Propagate building_props to dependent statesources
+        if building_props is not None:
+            self.building_props = building_props
+            for src in self.statesources:
+                if hasattr(src, "K") and hasattr(src, "mC"):
+                    src.K = building_props.K
+                    src.mC = building_props.mC
+
+        logger.debug(
+            "Infrastructure swapped: %s",
+            [i.name for i in infras],
+        )
+
     def get_state_space(self):
         return self.observation_space
 
@@ -347,16 +385,6 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         for state_src in self.statesources:
             if state_src.name in variant:
                 state_src.reload(variant[state_src.name])
-
-    # TODO VP 2026.03.10. : This does not belong strictly to the env... -- how to refactor it?
-    def _resolve_episode_date(self, row_offset: int) -> str:
-        """Derive a date string from the row offset using the first statesource with a 'start' column."""
-        for src in self.statesources:
-            if src.ts is not None and "start" in src.ts.columns and row_offset < len(src.ts):
-                return str(pd.to_datetime(src.ts.iloc[row_offset]["start"]).date())
-        # Fallback: day-of-year index
-        steps_per_day = int(86400 / self.control_step)
-        return f"day-{row_offset // steps_per_day}"
 
     def reset(self, *, seed: int | None = None, options: Dict[str, Any] | None = None):
         # ======= Seed =======
@@ -401,7 +429,7 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         row_offset, self._episode_day_mode = self.data_combinator.get_day_offset(
             self.episode_count, max_days, steps_per_day, data_start_year, self._rng,
         )
-        self._episode_date = self._resolve_episode_date(row_offset)
+        self._episode_date = resolve_episode_date(self.statesources, row_offset, self.control_step)
 
         if variant:
             logger.info("Episode %d, date %s: data variant %s", self.episode_count, self.data_combinator.get_day_date(), variant)
@@ -409,7 +437,7 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         # Allow external override via reset options
         if options and "row_offset" in options:
             row_offset = int(options["row_offset"])
-            self._episode_date = self._resolve_episode_date(row_offset)
+            self._episode_date = resolve_episode_date(self.statesources, row_offset, self.control_step)
             self._episode_day_mode = "manual"
 
         # ======== Reset state and synchronise datasources/infras ========
@@ -586,35 +614,31 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
 
         return self.state, reward, terminated, truncated, info
 
-    # TODO VP 2026.03.10. : Rework environment that it accepts data series, in state sources things are normalised, but 
-    # original values are stored as well in the info dict -- to show real data later in the plots
+
+# TODO VP 2026.03.23. : encourage exploration more
+# TODO VP 2026.03.23. : Use more history as state input -- from the 6h , 5h, 4h, 3h, 2h and 1h ago -- and the last 30min: each step from here
+# To this, implement a history collector -- collect specified timesteps from the past, according to the current simulation time: t-6h, t-4h, etc... -- can be generalised, it only needs the spec, the time series and the current simulation time.
+# Maybe not only for states, but for trajectory as well -- so that complete (s, a, r, s') tuples caputured from the past...
+# TODO VP 2026.03.23. : Eval script -- Plot all (reward, cum_E_usage) eval curves together -- with avg and variance
+# TODO VP 2026.03.23. : Remove default values from methods and functions where it is not needed
+# TODO VP 2026.03.23. : Check whether currently passed params really needed for the functions/methods
+# TODO VP 2026.03.23. : Add standalone input and output heads for the policy NN, fix the core policy NN -- investigate this option
 
     def _get_raw_state_values(self) -> dict[str, float]:
         """Collect raw (unnormalised) physical values from all components.
 
-        Uses a cache of ``(component, attribute_name)`` pairs built once
-        at ``__init__`` time, avoiding a ``dir()`` scan every step.
-        Also derives ``temp_in_raw`` by denormalising the simulated
+        Each component reports its own raw values via ``get_raw_values()``.
+        Additionally derives ``temp_in_raw`` by denormalising the simulated
         indoor temperature.
         """
-        
-        # TODO VP 2026.03.23. : encourage exploration more
-        # TODO VP 2026.03.23. : Use more history as state input -- from the 6h , 5h, 4h, 3h, 2h and 1h ago -- and the last 30min: each step from here
-        # To this, implement a history collector -- collect specified timesteps from the past, according to the current simulation time: t-6h, t-4h, etc... -- can be generalised, it only needs the spec, the time series and the current simulation time.
-        # Maybe not only for states, but for trajectory as well -- so that complete (s, a, r, s') tuples caputured from the past...
-        # TODO VP 2026.03.23. : Eval script -- Plot all (reward, cum_E_usage) eval curves together -- with avg and variance
-        # TODO VP 2026.03.23. : Remove default values from methods and functions where it is not needed
-        # TODO VP 2026.03.23. : Check whether currently passed params really needed for the functions/methods
-        # TODO VP 2026.03.23. : Add standalone input and output heads for the policy NN, fix the core policy NN -- investigate this option
-        
         raw: dict[str, float] = {}
-        for src, attr_name in self._raw_attr_cache:
-            raw[attr_name] = float(getattr(src, attr_name))
+        for src in self.statesources + self.infras:
+            raw.update(src.get_raw_values())
 
         # temp_in_raw: denormalise simulated indoor temperature
         temp_abs_max = (
-            float(self._temp_abs_max_source.temp_abs_max)
-            if self._temp_abs_max_source is not None
+            float(self._weather_source.temp_abs_max)
+            if self._weather_source is not None
             else 1.0
         )
         temp_in_norm = float(

@@ -81,20 +81,20 @@ class HP(Infrastructure):
         mode = float(np.atleast_1d(action)[1])
 
         # NOTE VP 2026.01.20. : Thermal model is 1R1C, same as links below
-        # Determine mode: cooling (<0.4), heating (>0.6), or no action ([0.4, 0.6])
+        # Determine mode: cooling (<0.45), heating (>0.55), or no action ([0.45, 0.55])
         # energy is in [0, 1], thermal power Q_thermal = energy * max_power_kW * COP
-        if mode < 0.4:
+        if mode < 0.45:
             # Cooling mode: remove heat from building (negative q_hp)
             cop = self.cop_cool
             q_hp = -energy * self.max_power_kW * cop  # heat removed from building
             mode = 0.0
-        elif mode > 0.6:
+        elif mode > 0.55:
             # Heating mode: add heat to building (positive q_hp)
             cop = self.cop_heat
             q_hp = energy * self.max_power_kW * cop  # heat added to building
             mode = 1.0
         else:
-            # No action zone [0.4, 0.6]
+            # No action zone [0.45, 0.55]
             q_hp = 0.0
             # Set also the energy part to 0 in this case -- at rewards it is useful to have the real actions
             actions["HP_action"][0] = 0.0

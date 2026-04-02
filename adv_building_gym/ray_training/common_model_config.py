@@ -13,6 +13,7 @@ from ray.rllib.algorithms.algorithm_config import AlgorithmConfig
 
 from adv_building_gym.callbacks import (
     create_data_schedule_on_train_result_cb,
+    create_infra_schedule_on_train_result_cb,
     create_reward_switch_on_train_result_cb,
     make_episode_metrics_cb_class,
     make_trajectory_logging_cb_class,
@@ -20,6 +21,7 @@ from adv_building_gym.callbacks import (
 from adv_building_gym.config.reward_schedule_manager import RewardScheduleManager, RewardScheduleMode
 from adv_building_gym.config.training_param_config import TrainingParamConfig
 from adv_building_gym.data_combinator import DataCombinator
+from adv_building_gym.infra_combinator import InfraCombinator
 from adv_building_gym.utils import ResourceAllocation, SlurmResources, validate_resource_allocation
 
 logger = logging.getLogger(__name__)
@@ -38,6 +40,99 @@ def _compose_on_train_result(*fns):
     return composed_on_train_result
 
 
+def register_callbacks(
+    config: AlgorithmConfig,
+    metrics_base_dir: str = "ep_metrics",
+    data_combinator: DataCombinator | None = None,
+    log_trajectories: bool = False,
+    reward_schedule_manager: RewardScheduleManager | None = None,
+    infra_combinator: InfraCombinator | None = None,
+) -> None:
+    """Register episode-metric, trajectory, and scheduling callbacks on *config*.
+
+    Mutates *config* in place via ``config.callbacks()``.  Intended to be
+    called after :func:`common_model_setup` (or at the end of it) so that
+    all algorithm-specific settings are already applied before callbacks
+    are wired up.
+
+    Args:
+        config: Algorithm config object to register callbacks on.
+        metrics_base_dir: Base directory for episode metrics.
+        data_combinator: DataCombinator for data variant scheduling.
+        log_trajectories: Save per-step trajectory JSON during evaluation.
+        reward_schedule_manager: Optional reward schedule manager.
+        infra_combinator: Optional infrastructure schedule combinator.
+    """
+    if data_combinator is None:
+        data_combinator = DataCombinator()
+
+    # Create callback classes for episode metrics and (optionally) trajectory logging.
+    # Each factory returns a configured RLlibCallback subclass.
+    # Link: https://docs.ray.io/en/latest/rllib/rllib-callback.html
+    exec_date = datetime.datetime.now()
+
+    episode_metrics_class = make_episode_metrics_cb_class(
+        metrics_base_dir=f"{metrics_base_dir}/metrics",
+        exec_date=exec_date,
+        dump_metrics_json=False
+    )
+
+    callback_classes = [episode_metrics_class]
+    if log_trajectories:
+        trajectory_class = make_trajectory_logging_cb_class(
+            metrics_base_dir=f"{metrics_base_dir}/trajectories",
+            exec_date=exec_date,
+        )
+        callback_classes.append(trajectory_class)
+        logger.info("Trajectory logging enabled: per-step trajectory JSON will be saved for each episode.")
+
+    # on_train_result callables — both data variant scheduling and reward
+    # switching run at iteration boundaries.  RLlib accepts a single
+    # on_train_result callable, so compose them when both are active.
+    on_train_result_fns = [
+        create_data_schedule_on_train_result_cb(
+            data_combinator, data_combinator.swap_every_n_episodes,
+        ),
+    ]
+    logger.info(
+        "DataScheduleCallback: swap every %d iterations, %d variants",
+        data_combinator.swap_every_n_episodes, len(data_combinator.variants),
+    )
+
+    if (reward_schedule_manager is not None
+            and reward_schedule_manager.mode is not RewardScheduleMode.OFF):
+        on_train_result_fns.append(
+            create_reward_switch_on_train_result_cb(reward_schedule_manager),
+        )
+        logger.info(
+            "RewardSwitchCallback: mode=%s, swap every %d iterations, "
+            "active rewards: %s",
+            reward_schedule_manager.mode,
+            reward_schedule_manager.swap_every_n_iterations,
+            reward_schedule_manager.get_active_reward_names(),
+        )
+
+    if infra_combinator is not None and infra_combinator.is_enabled():
+        on_train_result_fns.append(
+            create_infra_schedule_on_train_result_cb(infra_combinator),
+        )
+        logger.info(
+            "InfraScheduleCallback: mode=%s, swap every %d iterations, "
+            "%d configs in pool",
+            infra_combinator.mode,
+            infra_combinator.swap_every_n_iterations,
+            len(infra_combinator.config_paths),
+        )
+
+    callback_kwargs = {
+        "on_train_result": _compose_on_train_result(*on_train_result_fns),
+    }
+
+    # Register all callback classes + optional callable-based callbacks.
+    # RLlib executes subclass callbacks in list order, then callables.
+    config.callbacks(callbacks_class=callback_classes, **callback_kwargs)
+
+
 def common_model_setup(
     config: AlgorithmConfig,
     slurm_resources: SlurmResources,
@@ -47,6 +142,7 @@ def common_model_setup(
     data_combinator: DataCombinator | None = None,
     log_trajectories: bool = False,
     reward_schedule_manager: RewardScheduleManager | None = None,
+    infra_combinator: InfraCombinator | None = None,
 ):
     """
     Apply common RLlib configuration to an algorithm config.
@@ -177,69 +273,22 @@ def common_model_setup(
     )
 
     config.logger_config = {
-        "type": "ray.tune.logger.UnifiedLogger",
+        "type": "ray.tune.logger.UnifiedLogger", # Logging orchestrator
         "loggers": [
-                "ray.tune.json.JsonLoggerCallback",
-                "ray.tune.csv.CSVLoggerCallback",
-                # TODO VP 2026.03.16. : Fire up tensorboard...
-                "ray.tune.tensorboardx.TBXLoggerCallback",
+                "ray.tune.json.JsonLoggerCallback", # writes result.json files with train and eval metrics
+                "ray.tune.csv.CSVLoggerCallback", # writes progress.csv files
+                "ray.tune.tensorboardx.TBXLoggerCallback", # Writes tensorboard event files
         ],
     }
 
-    # Create callback classes for episode metrics and (optionally) trajectory logging.
-    # Each factory returns a configured RLlibCallback subclass.
-    # Link: https://docs.ray.io/en/latest/rllib/rllib-callback.html
-    exec_date = datetime.datetime.now()
-
-    episode_metrics_class = make_episode_metrics_cb_class(
-        metrics_base_dir=f"{metrics_base_dir}/metrics",
-        exec_date=exec_date,
-        dump_metrics_json=False
+    register_callbacks(
+        config,
+        metrics_base_dir=metrics_base_dir,
+        data_combinator=data_combinator,
+        log_trajectories=log_trajectories,
+        reward_schedule_manager=reward_schedule_manager,
+        infra_combinator=infra_combinator,
     )
-
-    # Assemble the callbacks_class list: metrics (always), trajectory (optional)
-    callback_classes = [episode_metrics_class]
-    if log_trajectories:
-        trajectory_class = make_trajectory_logging_cb_class(
-            metrics_base_dir=f"{metrics_base_dir}/trajectories",
-            exec_date=exec_date,
-        )
-        callback_classes.append(trajectory_class)
-        logger.info("Trajectory logging enabled: per-step trajectory JSON will be saved for each episode.")
-
-    # on_train_result callables — both data variant scheduling and reward
-    # switching run at iteration boundaries.  RLlib accepts a single
-    # on_train_result callable, so compose them when both are active.
-    on_train_result_fns = [
-        create_data_schedule_on_train_result_cb(
-            data_combinator, data_combinator.swap_every_n_episodes,
-        ),
-    ]
-    logger.info(
-        "DataScheduleCallback: swap every %d iterations, %d variants",
-        data_combinator.swap_every_n_episodes, len(data_combinator.variants),
-    )
-
-    if (reward_schedule_manager is not None
-            and reward_schedule_manager.mode is not RewardScheduleMode.OFF):
-        on_train_result_fns.append(
-            create_reward_switch_on_train_result_cb(reward_schedule_manager),
-        )
-        logger.info(
-            "RewardSwitchCallback: mode=%s, swap every %d iterations, "
-            "active rewards: %s",
-            reward_schedule_manager.mode,
-            reward_schedule_manager.swap_every_n_iterations,
-            reward_schedule_manager.get_active_reward_names(),
-        )
-
-    callback_kwargs = {
-        "on_train_result": _compose_on_train_result(*on_train_result_fns),
-    }
-
-    # Register all callback classes + optional callable-based callbacks.
-    # RLlib executes subclass callbacks in list order, then callables.
-    config.callbacks(callbacks_class=callback_classes, **callback_kwargs)
 
     # Validate resource allocation against SLURM constraints
     driver_cpus = 1

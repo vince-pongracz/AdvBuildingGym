@@ -95,6 +95,14 @@ class StateSource(EnvSyncInterface, Serializable):
         """
         self.update_state(states, info)
 
+    def get_raw_values(self) -> dict[str, float]:
+        """Return raw (unnormalised) physical values for logging.
+
+        Override in subclasses that track raw values (e.g. raw temperature).
+        Default returns an empty dict.
+        """
+        return {}
+
     @classmethod
     def from_dict(
         cls: Type[T],

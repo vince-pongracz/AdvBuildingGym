@@ -140,7 +140,8 @@ class TempReward(RewardFunction):
                 else:
                     reward += self.wrong_direction_penalty
 
-        reward = float(np.clip(reward, -1.0, 1.0))
+        # TODO VP 2026.04.02. : Still looks like not enough gradient signal for the model...
+        reward = float(min(reward, 1.0))
         return self.weight * reward, self.weight * self.max_reward
 
 

@@ -129,19 +129,13 @@ class EVState(StateSource):
     def setup_spaces(self, state_spaces, action_spaces):
         """Register bounded EV schedule keys in the observation space.
 
-        Unbounded keys (``max_cap_kWh``, ``max_charging_kW``) and the
-        connection flag are written to the shared info dict instead (see
-        ``update_state``).  The bounded [0, 1] keys below are useful for
-        the control policy and safe for the neural network.
+        Unbounded keys (``max_cap_kWh``, ``max_charging_kW``), the
+        connection flag, and static per-session parameters
+        (``charger_efficiency``, ``discharge_efficiency``) are written to
+        the shared info dict instead (see ``update_state``).  The bounded
+        [0, 1] keys below are useful for the control policy and safe for
+        the neural network.
         """
-        if self.KEY_CHARGE_EFF not in state_spaces:
-            state_spaces[self.KEY_CHARGE_EFF] = Box(
-                low=0, high=1, shape=(1,), dtype=np.float32,
-            )
-        if self.KEY_DISCHARGE_EFF not in state_spaces:
-            state_spaces[self.KEY_DISCHARGE_EFF] = Box(
-                low=0, high=1, shape=(1,), dtype=np.float32,
-            )
         if self.KEY_V2G not in state_spaces:
             state_spaces[self.KEY_V2G] = Box(
                 low=0, high=1, shape=(1,), dtype=np.float32,
@@ -169,14 +163,10 @@ class EVState(StateSource):
         # Zero everything when EV is disconnected so the agent sees a clean
         # signal instead of stale spec values from the previous session.
         if self._ev_connected and self._current_spec is not None:
-            states[self.KEY_CHARGE_EFF][0] = np.float32(self._current_spec.charger_efficiency)
-            states[self.KEY_DISCHARGE_EFF][0] = np.float32(self._current_spec.discharge_efficiency)
             states[self.KEY_V2G][0] = np.float32(1.0 if self._current_spec.v2g_enabled else 0.0)
             states[self.KEY_START_SOC][0] = np.float32(self._current_spec.start_soc)
             states[self.KEY_TARGET_SOC][0] = np.float32(self._current_spec.target_soc)
         else:
-            states[self.KEY_CHARGE_EFF][0] = np.float32(0.0)
-            states[self.KEY_DISCHARGE_EFF][0] = np.float32(0.0)
             states[self.KEY_V2G][0] = np.float32(0.0)
             states[self.KEY_START_SOC][0] = np.float32(0.0)
             states[self.KEY_TARGET_SOC][0] = np.float32(0.0)

@@ -37,9 +37,6 @@ scenario_sources:
 
 # Augmented data discovery paths (used when include_augmented is true)
 augmented_paths:
-  # TODO VP 2026.03.13. : A combinator would be needed as well for the infra items config --
-  # only 1 infra element should change at a time.
-  # for N episodes a config is fixed, then 1 aspect changes in it -- trains on that as well, then another aspect changes -- trains again...
   weather_dir: data/weather/dwd/preprocessed
   price_dirs:
     awattar: data/e_price/awattar

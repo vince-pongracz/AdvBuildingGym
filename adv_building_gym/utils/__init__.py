@@ -12,6 +12,7 @@ from .checkpoint_finder import (
     resolve_checkpoint_path,
 )
 from .normalisation import Normalisation, normalise_series
+from .episode_date import resolve_episode_date
 from .rng_service import RngService
 from .space_check import check_space_compatibility
 from .serializable import Serializable, ComponentRegistry
@@ -31,6 +32,7 @@ __all__ = [
     "resolve_checkpoint_path",
     "Normalisation",
     "normalise_series",
+    "resolve_episode_date",
     "RngService",
     "check_space_compatibility",
     "Serializable",
