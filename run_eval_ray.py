@@ -74,9 +74,9 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--data-config", type=str, nargs="?", default=None,
-        const="configs/eval_data_combinator_config.yaml",
+        const="configs/data_scheduler/eval_data_combinator_config.yaml",
         help="Path to data combinator YAML config. "
-            "If given without a path, uses configs/eval_data_combinator_config.yaml.",
+            "If given without a path, uses configs/data_scheduler/eval_data_combinator_config.yaml.",
     )
     parser.add_argument(
         "--data-mode", type=str, default=None,

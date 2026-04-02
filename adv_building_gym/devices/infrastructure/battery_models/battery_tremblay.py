@@ -334,8 +334,11 @@ class BatteryTremblay(Infrastructure):
             self.current_amps = -self.current_amps  # Convention: positive = discharge
 
         # Update terminal voltage with actual current
+        # _calculate_terminal_voltage expects positive = discharge, negative = charge.
+        # After line 334, current_amps is negative for discharge, positive for charge,
+        # so negate to match the expected convention.
         self.actual_voltage = self._calculate_terminal_voltage(
-            self.soc, self.current_amps if not is_charging else -self.current_amps
+            self.soc, -self.current_amps
         )
 
         # Calculate actual power for consumption reporting (kW)

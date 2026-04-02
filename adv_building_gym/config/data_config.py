@@ -14,7 +14,7 @@ from adv_building_gym.data_combinator import DataCombinator
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_YAML_PATH = Path(__file__).resolve().parents[2] / "configs" / "train_data_combinator_config.yaml"
+_DEFAULT_YAML_PATH = Path(__file__).resolve().parents[2] / "configs" / "data_scheduler" / "train_data_combinator_config.yaml"
 
 
 def load_data_combinator_config(
@@ -25,7 +25,7 @@ def load_data_combinator_config(
 
     Args:
         yaml_path: Path to the YAML config. Defaults to
-            ``configs/train_data_combinator_config.yaml`` in the project root.
+            ``configs/data_scheduler/train_data_combinator_config.yaml`` in the project root.
         seed_override: If provided, overrides the seed in the YAML file.
 
     Returns:

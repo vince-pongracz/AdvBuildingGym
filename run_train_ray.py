@@ -54,6 +54,9 @@ logger = logging.getLogger("main")
 # Environment variables to control Ray/RLlib behavior (must be set before ray.init)
 # These propagate to Ray worker processes
 os.environ["PYTHONWARNINGS"] = "ignore::DeprecationWarning,ignore::UserWarning"
+# Suppress TensorFlow C++ logs (oneDNN, CUDA) and disable oneDNN custom ops
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
+os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 # Disable Ray metrics/event services (not needed for training, avoids connection errors in SLURM)
 os.environ["RAY_METRICS_SERVICE_ENABLED"] = "0"
 os.environ["RAY_event_stats"] = "0"
@@ -73,6 +76,8 @@ runtime_env_vars = {
     # Suppress deprecation/user warnings in worker processes
     # Note: comma-separated, not colon-separated
     "PYTHONWARNINGS": os.environ["PYTHONWARNINGS"],
+    "TF_CPP_MIN_LOG_LEVEL": os.environ["TF_CPP_MIN_LOG_LEVEL"],
+    "TF_ENABLE_ONEDNN_OPTS": os.environ["TF_ENABLE_ONEDNN_OPTS"],
     "RAY_METRICS_SERVICE_ENABLED": os.environ["RAY_METRICS_SERVICE_ENABLED"],
     "RAY_event_stats": os.environ["RAY_event_stats"],
     # Disable log deduplication (prevents "repeated Nx across cluster" messages)
@@ -155,7 +160,7 @@ def main():
     )
     parser.add_argument(
         "--data-config", type=str, default=None,
-        help="Path to data combinator YAML config (default: configs/train_data_combinator_config.yaml)"
+        help="Path to data combinator YAML config (default: configs/data_scheduler/train_data_combinator_config.yaml)"
     )
     parser.add_argument(
         "--grad-train",
@@ -183,9 +188,6 @@ def main():
         training_param_config.seed = args.seed
     else:
         args.seed = training_param_config.seed
-
-    # Initialize centralized RNG service for all components
-    RngService.initialize(args.seed)
 
     # Load config from file if specified, otherwise use default
     if args.load_config:
@@ -301,6 +303,11 @@ def main():
         # Suppress Ray's internal logging noise
         logging_level=logging.INFO,
     )
+
+    # Initialize centralized RNG service as a Ray Named Actor on the head node.
+    # Must be called after ray.init() so the actor can be deployed.
+    # All Ray workers discover this actor automatically via RngService.get().
+    RngService.initialize(args.seed)
 
     # Create run name with timestamp (similar to SB3 naming convention)
     exec_date = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -420,7 +427,13 @@ def main():
         ),
     )
 
+    experiment_path = os.path.join(storage_path, run_name)
     logger.info("Starting tuner.fit() for: %s", run_name)
+    logger.info("=" * 70)
+    logger.info(
+        "To visualize results with TensorBoard, run:\n"
+        "  tensorboard --logdir %s", experiment_path
+    )
     logger.info("=" * 70)
     logger.info("Training progress will be displayed below:")
     logger.info("=" * 70)

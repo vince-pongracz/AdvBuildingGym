@@ -176,9 +176,6 @@ def common_model_setup(
         evaluation_config=AlgorithmConfig.overrides(env_config=eval_env_config),
     )
 
-    # TODO VP 2026.02.11. : Check this out in HPC
-    # config.training(gamma=0.995)
-
     config.logger_config = {
         "type": "ray.tune.logger.UnifiedLogger",
         "loggers": [

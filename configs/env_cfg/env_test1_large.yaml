@@ -28,7 +28,7 @@ infras:
   K: 0.0044
   A: 0.468
   B: 1.715
-  R_cell: 0.01
+  R_cell: 0.0049
   n_series: 125
   n_parallel: 10
   charge_efficiency: 0.95

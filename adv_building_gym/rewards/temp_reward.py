@@ -37,16 +37,16 @@ class TempReward(RewardFunction):
     def __init__(
         self,
         weight: float,
-        diff_threshold: float = 0.0,
+        diff_threshold: float = 0.008,
         name: str = "temp_reward",
         wrong_direction_penalty: float = -1.0,
         proportional_wrong_direction: bool = True,
         temp_const_multiplier: float = 10.0,
         quadratic_weight: float = 0.5,
         max_norm_diff: float = 1.0,
-        sustained_steps_threshold: int = 6,
-        sustained_penalty_per_step: float = 0.05,
-        sustained_penalty_cap: float = 0.5,
+        sustained_steps_threshold: int = 3,
+        sustained_penalty_per_step: float = 0.1,
+        sustained_penalty_cap: float = 4.0,
     ) -> None:
         """
         Args:
@@ -92,70 +92,53 @@ class TempReward(RewardFunction):
     def get_reward(self, actions, states, info: dict | None = None) -> tuple[float, float]:
         actual_temp = float(states["temp_in_norm"][0])
         desired_temp = float(states["desired_temp_in_norm"][0])
-
         temp_diff = abs(actual_temp - desired_temp)
 
-        # --- 1 & 2: comfort reward (exponential + optional dead-zone) ---
-        if temp_diff < self.diff_threshold:
+        # Comfort reward: exponential decay with optional dead-zone
+        if temp_diff <= self.diff_threshold:
             exp_reward = 1.0
         else:
             exp_reward = float(np.exp(-temp_diff * self.temp_const_multiplier))
 
-        # --- 3: quadratic penalty blend ---
+        # Quadratic penalty blend
         quad_reward = 1.0 - (min(temp_diff, self.max_norm_diff) / self.max_norm_diff) ** 2
         qw = self.quadratic_weight
         reward = (1.0 - qw) * exp_reward + qw * quad_reward
 
-        # --- 4: sustained-deviation penalty ---
-        # The consecutive-violation counter lives in the shared info dict
-        # so the reward function itself remains stateless.  Episode
-        # boundaries are detected via sim_hour: the first step() of an
-        # episode sets sim_hour to exactly one control-step worth of hours,
-        # so any value at or below that threshold resets the counter.
+        # Sustained-deviation penalty — counter lives in the shared info dict
+        # so the reward function remains stateless.  sim_hour == 0 at episode
+        # start resets the counter.
         if info is not None:
             sim_hour = float(states["sim_hour"][0])
+            consecutive = info.get(_SUSTAINED_KEY, 0) if sim_hour > 0.0 else 0
 
-            if sim_hour > 0.0:
-                consecutive = info.get(_SUSTAINED_KEY, 0)
-            else:
-                consecutive = 0
-
-            if temp_diff >= self.diff_threshold:
-                consecutive += 1
-            else:
-                consecutive = 0
-
+            consecutive = consecutive + 1 if temp_diff >= self.diff_threshold else 0
             info[_SUSTAINED_KEY] = consecutive
 
             if consecutive > self.sustained_steps_threshold:
                 overshoot = consecutive - self.sustained_steps_threshold
-                sustained_penalty = min(
+                reward -= min(
                     overshoot * self.sustained_penalty_per_step,
                     self.sustained_penalty_cap,
                 )
-                reward -= sustained_penalty
 
-        # --- 5: proportional wrong-direction penalty ---
-        # HP mode convention: <0.4 = cooling, >0.6 = heating, [0.4, 0.6] = off
+        # Wrong-direction penalty: heating when too hot, or cooling when too cold
+        # HP mode: <0.4 = cooling, >0.6 = heating, [0.4, 0.6] = off
         if "HP_action" in actions:
-            energy = float(np.atleast_1d(actions["HP_action"])[0])
-            mode = float(np.atleast_1d(actions["HP_action"])[1])
+            hp_action = np.atleast_1d(actions["HP_action"])
+            energy = float(hp_action[0])
+            mode = float(hp_action[1])
             temp_error = actual_temp - desired_temp  # positive = too hot
 
-            wrong = False
-            if energy > 0:
-                if temp_error > 0 and mode > 0.6:
-                    wrong = True
-                elif temp_error < 0 and mode < 0.4:
-                    wrong = True
-
+            wrong = energy > 0 and (
+                (temp_error > 0 and mode > 0.6) or
+                (temp_error < 0 and mode < 0.4)
+            )
             if wrong:
                 if self.proportional_wrong_direction:
-                    # Scale by how much energy and how far off-target
-                    penalty = self.wrong_direction_penalty * abs(energy) * abs(temp_error)
+                    reward += self.wrong_direction_penalty * energy * abs(temp_error)
                 else:
-                    penalty = self.wrong_direction_penalty
-                reward = penalty
+                    reward += self.wrong_direction_penalty
 
         reward = float(np.clip(reward, -1.0, 1.0))
         return self.weight * reward, self.weight * self.max_reward

@@ -598,9 +598,6 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         indoor temperature.
         """
         
-        # TODO VP 2026.03.24. : No entropy/alpha logging visible -- add logging
-        
-        # TODO VP 2026.03.23. : Continue here
         # TODO VP 2026.03.23. : encourage exploration more
         # TODO VP 2026.03.23. : Use more history as state input -- from the 6h , 5h, 4h, 3h, 2h and 1h ago -- and the last 30min: each step from here
         # To this, implement a history collector -- collect specified timesteps from the past, according to the current simulation time: t-6h, t-4h, etc... -- can be generalised, it only needs the spec, the time series and the current simulation time.
