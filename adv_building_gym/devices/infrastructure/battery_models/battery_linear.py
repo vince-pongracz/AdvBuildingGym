@@ -60,7 +60,6 @@ class BatteryLinear(Infrastructure):
 
         self.max_cap_kWh = max_cap_kWh
         self.soc = start_soc_percentage
-        self.start_percentage = start_soc_percentage
         self.target_soc = target_soc
         self.control_step = control_step
         self.history_length = history_length
@@ -74,9 +73,8 @@ class BatteryLinear(Infrastructure):
         return self.max_power_kW
 
     def setup_spaces(self,
-                     state_spaces,
-                     action_spaces
-                     ):
+                    state_spaces,
+                    action_spaces):
         if "battery_action" not in action_spaces.keys():
             action_spaces["battery_action"] = Box(low=-1, high=1, shape=(1,), dtype=np.float32)
 

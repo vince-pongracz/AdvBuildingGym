@@ -87,7 +87,7 @@ def select_model(
         # Collect complete episodes before returning to learner.
         # Without this, SAC defaults rollout_fragment_length to 1, causing
         # training episodes to be reported as length = 1 in callbacks.
-        config.env_runners(rollout_fragment_length=episode_length)
+        config.env_runners(rollout_fragment_length=training_config.sac_rollout_fragment_length)
         config.training(
             # NOTE VP 2026.02.11. : Actor critic methods SAC & PPO - blog
             # Link: https://joel-baptista.github.io/phd-weekly-report/posts/ac/
@@ -95,16 +95,26 @@ def select_model(
             critic_lr=training_config.learning_rate,  # LR of the critic network
             alpha_lr=training_config.learning_rate,  # Influences weight of entropy -- and thus exploration
             replay_buffer_config={
-                "type": "EpisodeReplayBuffer",
+                "type": "PrioritizedEpisodeReplayBuffer",
                 "capacity": episode_length * training_config.sac_days_to_keep_in_replay_buffer,
+                "alpha": 0.6,   # How much prioritisation (0 = uniform, 1 = full priority)
+                "beta": 0.4,    # Importance-sampling correction (0 = none, 1 = full correction)
             },
             # SAC-specific hyperparameters
             twin_q=True,  # Use twin Q-networks to reduce overestimation bias
             initial_alpha=1.0,  # Initial entropy coefficient (auto-tuned via alpha_lr)
-            target_network_update_freq=4,  # Update target networks every step
+            target_network_update_freq=1, # Update target networks every step
+            n_step=6, 
             tau=0.005,  # Soft update coefficient for target networks (at Polyak averaging)
             train_batch_size_per_learner=training_config.sac_replay_batch_size,
-            num_steps_sampled_before_learning_starts=learning_starts, # Number of steps to collect before starting learning (to fill up replay buffer)
+            # training_intensity = replayed_steps / sampled_steps.
+            # Without this, RLlib defaults to [1, 1] round-robin: only
+            # 1 gradient update per ~864 sampled env steps (UTD ≈ 0.001).
+            # Standard SAC uses UTD ≈ 1.0 (1 grad step per env step).
+            # UTD = training_intensity / batch_size.
+            # Link: https://arxiv.org/abs/1802.09477
+            training_intensity=training_config.sac_training_intensity,
+            # num_steps_sampled_before_learning_starts=learning_starts, # Number of steps to collect before starting learning (to fill up replay buffer)
             # Gradient clipping mitigates but does NOT fully prevent NaN in
             # the policy network. If the loss itself is NaN/Inf (e.g. from
             # extreme Q-values caused by large reward spikes like the -2.0
@@ -129,7 +139,7 @@ def select_model(
         model_config=DefaultModelConfig(
             fcnet_activation='relu',
             # NOTE VP 2026.03.10. : What is the NN structure which is needed to learn this task complexity?
-            fcnet_hiddens=[256, 256],
+            fcnet_hiddens=[32, 32],
             # [256, 256, 256]
             # Use LSTM to exploit temporal dependencies
             # use_lstm=True,

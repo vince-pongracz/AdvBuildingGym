@@ -6,6 +6,13 @@ from adv_building_gym.utils.serializable import ComponentRegistry
 
 logger = logging.getLogger(__name__)
 
+# Info-dict keys used to persist recovery state across steps without
+# storing mutable state on the reward object itself.  Using the info
+# dict (like TempReward) ensures counters reset naturally at episode
+# boundaries when the environment clears _component_info.
+_STEP_KEY = "operator_reward_step"
+_LAST_VIOLATION_KEY = "operator_reward_last_violation_step"
+
 
 class OperatorEnergyControlReward(RewardFunction):
     """Reward function for respecting grid operator energy consumption limits.
@@ -16,7 +23,7 @@ class OperatorEnergyControlReward(RewardFunction):
     - 90%-100% of limit: exponential decay from 1.0 towards 0
       using exp(-5 * (ratio - 0.9) / 0.1), where the scale factor 5
       gives exp(-5) ~ 0.007 at the limit boundary
-    - Above limit: harsh_penalty (default -5.0), followed by an
+    - Above limit: harsh_penalty (default -4.0), followed by an
       exponential recovery period of ``recovery_steps`` steps where
       the reward follows harsh_penalty * exp(-rate * k), decaying
       from harsh_penalty towards 0. After recovery_steps the normal
@@ -26,6 +33,10 @@ class OperatorEnergyControlReward(RewardFunction):
     Reads ``net_power_kW`` from the ``info`` dict (published by the environment
     from infrastructure power computations) instead of querying infrastructures
     directly.
+
+    Recovery state (step counter, last violation step) is stored in the
+    shared ``info`` dict so it resets automatically at episode boundaries
+    when the environment clears ``_component_info``.
     """
 
     # Scale factor for the exponential decay in the transition zone.
@@ -51,7 +62,7 @@ class OperatorEnergyControlReward(RewardFunction):
                 (default 0.9 = 90%). Must be in (0, 1).
             recovery_steps: Number of steps after a harsh penalty during which
                 the reward is suppressed and exponentially recovers towards 0
-                before returning to normal (default 12 = 1 hour at 5-min steps).
+                before returning to normal (default 3).
         """
         super().__init__(weight, name)
         self.max_power_kW = max_power_kW
@@ -64,10 +75,6 @@ class OperatorEnergyControlReward(RewardFunction):
         # is ~1% of harsh_penalty: exp(-rate * N) ~ 0.01 => rate = ln(100)/N
         # Link: standard exponential decay, solving for 99% recovery
         self._recovery_rate = np.log(100.0) / max(recovery_steps, 1)
-        # Monotonic step counter — no reset needed across episodes.
-        # Recovery is driven by elapsed steps since last violation.
-        self._step: int = 0
-        self._last_violation_step: int = -recovery_steps  # no active recovery at init
 
     def get_reward(self, actions, states, info: dict | None = None) -> tuple[float, float]:
         """Calculate reward based on grid power consumption vs operator limit.
@@ -76,16 +83,24 @@ class OperatorEnergyControlReward(RewardFunction):
             actions: Dictionary of actions taken by infrastructures.
             states: Dictionary containing "operator_energy_max" (normalized limit [0, 1]).
             info: Shared inter-component dict containing ``net_power_kW``.
+                Also used to persist recovery counters across steps within
+                an episode; counters reset when the environment clears the
+                info dict at episode boundaries.
 
         Returns:
             Tuple of (weighted reward, weighted max reward for this step).
         """
-        self._step += 1
         max_step = self.weight * self.max_reward
 
         if info is None:
             logger.warning("OperatorEnergyControlReward: info dict is None, returning 0")
             return 0.0, max_step
+
+        # Read and advance per-episode step counter from info dict.
+        # Resets to 0 at episode start because _component_info is cleared.
+        step = info.get(_STEP_KEY, 0) + 1
+        info[_STEP_KEY] = step
+        last_violation_step = info.get(_LAST_VIOLATION_KEY, -self.recovery_steps)
 
         # Read pre-computed net power from info dict (published by environment)
         grid_power_kW = info.get("net_power_kW", 0.0)
@@ -99,7 +114,7 @@ class OperatorEnergyControlReward(RewardFunction):
         if operator_limit_kW <= 0:
             # If limit is 0, any consumption is a violation
             if grid_power_kW > 0:
-                self._last_violation_step = self._step
+                info[_LAST_VIOLATION_KEY] = step
                 return float(self.weight * self.harsh_penalty), max_step
             return float(self.weight * 1.0), max_step
 
@@ -116,13 +131,13 @@ class OperatorEnergyControlReward(RewardFunction):
             reward = float(np.exp(-self._DECAY_SCALE * t))
         else:
             # Above operator limit: harsh penalty and mark violation
-            self._last_violation_step = self._step
+            info[_LAST_VIOLATION_KEY] = step
             return float(self.weight * self.harsh_penalty), max_step
 
         # During recovery: override reward with an exponential curve from
         # harsh_penalty towards 0.  The agent earns a negative (but shrinking)
         # reward for recovery_steps steps, then normal rewarding resumes.
-        steps_since_violation = self._step - self._last_violation_step
+        steps_since_violation = step - last_violation_step
         if steps_since_violation <= self.recovery_steps:
             reward = float(self.harsh_penalty * np.exp(
                 -self._recovery_rate * steps_since_violation))

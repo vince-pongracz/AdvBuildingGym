@@ -89,16 +89,8 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
             Static description of building parameters used by infras/datasources/rewards.
     - control_step: int (seconds, default 300)
             Duration of a single control step / time advancement between calls to step.
-    - schedule_type: optional
-            Optional type identifier controlling e.g. outdoor temperature schedules.
     - render_mode: optional
             Reserved for Gym compatibility.
-    - training: bool (default True)
-            Training mode flag (user-defined semantics).
-    - train_ratio: float (default 0.8)
-            Ratio used by some Datasources to split training/validation sequences (if applicable).
-    - prediction_horizon: int
-            Number of discrete steps to keep in TemporalFeatureBuffer for forecasting signals.
     - **kwargs:
             Additional environment-specific parameters forwarded or ignored.
     Observation and action spaces
@@ -152,8 +144,6 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         follow the expected interfaces.
     - RewardFunction objects encapsulate objective logic and can be combined to
         form multi-objective rewards.
-    - TemporalFeatureBuffer is used internally to store prediction windows for
-        forecasted signals (prediction_horizon). Datasources may interact with it.
     Return types and compatibility
     - Conforms to the Gymnasium step/reset semantics returning Python objects:
         - reset -> (observation, info)
@@ -175,12 +165,7 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         rewards: list[RewardFunction],
         building_props: BuildingProps,
         control_step: int | None = None,
-        schedule_type=None,
         render_mode=None,
-        training=True,
-        train_ratio=0.8,
-        # Number of steps to look ahead for forecasted values
-        prediction_horizon=8 * 12,  # 8 hours at 5-minute steps
         data_combinator: DataCombinator | None = None,
         action_history_length: int | None = None,
         **kwargs,
@@ -196,13 +181,7 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
                 the scalar reward signal.
             building_props: Physical and thermal properties of the building.
             control_step: Time between control actions in seconds (default: 300 s).
-            schedule_type: Optional schedule identifier for occupancy / usage patterns.
             render_mode: Gymnasium render mode (currently unused).
-            training: If True, sample from the training data split; otherwise
-                use the held-out evaluation split.
-            train_ratio: Fraction of available data used for training (default: 0.8).
-            prediction_horizon: Number of future time-steps included in
-                forecast observations (default: 360, i.e. 30 h at 300 s steps).
         """
 
         # Setup warning filters for Ray workers (must be called early)
@@ -287,10 +266,7 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         self.building_props = building_props
         # NOTE VP 2026.02.28. : Simulation time is in seconds
         self.simulation_time = env_config.CONTROL_STEP * env_config.EPISODE_LENGTH
-        self.prediction_horizon = prediction_horizon
         self.control_step = control_step if control_step is not None else env_config.CONTROL_STEP
-        self.training = training
-        self.train_ratio = train_ratio
         self.max_iteration = env_config.EPISODE_LENGTH
 
         # When True, step()/reset() include a deep copy of the full named state
@@ -620,8 +596,6 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
 # To this, implement a history collector -- collect specified timesteps from the past, according to the current simulation time: t-6h, t-4h, etc... -- can be generalised, it only needs the spec, the time series and the current simulation time.
 # Maybe not only for states, but for trajectory as well -- so that complete (s, a, r, s') tuples caputured from the past...
 # TODO VP 2026.03.23. : Eval script -- Plot all (reward, cum_E_usage) eval curves together -- with avg and variance
-# TODO VP 2026.03.23. : Remove default values from methods and functions where it is not needed
-# TODO VP 2026.03.23. : Check whether currently passed params really needed for the functions/methods
 # TODO VP 2026.03.23. : Add standalone input and output heads for the policy NN, fix the core policy NN -- investigate this option
 
     def _get_raw_state_values(self) -> dict[str, float]:

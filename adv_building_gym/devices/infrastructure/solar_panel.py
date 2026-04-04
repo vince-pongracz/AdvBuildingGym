@@ -30,9 +30,6 @@ class SolarPanel(Infrastructure):
     - Synthetic time-based profile (default)
     """
 
-    # control_step comes from config context
-    _context_params: ClassVar[Set[str]] = {'control_step'}
-
     # Internal state variables - don't serialize
     _exclude_params: ClassVar[Set[str]] = {
         'iteration', 'irradiance_norm', 'current_production_kW'
@@ -42,7 +39,6 @@ class SolarPanel(Infrastructure):
                 name: str,
                 max_power_kW: float,
                 peak_power_kW: float,
-                control_step: int
                 ) -> None:
         """Initialize Solar Panel infrastructure.
 
@@ -50,14 +46,12 @@ class SolarPanel(Infrastructure):
             name: Component identifier
             max_power_kW: Maximum power production in kW (typically = peak_power_kW)
             peak_power_kW: Peak power output under standard test conditions (STC)
-            control_step: Control timestep in seconds (stored for future use)
         """
         super().__init__(name, max_power_kW)
 
         # NOTE VP 2026.01.24. : Inverter efficiency is not considered,
         # peak power means peak output power, produced by the solar panel
         self.peak_power_kW = peak_power_kW # -1.0 at actions means the peak power
-        self.control_step = control_step
 
         # State variables
         self.irradiance_norm = 0.0  # Normalized irradiance [0, 1]

@@ -118,19 +118,13 @@ class EnvConfig:
                 "solar",
                 max_power_kW=5.0,
                 peak_power_kW=5.0,
-                control_step=self.CONTROL_STEP
             ),
             HouseholdEnergyConsumers(
                 "hh_consumers",
                 max_power_kW=8.0,
                 peak_consumption_kW=8.0,
-                control_step=self.CONTROL_STEP
             ),
         ]
-
-    def create_rewards(self) -> list:
-        """Delegate to reward_config.create_rewards()."""
-        return self.reward_config.create_rewards()
 
     def __post_init__(self):
         """Lightweight post-init — does NOT eagerly call factory methods.
@@ -147,8 +141,8 @@ class EnvConfig:
         Call this once in the main process after creating / loading a Config,
         before accessing self.infras / self.statesources / self.reward_config.rewards.
         Not needed in Ray worker subprocesses — they call the factory methods
-        (create_infras, create_statesources, reward_config.create_rewards) directly via
-        adv_building_env_creator.
+        (create_infras, create_statesources) directly via adv_building_env_creator.
+        Rewards are populated by ``RewardScheduleManager`` before this is called.
 
         WARNING: Do not pass these singleton instances to parallel environments
         — use the factory methods instead.
@@ -158,8 +152,6 @@ class EnvConfig:
 
         if self.infras is None:
             self.infras = self.create_infras()
-
-        self.reward_config.init_singletons()
 
 # default/config instance
 config = EnvConfig()

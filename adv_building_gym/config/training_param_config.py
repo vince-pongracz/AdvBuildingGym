@@ -10,7 +10,7 @@ from pathlib import Path
 
 import yaml
 
-
+# TODO VP 2026.04.03. : Is it possible to define dataclass without default values?
 @dataclass
 class TrainingParamConfig:
     """Training hyperparameters, split by algorithm where semantics differ.
@@ -34,6 +34,13 @@ class TrainingParamConfig:
             (in timesteps).
         sac_replay_batch_size: Number of transitions sampled from the
             replay buffer per SAC gradient step.
+        sac_training_intensity: Ratio of replayed steps to sampled steps.
+            Controls how many gradient updates SAC performs per sampling
+            round.  Standard UTD ≈ training_intensity / batch_size.
+            With batch_size=256 and rollout_fragment_length=288 (3 workers),
+            training_intensity=128 gives UTD≈0.5 (432 gradient steps
+            per iteration instead of 1).
+            Link: https://arxiv.org/abs/1802.09477
     """
 
     learning_rate: float = 3e-4
@@ -47,6 +54,8 @@ class TrainingParamConfig:
     
     sac_replay_batch_size: int = 256
     sac_days_to_keep_in_replay_buffer: int = 100
+    sac_training_intensity: float = 1.0
+    sac_rollout_fragment_length: int = 288
 
     @staticmethod
     def from_yaml(path: str | Path) -> "TrainingParamConfig":

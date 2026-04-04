@@ -23,8 +23,7 @@ class OperatorEnergyControl(StateSource):
     def __init__(self,
                 name: str,
                 ds_path: str | None = None,
-                max_power_kW: float = 10.0,
-                derive_max_power_from_data: bool = True) -> None:
+                max_power_kW: float = 10.0) -> None:
         """
         Initialize OperatorEnergyControl datasource.
 
@@ -32,7 +31,6 @@ class OperatorEnergyControl(StateSource):
             name: Datasource identifier
             max_power_kW: Maximum power limit in kW for normalization (default: 10.0 kW residential)
             ds_path: Optional CSV file path with time series data
-            derive_max_power_from_data: Whether to derive max power from CSV data if provided
         """
         super().__init__(name, ds_path)
         self.max_power_kW = max_power_kW
@@ -50,11 +48,9 @@ class OperatorEnergyControl(StateSource):
                 self.ts = None
                 return
 
-            # TODO VP 2026.01.13. : Still use provided max_power_kW or derive from data?
-            if derive_max_power_from_data:
-                self.max_power_kW = float(self.ts[column_name].max())
+            self.max_power_kW = float(self.ts[column_name].max())
             # Normalize to [0, 1] range based on max_power_kW
-            # Operator limit should be non-negative (0 to max_power_kW)            
+            # Operator limit should be non-negative (0 to max_power_kW)
             self.ts["operator_energy_max_norm"] = self.ts[column_name] / self.max_power_kW
             # Clip to [0, 1] in case CSV has values exceeding max_power_kW
             self.ts["operator_energy_max_norm"] = self.ts["operator_energy_max_norm"].clip(0.0, 1.0)

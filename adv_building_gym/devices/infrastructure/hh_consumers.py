@@ -27,9 +27,6 @@ class HouseholdEnergyConsumers(Infrastructure):
     hh_consumption_action value: 0 = no consumption, 1 = peak consumption.
     """
 
-    # control_step comes from config context
-    _context_params: ClassVar[Set[str]] = {'control_step'}
-
     # Internal state variables — don't serialize
     _exclude_params: ClassVar[Set[str]] = {
         'iteration', 'consumption_norm', 'current_consumption_kW'
@@ -38,7 +35,6 @@ class HouseholdEnergyConsumers(Infrastructure):
     def __init__(self,
                 name: str,
                 max_power_kW: float,
-                control_step: int,
                 peak_consumption_kW: float = 8.0
                 ) -> None:
         """Initialize household energy consumers infrastructure.
@@ -47,12 +43,10 @@ class HouseholdEnergyConsumers(Infrastructure):
             name: Component identifier
             max_power_kW: Maximum power consumption in kW (typically = peak_consumption_kW)
             peak_consumption_kW: Peak household consumption in kW
-            control_step: Control timestep in seconds
         """
         super().__init__(name, max_power_kW)
 
         self.peak_consumption_kW = peak_consumption_kW
-        self.control_step = control_step
 
         # State variables
         self.consumption_norm = 0.0  # Normalized consumption [0, 1]

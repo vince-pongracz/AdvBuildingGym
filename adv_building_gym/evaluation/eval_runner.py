@@ -113,7 +113,6 @@ def evaluate_model(
         statesources=active_config.statesources,
         rewards=active_config.reward_config.rewards,
         building_props=active_config.building_props,
-        training=False,
         data_combinator=data_combinator,
     )
 

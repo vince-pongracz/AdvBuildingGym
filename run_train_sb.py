@@ -260,7 +260,7 @@ def make_env(rank: int, seed: int):
         # Each env gets its own infras/statesources/rewards with independent state.
         infras = env_config.create_infras()
         statesources = env_config.create_statesources()
-        rewards = env_config.create_rewards()
+        rewards = list(env_config.reward_config.rewards)
 
         env = AdvBuildingGym(
             infras=infras,
