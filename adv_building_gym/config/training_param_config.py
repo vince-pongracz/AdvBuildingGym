@@ -5,12 +5,14 @@ from a YAML file.
 Fields are split by algorithm where their semantics differ.
 """
 
-from dataclasses import dataclass
+import logging
+from dataclasses import dataclass, fields
 from pathlib import Path
 
 import yaml
 
-# TODO VP 2026.04.03. : Is it possible to define dataclass without default values?
+logger = logging.getLogger(__name__)
+
 @dataclass
 class TrainingParamConfig:
     """Training hyperparameters, split by algorithm where semantics differ.
@@ -44,7 +46,7 @@ class TrainingParamConfig:
     """
 
     learning_rate: float = 3e-4
-    episode_lookback_horizon_steps: int = 12
+    episode_lookback_horizon_steps: int = 120
     seed: int = 42
     max_episodes_to_run:int = 10000
     
@@ -84,4 +86,11 @@ class TrainingParamConfig:
         # Allow top-level keys as well (backwards compatibility)
         flat.update(data)
 
-        return TrainingParamConfig(**flat)
+        config = TrainingParamConfig(**flat)
+        config.log_values()
+        return config
+
+    def log_values(self) -> None:
+        """Log all config field values at INFO level."""
+        lines = [f"  {f.name} = {getattr(self, f.name)}" for f in fields(self)]
+        logger.info("TrainingParamConfig:\n%s", "\n".join(lines))

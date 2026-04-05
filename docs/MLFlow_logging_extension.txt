@@ -1,0 +1,213 @@
+ ▐▛███▜▌   Claude Code v2.1.92
+▝▜█████▛▘  Sonnet 4.6 · Claude Pro
+  ▘▘ ▝▝    /hkfs/home/haicore/iai/dj0397/AdvBuildingGym
+
+❯ source /home/iai/dj0397/adv_env/bin/activate                                  
+
+● Bash(source /home/iai/dj0397/adv_env/bin/activate && echo "Virtual environment
+       activated" && which python)
+  ⎿  Virtual environment activated
+     /hkfs/home/haicore/iai/dj0397/adv_env/bin/python
+
+● Virtual environment activated. Python is at
+  /hkfs/home/haicore/iai/dj0397/adv_env/bin/python.
+
+❯ How to setup tensorboard so, that the side menu of it includes subdirectories 
+ regarding of the run date? Now all trials are listed together. I want such a   
+directory structure at the left panel on tensorboard that groups the trials by  
+date together, under that there are the eval runs for that specific trial date  
+
+● Let me first understand how runs are currently organized.
+
+● Bash(source /home/iai/dj0397/adv_env/bin/activate && ls
+      /hkfs/home/haicore/iai/dj0397/AdvBuildingGym/ray_results/ 2>/dev/null ||
+      echo "No ray_results dir")
+  ⎿  No ray_results dir
+
+  Searched for 2 patterns, read 2 files, listed 2 directories (ctrl+o to expand)
+
+● Now I understand the current layout. Here's the situation and the solution:
+
+  Current structure
+
+  models/env_test1_small/ray/sac/
+  ├── sac_seed42_20260403_003656/   ← trial run
+  ├── sac_seed42_20260403_004119/   ← trial run
+  ├── sac_seed42_20260403_010107/   ← trial run
+  ├── sac_seed42_20260404_153823/   ← trial run
+  └── ...                           ← all flat, no grouping
+
+  TensorBoard groups runs by directory. Since all trials sit in the same flat
+  directory, they all appear as one long list.
+
+  Solution: add a date subdirectory to storage_path
+
+  The fix is simple — insert the date (YYYYMMDD) into storage_path so that each
+  day's runs are in their own folder. Then when you point TensorBoard at the
+  algorithm-level directory, it shows date folders as collapsible groups.
+
+  Target structure:
+  models/env_test1_small/ray/sac/
+  ├── 20260403/
+  │   ├── sac_seed42_20260403_003656/
+  │   └── sac_seed42_20260403_010107/
+  ├── 20260404/
+  │   ├── sac_seed42_20260404_153823/
+  │   └── sac_seed42_20260404_160943/
+  └── ...
+
+  Then you run TensorBoard at the algorithm level:
+  tensorboard --logdir models/env_test1_small/ray/sac/
+
+  And the left panel shows 20260403/sac_seed42_..., 20260404/sac_seed42_... —
+  grouped by date.
+
+  Read 1 file (ctrl+o to expand)
+
+● Update(run_train_ray.py)
+  ⎿  User rejected update to run_train_ray.py
+
+❯ I meant the eval runs at the ep_metrics, eval_trajectories -- e.g.            
+20260404_172532/iter_000004, 20260404_172532/iter_000008, etc.                  
+
+● Got it — you want the ep_metrics/eval_trajectories/ directory grouped by date
+  so TensorBoard shows a hierarchy like:
+
+  ep_metrics/eval_trajectories/
+  ├── 20260404/
+  │   ├── 20260404_172532/
+  │   │   ├── iter_000004/
+  │   │   └── iter_000008/
+  │   └── 20260404_175807/
+  │       └── ...
+  ├── 20260403/
+  │   └── ...
+
+  Let me look at where that path is constructed.
+
+  Read 1 file, listed 1 directory (ctrl+o to expand)
+
+● Now let me see where exec_date is passed from.
+
+  Searched for 1 pattern, read 1 file (ctrl+o to expand)
+
+● Now I see the full picture. The tb_log_dir in the callback is built as:
+
+  ep_metrics/eval_trajectories/20260404_172532/
+
+  To get date grouping, we just need to insert the date as a parent directory:
+
+  ep_metrics/eval_trajectories/20260404/20260404_172532/
+
+  The only change needed is in the callback factory, line 59-62:
+
+● Update(adv_building_gym/callbacks/eval_state_action_callback.py)
+  ⎿  User rejected update tadv_building_gym/callbacks/eval_state_action_callback
+                           .py
+
+❯ I want to group them by 20260404_172532 -- so by full date, under there are   
+iter_**                                                                         
+
+● That's already how it works. The current structure is:
+
+  ep_metrics/eval_trajectories/
+  ├── 20260404_172532/
+  │   ├── iter_000004/
+  │   └── iter_000008/
+  ├── 20260404_175807/
+  │   ├── iter_000004/
+  │   └── iter_000008/
+
+  And TensorBoard's left panel should already show 20260404_172532/iter_000004,
+  20260404_172532/iter_000008, etc. when you run:
+
+  tensorboard --logdir ep_metrics/eval_trajectories/
+
+  What exactly does the left panel look like right now? Are the runs showing
+  flat (all iter_* mixed together without their parent), or is the issue
+  something else — like you want a regex filter or collapsible grouping?
+
+❯ The left panel has entries from the 20260404_172532 and 20260404_175807 --    
+with iter_**-s on the same level                                                
+
+● That's just how TensorBoard works — the runs sidebar is always a flat list of
+  relative paths from --logdir. There's no collapsible tree view built in.
+
+  Your options to filter/group:
+
+  1. Regex filter (easiest) — In the TensorBoard sidebar, there's a text box
+  above the run list. Type 20260404_172532 and it filters to only that run's
+  iterations.
+  2. Point --logdir at a specific run — Instead of the parent:
+  tensorboard --logdir ep_metrics/eval_trajectories/20260404_172532
+  2. Then only that run's iter_* entries appear.
+  3. --logdir_spec — Give each run a named group:
+  tensorboard --logdir_spec run1:ep_metrics/eval_trajectories/20260404_172532,ru
+  n2:ep_metrics/eval_trajectories/20260404_175807
+
+  Option 1 (regex filter) is probably what you want — no code changes, just type
+   the date prefix in the filter box and it scopes the sidebar to that run.
+
+✻ Baked for 31s
+
+❯ I think collapsible grouping is the target                                    
+
+● TensorBoard doesn't have native collapsible run grouping. The sidebar is
+  always a flat list.
+
+  The closest alternatives that give a tree-like experience:
+
+  1. MLflow — has a native collapsible experiment/run hierarchy, integrates with
+   TensorBoard event files. You can point it at existing tfevents dirs.
+  2. Weights & Biases (wandb) — groups runs by configurable fields, collapsible
+  in the UI.
+  3. TensorBoard.dev — no collapsible grouping either.
+  4. Custom TensorBoard plugin — possible but significant effort for a sidebar
+  UI change.
+
+  Would you like to integrate one of these (MLflow is the lightest lift since it
+   reads tfevents natively), or is the regex filter in TensorBoard good enough
+  for now?
+
+❯ How would you do the regex filter and how the MLFlow solution:                
+
+● Option 1: TensorBoard Regex Filter
+
+  No code changes needed. In TensorBoard's left sidebar, there's a text input
+  field at the top of the runs list. It accepts regex:
+
+  - 20260404_172532 — show only that run's iterations
+  - 20260404 — show all runs from that day
+  - iter_000004 — show iter 4 across all runs
+  - 20260404_172532/iter_00000[48] — show specific iterations from one run
+
+  That's it — just type and the list filters live.
+
+  ---
+  Option 2: MLflow with Collapsible Grouping
+
+  MLflow can read your existing tfevents files and display them in a collapsible
+   experiment/run/nested-run hierarchy.
+
+  The structure would look like:
+
+  MLflow UI sidebar:
+  ▼ eval_trajectories          (Experiment)
+    ▼ 20260404_172532          (Parent Run)
+        iter_000004            (Child Run)
+        iter_000008            (Child Run)
+    ▼ 20260404_175807          (Parent Run)
+        iter_000004            (Child Run)
+        iter_000008            (Child Run)
+
+  This requires:
+
+  1. Install: pip install mlflow
+  2. A small import script that walks your existing eval_trajectories/
+  directory, creates an MLflow experiment, and logs each exec_date as a parent
+  run with its iter_* entries as nested child runs — reading the scalar data
+  from the tfevents files.
+  3. Modify the callback to log to MLflow directly instead of (or alongside)
+  TensorBoard, so future runs get the hierarchy automatically.
+
+  Want me to implement the MLflow approach?

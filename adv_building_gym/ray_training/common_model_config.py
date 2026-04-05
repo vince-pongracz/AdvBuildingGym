@@ -16,6 +16,7 @@ from adv_building_gym.callbacks import (
     create_infra_schedule_on_train_result_cb,
     create_reward_switch_on_train_result_cb,
     make_episode_metrics_cb_class,
+    make_eval_state_action_cb_class,
     make_trajectory_logging_cb_class,
 )
 from adv_building_gym.config.reward_schedule_manager import RewardScheduleManager, RewardScheduleMode
@@ -77,7 +78,12 @@ def register_callbacks(
         dump_metrics_json=False
     )
 
-    callback_classes = [episode_metrics_class]
+    eval_state_action_class = make_eval_state_action_cb_class(
+        metrics_base_dir=metrics_base_dir,
+        exec_date=exec_date,
+    )
+
+    callback_classes = [episode_metrics_class, eval_state_action_class]
     if log_trajectories:
         trajectory_class = make_trajectory_logging_cb_class(
             metrics_base_dir=f"{metrics_base_dir}/trajectories",
@@ -212,20 +218,19 @@ def common_model_setup(
     )
     config.environment(
         env="AdvBuilding",
-        clip_actions=clip_actions,
+        clip_actions=clip_actions,  # RLlib default: False
     )
     config.debugging(
         # WARN: Reduces verbosity (suppress connector pipeline INFO messages)
-        log_level="INFO",
-        log_sys_usage=True,
-        seed=training_config.seed
+        log_level="INFO",  # RLlib default: WARN
+        seed=training_config.seed  # RLlib default: None
     )
     config.reporting(
-        keep_per_episode_custom_metrics=True,
-        metrics_num_episodes_for_smoothing=25,
+        keep_per_episode_custom_metrics=True,  # RLlib default: False
+        metrics_num_episodes_for_smoothing=25,  # RLlib default: 100
     )
     config.framework(
-        framework="torch",
+        framework="torch",  # RLlib default
         torch_skip_nan_gradients=True,
         # TODO VP 2026.03.18. : Torch dynamo backend -- what is it?
         # It runs on torch, not tensorflow
@@ -243,10 +248,8 @@ def common_model_setup(
     # Sampling actions (querying the env, using the policy, sample trajectories) -- no GPU needed
     config.env_runners(
         num_env_runners=num_env_runners,
-        num_envs_per_env_runner=1, # NOTE VP 2026.02.11. : Maybe worth running multiple envs on a single ray envrunner node...
         num_cpus_per_env_runner=num_cpus_per_env_runner,
-        num_gpus_per_env_runner=0,
-        episode_lookback_horizon=training_config.episode_lookback_horizon_steps,
+        episode_lookback_horizon=training_config.episode_lookback_horizon_steps,  # RLlib default: 1
         # Flatten dict observation space into a single vector for the RL module.
         # Action space flattening + rescaling is handled by env wrappers
         # (FlattenAction + RescaleAction) applied in env_creator.
@@ -255,20 +258,21 @@ def common_model_setup(
     # Evaluation runs the current policy without exploration noise to provide
     # an unbiased performance signal for model selection (analogous to a
     # validation set).  It does NOT influence gradient updates.
-    # Evaluation EnvRunners get log_full_info=True so step() includes a deep
-    # copy of named state in info["state"] — needed by trajectory logging.
+    # Evaluation EnvRunners always get log_full_info=True so step() includes
+    # a deep copy of named state in info["state"] — needed by the eval
+    # trajectory callback (raw + normalised + actions) and trajectory logging.
     # Training EnvRunners are unaffected (no extra memory overhead).
-    eval_env_config = {"log_full_info": True} if log_trajectories else {}
+    eval_env_config = {"log_full_info": True}
 
     # evaluation_interval > 1 means the `evaluation/env_runners/` keys are
     # absent from results on non-eval iterations.  Tune's strict metric check
     # would crash, so TUNE_DISABLE_STRICT_METRIC_CHECKING must be set in the
     # driver process (run_train_ray.py).
     config.evaluation(
-        evaluation_interval=5,
-        evaluation_duration_unit="episodes",
-        evaluation_duration=2,
-        evaluation_parallel_to_training=False,
+        evaluation_interval=4,  # RLlib default: None
+        evaluation_duration_unit="episodes",  # RLlib default
+        evaluation_duration=2,  # RLlib default: 10
+        evaluation_parallel_to_training=False,  # RLlib default
         evaluation_config=AlgorithmConfig.overrides(env_config=eval_env_config),
     )
 
