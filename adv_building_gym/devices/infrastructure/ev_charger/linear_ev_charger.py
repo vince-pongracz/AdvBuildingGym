@@ -29,7 +29,7 @@ class LinearEVCharger(Infrastructure):
     _context_params: ClassVar[Set[str]] = {'control_step'}
 
     # Internal state variables - don't serialize
-    _exclude_params: ClassVar[Set[str]] = {'iteration', 'soc', 'ev_connected', 'charge_to_target_in_hrs', 'max_cap_kWh'}
+    _exclude_params: ClassVar[Set[str]] = {'iteration', 'soc', 'ev_connected', 'charge_to_target_in_hrs', 'max_cap_kWh', 'actual_power_kW'}
 
     def __init__(self,
                  name: str,
@@ -81,6 +81,7 @@ class LinearEVCharger(Infrastructure):
         self.target_soc = target_soc
         self.ev_connected = False  # Whether EV is connected to charger
         self.charge_to_target_in_hrs = 0.0  # Time remaining to reach target SoC
+        self.actual_power_kW = 0.0  # Track actual electric consumption for reporting
 
         if charger_efficiency <= 0 or charger_efficiency > 1:
             raise ValueError("charger_efficiency must be in (0, 1].")
@@ -198,6 +199,7 @@ class LinearEVCharger(Infrastructure):
         if not self.ev_connected:
             # EV not connected --> no action
             actions["lin_ev_charger_action"][0] = 0.0
+            self.actual_power_kW = 0.0
             return
 
         action = float(np.atleast_1d(actions["lin_ev_charger_action"])[0])
@@ -255,8 +257,9 @@ class LinearEVCharger(Infrastructure):
         else:
             self.soc = new_soc
 
-        # Write adjusted action back
+        # Write adjusted action back and store actual power for consumption reporting
         actions["lin_ev_charger_action"][0] = np.float32(action)
+        self.actual_power_kW = action * self.max_charging_kW
 
     def update_state(self, states: Dict, info=None) -> None:
         """Update observable state."""
@@ -289,25 +292,16 @@ class LinearEVCharger(Infrastructure):
             info["ev_max_charge_time_hrs"] = self.max_charge_time_hrs
 
     def get_electric_consumption(self, actions: Dict) -> float:
-        """Get current electric energy consumption from EV charger.
+        """Get current electric energy consumption from EV charger in kW.
 
-        Sign convention: positive = consumption from grid, negative = production to grid.
+        Uses the actual power computed during exec_action (accounts for
+        SoC clipping and V2G restrictions).
 
         Returns:
             Positive value when charging EV (consuming from grid).
             Negative value when V2G discharging (providing to grid).
         """
-        if "lin_ev_charger_action" not in actions or not self.ev_connected:
-            return 0.0
-
-        action = float(np.atleast_1d(actions["lin_ev_charger_action"])[0])
-
-        # V2G discharge only allowed when SOC >= target - playroom (consistent with exec_action)
-        if not self.v2g_enabled or self.soc < self.target_soc - self.v2g_playroom:
-            action = max(0.0, action)
-
-        # Power consumption in kW
-        return action * self.max_charging_kW
+        return self.actual_power_kW
 
 
 # Register EvCharger with the component registry

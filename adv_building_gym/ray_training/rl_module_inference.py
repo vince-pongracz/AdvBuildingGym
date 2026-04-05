@@ -34,26 +34,6 @@ def load_rl_module(checkpoint_path: str) -> RLModule:
     return RLModule.from_checkpoint(full_path)
 
 
-def flatten_observation(obs: dict | np.ndarray) -> np.ndarray:
-    """Flatten a dictionary observation into a single float32 array.
-
-    Replicates the ``FlattenObservations`` connector used during training:
-    concatenate all observation arrays in key order into one flat vector.
-    Link: https://docs.ray.io/en/latest/rllib/package_ref/connectors.html#flattenobservations
-
-    Args:
-        obs: Dictionary observation (keys → arrays) or already-flat array.
-
-    Returns:
-        1-D float32 numpy array.
-    """
-    if isinstance(obs, dict):
-        return np.concatenate([
-            np.asarray(v, dtype=np.float32).flatten() for v in obs.values()
-        ])
-    return np.asarray(obs, dtype=np.float32).flatten()
-
-
 def infer_action(rl_module: RLModule, flat_obs: np.ndarray) -> np.ndarray:
     """Run deterministic forward inference on a single observation.
 

@@ -12,12 +12,13 @@ import time
 
 import numpy as np
 import ray
+from ray.rllib.connectors.env_to_module import FlattenObservations
+from ray.rllib.env.single_agent_episode import SingleAgentEpisode
 
 from adv_building_gym.data_combinator import DataCombinator
 from adv_building_gym.envs import AdvBuildingGym
 from adv_building_gym.envs.env_creator import wrap_action_space
 from adv_building_gym.ray_training.rl_module_inference import (
-    flatten_observation,
     infer_action,
     load_rl_module,
 )
@@ -125,6 +126,14 @@ def evaluate_model(
     env = wrap_action_space(base_env)
     check_space_compatibility(rl_module, env)
 
+    # Use the same FlattenObservations connector as training to guarantee
+    # identical observation key ordering (dm-tree sorted).
+    # Link: https://docs.ray.io/en/latest/rllib/package_ref/connectors.html#flattenobservations
+    flatten_obs_connector = FlattenObservations(
+        base_env.observation_space,
+        base_env.action_space,
+    )
+
     episode_stats: list[EpisodeStats] = []
     start_time = time.time()
 
@@ -160,12 +169,20 @@ def evaluate_model(
                 collector.on_reset(reset_info)
 
             while not done and episode_length < MAX_STEPS_PER_EPISODE:
-                flat_obs = flatten_observation(obs)
+                # Flatten dict obs via the same connector used in training.
+                sa_episode = SingleAgentEpisode(
+                    observation_space=base_env.observation_space,
+                    action_space=base_env.action_space,
+                    observations=[obs],
+                )
+                flatten_obs_connector(
+                    rl_module=None, batch={}, episodes=[sa_episode],
+                    explore=False, shared_data={},
+                )
+                flat_obs = sa_episode.get_observations(-1)
                 raw_action = infer_action(rl_module, flat_obs)
 
-                next_obs, reward, terminated, truncated, step_info = env.step(
-                    raw_action,
-                )
+                next_obs, reward, terminated, truncated, step_info = env.step(raw_action)
 
                 if collector is not None:
                     collector.on_step(

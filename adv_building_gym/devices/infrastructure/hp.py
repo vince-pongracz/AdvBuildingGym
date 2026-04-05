@@ -19,15 +19,16 @@ logger = logging.getLogger(__name__)
 class HP(Infrastructure):
     """Heat Pump infrastructure component.
 
-    Action convention: positive = consumption (from grid), negative = production (to grid).
-    Heat pumps only consume energy, so action is in [0, 1].
+    Action convention: single value in [-1, 1].
+    Negative = cooling, positive = heating, magnitude = energy level.
+    Heat pumps only consume energy (|action| * max_power_kW).
     """
 
     # K and mC come from building_props context
     _context_params: ClassVar[Set[str]] = {'K', 'mC'}
 
     # Internal state variables - don't serialize
-    _exclude_params: ClassVar[Set[str]] = {'iteration', 'temp_in_norm', 'temp_in_norm_change', 'control_step'}
+    _exclude_params: ClassVar[Set[str]] = {'iteration', 'temp_in_norm', 'temp_in_norm_change', 'control_step', 'actual_power_kW'}
 
     def __init__(self,
                 name: str,
@@ -50,6 +51,7 @@ class HP(Infrastructure):
 
         self.temp_in_norm = 0
         self.temp_in_norm_change = 0
+        self.actual_power_kW = 0.0  # Track actual electric consumption for reporting
 
         if self.cop_heat <= 0 or self.cop_cool <= 0:
             raise ValueError("cop_heat and cop_cool must be positive.")
@@ -57,13 +59,12 @@ class HP(Infrastructure):
     def setup_spaces(self,
                     state_spaces: OrderedDict,
                     action_spaces: OrderedDict) -> tuple[OrderedDict, OrderedDict]:
-        # HP action is 2D: [energy, mode]
-        # - energy: [0, 1] - HP always consumes energy (positive = consumption)
-        # - mode: [0, 1] - <0.4: cooling, >0.6: heating, [0.4, 0.6]: no action
+        # HP action is 1D: [-1, 1]
+        # Negative = cooling, positive = heating, magnitude = energy level
         action_spaces["HP_action"] = Box(
-            low=np.array([0.0, 0.0], dtype=np.float32),
-            high=np.array([1.0, 1.0], dtype=np.float32),
-            shape=(2,),
+            low=np.array([-1.0], dtype=np.float32),
+            high=np.array([1.0], dtype=np.float32),
+            shape=(1,),
             dtype=np.float32
         )
 
@@ -75,44 +76,30 @@ class HP(Infrastructure):
         return state_spaces, action_spaces
 
     def exec_action(self, actions, states, info=None) -> None:
-        action = actions["HP_action"]
-        # Action is 2D: [energy, mode]
-        energy = float(np.atleast_1d(action)[0])
-        mode = float(np.atleast_1d(action)[1])
+        # Action is 1D: [-1, 1]. Negative = cooling, positive = heating.
+        hp_action = float(np.atleast_1d(actions["HP_action"])[0])
+        energy = abs(hp_action)
 
         # NOTE VP 2026.01.20. : Thermal model is 1R1C, same as links below
-        # Determine mode: cooling (<0.45), heating (>0.55), or no action ([0.45, 0.55])
-        # energy is in [0, 1], thermal power Q_thermal = energy * max_power_kW * COP
-        if mode < 0.45:
-            # Cooling mode: remove heat from building (negative q_hp)
+        # Thermal power Q_thermal = energy * max_power_kW * COP
+        # Sign of q_hp follows the action: positive = heating, negative = cooling
+        if hp_action < 0:
             cop = self.cop_cool
             q_hp = -energy * self.max_power_kW * cop  # heat removed from building
-            mode = 0.0
-        elif mode > 0.55:
-            # Heating mode: add heat to building (positive q_hp)
+        elif hp_action > 0:
             cop = self.cop_heat
             q_hp = energy * self.max_power_kW * cop  # heat added to building
-            mode = 1.0
         else:
-            # No action zone [0.45, 0.55]
-            q_hp = 0.0
-            # Set also the energy part to 0 in this case -- at rewards it is useful to have the real actions
-            actions["HP_action"][0] = 0.0
-            actions["HP_action"][1] = 0.5
             self.temp_in_norm_change = 0.0
+            self.actual_power_kW = 0.0
             return
 
-        # Write back discretized mode so downstream consumers (info["action"],
-        # prev_HP_action, rewards) see the effective 0/0.5/1 value, not the
-        # raw continuous policy output.
-        actions["HP_action"][1] = np.float32(mode)
-
-        # TODO VP 2026.03.16. : Refinement idea for slow cooling/ slow heating. Add venting system / window open controller (as infrastructure), 
+        # TODO VP 2026.03.16. : Refinement idea for slow cooling/ slow heating. Add venting system / window open controller (as infrastructure),
         # which can cool the house faster if the temperature diff is too big and cooling is not fast enough.
         # Possible to schedule it, if once fired, then it can't be fire again in an hour -- physics of venting/ventillating a house?
-        # action, but with minimal energy (as window open and close is there). 
+        # action, but with minimal energy (as window open and close is there).
         # Refinement idea: If the wind is too strong or wind is higher than a threshold and it's raining, do not allow this action
-        
+
         # TODO VP 2026.01.20. : Add forecasting window (and thus MPC) for the states and the
         # actions as well in the config, generally window size is 0.
         # Allow it only for the forecasted desired states -- not for the actual system states
@@ -147,27 +134,22 @@ class HP(Infrastructure):
             actual_q_hp = actual_dTemp * self.mC / (0.001 * self.control_step)
 
             # Back-calculate actual energy from actual q_hp
-            if mode < 0.4:
-                # Cooling: q_hp = -energy * max_power_kW * cop
-                # => energy = -q_hp / (max_power_kW * cop)
-                actual_energy = -actual_q_hp / (self.max_power_kW * cop) if (self.max_power_kW * cop) > 0 else 0.0
-            else:  # mode > 0.6 (heating)
-                # Heating: q_hp = energy * max_power_kW * cop
-                # => energy = q_hp / (max_power_kW * cop)
-                actual_energy = actual_q_hp / (self.max_power_kW * cop) if (self.max_power_kW * cop) > 0 else 0.0
-
-            # Clamp to valid range — HP can only consume energy, never produce
+            # |q_hp| = energy * max_power_kW * cop
+            # => energy = |q_hp| / (max_power_kW * cop)
+            actual_energy = abs(actual_q_hp) / (self.max_power_kW * cop) if (self.max_power_kW * cop) > 0 else 0.0
             actual_energy = np.clip(actual_energy, 0.0, 1.0)
 
-            # Update action with the reduced energy (preserve mode)
-            actions["HP_action"][0] = np.float32(actual_energy)
-            actions["HP_action"][1] = np.float32(mode)
+            # Update action preserving sign (cooling/heating direction)
+            sign = -1.0 if hp_action < 0 else 1.0
+            actions["HP_action"][0] = np.float32(sign * actual_energy)
 
-            # Store the actual temperature change
+            # Store the actual temperature change and power consumption
             self.temp_in_norm_change = actual_dTemp
+            self.actual_power_kW = actual_energy * self.max_power_kW
         else:
             # No clipping needed, use the original dTemp
             self.temp_in_norm_change = dTemp
+            self.actual_power_kW = energy * self.max_power_kW
 
     def update_state(self, states, info=None) -> None:
         super().update_state(states, info)
@@ -176,19 +158,12 @@ class HP(Infrastructure):
         states["temp_in_norm"][0] = np.float32(new_temp)
 
     def get_electric_consumption(self, actions) -> float:
-        """Get current electric energy consumption from heat pump.
+        """Get current electric energy consumption from heat pump in kW.
 
-        HP action is [energy, mode] where energy is in [0, 1].
-        Positive value indicates consumption from grid.
-        Actual consumption is energy * max_power_kW.
+        Always positive — HP only consumes energy regardless of heating/cooling mode.
+        Uses the actual power computed during exec_action (accounts for clipping).
         """
-        if "HP_action" not in actions:
-            return 0.0
-
-        action = actions["HP_action"]
-        energy = float(np.atleast_1d(action)[0])
-        # Energy is positive ([0, 1]), consumption from grid
-        return energy * self.max_power_kW
+        return self.actual_power_kW
 
 
 # Register HP with the component registry

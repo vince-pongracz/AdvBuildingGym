@@ -1,8 +1,6 @@
 # Reward function definitions shared across training and evaluation.
 # Each entry must match a registered RewardFunction class name.
 
-# TODO VP 2026.04.04. : Change action semantics -- it does not matter how the action maps to energy, action should orient to the control of the infrastructure. Energy consumption depends on the infra config and it's action semantics, so create separate functions to compute energy consumption and usage.
-
 rewards:
   - class_name: TempReward
     weight: 1.0

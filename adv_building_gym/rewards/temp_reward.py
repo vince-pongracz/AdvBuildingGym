@@ -72,16 +72,15 @@ class TempReward(RewardFunction):
         reward = float(-(d ** 2) + np.exp(-d))
 
         # Wrong-direction penalty: heating when too hot, or cooling when too cold
-        # HP mode: <0.4 = cooling, >0.6 = heating, [0.4, 0.6] = off
+        # HP action: negative = cooling, positive = heating
         if "HP_action" in actions:
-            hp_action = np.atleast_1d(actions["HP_action"])
-            energy = float(hp_action[0])
-            mode = float(hp_action[1])
+            hp_action = float(np.atleast_1d(actions["HP_action"])[0])
+            energy = abs(hp_action)
             temp_error = actual_temp - desired_temp  # positive = too hot
 
             wrong = energy > 0 and (
-                (temp_error > 0 and mode > 0.6) or
-                (temp_error < 0 and mode < 0.4)
+                (temp_error > 0 and hp_action > 0) or   # too hot but heating
+                (temp_error < 0 and hp_action < 0)       # too cold but cooling
             )
             if wrong:
                 reward += self.wrong_direction_penalty * energy * abs(temp_error)

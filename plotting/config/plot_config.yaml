@@ -33,8 +33,7 @@ states:
 actions:
   # Human-readable dimension labels for multi-dimensional actions.
   # Keys that are not listed here fall back to numeric indices (0, 1, …).
-  dim_labels:
-    HP_action: [energy, mode]
+  dim_labels: {}
 
 raw:
   # Group temperature raw values into a single plot (same unit: °C)

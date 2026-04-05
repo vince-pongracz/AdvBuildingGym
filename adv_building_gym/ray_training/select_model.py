@@ -139,7 +139,7 @@ def select_model(
         model_config=DefaultModelConfig(
             fcnet_activation='relu',  # RLlib default: tanh
             # NOTE VP 2026.03.10. : What is the NN structure which is needed to learn this task complexity?
-            fcnet_hiddens=[32, 32],  # RLlib default: [256, 256]
+            fcnet_hiddens=[256, 256],  # RLlib default: [256, 256]
             # [256, 256, 256]
             # Use LSTM to exploit temporal dependencies
             # use_lstm=True,
