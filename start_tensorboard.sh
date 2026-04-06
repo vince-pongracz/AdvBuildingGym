@@ -3,17 +3,19 @@
 # Logs output to tensorboard_fireup.log, prints the URL, CTRL+C stops it.
 
 # Usage: ./start_tensorboard.sh <logdir>
-# Example: ./start_tensorboard.sh /hkfs/home/haicore/iai/dj0397/AdvBuildingGym/models/env_test1_small/ray/sac/
+# Example usages: 
+# ./start_tensorboard.sh /hkfs/home/haicore/iai/dj0397/AdvBuildingGym/models/env_test1_small/ray/sac/
+# ./start_tensorboard.sh /hkfs/home/haicore/iai/dj0397/AdvBuildingGym/ep_metrics/eval_trajectories
 
 set -euo pipefail
-
-echo -e
-echo "Starting TensorBoard with logdir: $1"
 
 if [ $# -lt 1 ]; then
     echo "Usage: $0 <logdir>" >&2
     exit 1
 fi
+
+echo ""
+echo "Starting TensorBoard with logdir: $1"
 
 export TF_CPP_MIN_LOG_LEVEL=3
 export TF_ENABLE_ONEDNN_OPTS=0

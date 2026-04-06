@@ -376,15 +376,19 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
             self._rng = np.random.default_rng(seed)
 
         # ======== Data variant selection logic ========
-        # Variant swapping (which CSV files to use) is handled centrally by
-        # the D1 callback (data_schedule_callback.py) which pushes the same
-        # variant to all runners at iteration boundaries.
+        # During distributed training the D1 callback pushes variants to all
+        # runners.  For single-env usage (evaluation, local testing) the env
+        # selects the variant itself from its DataCombinator.
         self.episode_count += 1
         variant = None
 
         # Approach C: external override via reset(options={"data_variant": {...}})
         if options and "data_variant" in options:
             variant = options["data_variant"]
+            self.apply_data_variant(variant)
+        elif self.data_combinator.variants:
+            # No external push — select variant from the combinator
+            variant = self.data_combinator.get_variant(self.episode_count, self._rng)
             self.apply_data_variant(variant)
 
         # Compute day offset from DataCombinator (must run before logging so get_day_date() is set)

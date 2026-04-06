@@ -5,7 +5,7 @@ rewards:
   - class_name: TempReward
     weight: 1.0
     params:
-      zero_reward_diff_celsius: 2.0
+      zero_reward_diff_celsius: 1.0
       wrong_direction_penalty: -1.0
 
   # - class_name: EconomicReward
