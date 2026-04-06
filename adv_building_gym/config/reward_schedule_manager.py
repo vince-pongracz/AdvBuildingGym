@@ -230,9 +230,14 @@ class RewardScheduleManager:
         new_names = self.get_active_reward_names()
         changed = old_names != new_names
         if changed:
+            active_specs = self._get_active_specs()
+            reward_details = [
+                f"{s['class_name']} (weight={s.get('weight', 1.0)})"
+                for s in active_specs
+            ]
             logger.info(
                 "Reward schedule advanced (swap_index=%d): %s",
-                self._swap_index, new_names,
+                self._swap_index, reward_details,
             )
         return changed
 

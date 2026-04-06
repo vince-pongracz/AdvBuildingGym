@@ -18,7 +18,7 @@ class WeatherDataSource(StateSource):
 
     # normalise is an enum, need special handling for serialization
     _context_params: ClassVar[Set[str]] = {'control_step', 'temp_abs_max'}
-    _exclude_params: ClassVar[Set[str]] = {'iteration', 'ts', '_fixed_temp_abs_max'}
+    _exclude_params: ClassVar[Set[str]] = {'iteration', 'ts', '_fixed_temp_abs_max', 'wind_speed_abs_max'}
 
     def __init__(self, name: str, ds_path: str | None = None,
                 normalise: Normalisation | str | None = Normalisation.ABS_MIN_MAX_SCALING,
@@ -32,6 +32,7 @@ class WeatherDataSource(StateSource):
         # data-derived value, ensuring consistent scaling across datasets.
         self._fixed_temp_abs_max: float | None = temp_abs_max
         self.temp_abs_max: float = temp_abs_max if temp_abs_max is not None else 1.0
+        self.wind_speed_abs_max: float = 1.0  # Derived from data in _post_load_data_processing
 
         if self.ts is not None:
             logger.info("Use data file: %s", ds_path)
@@ -89,6 +90,14 @@ class WeatherDataSource(StateSource):
             self.temp_abs_max = float(self.ts["temp_amb"].abs().max())
         else:
             self.temp_abs_max = 1.0
+
+        # Wind speed scale factor — derived from data (always non-negative)
+        if "avg_wind_speed" in self.ts.columns:
+            self.wind_speed_abs_max = float(self.ts["avg_wind_speed"].abs().max())
+            if self.wind_speed_abs_max == 0.0:
+                self.wind_speed_abs_max = 1.0
+        else:
+            self.wind_speed_abs_max = 1.0
 
 
     def setup_spaces(self,
@@ -159,6 +168,7 @@ class WeatherDataSource(StateSource):
         # Not in observation space — raw °C value would destabilise the NN.
         if info is not None:
             info["_temp_abs_max"] = self.temp_abs_max
+            info["_wind_speed_abs_max"] = self.wind_speed_abs_max
 
     def get_raw_values(self) -> dict[str, float]:
         return {"temp_out_raw": self.temp_out_raw}

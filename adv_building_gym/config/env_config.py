@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 from adv_building_gym.devices.infrastructure import (
     Infrastructure, HP, BatteryTremblay,
-    SolarPanel, LinearEVCharger, HouseholdEnergyConsumers
+    SolarPanel, WindTurbine, LinearEVCharger, HouseholdEnergyConsumers
 )
 
 from adv_building_gym.devices.statesources import (
@@ -120,6 +120,11 @@ class EnvConfig(LoggableConfig):
                 max_power_kW=5.0,
                 peak_power_kW=5.0,
             ),
+            WindTurbine(
+                "wind_turbine",
+                max_power_kW=5.0,
+                rated_power_kW=5.0,
+            ),
             HouseholdEnergyConsumers(
                 "hh_consumers",
                 max_power_kW=8.0,
@@ -156,6 +161,27 @@ class EnvConfig(LoggableConfig):
 
     def _log_label(self) -> str:
         return "EnvConfig"
+
+    def log_values(self) -> None:
+        """Log config values, showing component names instead of object repr."""
+        def _names(components: list | None) -> str:
+            if components is None:
+                return "None"
+            return "[" + ", ".join(c.name for c in components) + "]"
+
+        lines = [
+            f"  env_config_name = {self.env_config_name}",
+            f"  EPISODE_LENGTH = {self.EPISODE_LENGTH}",
+            f"  CONTROL_STEP = {self.CONTROL_STEP}",
+            f"  ACTION_HISTORY_LENGTH = {self.ACTION_HISTORY_LENGTH}",
+            f"  building_props = mC={self.building_props.mC}, K={self.building_props.K}",
+            f"  temp_min = {self.temp_min}",
+            f"  temp_max = {self.temp_max}",
+            f"  infras = {_names(self.infras)}",
+            f"  statesources = {_names(self.statesources)}",
+        ]
+        logger.info("%s:\n%s", self._log_label(), "\n".join(lines))
+        self.reward_config.log_values()
 
 # default/config instance
 config = EnvConfig()
