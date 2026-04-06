@@ -206,6 +206,24 @@ def extract_weather_data(
         # Rename columns to match environment statesource conventions
         df_merged.rename(columns=COLUMN_RENAMES, inplace=True)
 
+        # Zenodo CSVs have only direct_sun_shine (no diffuse component).
+        # Create sun_shine alias so downstream code can use a single column name.
+        if "direct_sun_shine" in df_merged.columns and "sun_shine" not in df_merged.columns:
+            df_merged["sun_shine"] = df_merged["direct_sun_shine"]
+
+        # Replace negative sentinel values in irradiance columns with 0
+        # (real irradiance is never negative; some sources use e.g. -999 for missing data)
+        for col in ("sun_shine", "direct_sun_shine"):
+            if col in df_merged.columns:
+                neg_mask = df_merged[col] < 0
+                n_neg = neg_mask.sum()
+                if n_neg > 0:
+                    logger.warning(
+                        "%d negative sentinel values in '%s' replaced with 0",
+                        n_neg, col,
+                    )
+                    df_merged.loc[neg_mask, col] = 0.0
+
         # Drop columns not needed by the environment
         cols_to_drop = [c for c in COLUMNS_TO_DROP if c in df_merged.columns]
         if cols_to_drop:

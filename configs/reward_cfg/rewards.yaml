@@ -39,6 +39,6 @@ rewards:
   #   weight: 1.0
   #   params: {}
 
-  # - class_name: ActionSmoothnessReward
-  #   weight: 0.5
-  #   params: {}
+  - class_name: ActionSmoothnessReward
+    weight: 0.5
+    params: {}

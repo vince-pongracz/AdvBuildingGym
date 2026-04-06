@@ -291,6 +291,13 @@ class LinearEVCharger(Infrastructure):
             info["ev_charger_efficiency"] = self.charger_efficiency
             info["ev_max_charge_time_hrs"] = self.max_charge_time_hrs
 
+    def get_penalisable_consumption(self, actions: Dict, states: Dict) -> float:
+        """Exempt charging when EV is connected and below target SoC."""
+        power = self.get_electric_consumption(actions)
+        if power > 0 and self.ev_connected and self.soc < self.target_soc:
+            return 0.0
+        return power
+
     def get_electric_consumption(self, actions: Dict) -> float:
         """Get current electric energy consumption from EV charger in kW.
 

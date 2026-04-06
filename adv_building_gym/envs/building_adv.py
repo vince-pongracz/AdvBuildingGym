@@ -534,6 +534,10 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         # access it without holding infrastructure references.
         self._component_info["power_breakdown"] = power_breakdown
         self._component_info["net_power_kW"] = total_power_kW
+        self._component_info["penalisable_power_kW"] = sum(
+            infra.get_penalisable_consumption(action, self.state)
+            for infra in self.infras
+        )
 
         # Calculate reward with per-function breakdown
         reward: float = 0

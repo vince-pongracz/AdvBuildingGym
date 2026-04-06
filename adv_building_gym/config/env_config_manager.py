@@ -6,12 +6,14 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Dict, Any
 
 import yaml
+import logging
 
 if TYPE_CHECKING:
     from adv_building_gym.config.env_config import EnvConfig
 
 from adv_building_gym.envs.utils import BuildingProps
 
+logger = logging.getLogger(__name__)
 
 class EnvConfigManager:
     """Handles serialization and deserialization of EnvConfig objects.
@@ -169,5 +171,10 @@ class EnvConfigManager:
 
         with open(path, 'r') as f:
             config_dict = yaml.safe_load(f)
+        
+        config = EnvConfigManager.from_dict(config_dict)
+        config.log_values()
+        
+        logger.info("Config loaded successfully: %s", config.env_config_name)
 
-        return EnvConfigManager.from_dict(config_dict)
+        return config

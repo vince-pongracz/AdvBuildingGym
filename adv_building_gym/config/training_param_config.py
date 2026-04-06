@@ -6,15 +6,17 @@ Fields are split by algorithm where their semantics differ.
 """
 
 import logging
-from dataclasses import dataclass, fields
+from dataclasses import dataclass
 from pathlib import Path
+
+from adv_building_gym.config.utils.loggable_config import LoggableConfig
 
 import yaml
 
 logger = logging.getLogger(__name__)
 
 @dataclass
-class TrainingParamConfig:
+class TrainingParamConfig(LoggableConfig):
     """Training hyperparameters, split by algorithm where semantics differ.
 
     PPO (on-policy) collects a batch of complete episodes before each policy
@@ -90,7 +92,5 @@ class TrainingParamConfig:
         config.log_values()
         return config
 
-    def log_values(self) -> None:
-        """Log all config field values at INFO level."""
-        lines = [f"  {f.name} = {getattr(self, f.name)}" for f in fields(self)]
-        logger.info("TrainingParamConfig:\n%s", "\n".join(lines))
+    def _log_label(self) -> str:
+        return "TrainingParamConfig"

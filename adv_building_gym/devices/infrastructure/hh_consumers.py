@@ -121,6 +121,10 @@ class HouseholdEnergyConsumers(Infrastructure):
         noise = np.random.default_rng(seed).normal(loc=0.0, scale=0.05)
         return float(np.clip(base + noise, 0.0, 1.0))
 
+    def get_penalisable_consumption(self, actions: Dict, states: Dict) -> float:
+        """Non-controllable load — always exempt from energy penalty."""
+        return 0.0
+
     def get_electric_consumption(self, actions: Dict) -> float:
         """Get current electric energy consumption from household consumers.
 

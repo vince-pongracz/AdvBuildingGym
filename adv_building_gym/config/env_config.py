@@ -5,6 +5,7 @@ from typing import List, Optional
 
 # TODO VP 2026.02.20. : Simplyfy env config somehow, too much code here, too little declarative stuff...
 from adv_building_gym.envs.utils import BuildingProps
+from adv_building_gym.config.utils.loggable_config import LoggableConfig
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +23,7 @@ from adv_building_gym.config.reward_config import RewardConfig
 
 
 @dataclass
-class EnvConfig:
+class EnvConfig(LoggableConfig):
     """Environment topology configuration — state sources, infrastructure, and physics.
 
     Config serialisation -- by ConfigManager.
@@ -152,6 +153,9 @@ class EnvConfig:
 
         if self.infras is None:
             self.infras = self.create_infras()
+
+    def _log_label(self) -> str:
+        return "EnvConfig"
 
 # default/config instance
 config = EnvConfig()

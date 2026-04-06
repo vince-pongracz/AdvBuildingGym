@@ -40,44 +40,34 @@ class WeatherDataSource(StateSource):
             logger.debug("No initial data file for '%s', data source will be assigned by DataCombinator", name)
 
     def _post_load_data_processing(self) -> None:
-        # TODO VP 2026.03.26. : Deal with this, refactor...
         """Normalise weather columns after CSV load / reload.
 
-        Handles common data-quality issues in DWD weather CSVs:
-        - Missing-data sentinels (e.g. -999 / -1998 in sun_shine)
-        - NaN gaps from station outages (forward-filled then back-filled)
+        Data cleaning (sentinel replacement, NaN handling, column aliasing)
+        is handled by the preprocessing scripts. This method only validates
+        that the data is clean and applies runtime normalisation.
         """
-        # Zenodo CSVs have direct_sun_shine only; create sun_shine alias
-        if "sun_shine" not in self.ts.columns and "direct_sun_shine" in self.ts.columns:
-            self.ts["sun_shine"] = self.ts["direct_sun_shine"]
-
-        # Replace negative sentinel values in irradiance with 0
-        # (real irradiance is never negative; DWD uses e.g. -999 for missing data)
-        if "sun_shine" in self.ts.columns:
-            neg_mask = self.ts["sun_shine"] < 0
-            n_neg = neg_mask.sum()
-            if n_neg > 0:
-                logger.warning(
-                    "WeatherDataSource '%s': %d negative sentinel values in "
-                    "'sun_shine' replaced with 0 (whole-year CSV)",
-                    self.name, n_neg,
-                )
-                self.ts.loc[neg_mask, "sun_shine"] = 0.0
-
-        # Forward-fill NaN in weather columns (station outages), then
-        # back-fill any leading NaN so no row is left with NaN.
+        # Validate that preprocessing produced clean data
         weather_cols = ["temp_amb", "sun_shine", "avg_wind_speed"]
         for col in weather_cols:
             if col in self.ts.columns:
                 n_nan = int(self.ts[col].isna().sum())
                 if n_nan > 0:
                     logger.warning(
-                        "WeatherDataSource '%s': %d NaN values in '%s' "
-                        "(whole-year CSV), filling with 0",
+                        "WeatherDataSource '%s': %d NaN in '%s' — "
+                        "check preprocessing. Filling with 0.",
                         self.name, n_nan, col,
                     )
                     self.ts[col] = self.ts[col].fillna(0)
 
+        if "sun_shine" not in self.ts.columns and "direct_sun_shine" in self.ts.columns:
+            logger.warning(
+                "WeatherDataSource '%s': 'sun_shine' column missing, "
+                "falling back to 'direct_sun_shine' — check preprocessing.",
+                self.name,
+            )
+            self.ts["sun_shine"] = self.ts["direct_sun_shine"]
+
+        # Normalise raw columns for the observation space
         cols = {
             "temp_amb": "temp_out_norm",
             "sun_shine": "solar_irradiance_norm",

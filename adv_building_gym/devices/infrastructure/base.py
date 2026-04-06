@@ -112,6 +112,14 @@ class Infrastructure(EnvSyncInterface, Serializable):
         """
         return {}
 
+    def get_penalisable_consumption(self, actions: Dict, states: Dict) -> float:
+        """Power (kW) that should count toward the energy consumption penalty.
+
+        Override to exempt necessary consumption (e.g. charging below target
+        SoC) or non-controllable load.  Default: all consumption is penalisable.
+        """
+        return self.get_electric_consumption(actions)
+
     def get_electric_consumption(self, actions: Dict) -> float:
         """Get current electric energy consumption in kW.
 

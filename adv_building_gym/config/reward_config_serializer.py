@@ -65,7 +65,7 @@ class RewardConfigSerializer:
                 reward = RewardFunction.from_dict(reward_dict)
                 rewards.append(reward)
             reward_config.rewards = rewards
-            logger.info(f"Deserialized {len(rewards)} rewards from config, including: {[r.name for r in rewards]}")
+            reward_config.log_values()
         return reward_config
 
     @staticmethod

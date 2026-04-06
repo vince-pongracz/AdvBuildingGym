@@ -119,7 +119,6 @@ def main() -> None:
     if args.load_config:
         logger.info("Loading config from: %s", args.load_config)
         active_config = EnvConfigManager.load(args.load_config)
-        logger.info("Config loaded successfully: %s", active_config.env_config_name)
     else:
         active_config = default_config
 

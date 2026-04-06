@@ -114,7 +114,7 @@ def select_model(
             # UTD = training_intensity / batch_size.
             # Link: https://arxiv.org/abs/1802.09477
             training_intensity=training_config.sac_training_intensity,  # RLlib default: None
-            # num_steps_sampled_before_learning_starts=learning_starts, # Number of steps to collect before starting learning (to fill up replay buffer)
+            num_steps_sampled_before_learning_starts=learning_starts,
             # Gradient clipping mitigates but does NOT fully prevent NaN in
             # the policy network. If the loss itself is NaN/Inf (e.g. from
             # extreme Q-values caused by large reward spikes like the -2.0

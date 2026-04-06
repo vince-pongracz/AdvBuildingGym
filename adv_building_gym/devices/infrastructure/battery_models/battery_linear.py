@@ -137,6 +137,13 @@ class BatteryLinear(Infrastructure):
         history[:-1] = history[1:]
         history[-1] = np.float32(self.soc)
 
+    def get_penalisable_consumption(self, actions: Dict, states: Dict) -> float:
+        """Exempt charging when battery is below target SoC."""
+        power = self.get_electric_consumption(actions)
+        if power > 0 and self.soc < self.target_soc:
+            return 0.0
+        return power
+
     def get_electric_consumption(self, actions: Dict) -> float:
         """Get current electric energy consumption from battery in kW.
 
