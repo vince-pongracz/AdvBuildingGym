@@ -33,7 +33,7 @@
 #SBATCH --partition=normal
 #SBATCH --nodes=1
 #SBATCH --tasks-per-node=1
-# TODO VP: paralellise eval script -- run episodes parallel
+# TODO VP / NOTE: paralellise eval script -- run episodes parallel
 #SBATCH --cpus-per-task=2
 #SBATCH --time=00:10:00
 #SBATCH --output=slurm_logs/eval/slurm-eval-ray-%j.out

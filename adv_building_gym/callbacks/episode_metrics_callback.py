@@ -220,7 +220,7 @@ def make_episode_metrics_cb_class(
             
             if dump_metrics_json:
                 # Save per-episode metrics JSON
-                ep_metrics_dir = f"{_metrics_base_dir}/{_exec_date.strftime('%Y%m%d_%H%M')}00"
+                ep_metrics_dir = f"{_metrics_base_dir}/{_exec_date.strftime('%Y%m%d_%H%M%S')}"
                 os.makedirs(ep_metrics_dir, exist_ok=True)
                 ep_metrics_file = f"{ep_metrics_dir}/episode_{episode_id}_metrics.json"
 

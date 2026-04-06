@@ -1,0 +1,24 @@
+# Reward schedule configuration for training.
+# Controls which reward functions are active during training and how they
+# are swapped over the course of training (gradual curriculum).
+#
+# Modes:
+#   off          - All rewards active from the start, no swapping.
+#   gradual_add  - Start with the first reward, add the next one every
+#                  swap_every_n_episodes episodes. Once all are added they
+#                  stay active for the rest of training.
+#   iterate      - Only one reward is active at a time; rotate to the next
+#                  every swap_every_n_episodes episodes (round-robin).
+#   random       - Each swap randomly selects a subset of rewards
+#                  (at least 1, up to all).
+
+# Path to the shared reward definitions (relative to this file).
+rewards_file: rewards_2.yaml
+
+mode: "off"
+
+# How often to change the active reward set (in training episodes).
+swap_every_n_iterations: 100
+
+# Seed for the random mode (reproducibility).
+seed: 42

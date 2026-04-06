@@ -138,7 +138,7 @@ def make_trajectory_logging_cb_class(
                 }
 
                 ep_metrics_dir = (
-                    f"{_metrics_base_dir}/{_exec_date.strftime('%Y%m%d_%H%M')}00"
+                    f"{_metrics_base_dir}/{_exec_date.strftime('%Y%m%d_%H%M%S')}"
                 )
                 os.makedirs(ep_metrics_dir, exist_ok=True)
                 jsons_dir = f"{ep_metrics_dir}/jsons"
