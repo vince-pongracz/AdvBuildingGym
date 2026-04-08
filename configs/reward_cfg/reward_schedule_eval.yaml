@@ -3,7 +3,7 @@
 # the agent is scored on the full multi-objective reward.
 
 # Path to the shared reward definitions (relative to this file).
-rewards_file: rewards.yaml
+rewards_file: rewards_all.yaml
 
 mode: "off"
 

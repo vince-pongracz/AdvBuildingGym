@@ -8,26 +8,26 @@ rewards:
   #     zero_reward_diff_celsius: 1.0
   #     wrong_direction_penalty: -1.0
 
-  # - class_name: EconomicReward
-  #   weight: 1.0
-  #   params: {}
+  - class_name: EconomicReward
+    weight: 1.0
+    params: {}
 
   # - class_name: MinimiseEnergyConsumptionReward
   #   weight: 0.2
   #   params: {}
 
-  # - class_name: OperatorEnergyControlReward
-  #   weight: 1.0
-  #   params:
-  #     harsh_penalty: -4.0
-  #     soft_threshold_pct: 0.9
-  #     recovery_steps: 3
+  - class_name: OperatorEnergyControlReward
+    weight: 1.0
+    params:
+      harsh_penalty: -4.0
+      soft_threshold_pct: 0.9
+      recovery_steps: 3
 
-  # - class_name: BatteryTargetReward
-  #   weight: 1.0
-  #   params:
-  #     diff_threshold: 0.02
-  #     soc_diff_multiplier: 5.0
+  - class_name: BatteryTargetReward
+    weight: 1.0
+    params:
+      diff_threshold: 0.02
+      soc_diff_multiplier: 5.0
 
   # - class_name: EVChargingReward
   #   weight: 1.0

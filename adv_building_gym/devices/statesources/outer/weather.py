@@ -36,7 +36,7 @@ class WeatherDataSource(StateSource):
 
         if self.ts is not None:
             logger.info("Use data file: %s", ds_path)
-            self._post_load_data_processing()
+            self._run_post_load()
         else:
             logger.debug("No initial data file for '%s', data source will be assigned by DataCombinator", name)
 
@@ -47,25 +47,28 @@ class WeatherDataSource(StateSource):
         is handled by the preprocessing scripts. This method only validates
         that the data is clean and applies runtime normalisation.
         """
-        # Validate that preprocessing produced clean data
+        # Validate and clean data; only warn when a new file is loaded (not
+        # on every reload of the same file, which happens each episode reset).
         weather_cols = ["temp_amb", "sun_shine", "avg_wind_speed"]
         for col in weather_cols:
             if col in self.ts.columns:
                 n_nan = int(self.ts[col].isna().sum())
                 if n_nan > 0:
-                    logger.warning(
-                        "WeatherDataSource '%s': %d NaN in '%s' — "
-                        "check preprocessing. Filling with 0.",
-                        self.name, n_nan, col,
-                    )
+                    if self.is_new_data_source:
+                        logger.warning(
+                            "WeatherDataSource '%s': %d NaN in '%s' — "
+                            "check preprocessing. Filling with 0.",
+                            self.name, n_nan, col,
+                        )
                     self.ts[col] = self.ts[col].fillna(0)
 
         if "sun_shine" not in self.ts.columns and "direct_sun_shine" in self.ts.columns:
-            logger.warning(
-                "WeatherDataSource '%s': 'sun_shine' column missing, "
-                "falling back to 'direct_sun_shine' — check preprocessing.",
-                self.name,
-            )
+            if self.is_new_data_source:
+                logger.warning(
+                    "WeatherDataSource '%s': 'sun_shine' column missing, "
+                    "falling back to 'direct_sun_shine' — check preprocessing.",
+                    self.name,
+                )
             self.ts["sun_shine"] = self.ts["direct_sun_shine"]
 
         # Normalise raw columns for the observation space

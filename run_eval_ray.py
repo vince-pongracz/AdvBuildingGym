@@ -102,6 +102,8 @@ def parse_args() -> argparse.Namespace:
     )
     args = parser.parse_args()
 
+    logger.info("CMD: %s", " ".join(sys.argv))
+
     # --plot / --plot-all require trajectory data; force --log-trajectories on
     if args.plot or args.plot_all:
         if not args.log_trajectories:

@@ -26,7 +26,7 @@ class EnergyPriceDataSource(StateSource):
 
         if self.ts is not None:
             logger.info("Use data file: %s", ds_path)
-            self._post_load_data_processing()
+            self._run_post_load()
         else:
             self.price_max = 1.0
 

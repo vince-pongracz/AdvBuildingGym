@@ -22,7 +22,7 @@ class StateSource(EnvSyncInterface, Serializable):
     _context_params: ClassVar[Set[str]] = {'control_step'}
 
     # Internal state - never serialize (ts is loaded from ds_path)
-    _exclude_params: ClassVar[Set[str]] = {'iteration', 'row_offset', 'ts'}
+    _exclude_params: ClassVar[Set[str]] = {'iteration', 'row_offset', 'ts', '_last_processed_ds_path'}
 
     def __init__(self,
                 name: str,
@@ -34,6 +34,7 @@ class StateSource(EnvSyncInterface, Serializable):
         self.name = name
         self.ds_path = ds_path  # Store original path for serialization
         self.control_step = control_step  # Control timestep in seconds
+        self._last_processed_ds_path: str | None = None  # Tracks which file was last post-processed
         if ds_path is not None:
             resolved = Path(ds_path)
             if not resolved.is_absolute():
@@ -43,13 +44,31 @@ class StateSource(EnvSyncInterface, Serializable):
         else:
             self.ts = None
 
+    @property
+    def is_new_data_source(self) -> bool:
+        """True when the current ds_path differs from the last processed one.
+
+        Subclasses can check this in ``_post_load_data_processing`` to decide
+        whether to emit one-time warnings (e.g. NaN validation).  The flag is
+        updated automatically after ``_post_load_data_processing`` returns.
+        """
+        return self.ds_path != self._last_processed_ds_path
+
     def _post_load_data_processing(self) -> None:
         """Override to re-run post-processing after a new CSV is loaded.
 
         Called both at the end of __init__ (via subclass constructors) and
         after reload().  Subclasses that normalise columns, cache scalars, or
         parse events from the CSV should put that logic here.
+
+        Use ``self.is_new_data_source`` to guard one-time diagnostics
+        (e.g. NaN warnings) so they only fire when the file actually changes.
         """
+
+    def _run_post_load(self) -> None:
+        """Run subclass post-processing and update the data-source tracker."""
+        self._post_load_data_processing()
+        self._last_processed_ds_path = self.ds_path
 
     def reload(self, ds_path: str) -> None:
         """Load a new time-series file without recreating this StateSource.
@@ -66,7 +85,7 @@ class StateSource(EnvSyncInterface, Serializable):
             resolved = _PROJECT_ROOT / resolved
         self.ds_path = ds_path
         self.ts = pd.read_csv(resolved)
-        self._post_load_data_processing()
+        self._run_post_load()
         logger.debug("StateSource '%s' reloaded from %s", self.name, resolved)
 
     def setup_spaces(self,

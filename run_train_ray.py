@@ -191,6 +191,8 @@ def main():
 
     args = parser.parse_args()
 
+    logger.info("CMD: %s", " ".join(sys.argv))
+
     if args.seed is not None:
         training_param_config.seed = args.seed
     else:
@@ -379,6 +381,7 @@ def main():
         timesteps_per_iteration = training_param_config.ppo_episodes_per_iteration * active_config.EPISODE_LENGTH
     else:
         timesteps_per_iteration = training_param_config.sac_replay_batch_size
+
     checkpoint_freq_iterations = max(1, int(
         (args.checkpoint_frequency_episodes * timesteps_per_episode) / timesteps_per_iteration
     ))

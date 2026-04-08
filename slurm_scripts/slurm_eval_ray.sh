@@ -42,9 +42,6 @@
 
 set -euo pipefail
 
-# Log the full sbatch invocation to stderr so it appears as the 1st line of .err
-echo "CMD: $0 $*" >&2
-
 # Activate virtual environment
 PYTHON_ENV="../adv_env"
 if [ -d "$PYTHON_ENV" ]; then

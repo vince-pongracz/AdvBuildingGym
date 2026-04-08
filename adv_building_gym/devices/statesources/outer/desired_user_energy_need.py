@@ -45,7 +45,7 @@ class DesiredUserEnergyNeed(StateSource):
 
         if self.ts is not None:
             logger.info("Use data file: %s", ds_path)
-            self._post_load_data_processing()
+            self._run_post_load()
         else:
             self.consumption_max = 1.0
             logger.debug("No initial data file for '%s', using synthetic energy need profile", name)
