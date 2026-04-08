@@ -8,7 +8,7 @@ from gymnasium.spaces import Box
 
 from ..base import StateSource
 from adv_building_gym.utils.serializable import ComponentRegistry
-from adv_building_gym.utils.normalisation import Normalisation, get_scale_factor, normalise_series
+from adv_building_gym.utils.normalisation import Normalisation, normalise_with_scale_factor, normalise_series
 
 logger = logging.getLogger(__name__)
 
@@ -18,18 +18,23 @@ class WeatherDataSource(StateSource):
 
     # normalise is an enum, need special handling for serialization
     _context_params: ClassVar[Set[str]] = {'control_step'}
-    _exclude_params: ClassVar[Set[str]] = {'iteration', 'ts', 'temp_abs_max', 'wind_speed_abs_max'}
+    _exclude_params: ClassVar[Set[str]] = {
+        'iteration', 'ts',
+        'temp_abs_max', 'temp_out_raw',
+        'wind_speed_abs_max', 'wind_speed_raw',
+    }
 
     def __init__(self, name: str, ds_path: str | None = None,
                 normalise: Normalisation | str | None = Normalisation.ABS_MIN_MAX_SCALING) -> None:
         super().__init__(name, ds_path)
 
         self.normalise = Normalisation.init(normalise)  # Store for serialization
-        self.temp_out_raw: float = 0.0  # Raw outdoor temperature (°C)
-        # Derived from data in _post_load_data_processing; represents
-        # max(|temp_amb|) across the loaded CSV for normalisation.
+        # Raw values for get_raw_values() — updated each step
+        self.temp_out_raw: float = 0.0
+        self.wind_speed_raw: float = 0.0
+        # Scale factors derived from data in _post_load_data_processing
         self.temp_abs_max: float = 1.0
-        self.wind_speed_abs_max: float = 1.0  # Derived from data in _post_load_data_processing
+        self.wind_speed_abs_max: float = 1.0
 
         if self.ts is not None:
             logger.info("Use data file: %s", ds_path)
@@ -68,32 +73,20 @@ class WeatherDataSource(StateSource):
                 )
             self.ts["sun_shine"] = self.ts["direct_sun_shine"]
 
-        # Normalise raw columns for the observation space
+        # Normalise raw columns and derive scale factors so downstream
+        # components can convert between raw and normalised values.
         cols = {
-            "temp_amb": "temp_out_norm",
-            "sun_shine": "solar_irradiance_norm",
-            "avg_wind_speed": "avg_wind_speed_norm",
+            "temp_amb": ("temp_out_norm", "temp_abs_max"),
+            "sun_shine": ("solar_irradiance_norm", None),
+            "avg_wind_speed": ("avg_wind_speed_norm", "wind_speed_abs_max"),
         }
 
-        # Derive temp_abs_max from data — the scale factor (denominator)
-        # that normalise_series uses, so downstream components can convert
-        # between raw °C and normalised values on the same scale.
-        if "temp_amb" in self.ts.columns:
-            self.temp_abs_max = get_scale_factor(self.ts["temp_amb"], self.normalise)
-        else:
-            self.temp_abs_max = 1.0
-
-        for raw_col, norm_col in cols.items():
+        for raw_col, (norm_col, scale_attr) in cols.items():
             if raw_col in self.ts.columns:
-                self.ts[norm_col] = normalise_series(self.ts[raw_col], self.normalise)
-
-        # Wind speed scale factor — derived from data (always non-negative)
-        if "avg_wind_speed" in self.ts.columns:
-            self.wind_speed_abs_max = float(self.ts["avg_wind_speed"].abs().max())
-            if self.wind_speed_abs_max == 0.0:
-                self.wind_speed_abs_max = 1.0
-        else:
-            self.wind_speed_abs_max = 1.0
+                normalised, scale_factor = normalise_with_scale_factor(self.ts[raw_col], self.normalise)
+                self.ts[norm_col] = normalised
+                if scale_attr is not None:
+                    setattr(self, scale_attr, scale_factor)
 
 
     def setup_spaces(self,
@@ -123,6 +116,7 @@ class WeatherDataSource(StateSource):
             self.temp_out_raw = float(row["temp_amb"])
             solar_irradiance_norm = float(row.get("solar_irradiance_norm", 0.0))
             avg_wind_speed_norm = float(row.get("avg_wind_speed_norm", 0.0))
+            self.wind_speed_raw = float(row.get("avg_wind_speed", 0.0))
         else:
             # sim_hour is actual hour of day (0–24); modulo ensures correct
             # wrap-around if the value ever accumulates beyond 24.
@@ -146,13 +140,14 @@ class WeatherDataSource(StateSource):
                 temp_out_norm = 0.1
             else:
                 temp_out_norm = 0.3
-            # Compute raw °C from the synthetic normalised value so that
-            # get_raw_values() reports a physically consistent temperature.
+            # Compute raw values from synthetic normalised values so that
+            # get_raw_values() reports physically consistent quantities.
             self.temp_out_raw = temp_out_norm * self.temp_abs_max
 
             # NOTE VP 2026.03.10. : Maybe add synthetic data to the other variables as well
             solar_irradiance_norm = 0.0
             avg_wind_speed_norm = 0.0
+            self.wind_speed_raw = avg_wind_speed_norm * self.wind_speed_abs_max
 
         # Ensure float32 dtype for all updates
         states["temp_out_norm"][0] = np.float32(temp_out_norm)
@@ -167,7 +162,10 @@ class WeatherDataSource(StateSource):
             info["_wind_speed_abs_max"] = self.wind_speed_abs_max
 
     def get_raw_values(self) -> dict[str, float]:
-        return {"temp_out_raw": self.temp_out_raw}
+        return {
+            "temp_out_raw": self.temp_out_raw,
+            "wind_speed_raw": self.wind_speed_raw,
+        }
 
     def _get_serialize_value(self, param_name: str, value):
         """Handle enum serialization for normalise parameter."""
