@@ -11,7 +11,7 @@ from .checkpoint_finder import (
     find_latest_checkpoint,
     resolve_checkpoint_path,
 )
-from .normalisation import Normalisation, normalise_series
+from .normalisation import Normalisation, get_scale_factor, normalise_series
 from .episode_date import resolve_episode_date
 from .rng_service import RngService
 from .space_check import check_space_compatibility
@@ -31,6 +31,7 @@ __all__ = [
     "find_latest_checkpoint",
     "resolve_checkpoint_path",
     "Normalisation",
+    "get_scale_factor",
     "normalise_series",
     "resolve_episode_date",
     "RngService",

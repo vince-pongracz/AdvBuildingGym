@@ -40,8 +40,6 @@ class EnvConfigManager:
             "env_config_name": config.env_config_name,
             "EPISODE_LENGTH": config.EPISODE_LENGTH,
             "control_step": config.CONTROL_STEP,
-            "temp_min": config.temp_min,
-            "temp_max": config.temp_max,
             "building_props": {
                 "mC": config.building_props.mC,
                 "K": config.building_props.K,
@@ -88,17 +86,12 @@ class EnvConfigManager:
 
         control_step = config_dict.get("control_step", 300)
 
-        temp_min = config_dict.get("temp_min", -60.0)
-        temp_max = config_dict.get("temp_max", 60.0)
-
         # Create Config with basic params (don't trigger __post_init__ defaults)
         config = EnvConfig(
             env_config_name=config_dict.get("env_config_name", "loaded_config"),
             EPISODE_LENGTH=config_dict.get("EPISODE_LENGTH", 288),
             CONTROL_STEP=control_step,
             building_props=building_props,
-            temp_min=temp_min,
-            temp_max=temp_max,
             # Set to empty lists to prevent __post_init__ from creating defaults
             infras=[],
             statesources=[],
@@ -125,7 +118,6 @@ class EnvConfigManager:
             "K": building_props.K,
             "mC": building_props.mC,
             "timestep": control_step,
-            "temp_abs_max": max(abs(temp_min), abs(temp_max)),
         }
 
         # Reconstruct statesources

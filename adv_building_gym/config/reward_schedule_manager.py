@@ -135,11 +135,18 @@ class RewardScheduleManager:
             seed=cfg.get("seed", 42),
             reward_specs=reward_specs,
         )
+        reward_lines = [
+            f"  {s['class_name']}: weight={s['weight']}"
+            + (f", params={s['params']}" if s["params"] else "")
+            for s in reward_specs
+        ]
         logger.info(
-            "Loaded reward schedule from %s: mode=%s, %d rewards, "
-            "swap every %d iterations",
-            path.name, manager.mode, len(reward_specs),
+            "Loaded reward schedule from %s: mode=%s, "
+            "swap every %d iterations\n"
+            "RewardSchedule (%d rewards):\n%s",
+            path.name, manager.mode,
             manager.swap_every_n_iterations,
+            len(reward_specs), "\n".join(reward_lines),
         )
         return manager
 

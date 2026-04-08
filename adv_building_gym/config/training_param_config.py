@@ -6,7 +6,7 @@ Fields are split by algorithm where their semantics differ.
 """
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from adv_building_gym.config.utils.loggable_config import LoggableConfig
@@ -61,6 +61,8 @@ class TrainingParamConfig(LoggableConfig):
     sac_training_intensity: float = 1.0
     sac_rollout_fragment_length: int = 288
 
+    _source_file: str | None = field(default=None, repr=False)
+
     @staticmethod
     def from_yaml(path: str | Path) -> "TrainingParamConfig":
         """Load training config from a YAML file.
@@ -89,8 +91,11 @@ class TrainingParamConfig(LoggableConfig):
         flat.update(data)
 
         config = TrainingParamConfig(**flat)
+        config._source_file = Path(path).name
         config.log_values()
         return config
 
     def _log_label(self) -> str:
+        if self._source_file:
+            return f"TrainingParamConfig ({self._source_file})"
         return "TrainingParamConfig"

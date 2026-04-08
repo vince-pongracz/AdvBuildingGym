@@ -19,5 +19,8 @@ class LoggableConfig(ABC):
     def log_values(self) -> None:
         """Log all config field values at INFO level."""
         logger = logging.getLogger(type(self).__module__)
-        lines = [f"  {f.name} = {getattr(self, f.name)}" for f in fields(self)]
+        lines = [
+            f"  {f.name} = {getattr(self, f.name)}"
+            for f in fields(self) if not f.name.startswith("_")
+        ]
         logger.info("%s:\n%s", self._log_label(), "\n".join(lines))

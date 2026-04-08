@@ -67,7 +67,7 @@ class InsideTemperature(StateSource):
         This ensures the reward function sees comparable values.
         """
         # Shared temperature scale written by WeatherDataSource to info.
-        # Fallback 60 °C matches the default EnvConfig.temp_max.
+        # Fallback 60 °C is a safe default when no weather data is loaded.
         temp_abs_max: float = float((info or {}).get("_temp_abs_max", 60.0))
 
         if self.ts is not None:

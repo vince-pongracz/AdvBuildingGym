@@ -47,14 +47,6 @@ class EnvConfig(LoggableConfig):
         BuildingProps(mC=300, K=20)
     )
 
-    # Fixed temperature normalisation range [°C].
-    # All temperature values (outdoor, indoor, desired setpoint) are normalised
-    # as temp_norm = temp_raw / max(|temp_min|, |temp_max|), mapping to [-1, 1].
-    # A fixed range ensures consistent normalisation across different weather
-    # datasets and temperature profiles.
-    temp_min: float = -60.0  # °C
-    temp_max: float = 60.0   # °C
-
     # Cached singleton instances (for backward compatibility and inspection)
     # WARNING: Do not pass these to parallel environments - use factory methods instead
     infras: Optional[List[Infrastructure]] = None
@@ -73,10 +65,9 @@ class EnvConfig(LoggableConfig):
         Returns:
             List of newly created StateSource instances.
         """
-        temp_abs_max = max(abs(self.temp_min), abs(self.temp_max))
         return [
             EnergyPriceDataSource("E_price"),
-            WeatherDataSource("weather", temp_abs_max=temp_abs_max),
+            WeatherDataSource("weather"),
             InsideTemperature("desired_temp_in"),
             DesiredUserEnergyNeed("user_energy_need"),
             BuildingHeatLoss(
@@ -175,8 +166,6 @@ class EnvConfig(LoggableConfig):
             f"  CONTROL_STEP = {self.CONTROL_STEP}",
             f"  ACTION_HISTORY_LENGTH = {self.ACTION_HISTORY_LENGTH}",
             f"  building_props = mC={self.building_props.mC}, K={self.building_props.K}",
-            f"  temp_min = {self.temp_min}",
-            f"  temp_max = {self.temp_max}",
             f"  infras = {_names(self.infras)}",
             f"  statesources = {_names(self.statesources)}",
         ]

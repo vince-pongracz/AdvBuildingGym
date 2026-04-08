@@ -8,7 +8,7 @@ from gymnasium.spaces import Box
 
 from ..base import StateSource
 from adv_building_gym.utils.serializable import ComponentRegistry
-from adv_building_gym.utils.normalisation import Normalisation, normalise_series
+from adv_building_gym.utils.normalisation import Normalisation, get_scale_factor, normalise_series
 
 logger = logging.getLogger(__name__)
 
@@ -17,21 +17,18 @@ class WeatherDataSource(StateSource):
     """WeatherDataSource"""
 
     # normalise is an enum, need special handling for serialization
-    _context_params: ClassVar[Set[str]] = {'control_step', 'temp_abs_max'}
-    _exclude_params: ClassVar[Set[str]] = {'iteration', 'ts', '_fixed_temp_abs_max', 'wind_speed_abs_max'}
+    _context_params: ClassVar[Set[str]] = {'control_step'}
+    _exclude_params: ClassVar[Set[str]] = {'iteration', 'ts', 'temp_abs_max', 'wind_speed_abs_max'}
 
     def __init__(self, name: str, ds_path: str | None = None,
-                normalise: Normalisation | str | None = Normalisation.ABS_MIN_MAX_SCALING,
-                temp_abs_max: float | None = None) -> None:
+                normalise: Normalisation | str | None = Normalisation.ABS_MIN_MAX_SCALING) -> None:
         super().__init__(name, ds_path)
 
         self.normalise = Normalisation.init(normalise)  # Store for serialization
         self.temp_out_raw: float = 0.0  # Raw outdoor temperature (°C)
-        # Fixed scale factor from config (max(|temp_min|, |temp_max|)).
-        # When set, temperature normalisation uses this instead of the
-        # data-derived value, ensuring consistent scaling across datasets.
-        self._fixed_temp_abs_max: float | None = temp_abs_max
-        self.temp_abs_max: float = temp_abs_max if temp_abs_max is not None else 1.0
+        # Derived from data in _post_load_data_processing; represents
+        # max(|temp_amb|) across the loaded CSV for normalisation.
+        self.temp_abs_max: float = 1.0
         self.wind_speed_abs_max: float = 1.0  # Derived from data in _post_load_data_processing
 
         if self.ts is not None:
@@ -78,21 +75,17 @@ class WeatherDataSource(StateSource):
             "avg_wind_speed": "avg_wind_speed_norm",
         }
 
-        for raw_col, norm_col in cols.items():
-            if raw_col in self.ts.columns:
-                if raw_col == "temp_amb" and self._fixed_temp_abs_max is not None:
-                    # Use fixed config range for temperature normalisation
-                    self.ts[norm_col] = self.ts[raw_col] / self._fixed_temp_abs_max
-                else:
-                    self.ts[norm_col] = normalise_series(self.ts[raw_col], self.normalise)
-
-        # Use fixed scale factor when provided, otherwise derive from data
-        if self._fixed_temp_abs_max is not None:
-            self.temp_abs_max = self._fixed_temp_abs_max
-        elif "temp_amb" in self.ts.columns:
-            self.temp_abs_max = float(self.ts["temp_amb"].abs().max())
+        # Derive temp_abs_max from data — the scale factor (denominator)
+        # that normalise_series uses, so downstream components can convert
+        # between raw °C and normalised values on the same scale.
+        if "temp_amb" in self.ts.columns:
+            self.temp_abs_max = get_scale_factor(self.ts["temp_amb"], self.normalise)
         else:
             self.temp_abs_max = 1.0
+
+        for raw_col, norm_col in cols.items():
+            if raw_col in self.ts.columns:
+                self.ts[norm_col] = normalise_series(self.ts[raw_col], self.normalise)
 
         # Wind speed scale factor — derived from data (always non-negative)
         if "avg_wind_speed" in self.ts.columns:
