@@ -100,6 +100,18 @@ class WeatherDataSource(StateSource):
         if "avg_wind_speed_norm" not in state_spaces.keys():
             state_spaces["avg_wind_speed_norm"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
 
+        # Raw scale factors — set once when data is loaded, not every step.
+        # The policy can use these to reconstruct physical units from
+        # normalised observations (e.g. temp_out_raw = temp_out_norm * temp_abs_max).
+        if "temp_abs_max" not in state_spaces.keys():
+            state_spaces["temp_abs_max"] = Box(
+                low=0, high=np.inf, shape=(1,), dtype=np.float32
+            )
+        if "wind_speed_abs_max" not in state_spaces.keys():
+            state_spaces["wind_speed_abs_max"] = Box(
+                low=0, high=np.inf, shape=(1,), dtype=np.float32
+            )
+
         if "sim_hour" not in state_spaces.keys():
             state_spaces["sim_hour"] = Box(low=np.full((1,), 0, dtype=np.float32),
                                             high=np.full((1,), np.inf, dtype=np.float32),
@@ -154,9 +166,13 @@ class WeatherDataSource(StateSource):
         states["solar_irradiance_norm"][0] = np.float32(solar_irradiance_norm)
         states["avg_wind_speed_norm"][0] = np.float32(avg_wind_speed_norm)
 
-        # Expose the temperature scale factor via info so other components
-        # (e.g. InsideTemperature) can normalise on the same scale.
-        # Not in observation space — raw °C value would destabilise the NN.
+        # Raw scale factors — constant within an episode, change only when
+        # a new data variant is loaded (via _post_load_data_processing).
+        states["temp_abs_max"][0] = np.float32(self.temp_abs_max)
+        states["wind_speed_abs_max"][0] = np.float32(self.wind_speed_abs_max)
+
+        # Expose scale factors via info for inter-component use
+        # (e.g. InsideTemperature normalises on the same temp scale).
         if info is not None:
             info["_temp_abs_max"] = self.temp_abs_max
             info["_wind_speed_abs_max"] = self.wind_speed_abs_max

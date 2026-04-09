@@ -200,8 +200,9 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         self._episode_day_mode: str = "none"
 
         # Build observation and action spaces from components.
-        # Only normalised, bounded values belong here — raw physical
-        # quantities (kWh, °C, kW) go into _component_info instead.
+        # Time-varying signals are normalised to small ranges; raw scale
+        # factors (e.g. temp_abs_max, E_price_max) are included
+        # unnormalised so the policy can reconstruct physical units.
         observation_space = OrderedDict()
         action_space = OrderedDict()
 

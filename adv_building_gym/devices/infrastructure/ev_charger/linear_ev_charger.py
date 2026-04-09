@@ -125,6 +125,13 @@ class LinearEVCharger(Infrastructure):
             # Normalized: 0 = no time left or disconnected, 1 = max_charge_time_hrs remaining
             state_spaces["ev_charge_to_target_hrs_norm"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
 
+        # Raw maximum charging power (kW) — changes only when a new EV
+        # connects with different specs (via EvSpec).
+        if "ev_max_charging_kW" not in state_spaces.keys():
+            state_spaces["ev_max_charging_kW"] = Box(
+                low=0, high=np.inf, shape=(1,), dtype=np.float32
+            )
+
         return state_spaces, action_spaces
 
     def set_target(self, target: float) -> None:
@@ -267,6 +274,7 @@ class LinearEVCharger(Infrastructure):
         states["ev_soc"][0] = np.float32(self.soc)
         states["ev_target_soc"][0] = np.float32(self.target_soc)
         states["ev_connected"][0] = np.float32(1.0 if self.ev_connected else 0.0)
+        states["ev_max_charging_kW"][0] = np.float32(self.max_charging_kW)
 
         # Decrement charge_to_target_in_hrs by control_step (convert seconds to hours)
         if self.ev_connected and self.charge_to_target_in_hrs > 0:

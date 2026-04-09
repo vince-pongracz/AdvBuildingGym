@@ -94,11 +94,13 @@ def select_model(
             actor_lr=training_config.learning_rate,  # LR of the policy network. RLlib default: 3e-5
             critic_lr=training_config.learning_rate,  # LR of the critic network. RLlib default: 3e-4
             alpha_lr=training_config.learning_rate,  # Influences weight of entropy -- and thus exploration. RLlib default: 3e-4
+            # PrioritizedEpisodeReplayBuffer crashes on Ray 2.52.1 with
+            # KeyError in sum-tree when priorities degenerate to zero.
+            # Use uniform EpisodeReplayBuffer until the bug is fixed upstream.
+            # Link: https://github.com/ray-project/ray/issues/50966
             replay_buffer_config={
-                "type": "PrioritizedEpisodeReplayBuffer",  # RLlib default
-                "capacity": episode_length * training_config.sac_days_to_keep_in_replay_buffer,  # RLlib default: 1_000_000
-                "alpha": 0.6,   # How much prioritisation (0 = uniform, 1 = full priority). RLlib default
-                "beta": 0.4,    # Importance-sampling correction (0 = none, 1 = full correction). RLlib default
+                "type": "EpisodeReplayBuffer",
+                "capacity": episode_length * training_config.sac_days_to_keep_in_replay_buffer,
             },
             # SAC-specific hyperparameters
             twin_q=True,  # Use twin Q-networks to reduce overestimation bias. RLlib default

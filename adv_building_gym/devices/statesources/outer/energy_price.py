@@ -42,8 +42,11 @@ class EnergyPriceDataSource(StateSource):
 
         if "E_price" not in state_spaces.keys():
             state_spaces["E_price"] = Box(low=-1, high=1, shape=(1,), dtype=np.float32)
+        # Raw maximum energy price (€/kWh) — changes only when a new data
+        # variant is loaded.  Allows the policy to reconstruct physical
+        # price from the normalised E_price observation.
         if "E_price_max" not in state_spaces.keys():
-            state_spaces["E_price_max"] = Box(low=-1, high=1, shape=(1,), dtype=np.float32)
+            state_spaces["E_price_max"] = Box(low=0, high=np.inf, shape=(1,), dtype=np.float32)
 
         if "sim_hour" not in state_spaces.keys():
             state_spaces["sim_hour"] = Box(low=np.full((1,), 0, dtype=np.float32),
@@ -68,8 +71,9 @@ class EnergyPriceDataSource(StateSource):
                 energy_price = 0.75
 
         states["E_price"][0] = np.float32(energy_price)
-        # E_price is already normalised, so the normalised max is 1.0
-        states["E_price_max"][0] = np.float32(1.0)
+        # Raw maximum price (€/kWh) — constant within an episode, changes
+        # only when a new data variant is loaded.
+        states["E_price_max"][0] = np.float32(self.price_max)
 
     @property
     def E_price_max_raw(self) -> float:

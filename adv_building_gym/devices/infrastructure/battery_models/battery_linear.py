@@ -85,6 +85,12 @@ class BatteryLinear(Infrastructure):
         if "battery_pct_hist" not in state_spaces.keys():
             state_spaces["battery_pct_hist"] = Box(low=0, high=1, shape=(self.history_length,), dtype=np.float32)
 
+        # Raw battery capacity (kWh) — constant hardware parameter.
+        if "battery_capacity_kWh" not in state_spaces.keys():
+            state_spaces["battery_capacity_kWh"] = Box(
+                low=0, high=np.inf, shape=(1,), dtype=np.float32
+            )
+
         return state_spaces, action_spaces
 
     def set_target(self, target: Optional[float] = None) -> None:
@@ -132,6 +138,7 @@ class BatteryLinear(Infrastructure):
         super().update_state(states, info)
         states["battery_pct"][0] = np.float32(self.soc)
         states["battery_target_pct"][0] = np.float32(self.target_soc)
+        states["battery_capacity_kWh"][0] = np.float32(self.max_cap_kWh)
 
         history = states["battery_pct_hist"]
         history[:-1] = history[1:]
