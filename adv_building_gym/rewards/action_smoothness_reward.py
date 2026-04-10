@@ -5,40 +5,45 @@ from adv_building_gym.utils.serializable import ComponentRegistry
 
 
 class ActionSmoothnessReward(RewardFunction):
-    """Penalise large action changes between consecutive timesteps.
+    """Penalise oscillatory action patterns over a rolling history window.
 
-    For each action key, computes a per-key penalty in [-1, 0]:
+    Instead of penalising raw step-to-step changes (which also punishes
+    justified ramps), this reward targets *direction reversals* weighted
+    by acceleration magnitude.  A reversal occurs when consecutive first-
+    differences flip sign — the hallmark of oscillation.
 
-        penalty_k = -||a_t - a_{t-1}||² / (4 * n_dims_k)
+    For each action key and each dimension independently:
 
-    where 4 * n_dims_k is the maximum possible squared L2 norm (each
-    dimension changes by at most 2 in [-1, 1]).  The penalties are summed
-    across all action keys, giving a raw reward in [-n_action_keys, 0].
-    The final reward is ``weight * sum(penalties)``.
+    1. Compute first-differences from the history window:
+       ``d_i = a_{i+1} - a_i`` for consecutive pairs.
+    2. For each pair of consecutive diffs ``(d_i, d_{i+1})``, check for
+       a sign reversal: ``sign(d_i) * sign(d_{i+1}) < 0``.
+    3. Where a reversal is detected, compute the second-difference
+       (acceleration): ``accel = d_{i+1} - d_i``, and accumulate
+       ``accel²``.
+    4. Normalise by the maximum possible ``accel²`` (16 per dimension
+       per pair, since each diff ∈ [-2, 2] and worst-case swing is 4).
 
-    ``max_reward = 0.0`` so the smoothness term contributes nothing to the
-    achievable reward ceiling in reward_rate, but pulls down achieved_reward
-    when actions oscillate.
+    The per-key penalty is averaged across all checked pairs and lives
+    in [-1, 0].  Summing across action keys and shifting by
+    ``max_reward`` gives a raw reward in
+    ``[max_reward - n_keys, max_reward]``.
 
-    The reward reads the most recent entry from the per-key action history
-    window maintained by the environment in ``prev_{key}_hist``
-    (shape ``(window, *action_shape)``).
+    This design ensures:
+    - Smooth ramps (all diffs same sign): zero penalty.
+    - Single justified step-changes from steady state: zero penalty
+      (``sign(0) * sign(x) = 0``, not negative).
+    - Persistent oscillation: heavy penalty, proportional to amplitude.
 
-    Reference: Higher-Order Action Regularisation for RL in Building Energy
-    Management (NeurIPS 2025 UrbanAI Workshop)
+    Reference: Higher-Order Action Regularisation for RL in Building
+    Energy Management (NeurIPS 2025 UrbanAI Workshop)
     Link: https://arxiv.org/abs/2601.02061
     """
-    # TODO VP 2026.03.14. : Read the paper
-    # TODO VP 2026.03.14. : Fix reward ranges and adjust reward rate computations
 
-    # max_reward = 0.3 means perfectly smooth actions earn a small positive
-    # reward, contributing to max_achievable in reward_rate and giving the
-    # agent incentive for smooth control rather than only penalising jitter.
     max_reward: float = 0.3
 
     def __init__(self, weight: float, name: str = "action_smoothness") -> None:
         super().__init__(weight, name)
-        # Number of action keys observed so far; used to compute min_reward
         self._n_action_keys: int = 0
 
     @property
@@ -56,31 +61,54 @@ class ActionSmoothnessReward(RewardFunction):
                 continue
 
             a_current = np.atleast_1d(current_action).astype(np.float32)
-            a_history = states[hist_key]
-            # Most recent previous action is the last row in the history window
-            prev_a = a_history[-1]
+            a_history = states[hist_key]  # shape (window, *action_shape)
 
-            a_diff = a_current - prev_a
-            n_dims = a_current.size
-            # dot(a_diff, a_diff) = ||a_t - a_{t-1}||² (squared L2 norm).
-            # Each dimension is in [-1, 1], so max change per dim is 2,
-            # max squared change per dim is 4, max across n_dims is 4*n_dims.
-            # Dividing normalises to [0, 1] ("fraction of max possible change"),
-            # the leading minus flips it to [-1, 0] as a penalty.
-            penalties.append(-float(np.dot(a_diff, a_diff)) / (4.0 * n_dims))
+            # Build the full action sequence: history rows + current action.
+            # a_history is oldest-first; append current at the end.
+            # Result shape: (window + 1, n_dims)
+            sequence = np.vstack(
+                [a_history.reshape(a_history.shape[0], -1), a_current.reshape(1, -1)]
+            )
+
+            # First differences: d[i] = sequence[i+1] - sequence[i]
+            diffs = np.diff(sequence, axis=0)  # (window, n_dims)
+            n_dims = diffs.shape[1]
+
+            if diffs.shape[0] < 2:
+                # Need at least 2 diffs to detect a reversal
+                penalties.append(0.0)
+                continue
+
+            # Check consecutive diff pairs for per-dimension sign reversals.
+            # sign(d_i) * sign(d_{i+1}) < 0  iff  genuine +/- flip.
+            # Link: https://numpy.org/doc/stable/reference/generated/numpy.sign.html
+            signs = np.sign(diffs)
+            sign_products = signs[:-1] * signs[1:]  # (n_pairs, n_dims)
+
+            # Acceleration (second difference) at each pair
+            accels = np.diff(diffs, axis=0)  # (n_pairs, n_dims)
+
+            # Mask: only penalise where a reversal occurred
+            reversal_mask = sign_products < 0  # (n_pairs, n_dims)
+
+            # Squared acceleration, zeroed where no reversal
+            accel_sq = np.where(reversal_mask, accels ** 2, 0.0)
+
+            # Max accel² per dimension per pair = 16 (swing from -2 to +2)
+            n_pairs = accel_sq.shape[0]
+            max_possible = 16.0 * n_dims * n_pairs
+
+            # Penalty in [-1, 0]: fraction of worst-case oscillation
+            penalty = -float(accel_sq.sum()) / max_possible
+            penalties.append(penalty)
 
         if not penalties:
             return 0.0, max_step
 
-        # Update action key count on first call (stable across episode)
         if self._n_action_keys == 0:
             self._n_action_keys = len(penalties)
 
-        # Sum of per-key penalties; range is [-n_action_keys, 0].
-        # Shift by max_reward so smooth actions earn a positive reward
-        # instead of just zero: range becomes [max_reward - n_keys, max_reward].
         raw_reward = self.max_reward + sum(penalties)
-
         return float(self.weight * raw_reward), max_step
 
 
