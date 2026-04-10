@@ -77,7 +77,7 @@ def _add_day_traces(
         ))
 
 
-def _resolve_weather_cols(sample_df: pd.DataFrame) -> list[tuple[str, str]]:
+def resolve_weather_cols(sample_df: pd.DataFrame) -> list[tuple[str, str]]:
     """Return (column_name, label) pairs available in the data."""
     available = []
     for col, label, alt in _WEATHER_COLS:
@@ -137,7 +137,7 @@ def build_weather_figures(
 ) -> list[go.Figure]:
     """Create one standalone figure per weather variable, each with all days overlaid."""
     sample_df = next(iter(day_frames.values()))
-    available = _resolve_weather_cols(sample_df)
+    available = resolve_weather_cols(sample_df)
     if not available:
         logger.warning("No plottable weather columns found.")
         return []

@@ -1,0 +1,365 @@
+"""Cross-year monthly plots with all datasets overlaid in a single figure.
+
+For each of the 12 calendar months, collects every day across 2016-2026
+and produces figures where each weather/price dataset appears as its own
+stat band (mean +/- 1 std + min-max), colour-coded by dataset.
+
+Weather figures: one per weather variable, with stat bands per weather
+dataset (dwd, zenodo).  All price datasets feed into a single price
+figure with one stat band per price source (awattar, e_charts).
+
+Profile data (desired_temp_in, ev_schedule, user_energy_need) is
+overlaid as before (date-independent).
+
+Usage:
+    python -m plotting.data_plotting.plot_cross_year_combined
+
+    python -m plotting.data_plotting.plot_cross_year_combined --format html png
+
+    python -m plotting.data_plotting.plot_cross_year_combined --start-year 2020 --end-year 2024
+"""
+
+from __future__ import annotations
+
+import argparse
+import calendar
+import logging
+from datetime import datetime
+from pathlib import Path
+
+import numpy as np
+import plotly.graph_objects as go
+
+from plotting.utils import apply_day_xaxis
+
+from .common import (
+    DATASET_STYLES,
+    DEFAULT_CONFIG,
+    PRICE_DATASETS,
+    REPO_ROOT,
+    WEATHER_DATASETS,
+    days_in_month,
+    load_config,
+    load_profiles_from_cfg,
+    resolve_source,
+    write_output,
+)
+from .figure_builders import (
+    resolve_weather_cols,
+    build_desired_temp_figure,
+    build_ev_schedule_figure,
+    build_user_energy_need_figure,
+    finalize_figure,
+)
+from .loaders import load_days
+from .stats import ColumnStats, compute_column_stats
+
+logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Multi-dataset stat band rendering
+# ---------------------------------------------------------------------------
+
+def _add_dataset_stat_traces(
+    fig: go.Figure,
+    stats: ColumnStats,
+    dataset_name: str,
+    value_label: str,
+    value_fmt: str = ".1f",
+) -> None:
+    """Add mean line + std band + min-max band for one dataset, colour-coded."""
+    style = DATASET_STYLES.get(dataset_name, {
+        "color": "#888",
+        "rgba_std": "rgba(136,136,136,0.20)",
+        "rgba_mm": "rgba(136,136,136,0.08)",
+    })
+    minutes = stats.minutes
+    hhmm = [f"{int(m) // 60:02d}:{int(m) % 60:02d}" for m in minutes]
+
+    # --- min-max band (outer, lighter) ---
+    fig.add_trace(go.Scatter(
+        x=minutes, y=stats.vmax,
+        mode="lines", line=dict(width=0),
+        legendgroup=dataset_name, showlegend=False, hoverinfo="skip",
+    ))
+    fig.add_trace(go.Scatter(
+        x=minutes, y=stats.vmin,
+        mode="lines", line=dict(width=0),
+        fill="tonexty", fillcolor=style["rgba_mm"],
+        legendgroup=dataset_name,
+        name=f"{dataset_name} min\u2013max",
+        showlegend=True, hoverinfo="skip",
+    ))
+
+    # --- +/-1 std band ---
+    upper_std = stats.mean + stats.std
+    lower_std = stats.mean - stats.std
+    fig.add_trace(go.Scatter(
+        x=minutes, y=upper_std,
+        mode="lines", line=dict(width=0),
+        legendgroup=dataset_name, showlegend=False, hoverinfo="skip",
+    ))
+    fig.add_trace(go.Scatter(
+        x=minutes, y=lower_std,
+        mode="lines", line=dict(width=0),
+        fill="tonexty", fillcolor=style["rgba_std"],
+        legendgroup=dataset_name,
+        name=f"{dataset_name} \u00b11 std",
+        showlegend=True, hoverinfo="skip",
+    ))
+
+    # --- mean line ---
+    fig.add_trace(go.Scatter(
+        x=minutes, y=stats.mean,
+        mode="lines",
+        legendgroup=dataset_name,
+        name=f"{dataset_name} mean",
+        line=dict(color=style["color"], width=2),
+        customdata=np.column_stack([
+            hhmm,
+            [f"{v:{value_fmt}}" for v in stats.vmin],
+            [f"{v:{value_fmt}}" for v in stats.vmax],
+        ]),
+        hovertemplate=(
+            f"<b>{dataset_name} mean</b> " + "%{customdata[0]}<br>"
+            f"{value_label}: " + "%{y:" + value_fmt + "}"
+            " [%{customdata[1]} .. %{customdata[2]}]"
+            "<extra></extra>"
+        ),
+    ))
+
+
+# ---------------------------------------------------------------------------
+# Combined figure builders
+# ---------------------------------------------------------------------------
+
+def _build_combined_weather_figures(
+    datasets: dict[str, dict[str, object]],
+    month_label: str,
+) -> list[go.Figure]:
+    """Build one figure per weather variable with stat bands from each dataset.
+
+    Resolves columns per-dataset so that equivalent variables with different
+    column names (e.g. DWD ``sun_shine`` vs Zenodo ``direct_sun_shine``) are
+    grouped under the same y-axis label.
+    """
+    # Resolve columns per dataset: {ds_name: [(col, label), ...]}
+    ds_cols: dict[str, list[tuple[str, str]]] = {}
+    for ds_name, day_frames in datasets.items():
+        if not day_frames:
+            continue
+        sample = next(iter(day_frames.values()))
+        ds_cols[ds_name] = resolve_weather_cols(sample)
+    if not ds_cols:
+        return []
+
+    # Collect the union of y-axis labels in stable order
+    seen_labels: set[str] = set()
+    ordered_labels: list[str] = []
+    for cols in ds_cols.values():
+        for _, label in cols:
+            if label not in seen_labels:
+                seen_labels.add(label)
+                ordered_labels.append(label)
+
+    figures: list[go.Figure] = []
+    for label in ordered_labels:
+        fig = go.Figure()
+        has_data = False
+        for ds_name, cols in ds_cols.items():
+            # Find the column name this dataset uses for this label
+            col = next((c for c, lbl in cols if lbl == label), None)
+            if col is None:
+                continue
+            stats = compute_column_stats(datasets[ds_name], col)
+            if stats is not None:
+                _add_dataset_stat_traces(fig, stats, ds_name, col)
+                has_data = True
+
+        if not has_data:
+            continue
+
+        apply_day_xaxis(fig)
+        fig.update_yaxes(title_text=label)
+        title = f"{label} \u2014 {month_label} (all datasets)"
+        finalize_figure(fig, title)
+        figures.append(fig)
+
+    return figures
+
+
+def _build_combined_price_figure(
+    datasets: dict[str, dict[str, object]],
+    month_label: str,
+) -> go.Figure | None:
+    """Build one price figure with stat bands from each price dataset."""
+    fig = go.Figure()
+    has_data = False
+    for ds_name, day_frames in datasets.items():
+        if not day_frames:
+            continue
+        stats = compute_column_stats(day_frames, "baseprice")
+        if stats is not None:
+            _add_dataset_stat_traces(fig, stats, ds_name, "price", ".2f")
+            has_data = True
+
+    if not has_data:
+        return None
+
+    apply_day_xaxis(fig)
+    fig.update_yaxes(title_text="Energy price (ct/kWh)")
+    title = f"Energy price \u2014 {month_label} (all datasets)"
+    finalize_figure(fig, title)
+    return fig
+
+
+# ---------------------------------------------------------------------------
+# Data loading
+# ---------------------------------------------------------------------------
+
+def _load_multi_datasets(
+    cfg_section: dict,
+    section_name: str,
+    dataset_keys: list[str],
+    dates: list[datetime],
+) -> dict[str, dict[str, object]]:
+    """Load data from every dataset variant in *dataset_keys*."""
+    result: dict[str, dict[str, object]] = {}
+    for ds_key in dataset_keys:
+        src = resolve_source(cfg_section, section_name, key=ds_key)
+        if src is None:
+            continue
+        frames = load_days(
+            REPO_ROOT / src["dir"],
+            src["file_pattern"],
+            src["timestamp_col"],
+            dates,
+        )
+        if frames:
+            result[ds_key] = frames
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Main orchestration
+# ---------------------------------------------------------------------------
+
+def run_combined(
+    config_path: Path = DEFAULT_CONFIG,
+    output_formats: list[str] | None = None,
+    start_year: int = 2016,
+    end_year: int = 2026,
+) -> None:
+    """Generate combined cross-year plots (all datasets per figure)."""
+    output_formats = output_formats or ["html"]
+    cfg = load_config(config_path)
+    out_dir = REPO_ROOT / cfg["output"]["dir"] / "cross_year_combined"
+
+    for month in range(1, 13):
+        month_name = calendar.month_name[month]
+        month_abbr = calendar.month_abbr[month]
+        logger.info("=== %s ===", month_name)
+
+        # Collect all days of this calendar month across all years
+        all_dates: list[datetime] = []
+        for year in range(start_year, end_year + 1):
+            all_dates.extend(days_in_month(year, month))
+
+        # Load all datasets
+        weather_data = _load_multi_datasets(cfg["weather"], "weather", WEATHER_DATASETS, all_dates)
+        price_data = _load_multi_datasets(cfg["price"], "price", PRICE_DATASETS, all_dates)
+        profile_data = load_profiles_from_cfg(cfg, all_dates)
+
+        if not weather_data and not price_data:
+            logger.info("No weather or price data for %s — skipping.", month_name)
+            continue
+
+        # Build figures
+        figures: list[go.Figure] = []
+        month_label = f"{month_name} ({start_year}\u2013{end_year})"
+
+        if weather_data:
+            figures.extend(_build_combined_weather_figures(weather_data, month_label))
+
+        if price_data:
+            price_fig = _build_combined_price_figure(price_data, month_label)
+            if price_fig is not None:
+                figures.append(price_fig)
+
+        # Profile figures (not dataset-dependent)
+        if profile_data.get("desired_temp_in"):
+            figures.append(build_desired_temp_figure(
+                profile_data["desired_temp_in"],
+                cfg["desired_temp_in"]["value_col"],
+                stat_only=True,
+            ))
+
+        if profile_data.get("user_energy_need"):
+            figures.append(build_user_energy_need_figure(
+                profile_data["user_energy_need"],
+                cfg["user_energy_need"]["value_col"],
+                stat_only=True,
+            ))
+
+        if profile_data.get("ev_schedule"):
+            figures.append(build_ev_schedule_figure(profile_data["ev_schedule"]))
+
+        if not figures:
+            logger.info("No figures for %s — skipping.", month_name)
+            continue
+
+        base_name = f"all_years_{month:02d}_{month_abbr}_combined"
+        write_output(figures, out_dir, base_name, output_formats)
+
+    logger.info("Done.")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Cross-year monthly plots with all weather/price datasets "
+                    "overlaid in a single figure.",
+    )
+    parser.add_argument(
+        "--start-year",
+        type=int,
+        default=2016,
+        help="First year to include (default: 2016).",
+    )
+    parser.add_argument(
+        "--end-year",
+        type=int,
+        default=2026,
+        help="Last year to include (default: 2026).",
+    )
+    parser.add_argument(
+        "--config",
+        type=str,
+        default=str(DEFAULT_CONFIG),
+        help="Path to data_plot_config.yaml (default: %(default)s).",
+    )
+    parser.add_argument(
+        "--format",
+        nargs="+",
+        default=["html"],
+        choices=["html", "png", "svg", "pdf"],
+        help="Output format(s). Default: html.",
+    )
+    args = parser.parse_args()
+
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+    logger.info(
+        "plot_cross_year_combined started at %s",
+        datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+    )
+
+    run_combined(
+        config_path=Path(args.config),
+        output_formats=args.format,
+        start_year=args.start_year,
+        end_year=args.end_year,
+    )
+
+
+if __name__ == "__main__":
+    main()

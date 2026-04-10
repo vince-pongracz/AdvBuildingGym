@@ -34,10 +34,15 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 import plotly.graph_objects as go
-import yaml
 
-from plotting.utils import ensure_chrome_for_kaleido, write_figure_list_html
-
+from .common import (
+    DEFAULT_CONFIG,
+    REPO_ROOT,
+    load_config,
+    load_profiles_from_cfg,
+    resolve_source,
+    write_output,
+)
 from .figure_builders import (
     build_desired_temp_figure,
     build_ev_schedule_figure,
@@ -45,43 +50,9 @@ from .figure_builders import (
     build_user_energy_need_figure,
     build_weather_figures,
 )
-from .loaders import load_day_csv, load_days, load_profiles
+from .loaders import load_days
 
 logger = logging.getLogger(__name__)
-
-_REPO_ROOT = Path(__file__).resolve().parents[2]
-_DEFAULT_CONFIG = Path(__file__).resolve().parents[1] / "config" / "data_plot_config.yaml"
-
-
-# ---------------------------------------------------------------------------
-# Config helpers
-# ---------------------------------------------------------------------------
-
-def _load_config(config_path: Path) -> dict:
-    with open(config_path, encoding="utf-8") as fh:
-        return yaml.safe_load(fh)
-
-
-def _resolve_source(cfg_section: dict, section_name: str) -> dict:
-    """Resolve a ``use`` selector inside a config section.
-
-    The section is expected to contain a ``use`` key naming the active
-    dataset, plus one sub-dict per dataset option.  Returns the sub-dict
-    for the selected dataset.  Falls back to the flat layout (dir,
-    file_pattern, timestamp_col at the top level) for backwards
-    compatibility.
-    """
-    if "use" not in cfg_section:
-        return cfg_section
-
-    key = cfg_section["use"]
-    if key not in cfg_section:
-        available = [k for k in cfg_section if k != "use"]
-        raise KeyError(
-            f"{section_name}.use = {key!r} but available datasets are: "
-            + ", ".join(available)
-        )
-    return cfg_section[key]
 
 
 # ---------------------------------------------------------------------------
@@ -142,52 +113,24 @@ def _load_all_sources(
     sources: dict[str, dict[str, object]] = {}
 
     # Year-partitioned sources (weather, price)
-    weather_cfg = _resolve_source(cfg["weather"], "weather")
+    weather_cfg = resolve_source(cfg["weather"], "weather")
     sources["weather"] = load_days(
-        _REPO_ROOT / weather_cfg["dir"],
+        REPO_ROOT / weather_cfg["dir"],
         weather_cfg["file_pattern"],
         weather_cfg["timestamp_col"],
         dates,
     )
 
-    price_cfg = _resolve_source(cfg["price"], "price")
+    price_cfg = resolve_source(cfg["price"], "price")
     sources["price"] = load_days(
-        _REPO_ROOT / price_cfg["dir"],
+        REPO_ROOT / price_cfg["dir"],
         price_cfg["file_pattern"],
         price_cfg["timestamp_col"],
         dates,
     )
 
-    # Profile sources (date-independent)
-    if "desired_temp_in" in cfg:
-        dt_cfg = cfg["desired_temp_in"]
-        sources["desired_temp_in"] = load_profiles(
-            _REPO_ROOT / dt_cfg["dir"],
-            dt_cfg["files"],
-            dt_cfg["timestamp_col"],
-        )
-
-    if "ev_schedule" in cfg:
-        ev_cfg = cfg["ev_schedule"]
-        sources["ev_schedule"] = load_profiles(
-            _REPO_ROOT / ev_cfg["dir"],
-            ev_cfg["files"],
-            ev_cfg["timestamp_col"],
-        )
-
-    # User energy need: year-partitioned files x profile variants
-    if "user_energy_need" in cfg:
-        ue_cfg = cfg["user_energy_need"]
-        ue_dir = _REPO_ROOT / ue_cfg["dir"]
-        pattern = ue_cfg["file_pattern"]
-        frames: dict[str, object] = {}
-        for profile in ue_cfg["profiles"]:
-            profile_pattern = pattern.replace("{profile}", profile)
-            for date in dates:
-                df = load_day_csv(ue_dir, profile_pattern, ue_cfg["timestamp_col"], date)
-                if not df.empty:
-                    frames[f"{profile} ({date.date()})"] = df
-        sources["user_energy_need"] = frames
+    # Profile sources (desired_temp_in, ev_schedule, user_energy_need)
+    sources.update(load_profiles_from_cfg(cfg, dates))
 
     return sources
 
@@ -231,51 +174,18 @@ def _build_figures(
 
 
 # ---------------------------------------------------------------------------
-# Output
-# ---------------------------------------------------------------------------
-
-def _write_output(
-    figures: list[go.Figure],
-    out_dir: Path,
-    base_name: str,
-    output_formats: list[str],
-) -> None:
-    """Write figures to disk in the requested formats."""
-    out_dir.mkdir(parents=True, exist_ok=True)
-
-    if "html" in output_formats:
-        html_path = out_dir / f"{base_name}.html"
-        write_figure_list_html(figures, str(html_path))
-        logger.info("Wrote %s", html_path)
-
-    static_formats = [fmt for fmt in output_formats if fmt != "html"]
-    if static_formats:
-        ensure_chrome_for_kaleido()
-        for fmt in static_formats:
-            for i, fig in enumerate(figures):
-                title_obj = fig.layout.title
-                title = (
-                    getattr(title_obj, "text", None) or str(title_obj) or f"fig{i}"
-                )
-                tag = title.lower().replace(" ", "_").replace("(", "").replace(")", "")
-                img_path = out_dir / f"{base_name}_{tag}.{fmt}"
-                fig.write_image(str(img_path))
-                logger.info("Wrote %s", img_path)
-
-
-# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
 def plot_days(
     dates: list[datetime],
-    config_path: Path = _DEFAULT_CONFIG,
+    config_path: Path = DEFAULT_CONFIG,
     output_formats: list[str] | None = None,
     n_consecutive: int | None = None,
     stat_only: bool = False,
 ) -> None:
     """Load data for *dates* and write combined plots."""
-    cfg = _load_config(config_path)
+    cfg = load_config(config_path)
     output_formats = output_formats or ["html"]
 
     sources = _load_all_sources(cfg, dates)
@@ -286,9 +196,9 @@ def plot_days(
 
     figures = _build_figures(cfg, sources, stat_only)
 
-    out_dir = _REPO_ROOT / cfg["output"]["dir"]
+    out_dir = REPO_ROOT / cfg["output"]["dir"]
     base_name = _make_base_name(dates, n_consecutive, stat_only)
-    _write_output(figures, out_dir, base_name, output_formats)
+    write_output(figures, out_dir, base_name, output_formats)
 
 
 # ---------------------------------------------------------------------------
@@ -323,7 +233,7 @@ def main() -> None:
     parser.add_argument(
         "--config",
         type=str,
-        default=str(_DEFAULT_CONFIG),
+        default=str(DEFAULT_CONFIG),
         help="Path to data_plot_config.yaml (default: %(default)s).",
     )
     parser.add_argument(
