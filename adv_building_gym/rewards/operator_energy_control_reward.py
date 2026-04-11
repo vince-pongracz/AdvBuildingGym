@@ -45,7 +45,7 @@ class OperatorEnergyControlReward(RewardFunction):
 
     def __init__(self,
                 weight: float,
-                max_power_kW: float = 10.0,
+                max_power_kW: float,
                 name: str = "operator_energy_control_reward",
                 harsh_penalty: float = -4.0,
                 soft_threshold_pct: float = 0.9,
@@ -55,7 +55,8 @@ class OperatorEnergyControlReward(RewardFunction):
 
         Args:
             weight: Reward weight (scaling factor).
-            max_power_kW: Maximum power in kW for denormalization (default: 10.0 kW).
+            max_power_kW: Maximum grid power in kW for denormalization.
+                Must match the building's grid connection capacity.
             name: Reward function name.
             harsh_penalty: Flat penalty when consumption exceeds the operator limit.
             soft_threshold_pct: Fraction of operator limit below which reward is 1.0

@@ -10,7 +10,9 @@ rewards:
 
   # - class_name: EconomicReward
   #   weight: 1.0
-  #   params: {}
+  #   params:
+  #     reference_power_kW: 15.0
+  #     export_bonus: 3.0
 
   - class_name: MinimiseEnergyConsumptionReward
     weight: 0.2
@@ -19,15 +21,18 @@ rewards:
   - class_name: OperatorEnergyControlReward
     weight: 1.0
     params:
+      max_power_kW: 15.0
       harsh_penalty: -4.0
       soft_threshold_pct: 0.9
       recovery_steps: 3
 
   # - class_name: BatteryTargetReward
-  #   weight: 1.0
+  #   weight: 0.5
   #   params:
-  #     diff_threshold: 0.02
-  #     soc_diff_multiplier: 5.0
+  #     safe_low: 0.15
+  #     safe_high: 0.85
+  #     in_band_reward: 0.3
+  #     max_penalty: -3.0
 
   # - class_name: EVChargingReward
   #   weight: 1.0

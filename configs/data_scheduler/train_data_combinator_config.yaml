@@ -44,7 +44,7 @@ augmented_paths:
 
 # Independent variable sources (Cartesian product applied across these)
 variable:
-   :
+  ev_schedule:
     - data/ev_usage_profiles/ev_0.csv
     - data/ev_usage_profiles/ev_1.csv
     - data/ev_usage_profiles/ev_2.csv
