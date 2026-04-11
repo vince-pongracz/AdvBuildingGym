@@ -51,3 +51,11 @@ def setup_warning_filters():
         message=r".*is not within the observation space.*",
         category=UserWarning
     )
+
+    # Suppress repeated "running SAC/PPO on the new API stack" notices from
+    # RLlib algorithm_config.py — the project deliberately uses the new stack
+    # and the message clutters the startup banner (emitted 3x+ per run).
+    warnings.filterwarnings(
+        "ignore",
+        message=r".*running .* on the new API stack.*",
+    )

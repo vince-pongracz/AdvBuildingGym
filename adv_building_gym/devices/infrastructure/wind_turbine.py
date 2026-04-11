@@ -96,6 +96,13 @@ class WindTurbine(Infrastructure):
             low=0, high=1, shape=(1,), dtype=np.float32
         )
 
+        # Raw rated power (kW) — static context variable, only
+        # changes between episodes if the config is swapped.
+        if "wind_rated_power_kW" not in state_spaces.keys():
+            state_spaces["wind_rated_power_kW"] = Box(
+                low=0, high=np.inf, shape=(1,), dtype=np.float32
+            )
+
         return state_spaces, action_spaces
 
     def exec_action(self, actions: Dict, states: Dict, info=None) -> None:
@@ -170,6 +177,7 @@ class WindTurbine(Infrastructure):
         if wind_abs_max is not None:
             self.wind_speed_abs_max = float(wind_abs_max)
         super().update_state(states, info)
+        states["wind_rated_power_kW"][0] = np.float32(self.rated_power_kW)
 
     def get_electric_consumption(self, actions: Dict) -> float:
         """Get current electric energy consumption (production) from wind turbine.

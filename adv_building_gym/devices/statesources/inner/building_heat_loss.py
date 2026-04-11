@@ -51,15 +51,25 @@ class BuildingHeatLoss(StateSource):
         self.timestep = timestep
 
     def setup_spaces(self,
-                     state_spaces: OrderedDict,
-                     action_spaces: OrderedDict
-                     ) -> tuple[OrderedDict, OrderedDict]:
+                    state_spaces: OrderedDict,
+                    action_spaces: OrderedDict) -> tuple[OrderedDict, OrderedDict]:
         """Setup observation spaces - requires temp_in_norm and temp_out_norm."""
         # Ensure temperature states exist (may be created by other components)
         if "temp_in_norm" not in state_spaces:
             state_spaces["temp_in_norm"] = Box(low=-1, high=1, shape=(1,), dtype=np.float32)
         if "temp_out_norm" not in state_spaces:
             state_spaces["temp_out_norm"] = Box(low=-1, high=1, shape=(1,), dtype=np.float32)
+
+        # Static building physics parameters — context variables that only
+        # change between episodes if building_props is swapped.
+        if "building_K" not in state_spaces:
+            state_spaces["building_K"] = Box(
+                low=0, high=np.inf, shape=(1,), dtype=np.float32
+            )
+        if "building_mC" not in state_spaces:
+            state_spaces["building_mC"] = Box(
+                low=0, high=np.inf, shape=(1,), dtype=np.float32
+            )
 
         return state_spaces, action_spaces
 
@@ -88,6 +98,10 @@ class BuildingHeatLoss(StateSource):
 
         # Clip to observation space bounds and ensure float32
         states["temp_in_norm"][0] = np.float32(np.clip(new_temp, -1.0, 1.0))
+
+        # Publish static building physics parameters.
+        states["building_K"][0] = np.float32(self.K)
+        states["building_mC"][0] = np.float32(self.mC)
 
 
 # Register BuildingHeatLoss with the component registry

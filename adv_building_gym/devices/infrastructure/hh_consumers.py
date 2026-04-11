@@ -34,17 +34,15 @@ class HouseholdEnergyConsumers(Infrastructure):
 
     def __init__(self,
                 name: str,
-                max_power_kW: float,
                 peak_consumption_kW: float = 8.0
                 ) -> None:
         """Initialize household energy consumers infrastructure.
 
         Args:
             name: Component identifier
-            max_power_kW: Maximum power consumption in kW (typically = peak_consumption_kW)
             peak_consumption_kW: Peak household consumption in kW
         """
-        super().__init__(name, max_power_kW)
+        super().__init__(name, peak_consumption_kW)
 
         self.peak_consumption_kW = peak_consumption_kW
 
@@ -64,6 +62,11 @@ class HouseholdEnergyConsumers(Infrastructure):
         if "hh_consumption_norm" not in state_spaces:
             state_spaces["hh_consumption_norm"] = Box(
                 low=0, high=1, shape=(1,), dtype=np.float32
+            )
+        
+        if "peak_consumption_kW" not in state_spaces:
+            state_spaces["peak_consumption_kW"] = Box(
+                low=0, high=np.inf, shape=(1,), dtype=np.float32
             )
 
         return state_spaces, action_spaces
@@ -97,6 +100,7 @@ class HouseholdEnergyConsumers(Infrastructure):
         """Write current normalized consumption into states for observation."""
         super().update_state(states, info)
         states["hh_consumption_norm"][0] = np.float32(self.consumption_norm)
+        states["peak_consumption_kW"][0] = np.float32(self.peak_consumption_kW)
 
     def _synthetic_consumption(self, states: Dict) -> float:
         """Generate synthetic consumption based on time of day.

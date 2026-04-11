@@ -80,6 +80,13 @@ class SolarPanel(Infrastructure):
                 low=0, high=1, shape=(1,), dtype=np.float32
             )
 
+        # Raw peak power capacity (kW) — static context variable, only
+        # changes between episodes if the config is swapped.
+        if "solar_peak_power_kW" not in state_spaces.keys():
+            state_spaces["solar_peak_power_kW"] = Box(
+                low=0, high=np.inf, shape=(1,), dtype=np.float32
+            )
+
         return state_spaces, action_spaces
 
 
@@ -112,6 +119,11 @@ class SolarPanel(Infrastructure):
             actions["solar_action"] = np.array([solar_action], dtype=np.float32)
         else:
             actions["solar_action"][0] = solar_action
+
+    def update_state(self, states: Dict, info=None) -> None:
+        """Publish static peak power into the observable state."""
+        super().update_state(states, info)
+        states["solar_peak_power_kW"][0] = np.float32(self.peak_power_kW)
 
     def _synthetic_irradiance(self, states: Dict) -> float:
         """Generate synthetic irradiance based on time of day.

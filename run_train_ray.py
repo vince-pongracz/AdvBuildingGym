@@ -42,6 +42,7 @@ from adv_building_gym.utils import (
     SlurmResources,
     trial_dirname_creator,
 )
+from adv_building_gym.utils.startup_log import log_startup_banner
 
 # Logging configuration
 logging.basicConfig(
@@ -190,8 +191,6 @@ def main():
     )
 
     args = parser.parse_args()
-
-    logger.info("CMD: %s", " ".join(sys.argv))
 
     if args.seed is not None:
         training_param_config.seed = args.seed
@@ -451,13 +450,21 @@ def main():
     )
 
     experiment_path = os.path.join(storage_path, run_name)
-    logger.info("Starting tuner.fit() for: %s", run_name)
-    logger.info("=" * 70)
-    logger.info(
-        "To visualize results with TensorBoard, run:\n"
-        "  tensorboard --logdir %s", experiment_path
+
+    log_startup_banner(
+        args=args,
+        env_config=active_config,
+        training_param_config=training_param_config,
+        reward_manager=reward_manager,
+        data_combinator=data_combinator,
+        infra_combinator=infra_combinator,
+        slurm_resources=slurm_resources,
+        run_name=run_name,
+        experiment_path=experiment_path,
+        storage_path=storage_path,
+        seed=args.seed,
     )
-    logger.info("=" * 70)
+    logger.info("Starting tuner.fit() for: %s", run_name)
     logger.info("Training progress will be displayed below:")
     logger.info("=" * 70)
 

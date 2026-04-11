@@ -48,7 +48,6 @@ infras:
   peak_power_kW: 5.0
 - class: HouseholdEnergyConsumers
   name: hh_consumers
-  max_power_kW: 8.0
   peak_consumption_kW: 8.0
 statesources:
 - class: EnergyPriceDataSource

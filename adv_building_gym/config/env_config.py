@@ -118,7 +118,6 @@ class EnvConfig(LoggableConfig):
             ),
             HouseholdEnergyConsumers(
                 "hh_consumers",
-                max_power_kW=8.0,
                 peak_consumption_kW=8.0,
             ),
         ]

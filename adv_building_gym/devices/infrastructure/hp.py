@@ -73,6 +73,13 @@ class HP(Infrastructure):
         if "temp_out_norm" not in state_spaces:
             state_spaces["temp_out_norm"] = Box(low=-1, high=1, shape=(1,), dtype=np.float32)
 
+        # Raw electric capacity (kW) — static context variable, only
+        # changes between episodes if the config is swapped.
+        if "hp_max_power_kW" not in state_spaces:
+            state_spaces["hp_max_power_kW"] = Box(
+                low=0, high=np.inf, shape=(1,), dtype=np.float32
+            )
+
         return state_spaces, action_spaces
 
     def exec_action(self, actions, states, info=None) -> None:
@@ -156,6 +163,7 @@ class HP(Infrastructure):
         new_temp = states["temp_in_norm"][0] + self.temp_in_norm_change
         # Clipping ensured in exec_action -- maybe reintroduction needed later
         states["temp_in_norm"][0] = np.float32(new_temp)
+        states["hp_max_power_kW"][0] = np.float32(self.max_power_kW)
 
     def get_electric_consumption(self, actions) -> float:
         """Get current electric energy consumption from heat pump in kW.
