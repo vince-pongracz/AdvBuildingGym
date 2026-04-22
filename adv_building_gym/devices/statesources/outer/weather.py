@@ -93,7 +93,7 @@ class WeatherDataSource(StateSource):
                     state_spaces: OrderedDict,
                     action_spaces: OrderedDict
                     ) -> tuple[OrderedDict, OrderedDict]:
-        # TODO VP 2026.04.22. : Add hst variables to these state variables
+        # TODO VP 2026.04.22. : Remove hst variables, use frame stacking instead -- more flexible and doesn't require predefining a fixed history length in the state space.
         if "s_temp_out_norm" not in state_spaces.keys():
             state_spaces["s_temp_out_norm"] = Box(low=-1, high=1, shape=(1,), dtype=np.float32)
         if "s_solar_irradiance_norm" not in state_spaces.keys():
