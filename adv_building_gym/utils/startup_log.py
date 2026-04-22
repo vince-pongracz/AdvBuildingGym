@@ -1,18 +1,19 @@
 """Organised startup banner for training runs.
 
-Prints a single, well-structured block that summarises everything a reader
-needs to reconstruct the run from scratch: invocation, environment topology,
-infrastructure, statesources, rewards + schedules, data schedule, training
-setup, and TensorBoard commands.
+Prints a structured block that summarises everything a reader
+needs to reconstruct the run from scratch: invocation, tensorboard, eval, 
+env config, training setup, env topology: infrastructure, 
+statesources, rewards + schedules.
 
 The same block is optionally written to ``<run_dir>/startup.txt`` so the
 snapshot travels with the checkpoint and can be diffed against other runs.
 
-Call once from the training script, right before ``tuner.fit()``.
+Call once from the training script, before learning/training starts.
 """
 
 from __future__ import annotations
 
+import datetime
 import logging
 import os
 import socket
@@ -24,6 +25,11 @@ from typing import Any
 logger = logging.getLogger("startup")
 
 _HR = "=" * 70
+
+# Each section builder returns one or more (title, body_lines) tuples.
+# Numbering is applied at render time from the order of the list below, so
+# reordering sections (or adding/removing one) cannot desync the labels.
+Section = tuple[str, list[str]]
 
 
 def _header(title: str) -> str:
@@ -55,94 +61,113 @@ def _fmt_statesource(src: Any) -> str:
     return f"  - {name:<20} [{cls}]{tail}"
 
 
-def _section_invocation(seed: int) -> list[str]:
+def _section_invocation(seed: int) -> list[Section]:
     job_id = os.environ.get("SLURM_JOB_ID", "n/a")
     host = socket.gethostname()
     cmd = " ".join(sys.argv)
-    return [
-        _header("[1/6] INVOCATION"),
-        f"  CMD       : {cmd}",
-        f"  HOST/JOB  : {host} / SLURM {job_id}",
-        f"  SEED      : {seed}",
-        f"  PYTHON    : {sys.version.split()[0]}",
+    return [(
+        "INVOCATION",
+        [
+            f"  CMD       : {cmd}",
+            f"  HOST/JOB  : {host} / SLURM {job_id}",
+            f"  SEED      : {seed}",
+            f"  PYTHON    : {sys.version.split()[0]}",
+        ],
+    )]
+
+
+def _section_tensorboard(
+    experiment_path: str,
+    storage_path: str,
+    exec_date: datetime.datetime | None,
+) -> list[Section]:
+    eval_trajectories_root = os.path.abspath("ep_metrics/eval_trajectories")
+    body = [
+        "  Training + eval curves share the same logdir; eval metrics are",
+        "  nested under evaluation/env_runners/ in the TB UI.",
+        "",
+        "  This run only:",
+        f"    ./start_tensorboard.sh {experiment_path}",
+        "",
+        "  All runs for this algorithm (compare across seeds):",
+        f"    ./start_tensorboard.sh {storage_path}",
+        "",
+        "  Eval trajectories (all runs):",
+        f"    ./start_tensorboard.sh {eval_trajectories_root}",
     ]
+    if exec_date is not None:
+        # Matches the directory created in make_eval_state_action_cb_class
+        # (ep_metrics/eval_trajectories/<YYYYmmdd_HHMMSS>/) using the same
+        # exec_date stamp this run uses end-to-end.
+        run_eval_trajectories_path = os.path.join(
+            eval_trajectories_root, exec_date.strftime("%Y%m%d_%H%M%S"),
+        )
+        body.extend([
+            "",
+            "  Eval trajectories (this run only):",
+            f"    ./start_tensorboard.sh {run_eval_trajectories_path}",
+        ])
+    return [("TENSORBOARD", body)]
 
 
-def _section_env_config(env_config: Any) -> list[str]:
+def _section_eval(
+    args: Namespace, env_config: Any, experiment_path: str, seed: int
+) -> list[Section]:
+    algo = args.algorithm
+    cfg_name = getattr(env_config, "env_config_name", "")
+
+    # Forward the reward schedule training used so the printed eval command
+    # reproduces training's reward definition. Data schedules are eval-specific
+    # (eval uses its own data config) and infra schedules are training-only.
+    reward_schedule = getattr(args, "reward_schedule", None)
+    reward_flag = f"--reward-schedule {reward_schedule}" if reward_schedule else None
+
+    explicit_lines = [
+        "  Explicit checkpoint path (this run):",
+        "    sbatch slurm_scripts/slurm_eval_ray.sh \\",
+        f"        --algorithm {algo} --seed {seed} \\",
+    ]
+    if reward_flag:
+        explicit_lines.append(f"        {reward_flag} \\")
+    explicit_lines.append(
+        f"        --checkpoint {experiment_path}/best_model_ep{{checkpoint_serial}}"
+    )
+
+    auto_lines = [
+        "  Auto-resolve best checkpoint for this config-name:",
+        "    sbatch slurm_scripts/slurm_eval_ray.sh \\",
+        f"        --algorithm {algo} --seed {seed} -cn {cfg_name}"
+        + (" \\" if reward_flag else ""),
+    ]
+    if reward_flag:
+        auto_lines.append(f"        {reward_flag}")
+
+    return [(
+        "EVAL",
+        [
+            "  Replace {checkpoint_serial} with the episode number of the",
+            "  checkpoint to load (e.g. best_model_ep500_...).",
+            "",
+            *explicit_lines,
+            "",
+            *auto_lines,
+        ],
+    )]
+
+
+def _section_env_config(env_config: Any) -> list[Section]:
     bp = getattr(env_config, "building_props", None)
     mC = getattr(bp, "mC", "?")
     K = getattr(bp, "K", "?")
-    return [
-        _header(f"[2/6] ENV CONFIG  ({env_config.env_config_name})"),
-        f"  EPISODE_LENGTH   = {env_config.EPISODE_LENGTH} steps",
-        f"  CONTROL_STEP     = {env_config.CONTROL_STEP} s",
-        f"  ACTION_HISTORY   = {env_config.ACTION_HISTORY_LENGTH}",
-        f"  building_props   : mC={mC}  K={K}",
-    ]
-
-
-def _section_components(env_config: Any) -> list[str]:
-    infras = env_config.infras or []
-    statesources = env_config.statesources or []
-    lines = [_header(f"[3/6] INFRASTRUCTURE  ({len(infras)} components)")]
-    lines.extend(_fmt_infra(i) for i in infras) if infras else lines.append("  (none)")
-    lines.append("")
-    lines.append(_header(f"[4/6] STATESOURCES  ({len(statesources)} components)"))
-    lines.extend(_fmt_statesource(s) for s in statesources) if statesources else lines.append("  (none)")
-    return lines
-
-
-def _section_rewards_and_schedules(
-    reward_manager: Any,
-    data_combinator: Any,
-    infra_combinator: Any,
-    grad_train: bool,
-) -> list[str]:
-    lines = [_header("[5/6] REWARDS & SCHEDULES")]
-
-    specs = list(getattr(reward_manager, "_reward_specs", []))
-    mode = getattr(reward_manager, "mode", "?")
-    swap = getattr(reward_manager, "swap_every_n_iterations", "?")
-    lines.append(
-        f"  Reward schedule : mode={mode}  swap every {swap} iter  "
-        f"(grad_train={grad_train})"
-    )
-    if specs:
-        for s in specs:
-            weight = s.get("weight", 1.0)
-            params = s.get("params") or {}
-            params_str = f"  {params}" if params else ""
-            lines.append(f"    - {s['class_name']:<32} w={weight}{params_str}")
-    else:
-        lines.append("    (no rewards configured)")
-
-    lines.append("")
-    if infra_combinator is not None:
-        lines.append(
-            f"  Infra schedule  : mode={infra_combinator.mode}  "
-            f"{len(infra_combinator.config_paths)} configs  "
-            f"swap every {infra_combinator.swap_every_n_iterations} iter"
-        )
-    else:
-        lines.append("  Infra schedule  : none  (single static infra config)")
-
-    lines.append("")
-    if data_combinator is not None:
-        n_variants = len(getattr(data_combinator, "variants", []) or [])
-        n_scenarios = len(getattr(data_combinator, "scenarios", []) or [])
-        variable = getattr(data_combinator, "variable", {}) or {}
-        n_var_combos = 1
-        for v in variable.values():
-            n_var_combos *= max(1, len(v))
-        lines.append(
-            f"  Data schedule   : {n_variants} variants  "
-            f"({n_scenarios} scenarios x {n_var_combos} variable combos)  "
-            f"swap every {data_combinator.swap_every_n_episodes} ep  "
-            f"mode={data_combinator.mode}  day={data_combinator.day}"
-        )
-    else:
-        lines.append("  Data schedule   : none")
-    return lines
+    return [(
+        f"ENV CONFIG  ({env_config.env_config_name})",
+        [
+            f"  EPISODE_LENGTH   = {env_config.EPISODE_LENGTH} steps",
+            f"  CONTROL_STEP     = {env_config.CONTROL_STEP} s",
+            f"  ACTION_HISTORY   = {env_config.ACTION_HISTORY_LENGTH}",
+            f"  building_props   : mC={mC}  K={K}",
+        ],
+    )]
 
 
 def _section_training_setup(
@@ -151,7 +176,7 @@ def _section_training_setup(
     slurm_resources: Any,
     run_name: str,
     experiment_path: str,
-) -> list[str]:
+) -> list[Section]:
     algo = args.algorithm.upper()
     tpc = training_param_config
     if args.algorithm == "ppo":
@@ -172,35 +197,89 @@ def _section_training_setup(
     else:
         hp = f"lr={tpc.learning_rate}"
 
+    return [(
+        "TRAINING SETUP",
+        [
+            f"  Algorithm       : {algo}  (new API stack)",
+            f"  Hyperparams     : {hp}",
+            f"  Episodes        : {args.episodes}  (-> {args.timesteps} timesteps)",
+            f"  Ray resources   : cpus={slurm_resources.num_cpus}  gpus={slurm_resources.num_gpus}",
+            f"  Metric          : {args.metric}  (mode=max)",
+            f"  Checkpoint freq : every {args.checkpoint_frequency_episodes} episodes",
+            f"  Trajectories    : {'enabled' if args.log_trajectories else 'disabled'}",
+            f"  Run name        : {run_name}",
+            f"  Run dir         : {experiment_path}",
+        ],
+    )]
+
+
+def _section_components(env_config: Any) -> list[Section]:
+    infras = env_config.infras or []
+    statesources = env_config.statesources or []
+    infra_body = [_fmt_infra(i) for i in infras] if infras else ["  (none)"]
+    src_body = [_fmt_statesource(s) for s in statesources] if statesources else ["  (none)"]
     return [
-        _header("[6/6] TRAINING SETUP"),
-        f"  Algorithm       : {algo}  (new API stack)",
-        f"  Hyperparams     : {hp}",
-        f"  Episodes        : {args.episodes}  (-> {args.timesteps} timesteps)",
-        f"  Ray resources   : cpus={slurm_resources.num_cpus}  gpus={slurm_resources.num_gpus}",
-        f"  Metric          : {args.metric}  (mode=max)",
-        f"  Checkpoint freq : every {args.checkpoint_frequency_episodes} episodes",
-        f"  Trajectories    : {'enabled' if args.log_trajectories else 'disabled'}",
-        f"  Run name        : {run_name}",
-        f"  Run dir         : {experiment_path}",
+        (f"INFRASTRUCTURE  ({len(infras)} components)", infra_body),
+        (f"STATESOURCES  ({len(statesources)} components)", src_body),
     ]
 
 
-def _section_tensorboard(experiment_path: str, storage_path: str) -> list[str]:
-    return [
-        _header("TENSORBOARD"),
-        "  Training + eval curves share the same logdir; eval metrics are",
-        "  nested under evaluation/env_runners/ in the TB UI.",
-        "",
-        "  This run only:",
-        f"    tensorboard --logdir {experiment_path} --port 6006",
-        "",
-        "  All runs for this algorithm (compare across seeds):",
-        f"    tensorboard --logdir {storage_path} --port 6007",
-        "",
-        "  Side-by-side training vs eval split (explicit tag filter):",
-        f"    tensorboard --logdir_spec train:{experiment_path},eval:{experiment_path} --port 6008",
-    ]
+def _section_rewards(reward_manager: Any) -> list[Section]:
+    specs = list(getattr(reward_manager, "_reward_specs", []))
+    body: list[str] = []
+    if specs:
+        for s in specs:
+            weight = s.get("weight", 1.0)
+            params = s.get("params") or {}
+            params_str = f"  {params}" if params else ""
+            body.append(f"  - {s['class_name']:<32} w={weight}{params_str}")
+    else:
+        body.append("  (no rewards configured)")
+    return [("REWARDS", body)]
+
+
+def _section_schedules(
+    reward_manager: Any,
+    data_combinator: Any,
+    infra_combinator: Any,
+    grad_train: bool,
+) -> list[Section]:
+    body: list[str] = []
+
+    reward_mode = getattr(reward_manager, "mode", "?")
+    reward_swap = getattr(reward_manager, "swap_every_n_iterations", "?")
+    body.append(
+        f"  Reward schedule : mode={reward_mode}  swap every {reward_swap} iter  "
+        f"(grad_train={grad_train})"
+    )
+
+    body.append("")
+    if infra_combinator is not None:
+        body.append(
+            f"  Infra schedule  : mode={infra_combinator.mode}  "
+            f"{len(infra_combinator.config_paths)} configs  "
+            f"swap every {infra_combinator.swap_every_n_iterations} iter"
+        )
+    else:
+        body.append("  Infra schedule  : none  (single static infra config)")
+
+    body.append("")
+    if data_combinator is not None:
+        n_variants = len(getattr(data_combinator, "variants", []) or [])
+        n_scenarios = len(getattr(data_combinator, "scenarios", []) or [])
+        variable = getattr(data_combinator, "variable", {}) or {}
+        n_var_combos = 1
+        for v in variable.values():
+            n_var_combos *= max(1, len(v))
+        body.append(
+            f"  Data schedule   : {n_variants} variants  "
+            f"({n_scenarios} scenarios x {n_var_combos} variable combos)  "
+            f"swap every {data_combinator.swap_every_n_episodes} ep  "
+            f"mode={data_combinator.mode}  day={data_combinator.day}"
+        )
+    else:
+        body.append("  Data schedule   : none")
+    return [("SCHEDULES", body)]
 
 
 def log_startup_banner(
@@ -216,36 +295,45 @@ def log_startup_banner(
     experiment_path: str,
     storage_path: str,
     seed: int,
+    exec_date: datetime.datetime | None = None,
     write_to_disk: bool = True,
 ) -> None:
-    """Log an organised, six-section startup banner.
+    """Log an organised startup banner.
 
-    Prints via ``logger.info`` (one line per entry so timestamps stay aligned)
-    and optionally writes the full banner to ``<experiment_path>/startup.txt``.
+    Sections are numbered automatically from their order in the list below;
+    reordering or adding sections does not require touching any `[i/N]` label.
     """
-    sections: list[list[str]] = [
-        _section_invocation(seed),
-        _section_env_config(env_config),
-        _section_components(env_config),
-        _section_rewards_and_schedules(
-            reward_manager, data_combinator, infra_combinator, args.grad_train
-        ),
-        _section_training_setup(
+    sections: list[Section] = [
+        *_section_invocation(seed),
+        *_section_tensorboard(experiment_path, storage_path, exec_date),
+        *_section_eval(args, env_config, experiment_path, seed),
+        *_section_env_config(env_config),
+        *_section_training_setup(
             args, training_param_config, slurm_resources, run_name, experiment_path
         ),
-        _section_tensorboard(experiment_path, storage_path),
+        *_section_components(env_config),
+        *_section_rewards(reward_manager),
+        *_section_schedules(
+            reward_manager, data_combinator, infra_combinator, args.grad_train
+        ),
     ]
 
-    banner = "\n".join("\n".join(section) for section in sections)
+    total = len(sections)
+    rendered: list[str] = []
+    for idx, (title, body) in enumerate(sections, start=1):
+        rendered.append(_header(f"[{idx}/{total}] {title}"))
+        rendered.extend(body)
+
+    banner = "\n".join(rendered)
     # Single logger.info call so the timestamp prefix appears only once and
     # the box borders stay vertically aligned.
-    logger.info("Startup summary:\n%s", banner)
+    logger.info("\n%s\nStartup summary:\n%s\n%s", _HR, banner, _HR)
 
     if write_to_disk:
         try:
             os.makedirs(experiment_path, exist_ok=True)
             out = Path(experiment_path) / "startup.txt"
             out.write_text(banner + "\n", encoding="utf-8")
-            logger.info("Startup snapshot written to %s", out)
+            logger.info("Startup snapshot written to %s\n%s", out, _HR)
         except OSError as e:
             logger.warning("Could not write startup.txt: %s", e)

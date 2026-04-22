@@ -17,13 +17,29 @@ used as the common x-axis across all day-data plots.
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
 logger = logging.getLogger(__name__)
+
+_WARN_FUTURE_DATA: bool = False
+
+
+def set_warn_future_data(enabled: bool) -> None:
+    """Toggle "No data for <date>" warnings for dates in the future.
+
+    Default behaviour (disabled) suppresses the warning when the requested
+    day has not yet occurred, since missing data is expected in that case.
+    """
+    global _WARN_FUTURE_DATA
+    _WARN_FUTURE_DATA = bool(enabled)
+
+
+def _is_future(d: datetime) -> bool:
+    return d.date() > date.today()
 
 
 def load_day_csv(
@@ -54,7 +70,8 @@ def load_day_csv(
     day_df = df.loc[mask].copy()
 
     if day_df.empty:
-        logger.warning("No data for %s in %s", date.date(), filepath)
+        if _WARN_FUTURE_DATA or not _is_future(date):
+            logger.warning("No data for %s in %s", date.date(), filepath)
         return pd.DataFrame()
 
     day_df["minutes"] = (
@@ -64,15 +81,44 @@ def load_day_csv(
     return day_df
 
 
+def _available_years(
+    directory: Path,
+    file_pattern: str,
+    years: set[int],
+) -> set[int]:
+    """Return the subset of *years* for which a data file exists on disk."""
+    available: set[int] = set()
+    for year in years:
+        filepath = directory / file_pattern.format(year=year)
+        if filepath.exists():
+            available.add(year)
+    return available
+
+
 def load_days(
     directory: Path,
     file_pattern: str,
     timestamp_col: str,
     dates: list[datetime],
 ) -> dict[str, pd.DataFrame]:
-    """Load CSV data for multiple days. Returns ``{date_label: DataFrame}``."""
+    """Load CSV data for multiple days. Returns ``{date_label: DataFrame}``.
+
+    Pre-checks which year files exist so that missing years produce a
+    single warning instead of one per day.
+    """
+    requested_years = {d.year for d in dates}
+    available = _available_years(directory, file_pattern, requested_years)
+    missing = sorted(requested_years - available)
+    if missing:
+        logger.warning(
+            "Skipping years with no data file in %s (pattern %s): %s",
+            directory, file_pattern, ", ".join(str(y) for y in missing),
+        )
+
     result: dict[str, pd.DataFrame] = {}
     for date in dates:
+        if date.year not in available:
+            continue
         df = load_day_csv(directory, file_pattern, timestamp_col, date)
         if not df.empty:
             result[str(date.date())] = df

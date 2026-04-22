@@ -1,6 +1,7 @@
-env_config_name: env_test1_large
+env_config_name: env_test1_mid
 EPISODE_LENGTH: 288
 control_step: 300
+
 building_props:
   mC: 300
   K: 20
@@ -10,33 +11,19 @@ infras:
   max_power_kW: 5.0
   cop_heat: 3.0
   cop_cool: 2.5
-# NOTE VP 2026.04.01. : Tremblay cell params (E0, K, A, B, R_cell) verified against
-# literature — plausible for LFP chemistry. Pack power is set by 48A × 400V ≈ 19 kW
-# across all config sizes; only cell_capacity_Ah (and thus kWh) varies.
-- class: BatteryTremblay
+- class: BatteryLinear
   name: battery
-  max_power_kW: 19.0
-  cell_capacity_Ah: 7.2
-  max_charge_amps: 48.0
-  max_charge_voltage: 420.0
-  target_soc: 1.0
-  max_charge_rate: 1.5
+  max_power_kW: 10.0
+  max_cap_kWh: 15.0
+  start_soc_percentage: 0.3
+  target_soc: 0.95
   history_length: 4
-  E0: 3.2
-  K: 0.0044
-  A: 0.468
-  B: 1.715
-  R_cell: 0.0049
-  n_series: 125
-  n_parallel: 10
-  charge_efficiency: 0.95
-  discharge_efficiency: 0.95
   soc_min: 0.1
   soc_max: 0.95
 - class: LinearEVCharger
   name: ev_charger
-  max_power_kW: 30.0
-  max_charging_kW: 30.0
+  max_power_kW: 11.0
+  max_charging_kW: 11.0
   charger_efficiency: 0.92
   discharge_efficiency: 0.92
   v2g_enabled: true
@@ -46,11 +33,11 @@ infras:
   v2g_playroom: 0.1
 - class: SolarPanel
   name: solar
-  max_power_kW: 30.0
-  peak_power_kW: 30.0
+  max_power_kW: 15.0
+  peak_power_kW: 15.0
 - class: HouseholdEnergyConsumers
   name: hh_consumers
-  peak_consumption_kW: 12.0
+  peak_consumption_kW: 8.0
 statesources:
 - class: EnergyPriceDataSource
   name: E_price
@@ -66,5 +53,4 @@ statesources:
   name: building_heat_loss
 - class: EVState
   name: ev_schedule
-
 # Rewards are configured separately in reward_cfg/rewards.yaml and reward_cfg/reward_schedule_*.yaml

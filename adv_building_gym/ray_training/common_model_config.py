@@ -48,6 +48,7 @@ def register_callbacks(
     log_trajectories: bool = False,
     reward_schedule_manager: RewardScheduleManager | None = None,
     infra_combinator: InfraCombinator | None = None,
+    exec_date: datetime.datetime | None = None,
 ) -> None:
     """Register episode-metric, trajectory, and scheduling callbacks on *config*.
 
@@ -70,7 +71,8 @@ def register_callbacks(
     # Create callback classes for episode metrics and (optionally) trajectory logging.
     # Each factory returns a configured RLlibCallback subclass.
     # Link: https://docs.ray.io/en/latest/rllib/rllib-callback.html
-    exec_date = datetime.datetime.now()
+    if exec_date is None:
+        exec_date = datetime.datetime.now()
 
     episode_metrics_class = make_episode_metrics_cb_class(
         metrics_base_dir=f"{metrics_base_dir}/metrics",
@@ -149,6 +151,7 @@ def common_model_setup(
     log_trajectories: bool = False,
     reward_schedule_manager: RewardScheduleManager | None = None,
     infra_combinator: InfraCombinator | None = None,
+    exec_date: datetime.datetime | None = None,
 ):
     """
     Apply common RLlib configuration to an algorithm config.
@@ -292,6 +295,7 @@ def common_model_setup(
         log_trajectories=log_trajectories,
         reward_schedule_manager=reward_schedule_manager,
         infra_combinator=infra_combinator,
+        exec_date=exec_date,
     )
 
     # Validate resource allocation against SLURM constraints

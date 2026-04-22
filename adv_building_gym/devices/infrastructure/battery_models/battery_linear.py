@@ -34,15 +34,15 @@ class BatteryLinear(Infrastructure):
     }
 
     def __init__(self, name: str,
-                 max_power_kW: float,
-                 max_cap_kWh: float,
-                 control_step: int,
-                 start_soc_percentage: float = 0.3,
-                 target_soc: float = 0.95,
-                 history_length: int = 4,
-                 soc_min: float = 0.1,
-                 soc_max: float = 0.95,
-                 ) -> None:
+                max_power_kW: float,
+                max_cap_kWh: float,
+                control_step: int,
+                start_soc_percentage: float,
+                target_soc: float,
+                history_length: int,
+                soc_min: float,
+                soc_max: float,
+                ) -> None:
         """Initialize linear battery model.
 
         Args:

@@ -47,6 +47,7 @@ from .common import (
     load_config,
     write_output,
 )
+from .loaders import set_warn_future_data
 from .plot_day_data import _build_figures, _load_all_sources
 
 logger = logging.getLogger(__name__)
@@ -201,6 +202,13 @@ def main() -> None:
         choices=["html", "png", "svg", "pdf"],
         help="Output format(s). Default: html.",
     )
+    parser.add_argument(
+        "--warn-future-data",
+        action="store_true",
+        default=False,
+        help="Emit 'No data for <date>' warnings for dates that have not yet "
+             "occurred. Off by default — future dates are silently skipped.",
+    )
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -208,6 +216,13 @@ def main() -> None:
         "plot_monthly_overview started at %s",
         datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
     )
+
+    set_warn_future_data(args.warn_future_data)
+    if not args.warn_future_data:
+        logger.info(
+            "Future-date warnings are OFF: 'No data for <date>' messages "
+            "will be suppressed for dates after today. Pass --warn-future-data to enable."
+        )
 
     run_overview(
         config_path=Path(args.config),

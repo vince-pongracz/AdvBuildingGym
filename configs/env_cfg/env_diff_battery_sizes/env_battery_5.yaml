@@ -1,38 +1,23 @@
 env_config_name: env_test1_mid
 EPISODE_LENGTH: 288
 control_step: 300
+
 building_props:
   mC: 300
   K: 20
-# Mid config: intermediate device sizes between small and large.
-# Battery power is the same (19 kW) across all sizes; only capacity (kWh) varies.
-# small: battery 19 kW/14 kWh, EV 7 kW, solar 5 kW
-# mid:   battery 19 kW/20 kWh, EV 11 kW, solar 15 kW
-# large: battery 19 kW/29 kWh, EV 30 kW, solar 30 kW
 infras:
 - class: HP
   name: HP
   max_power_kW: 5.0
   cop_heat: 3.0
   cop_cool: 2.5
-- class: BatteryTremblay
+- class: BatteryLinear
   name: battery
-  max_power_kW: 19.0
-  cell_capacity_Ah: 5.0
-  max_charge_amps: 48.0
-  max_charge_voltage: 420.0
-  target_soc: 1.0
-  max_charge_rate: 1.5
+  max_power_kW: 10.0
+  max_cap_kWh: 25.0
+  start_soc_percentage: 0.3
+  target_soc: 0.95
   history_length: 4
-  E0: 3.2
-  K: 0.0063
-  A: 0.468
-  B: 2.470
-  R_cell: 0.007
-  n_series: 125
-  n_parallel: 10
-  charge_efficiency: 0.95
-  discharge_efficiency: 0.95
   soc_min: 0.1
   soc_max: 0.95
 - class: LinearEVCharger

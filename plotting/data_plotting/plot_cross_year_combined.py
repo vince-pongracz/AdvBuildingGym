@@ -51,7 +51,7 @@ from .figure_builders import (
     build_user_energy_need_figure,
     finalize_figure,
 )
-from .loaders import load_days
+from .loaders import load_days, set_warn_future_data
 from .stats import ColumnStats, compute_column_stats
 
 logger = logging.getLogger(__name__)
@@ -345,6 +345,13 @@ def main() -> None:
         choices=["html", "png", "svg", "pdf"],
         help="Output format(s). Default: html.",
     )
+    parser.add_argument(
+        "--warn-future-data",
+        action="store_true",
+        default=False,
+        help="Emit 'No data for <date>' warnings for dates that have not yet "
+             "occurred. Off by default — future dates are silently skipped.",
+    )
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -352,6 +359,13 @@ def main() -> None:
         "plot_cross_year_combined started at %s",
         datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
     )
+
+    set_warn_future_data(args.warn_future_data)
+    if not args.warn_future_data:
+        logger.info(
+            "Future-date warnings are OFF: 'No data for <date>' messages "
+            "will be suppressed for dates after today. Pass --warn-future-data to enable."
+        )
 
     run_combined(
         config_path=Path(args.config),

@@ -329,8 +329,11 @@ def main():
     # All Ray workers discover this actor automatically via RngService.get().
     RngService.initialize(args.seed)
 
-    # Create run name with timestamp (similar to SB3 naming convention)
-    exec_date = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    # Create run name with timestamp (similar to SB3 naming convention).
+    # Keep a single datetime so the same stamp reaches run_name, callbacks
+    # (eval_trajectories dir), and the startup banner.
+    exec_date_dt = datetime.datetime.now()
+    exec_date = exec_date_dt.strftime("%Y%m%d_%H%M%S")
     run_name = f"{args.algorithm}_seed{args.seed}_{exec_date}"
     storage_path = os.path.abspath(f"models/{args.config_name}/ray/{args.algorithm}")
     os.makedirs(storage_path, exist_ok=True)
@@ -359,6 +362,7 @@ def main():
         log_trajectories=args.log_trajectories,
         reward_schedule_manager=reward_manager,
         infra_combinator=infra_combinator,
+        exec_date=exec_date_dt,
     )
 
     # Convert the RLlib config into a Tune param space
@@ -463,6 +467,7 @@ def main():
         experiment_path=experiment_path,
         storage_path=storage_path,
         seed=args.seed,
+        exec_date=exec_date_dt,
     )
     logger.info("Starting tuner.fit() for: %s", run_name)
     logger.info("Training progress will be displayed below:")

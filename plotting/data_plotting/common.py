@@ -102,7 +102,7 @@ def load_profiles_from_cfg(
 
     Returns ``{source_name: {label: DataFrame}}``.
     """
-    from .loaders import load_day_csv, load_profiles
+    from .loaders import load_days, load_profiles
 
     sources: dict[str, dict[str, object]] = {}
 
@@ -129,10 +129,9 @@ def load_profiles_from_cfg(
         frames: dict[str, object] = {}
         for profile in ue_cfg["profiles"]:
             profile_pattern = pattern.replace("{profile}", profile)
-            for date in dates:
-                df = load_day_csv(ue_dir, profile_pattern, ue_cfg["timestamp_col"], date)
-                if not df.empty:
-                    frames[f"{profile} ({date.date()})"] = df
+            day_frames = load_days(ue_dir, profile_pattern, ue_cfg["timestamp_col"], dates)
+            for date_label, df in day_frames.items():
+                frames[f"{profile} ({date_label})"] = df
         sources["user_energy_need"] = frames
 
     return sources

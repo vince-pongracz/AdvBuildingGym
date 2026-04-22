@@ -17,14 +17,8 @@ dist/
 .idea/
 
 # SLURM output logs
-**/slurm_logs/eval/**.out
-**/slurm_logs/eval/**.err
-**/slurm_logs/train/**.err
-**/slurm_logs/train/**.out
-**/slurm_logs/data_setup/**.err
-**/slurm_logs/data_setup/**.out
-**/slurm_logs/plotting/**.err
-**/slurm_logs/plotting/**.out
+**/slurm_logs/**/**.out
+**/slurm_logs/**/**.err
 
 # Environment and runtime
 .env
