@@ -96,7 +96,7 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
     Observation and action spaces
     - The environment builds an observation_space (SDict) and action_space (SDict)
         by aggregating spaces declared by every Infrastructure and DataSource. The
-        env also supplies per-key action history windows (``prev_{key}_hist``).
+        env also supplies per-key action history windows (``hst_{key}``).
     - The native action_space is a Dict whose keys/bounds are defined by the
         Infrastructure components. External wrappers (FlattenAction + RescaleAction)
         convert the flat [-1, 1] interface expected by RL libraries.
@@ -221,12 +221,12 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         # within the episode.  Used by statesource synthetic profiles
         # and SolarPanel for time-of-day logic.
         # Managed directly by the environment (not a StateSource).
-        observation_space["sim_hour"] = spaces.Box(
+        observation_space["raw_sim_hour"] = spaces.Box(
             low=0.0, high=24.0, shape=(1,), dtype=np.float32,
         )
 
         # Add per-key action history windows to the observation space.
-        # Each entry ``prev_{key}_hist`` has shape ``(action_history_length, *action_shape)``
+        # Each entry ``hst_{key}`` has shape ``(action_history_length, *action_shape)``
         # and stores a rolling window of the N most recent executed actions
         # (oldest first, newest last).  The agent can use this to reason about
         # action smoothness and the ActionSmoothnessReward reads the latest
@@ -235,7 +235,7 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         self.action_history_length = action_history_length if action_history_length is not None else env_config.ACTION_HISTORY_LENGTH
         for key, space in action_space.items():
             hist_shape = (self.action_history_length, *space.shape)
-            obs_key = f"prev_{key}_hist"
+            obs_key = f"hst_{key}"
             # Tile per-action bounds across the history window
             low_tiled = np.tile(space.low, (self.action_history_length, 1)).reshape(hist_shape)
             high_tiled = np.tile(space.high, (self.action_history_length, 1)).reshape(hist_shape)
@@ -436,7 +436,7 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
                 logger.debug("Unidentified type: %s", type(v))
 
         # Set sim_hour for step 0 (midnight start of day)
-        self.state["sim_hour"][0] = np.float32(0.0)
+        self.state["raw_sim_hour"][0] = np.float32(0.0)
 
         # ======== Update state from statesources to populate initial observations ========
         # reset_state() calls update_state() by default; subclasses (e.g.
@@ -465,7 +465,7 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
 
     def _get_observation(self) -> dict:
         # Start with the current env state so statesources have access to
-        # bookkeeping keys such as "iteration" and "sim_hour" during reset.
+        # bookkeeping keys such as "iteration" and "raw_sim_hour" during reset.
         state = OrderedDict(self.state) if isinstance(self.state, OrderedDict) else OrderedDict()
         for ds in self.statesources:
             # statesources accept a dict and update it in-place
@@ -509,7 +509,7 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         self.iteration += 1
         # Update simulation hour: actual hour of day (0–24)
         # control_step is in seconds; convert elapsed time to hours
-        self.state["sim_hour"][0] = np.float32(
+        self.state["raw_sim_hour"][0] = np.float32(
             (self.iteration * self.control_step) / 3600.0
         )
 
@@ -559,7 +559,7 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         # Must happen AFTER reward computation so that ActionSmoothnessReward can
         # compare the current action against the previous one stored in history[-1].
         for key in self.action_space_keys:
-            obs_key = f"prev_{key}_hist"
+            obs_key = f"hst_{key}"
             history = self.state[obs_key]
             # Shift rows up (drop oldest) and insert latest action at the end
             history[:-1] = history[1:]
@@ -625,9 +625,9 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
             else 1.0
         )
         temp_in_norm = float(
-            self.state.get("temp_in_norm", np.zeros(1, dtype=np.float32))[0]
+            self.state.get("s_temp_in_norm", np.zeros(1, dtype=np.float32))[0]
         )
-        raw["temp_in_raw"] = temp_in_norm * temp_abs_max
+        raw["raw_temp_in"] = temp_in_norm * temp_abs_max
 
         return raw
 

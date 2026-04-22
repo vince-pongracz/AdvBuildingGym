@@ -21,6 +21,9 @@ def plot_states(episode: EpisodeData) -> list[go.Figure]:
     """
     plot_config = load_plot_config().get("states", {})
     skip_keys: set[str] = set(plot_config.get("skip_keys", []))
+    # ``ctxt_`` state keys are static physical context (e.g. battery capacity);
+    # they are constant within an episode, so they are excluded from plots.
+    ctxt_prefix = "ctxt_"
     grouped_keys: list[list[str]] = plot_config.get("grouped_keys", [])
 
     states = episode.states
@@ -44,7 +47,7 @@ def plot_states(episode: EpisodeData) -> list[go.Figure]:
 
     seen_groups: set[int] = set()
     for key, val in states.items():
-        if key in skip_keys or val.ndim != 1:
+        if key in skip_keys or key.startswith(ctxt_prefix) or val.ndim != 1:
             continue
         if key in grouped_flat:
             for gi, group in enumerate(grouped_keys):
@@ -64,7 +67,7 @@ def plot_states(episode: EpisodeData) -> list[go.Figure]:
 
     # Multi-dim keys (2-D with few columns)
     for key, val in states.items():
-        if key in skip_keys or key in grouped_flat:
+        if key in skip_keys or key.startswith(ctxt_prefix) or key in grouped_flat:
             continue
         if val.ndim == 2 and val.shape[1] <= 4:
             plot_specs.append([key])

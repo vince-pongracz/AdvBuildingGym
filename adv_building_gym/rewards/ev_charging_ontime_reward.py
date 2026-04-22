@@ -65,7 +65,7 @@ class EVChargingOnTimeReward(RewardFunction):
             - (0, 0) if EV not connected
             - (weight, weight) if target achieved or on track
         """
-        ev_connected = states["ev_connected"][0]
+        ev_connected = states["s_ev_connected"][0]
 
         if ev_connected < 0.5:
             return 0.0, 0.0
@@ -75,21 +75,21 @@ class EVChargingOnTimeReward(RewardFunction):
             return 0.0, 0.0
 
         max_step = self.weight * self.max_reward
-        current_soc = states["ev_soc"][0]
-        target_soc = states["ev_target_soc"][0]
+        current_soc = states["s_ev_soc"][0]
+        target_soc = states["s_ev_target_soc"][0]
 
         # Max reward if target already achieved
         if current_soc >= target_soc:
             return self.weight * 1.0, max_step
 
         # Read EV charger parameters from info dict (published by LinearEVCharger)
-        max_charging_kW = info["ev_max_charging_kW"]
+        max_charging_kW = info["ctxt_ev_max_charging_kW"]
         max_cap_kWh = info["ev_max_cap_kWh"]
         charger_efficiency = info["ev_charger_efficiency"]
         max_charge_time_hrs = info["ev_max_charge_time_hrs"]
 
         # Denormalize remaining time from [0, 1] to hours
-        normalized_time = states["ev_charge_to_target_hrs_norm"][0]
+        normalized_time = states["s_ev_charge_to_target_hrs_norm"][0]
         remaining_hrs = normalized_time * max_charge_time_hrs
 
         # Calculate energy needed to reach target (in kWh)
@@ -114,7 +114,7 @@ class EVChargingOnTimeReward(RewardFunction):
         # Only give reward if the agent is actually charging at least a tiny bit.
         # Without this gate the reward rewards inaction (having time left) instead
         # of rewarding charging progress.
-        ev_action = float(np.atleast_1d(actions.get("lin_ev_charger_action", [0]))[0])
+        ev_action = float(np.atleast_1d(actions.get("a_lin_ev_charger", [0]))[0])
         if ev_action < 0.01:
             reward = 0.0
 

@@ -51,9 +51,9 @@ class EVState(StateSource):
     KEY_MAX_CHARGE = "ev_schedule_max_charging_kW"
     KEY_CHARGE_EFF = "ev_schedule_charger_eff"
     KEY_DISCHARGE_EFF = "ev_schedule_discharge_eff"
-    KEY_V2G = "ev_schedule_v2g"
-    KEY_START_SOC = "ev_schedule_start_soc"
-    KEY_TARGET_SOC = "ev_schedule_target_soc"
+    KEY_V2G = "ctxt_ev_schedule_v2g"
+    KEY_START_SOC = "ctxt_ev_schedule_start_soc"
+    KEY_TARGET_SOC = "ctxt_ev_schedule_target_soc"
     KEY_CHARGE_TO_TARGET_HRS = "ev_schedule_charge_to_target_hrs"
 
     def __init__(

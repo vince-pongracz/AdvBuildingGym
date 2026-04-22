@@ -92,14 +92,14 @@ class WindTurbine(Infrastructure):
         Wind speed observation is already registered by WeatherDataSource
         (``avg_wind_speed_norm``).  Only the curtailment action is added here.
         """
-        action_spaces["wind_curtailment"] = Box(
+        action_spaces["a_wind_curtailment"] = Box(
             low=0, high=1, shape=(1,), dtype=np.float32
         )
 
         # Raw rated power (kW) — static context variable, only
         # changes between episodes if the config is swapped.
-        if "wind_rated_power_kW" not in state_spaces.keys():
-            state_spaces["wind_rated_power_kW"] = Box(
+        if "ctxt_wind_rated_power_kW" not in state_spaces.keys():
+            state_spaces["ctxt_wind_rated_power_kW"] = Box(
                 low=0, high=np.inf, shape=(1,), dtype=np.float32
             )
 
@@ -114,8 +114,8 @@ class WindTurbine(Infrastructure):
         """
         # Read normalised wind speed from state
         wind_norm = 0.0
-        if "avg_wind_speed_norm" in states:
-            wind_norm = float(states["avg_wind_speed_norm"][0])
+        if "s_avg_wind_speed_norm" in states:
+            wind_norm = float(states["s_avg_wind_speed_norm"][0])
 
         # Denormalise to m/s using scale factor from WeatherDataSource
         self.wind_speed_raw = wind_norm * self.wind_speed_abs_max
@@ -127,8 +127,7 @@ class WindTurbine(Infrastructure):
 
         # Apply curtailment action
         curtailment = float(np.atleast_1d(actions.get(
-            "wind_curtailment", np.array([1.0])
-        ))[0])
+            "a_wind_curtailment", np.array([1.0])))[0])
         curtailment = float(np.clip(curtailment, 0.0, 1.0))
 
         self.current_production_kW = self.available_power_kW * curtailment
@@ -137,10 +136,10 @@ class WindTurbine(Infrastructure):
         wind_action = self.current_production_kW / self.rated_power_kW if self.rated_power_kW > 0 else 0.0
         wind_action = float(np.clip(wind_action, 0.0, 1.0))
 
-        if "wind_action" not in actions:
-            actions["wind_action"] = np.array([wind_action], dtype=np.float32)
+        if "a_wind" not in actions:
+            actions["a_wind"] = np.array([wind_action], dtype=np.float32)
         else:
-            actions["wind_action"][0] = wind_action
+            actions["a_wind"][0] = wind_action
 
     def _power_curve(self, wind_speed: float) -> float:
         """Compute available power from wind speed using a cubic power curve.
@@ -177,7 +176,7 @@ class WindTurbine(Infrastructure):
         if wind_abs_max is not None:
             self.wind_speed_abs_max = float(wind_abs_max)
         super().update_state(states, info)
-        states["wind_rated_power_kW"][0] = np.float32(self.rated_power_kW)
+        states["ctxt_wind_rated_power_kW"][0] = np.float32(self.rated_power_kW)
 
     def get_electric_consumption(self, actions: Dict) -> float:
         """Get current electric energy consumption (production) from wind turbine.
@@ -193,9 +192,9 @@ class WindTurbine(Infrastructure):
 
     def get_raw_values(self) -> dict[str, float]:
         return {
-            "wind_speed_raw": self.wind_speed_raw,
-            "wind_available_kW": self.available_power_kW,
-            "wind_production_kW": self.current_production_kW,
+            "raw_wind_speed": self.wind_speed_raw,
+            "raw_wind_available_kW": self.available_power_kW,
+            "raw_wind_production_kW": self.current_production_kW,
         }
 
 

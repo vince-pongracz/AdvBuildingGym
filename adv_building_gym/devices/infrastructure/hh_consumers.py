@@ -59,13 +59,13 @@ class HouseholdEnergyConsumers(Infrastructure):
         consumption is determined by the DesiredUserEnergyNeed statesource.
         Only state space is registered.
         """
-        if "hh_consumption_norm" not in state_spaces:
-            state_spaces["hh_consumption_norm"] = Box(
+        if "s_hh_consumption_norm" not in state_spaces:
+            state_spaces["s_hh_consumption_norm"] = Box(
                 low=0, high=1, shape=(1,), dtype=np.float32
             )
         
-        if "peak_consumption_kW" not in state_spaces:
-            state_spaces["peak_consumption_kW"] = Box(
+        if "ctxt_peak_consumption_kW" not in state_spaces:
+            state_spaces["ctxt_peak_consumption_kW"] = Box(
                 low=0, high=np.inf, shape=(1,), dtype=np.float32
             )
 
@@ -79,8 +79,8 @@ class HouseholdEnergyConsumers(Infrastructure):
         time-of-day profile when no statesource signal is available.
         """
         # Read normalized consumption signal from statesource
-        if "desired_energy_need" in states:
-            self.consumption_norm = float(states["desired_energy_need"][0])
+        if "s_desired_energy_need" in states:
+            self.consumption_norm = float(states["s_desired_energy_need"][0])
         else:
             # Fallback: synthetic time-based profile
             self.consumption_norm = self._synthetic_consumption(states)
@@ -89,18 +89,16 @@ class HouseholdEnergyConsumers(Infrastructure):
         self.current_consumption_kW = self.consumption_norm * self.peak_consumption_kW
 
         # Write normalized consumption as read-only output (positive = consumption)
-        if "hh_consumption_action" not in actions:
-            actions["hh_consumption_action"] = np.array(
-                [self.consumption_norm], dtype=np.float32
-            )
+        if "a_hh_consumption" not in actions:
+            actions["a_hh_consumption"] = np.array([self.consumption_norm], dtype=np.float32)
         else:
-            actions["hh_consumption_action"][0] = self.consumption_norm
+            actions["a_hh_consumption"][0] = self.consumption_norm
 
     def update_state(self, states: Dict, info=None) -> None:
         """Write current normalized consumption into states for observation."""
         super().update_state(states, info)
-        states["hh_consumption_norm"][0] = np.float32(self.consumption_norm)
-        states["peak_consumption_kW"][0] = np.float32(self.peak_consumption_kW)
+        states["s_hh_consumption_norm"][0] = np.float32(self.consumption_norm)
+        states["ctxt_peak_consumption_kW"][0] = np.float32(self.peak_consumption_kW)
 
     def _synthetic_consumption(self, states: Dict) -> float:
         """Generate synthetic consumption based on time of day.
@@ -108,7 +106,7 @@ class HouseholdEnergyConsumers(Infrastructure):
         Simple stepped profile matching DesiredUserEnergyNeed's synthetic
         pattern, with added Gaussian noise for realism.
         """
-        sim_hour = float(states.get("sim_hour", np.array([12.0]))[0]) % 24
+        sim_hour = float(states.get("raw_sim_hour", np.array([12.0]))[0]) % 24
 
         if sim_hour < 6:
             base = 0.2   # Low demand during night

@@ -47,11 +47,11 @@ class InsideTemperature(StateSource):
                     ) -> tuple[OrderedDict, OrderedDict]:
         """Setup observation spaces for desired user temperature."""
         
-        if "desired_temp_in_norm" not in state_spaces.keys():
-            state_spaces["desired_temp_in_norm"] = Box(low=-1, high=1, shape=(1,), dtype=np.float32)
+        if "s_desired_temp_in_norm" not in state_spaces.keys():
+            state_spaces["s_desired_temp_in_norm"] = Box(low=-1, high=1, shape=(1,), dtype=np.float32)
 
-        if "sim_hour" not in state_spaces.keys():
-            state_spaces["sim_hour"] = Box(low=np.full((1,), 0, dtype=np.float32),
+        if "raw_sim_hour" not in state_spaces.keys():
+            state_spaces["raw_sim_hour"] = Box(low=np.full((1,), 0, dtype=np.float32),
                                             high=np.full((1,), np.inf, dtype=np.float32),
                                             shape=(1,),
                                             dtype=np.float32)
@@ -83,7 +83,7 @@ class InsideTemperature(StateSource):
             desired_temp_in_norm = raw_temp / temp_abs_max if temp_abs_max != 0 else 0.0
         else:
             # sim_hour is actual hour of day (0–24)
-            sim_hour = float(states.get("sim_hour", np.zeros(shape=(1,), dtype=np.float32))[0])
+            sim_hour = float(states.get("raw_sim_hour", np.zeros(shape=(1,), dtype=np.float32))[0])
             sim_hour = sim_hour % 24
             # Synthetic setpoint profile — realistic °C values matching
             # the CSV profiles (inside_temp_0.csv as reference: 17 °C
@@ -99,7 +99,7 @@ class InsideTemperature(StateSource):
 
         # Ensure float32 dtype and clip to bounds
         desired_temp_in_norm = np.float32(np.clip(desired_temp_in_norm, -1.0, 1.0))
-        states["desired_temp_in_norm"][0] = desired_temp_in_norm
+        states["s_desired_temp_in_norm"][0] = desired_temp_in_norm
 
     def reset(self, states, info=None) -> None:
         """Populate initial desired temperature and seed temp_in_norm.
@@ -109,7 +109,7 @@ class InsideTemperature(StateSource):
         begin in a perfectly comfortable state.
         """
         self.update_state(states, info)
-        if "temp_in_norm" in states and "desired_temp_in_norm" in states:
+        if "s_temp_in_norm" in states and "s_desired_temp_in_norm" in states:
             # ±2 °C variance in normalised space (temp_abs_max default 60 °C
             # ⇒ 2/60 ≈ 0.033 normalised units)
             temp_abs_max = float((info or {}).get("_temp_abs_max", 60.0))
@@ -117,12 +117,12 @@ class InsideTemperature(StateSource):
             rng = np.random.default_rng(RngService.get().get_random(self.name))
             variance = rng.uniform(-max_offset_norm, max_offset_norm)
             
-            states["temp_in_norm"][0] = np.float32(np.clip(
-                states["desired_temp_in_norm"][0] + variance, -1.0, 1.0
+            states["s_temp_in_norm"][0] = np.float32(np.clip(
+                states["s_desired_temp_in_norm"][0] + variance, -1.0, 1.0
             ))
 
     def get_raw_values(self) -> dict[str, float]:
-        return {"desired_temp_in_raw": self.desired_temp_in_raw}
+        return {"raw_desired_temp_in": self.desired_temp_in_raw}
 
 
 # Register InsideTemperature with the component registry

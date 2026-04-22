@@ -19,11 +19,11 @@ logger = logging.getLogger(__name__)
 # Human-readable y-axis unit labels for known raw-value keys.
 # Keys not listed here fall back to a generic "Value" label.
 _UNIT_LABELS: dict[str, str] = {
-    "temp_out_raw": "Temperature (°C)",
-    "temp_in_raw": "Temperature (°C)",
-    "desired_temp_in_raw": "Temperature (°C)",
-    "E_price_raw": "Price (€/kWh)",
-    "E_price_max_raw": "Price (€/kWh)",
+    "raw_temp_out": "Temperature (°C)",
+    "raw_temp_in": "Temperature (°C)",
+    "raw_desired_temp_in": "Temperature (°C)",
+    "raw_E_price": "Price (€/kWh)",
+    "raw_E_price_max": "Price (€/kWh)",
 }
 
 # Suffix-based fallback for keys not in _UNIT_LABELS (auto-discovered _raw attrs).
@@ -67,8 +67,8 @@ def plot_raw(episode: EpisodeData) -> list[go.Figure]:
 
     plot_cfg = load_plot_config().get("raw", {})
     grouped_keys: list[list[str]] = plot_cfg.get("grouped_keys", [
-        ["temp_out_raw", "temp_in_raw", "desired_temp_in_raw"],
-        ["E_price_raw", "E_price_max_raw"],
+        ["raw_temp_out", "raw_temp_in", "raw_desired_temp_in"],
+        ["raw_E_price", "raw_E_price_max"],
     ])
     skip_keys: set[str] = set(plot_cfg.get("skip_keys", []))
 

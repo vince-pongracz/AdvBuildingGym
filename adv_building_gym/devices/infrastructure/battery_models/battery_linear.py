@@ -75,19 +75,19 @@ class BatteryLinear(Infrastructure):
     def setup_spaces(self,
                     state_spaces,
                     action_spaces):
-        if "battery_action" not in action_spaces.keys():
-            action_spaces["battery_action"] = Box(low=-1, high=1, shape=(1,), dtype=np.float32)
+        if "a_battery" not in action_spaces.keys():
+            action_spaces["a_battery"] = Box(low=-1, high=1, shape=(1,), dtype=np.float32)
 
-        if "battery_pct" not in state_spaces.keys():
-            state_spaces["battery_pct"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
-        if "battery_target_pct" not in state_spaces.keys():
-            state_spaces["battery_target_pct"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
-        if "battery_pct_hist" not in state_spaces.keys():
-            state_spaces["battery_pct_hist"] = Box(low=0, high=1, shape=(self.history_length,), dtype=np.float32)
+        if "s_battery_pct" not in state_spaces.keys():
+            state_spaces["s_battery_pct"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
+        if "s_battery_target_pct" not in state_spaces.keys():
+            state_spaces["s_battery_target_pct"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
+        if "hst_s_battery_pct" not in state_spaces.keys():
+            state_spaces["hst_s_battery_pct"] = Box(low=0, high=1, shape=(self.history_length,), dtype=np.float32)
 
         # Raw battery capacity (kWh) — constant hardware parameter.
-        if "battery_capacity_kWh" not in state_spaces.keys():
-            state_spaces["battery_capacity_kWh"] = Box(
+        if "ctxt_battery_capacity_kWh" not in state_spaces.keys():
+            state_spaces["ctxt_battery_capacity_kWh"] = Box(
                 low=0, high=np.inf, shape=(1,), dtype=np.float32
             )
 
@@ -105,7 +105,7 @@ class BatteryLinear(Infrastructure):
 
         The action represents fraction of max power (max_power_kW).
         """
-        action = float(np.atleast_1d(actions["battery_action"])[0])
+        action = float(np.atleast_1d(actions["a_battery"])[0])
 
         # Calculate requested power in kW
         requested_power_kW = action * self.max_power_kW
@@ -132,15 +132,15 @@ class BatteryLinear(Infrastructure):
 
         # Update the action dict to reflect actual (clipped) action
         actual_action = self.actual_power_kW / self.max_power_kW if self.max_power_kW > 0 else 0.0
-        actions["battery_action"] = np.array([np.float32(actual_action)], dtype=np.float32)
+        actions["a_battery"] = np.array([np.float32(actual_action)], dtype=np.float32)
 
     def update_state(self, states: Dict, info=None) -> None:
         super().update_state(states, info)
-        states["battery_pct"][0] = np.float32(self.soc)
-        states["battery_target_pct"][0] = np.float32(self.target_soc)
-        states["battery_capacity_kWh"][0] = np.float32(self.max_cap_kWh)
+        states["s_battery_pct"][0] = np.float32(self.soc)
+        states["s_battery_target_pct"][0] = np.float32(self.target_soc)
+        states["ctxt_battery_capacity_kWh"][0] = np.float32(self.max_cap_kWh)
 
-        history = states["battery_pct_hist"]
+        history = states["hst_s_battery_pct"]
         history[:-1] = history[1:]
         history[-1] = np.float32(self.soc)
 

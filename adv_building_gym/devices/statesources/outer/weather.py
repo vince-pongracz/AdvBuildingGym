@@ -76,9 +76,9 @@ class WeatherDataSource(StateSource):
         # Normalise raw columns and derive scale factors so downstream
         # components can convert between raw and normalised values.
         cols = {
-            "temp_amb": ("temp_out_norm", "temp_abs_max"),
-            "sun_shine": ("solar_irradiance_norm", None),
-            "avg_wind_speed": ("avg_wind_speed_norm", "wind_speed_abs_max"),
+            "temp_amb": ("s_temp_out_norm", "temp_abs_max"),
+            "sun_shine": ("s_solar_irradiance_norm", None),
+            "avg_wind_speed": ("s_avg_wind_speed_norm", "wind_speed_abs_max"),
         }
 
         for raw_col, (norm_col, scale_attr) in cols.items():
@@ -93,27 +93,28 @@ class WeatherDataSource(StateSource):
                     state_spaces: OrderedDict,
                     action_spaces: OrderedDict
                     ) -> tuple[OrderedDict, OrderedDict]:
-        if "temp_out_norm" not in state_spaces.keys():
-            state_spaces["temp_out_norm"] = Box(low=-1, high=1, shape=(1,), dtype=np.float32)
-        if "solar_irradiance_norm" not in state_spaces.keys():
-            state_spaces["solar_irradiance_norm"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
-        if "avg_wind_speed_norm" not in state_spaces.keys():
-            state_spaces["avg_wind_speed_norm"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
+        # TODO VP 2026.04.22. : Add hst variables to these state variables
+        if "s_temp_out_norm" not in state_spaces.keys():
+            state_spaces["s_temp_out_norm"] = Box(low=-1, high=1, shape=(1,), dtype=np.float32)
+        if "s_solar_irradiance_norm" not in state_spaces.keys():
+            state_spaces["s_solar_irradiance_norm"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
+        if "s_avg_wind_speed_norm" not in state_spaces.keys():
+            state_spaces["s_avg_wind_speed_norm"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
 
         # Raw scale factors — set once when data is loaded, not every step.
         # The policy can use these to reconstruct physical units from
         # normalised observations (e.g. temp_out_raw = temp_out_norm * temp_abs_max).
-        if "temp_abs_max" not in state_spaces.keys():
-            state_spaces["temp_abs_max"] = Box(
+        if "ctxt_temp_abs_max" not in state_spaces.keys():
+            state_spaces["ctxt_temp_abs_max"] = Box(
                 low=0, high=np.inf, shape=(1,), dtype=np.float32
             )
-        if "wind_speed_abs_max" not in state_spaces.keys():
-            state_spaces["wind_speed_abs_max"] = Box(
+        if "ctxt_wind_speed_abs_max" not in state_spaces.keys():
+            state_spaces["ctxt_wind_speed_abs_max"] = Box(
                 low=0, high=np.inf, shape=(1,), dtype=np.float32
             )
 
-        if "sim_hour" not in state_spaces.keys():
-            state_spaces["sim_hour"] = Box(low=np.full((1,), 0, dtype=np.float32),
+        if "raw_sim_hour" not in state_spaces.keys():
+            state_spaces["raw_sim_hour"] = Box(low=np.full((1,), 0, dtype=np.float32),
                                             high=np.full((1,), np.inf, dtype=np.float32),
                                             shape=(1,),
                                             dtype=np.float32)
@@ -124,15 +125,15 @@ class WeatherDataSource(StateSource):
     def update_state(self, states, info=None) -> None:
         if self.ts is not None:
             row = self.ts.iloc[min(self.effective_index, len(self.ts) - 1)]
-            temp_out_norm = float(row["temp_out_norm"])
+            temp_out_norm = float(row["s_temp_out_norm"])
             self.temp_out_raw = float(row["temp_amb"])
-            solar_irradiance_norm = float(row.get("solar_irradiance_norm", 0.0))
-            avg_wind_speed_norm = float(row.get("avg_wind_speed_norm", 0.0))
+            solar_irradiance_norm = float(row.get("s_solar_irradiance_norm", 0.0))
+            avg_wind_speed_norm = float(row.get("s_avg_wind_speed_norm", 0.0))
             self.wind_speed_raw = float(row.get("avg_wind_speed", 0.0))
         else:
             # sim_hour is actual hour of day (0–24); modulo ensures correct
             # wrap-around if the value ever accumulates beyond 24.
-            sim_hour = float(states.get("sim_hour", np.zeros(shape=(1,), dtype=np.float32))[0]) % 24
+            sim_hour = float(states.get("raw_sim_hour", np.zeros(shape=(1,), dtype=np.float32))[0]) % 24
             # Synthetic diurnal outdoor temperature profile (normalised)
             if sim_hour < 5:
                 temp_out_norm = 0.0
@@ -162,14 +163,14 @@ class WeatherDataSource(StateSource):
             self.wind_speed_raw = avg_wind_speed_norm * self.wind_speed_abs_max
 
         # Ensure float32 dtype for all updates
-        states["temp_out_norm"][0] = np.float32(temp_out_norm)
-        states["solar_irradiance_norm"][0] = np.float32(solar_irradiance_norm)
-        states["avg_wind_speed_norm"][0] = np.float32(avg_wind_speed_norm)
+        states["s_temp_out_norm"][0] = np.float32(temp_out_norm)
+        states["s_solar_irradiance_norm"][0] = np.float32(solar_irradiance_norm)
+        states["s_avg_wind_speed_norm"][0] = np.float32(avg_wind_speed_norm)
 
         # Raw scale factors — constant within an episode, change only when
         # a new data variant is loaded (via _post_load_data_processing).
-        states["temp_abs_max"][0] = np.float32(self.temp_abs_max)
-        states["wind_speed_abs_max"][0] = np.float32(self.wind_speed_abs_max)
+        states["ctxt_temp_abs_max"][0] = np.float32(self.temp_abs_max)
+        states["ctxt_wind_speed_abs_max"][0] = np.float32(self.wind_speed_abs_max)
 
         # Expose scale factors via info for inter-component use
         # (e.g. InsideTemperature normalises on the same temp scale).
@@ -179,8 +180,8 @@ class WeatherDataSource(StateSource):
 
     def get_raw_values(self) -> dict[str, float]:
         return {
-            "temp_out_raw": self.temp_out_raw,
-            "wind_speed_raw": self.wind_speed_raw,
+            "raw_temp_out": self.temp_out_raw,
+            "raw_wind_speed": self.wind_speed_raw,
         }
 
     def _get_serialize_value(self, param_name: str, value):

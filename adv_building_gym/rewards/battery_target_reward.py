@@ -61,7 +61,7 @@ class BatteryTargetReward(RewardFunction):
         self.max_reward = float(in_band_reward)
 
     def get_reward(self, actions, states, info: dict | None = None) -> tuple[float, float]:
-        soc = float(states["battery_pct"][0])
+        soc = float(states["s_battery_pct"][0])
 
         if self.safe_low <= soc <= self.safe_high:
             reward = self.in_band_reward

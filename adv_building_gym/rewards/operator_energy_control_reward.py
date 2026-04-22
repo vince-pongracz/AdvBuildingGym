@@ -82,7 +82,7 @@ class OperatorEnergyControlReward(RewardFunction):
 
         Args:
             actions: Dictionary of actions taken by infrastructures.
-            states: Dictionary containing "operator_energy_max" (normalized limit [0, 1]).
+            states: Dictionary containing "s_operator_energy_max" (normalized limit [0, 1]).
             info: Shared inter-component dict containing ``net_power_kW``.
                 Also used to persist recovery counters across steps within
                 an episode; counters reset when the environment clears the
@@ -107,7 +107,7 @@ class OperatorEnergyControlReward(RewardFunction):
         grid_power_kW = info.get("net_power_kW", 0.0)
 
         # Get normalized operator limit from state [0, 1]
-        operator_limit_norm = float(states.get("operator_energy_max", np.array([1.0]))[0])
+        operator_limit_norm = float(states.get("s_operator_energy_max", np.array([1.0]))[0])
 
         # Denormalize to actual kW
         operator_limit_kW = operator_limit_norm * self.max_power_kW

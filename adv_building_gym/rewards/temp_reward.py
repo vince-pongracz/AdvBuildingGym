@@ -53,8 +53,8 @@ class TempReward(RewardFunction):
     # Reward computation
     # ------------------------------------------------------------------
     def get_reward(self, actions, states, info: dict | None = None) -> tuple[float, float]:
-        actual_temp = float(states["temp_in_norm"][0])
-        desired_temp = float(states["desired_temp_in_norm"][0])
+        actual_temp = float(states["s_temp_in_norm"][0])
+        desired_temp = float(states["s_desired_temp_in_norm"][0])
         diff_norm = abs(actual_temp - desired_temp)
 
         # Convert zero-crossing threshold from °C to normalised space.
@@ -73,8 +73,8 @@ class TempReward(RewardFunction):
 
         # Wrong-direction penalty: heating when too hot, or cooling when too cold
         # HP action: negative = cooling, positive = heating
-        if "HP_action" in actions:
-            hp_action = float(np.atleast_1d(actions["HP_action"])[0])
+        if "a_hp" in actions:
+            hp_action = float(np.atleast_1d(actions["a_hp"])[0])
             energy = abs(hp_action)
             temp_error = actual_temp - desired_temp  # positive = too hot
 

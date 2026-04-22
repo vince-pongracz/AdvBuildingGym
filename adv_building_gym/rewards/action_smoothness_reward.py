@@ -56,7 +56,7 @@ class ActionSmoothnessReward(RewardFunction):
         penalties: list[float] = []
 
         for key, current_action in actions.items():
-            hist_key = f"prev_{key}_hist"
+            hist_key = f"hst_{key}"
             if hist_key not in states:
                 continue
 

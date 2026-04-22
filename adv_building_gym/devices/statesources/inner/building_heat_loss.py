@@ -30,11 +30,11 @@ class BuildingHeatLoss(StateSource):
     _context_params: ClassVar[Set[str]] = {'K', 'mC', 'timestep'}
 
     def __init__(self,
-                 name: str,
-                 K: float,
-                 mC: float,
-                 timestep: float = 300,
-                 ds_path: str | None = None) -> None:
+                name: str,
+                K: float,
+                mC: float,
+                timestep: float = 300,
+                ds_path: str | None = None) -> None:
         """
         Initialize BuildingHeatLoss datasource.
 
@@ -55,19 +55,19 @@ class BuildingHeatLoss(StateSource):
                     action_spaces: OrderedDict) -> tuple[OrderedDict, OrderedDict]:
         """Setup observation spaces - requires temp_in_norm and temp_out_norm."""
         # Ensure temperature states exist (may be created by other components)
-        if "temp_in_norm" not in state_spaces:
-            state_spaces["temp_in_norm"] = Box(low=-1, high=1, shape=(1,), dtype=np.float32)
-        if "temp_out_norm" not in state_spaces:
-            state_spaces["temp_out_norm"] = Box(low=-1, high=1, shape=(1,), dtype=np.float32)
+        if "s_temp_in_norm" not in state_spaces:
+            state_spaces["s_temp_in_norm"] = Box(low=-1, high=1, shape=(1,), dtype=np.float32)
+        if "s_temp_out_norm" not in state_spaces:
+            state_spaces["s_temp_out_norm"] = Box(low=-1, high=1, shape=(1,), dtype=np.float32)
 
         # Static building physics parameters — context variables that only
         # change between episodes if building_props is swapped.
-        if "building_K" not in state_spaces:
-            state_spaces["building_K"] = Box(
+        if "ctxt_building_K" not in state_spaces:
+            state_spaces["ctxt_building_K"] = Box(
                 low=0, high=np.inf, shape=(1,), dtype=np.float32
             )
-        if "building_mC" not in state_spaces:
-            state_spaces["building_mC"] = Box(
+        if "ctxt_building_mC" not in state_spaces:
+            state_spaces["ctxt_building_mC"] = Box(
                 low=0, high=np.inf, shape=(1,), dtype=np.float32
             )
 
@@ -84,8 +84,8 @@ class BuildingHeatLoss(StateSource):
         # NOTE VP 2026.01.14. : Reference to the 1R1C thermal model
         # Paper: EKF based self-adaptive thermal model for a passive house
         # Link: https://www.sciencedirect.com/science/article/pii/S0378778812003039?via%3Dihub
-        Tin = states["temp_in_norm"][0]
-        Tout = states["temp_out_norm"][0]
+        Tin = states["s_temp_in_norm"][0]
+        Tout = states["s_temp_out_norm"][0]
 
         # Heat transfer -- drawn from inside to the outside
         Q_transfer = self.K * (Tout - Tin)
@@ -97,11 +97,11 @@ class BuildingHeatLoss(StateSource):
         new_temp = Tin + dTemp
 
         # Clip to observation space bounds and ensure float32
-        states["temp_in_norm"][0] = np.float32(np.clip(new_temp, -1.0, 1.0))
+        states["s_temp_in_norm"][0] = np.float32(np.clip(new_temp, -1.0, 1.0))
 
         # Publish static building physics parameters.
-        states["building_K"][0] = np.float32(self.K)
-        states["building_mC"][0] = np.float32(self.mC)
+        states["ctxt_building_K"][0] = np.float32(self.K)
+        states["ctxt_building_mC"][0] = np.float32(self.mC)
 
 
 # Register BuildingHeatLoss with the component registry

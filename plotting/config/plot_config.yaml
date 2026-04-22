@@ -5,29 +5,28 @@
 
 states:
   # State keys excluded from plotting (constants or non-informative values)
+  # Keys listed here are skipped; in addition any key starting with
+  # ``ctxt_`` (static physical context) is automatically excluded.
   skip_keys:
-    - E_price_max
-    - sim_hour
-    - _temp_abs_max
+    - raw_sim_hour
 
   # Groups of state keys that share a single plot.
   # Each entry is a list of keys rendered together.
   grouped_keys:
-    - [battery_pct, battery_target_pct]
-    - [temp_in_norm, desired_temp_in_norm, temp_out_norm]
-    - [ev_schedule_charger_eff, ev_schedule_discharge_eff]
-    - [ev_schedule_start_soc, ev_schedule_target_soc]
-    - [ev_soc, ev_target_soc]
+    - [s_battery_pct, s_battery_target_pct]
+    - [s_temp_in_norm, s_desired_temp_in_norm, s_temp_out_norm]
+    - [ctxt_ev_schedule_start_soc, ctxt_ev_schedule_target_soc]
+    - [s_ev_soc, s_ev_target_soc]
 
   # Keys masked with NaN when a condition key is below 0.5.
   # Produces non-continuous lines (gaps) when the device is disconnected.
   mask_when_disconnected:
-    condition_key: ev_connected
+    condition_key: s_ev_connected
     keys:
-      - ev_soc
-      - ev_target_soc
-      - ev_soc_hist
-      - ev_charge_to_target_hrs_norm
+      - s_ev_soc
+      - s_ev_target_soc
+      - hst_s_ev_soc
+      - s_ev_charge_to_target_hrs_norm
 
 
 actions:
@@ -38,11 +37,11 @@ actions:
 raw:
   # Group temperature raw values into a single plot (same unit: °C)
   grouped_keys:
-    - [temp_out_raw, temp_in_raw, desired_temp_in_raw]
+    - [raw_temp_out, raw_temp_in, raw_desired_temp_in]
 
   # Raw keys to skip in plotting
   skip_keys:
-    - E_price_max_raw  # constant per episode, not useful as time series
+    - raw_E_price_max  # constant per episode, not useful as time series
 
 output:
   # Relative to repository root

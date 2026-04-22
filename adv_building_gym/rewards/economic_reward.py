@@ -35,8 +35,8 @@ class EconomicReward(RewardFunction):
     """
 
     def __init__(self, weight: float, reference_power_kW: float,
-                 name: str = "economic_reward",
-                 export_bonus: float = 1.0) -> None:
+                name: str = "economic_reward",
+                export_bonus: float = 1.0) -> None:
         """Initialize EconomicReward.
 
         Args:
@@ -61,7 +61,7 @@ class EconomicReward(RewardFunction):
     def get_reward(self, actions, states, info: dict | None = None) -> tuple[float, float]:
         max_step = self.weight * self.max_reward
 
-        current_energy_price = float(states["E_price"][0])
+        current_energy_price = float(states["s_E_price"][0])
 
         if info is None:
             logger.warning("EconomicReward: info dict is None, returning 0")

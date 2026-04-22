@@ -74,16 +74,16 @@ class SolarPanel(Infrastructure):
         fully determined by solar irradiance. Only state space is registered.
         """
 
-        if "solar_irradiance_norm" not in state_spaces.keys():
+        if "s_solar_irradiance_norm" not in state_spaces.keys():
             # Normalized irradiance [0, 1]
-            state_spaces["solar_irradiance_norm"] = Box(
+            state_spaces["s_solar_irradiance_norm"] = Box(
                 low=0, high=1, shape=(1,), dtype=np.float32
             )
 
         # Raw peak power capacity (kW) — static context variable, only
         # changes between episodes if the config is swapped.
-        if "solar_peak_power_kW" not in state_spaces.keys():
-            state_spaces["solar_peak_power_kW"] = Box(
+        if "ctxt_solar_peak_power_kW" not in state_spaces.keys():
+            state_spaces["ctxt_solar_peak_power_kW"] = Box(
                 low=0, high=np.inf, shape=(1,), dtype=np.float32
             )
 
@@ -99,15 +99,15 @@ class SolarPanel(Infrastructure):
         """
 
         # Update irradiance from state if available (set by DataSource)
-        if "solar_irradiance_norm" in states:
-            self.irradiance_norm = float(states["solar_irradiance_norm"][0])
+        if "s_solar_irradiance_norm" in states:
+            self.irradiance_norm = float(states["s_solar_irradiance_norm"][0])
 
         # Use synthetic irradiance ONLY when no weather data source is active.
         # When a weather source exists, irradiance=0.0 means "no sunshine"
         # (e.g. nighttime, overcast), not "data unavailable".
         # The weather source writes _temp_abs_max to info when active.
         weather_active = (info or {}).get("_temp_abs_max") is not None
-        if not weather_active and self.irradiance_norm == 0.0 and "sim_hour" in states:
+        if not weather_active and self.irradiance_norm == 0.0 and "raw_sim_hour" in states:
             self.irradiance_norm = self._synthetic_irradiance(states)
 
         # Production = irradiance * peak_power
@@ -115,15 +115,15 @@ class SolarPanel(Infrastructure):
 
         # Write normalized production as read-only output (negative = production)
         solar_action = -self.irradiance_norm
-        if "solar_action" not in actions:
-            actions["solar_action"] = np.array([solar_action], dtype=np.float32)
+        if "a_solar" not in actions:
+            actions["a_solar"] = np.array([solar_action], dtype=np.float32)
         else:
-            actions["solar_action"][0] = solar_action
+            actions["a_solar"][0] = solar_action
 
     def update_state(self, states: Dict, info=None) -> None:
         """Publish static peak power into the observable state."""
         super().update_state(states, info)
-        states["solar_peak_power_kW"][0] = np.float32(self.peak_power_kW)
+        states["ctxt_solar_peak_power_kW"][0] = np.float32(self.peak_power_kW)
 
     def _synthetic_irradiance(self, states: Dict) -> float:
         """Generate synthetic irradiance based on time of day.
@@ -131,7 +131,7 @@ class SolarPanel(Infrastructure):
         Simple bell curve approximation of solar irradiance with Gaussian noise.
         Peak at solar noon (12:00), zero at night.
         """
-        sim_hour = float(states.get("sim_hour", np.array([12.0]))[0])
+        sim_hour = float(states.get("raw_sim_hour", np.array([12.0]))[0])
 
         # Sunrise ~6:00, sunset ~18:00, peak at 12:00
         if sim_hour < 6 or sim_hour > 18:

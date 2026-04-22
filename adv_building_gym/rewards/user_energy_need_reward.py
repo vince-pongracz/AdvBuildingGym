@@ -28,13 +28,13 @@ class UserEnergyNeedReward(RewardFunction):
             Tuple of (reward, max_reward_for_this_step).
         """
         # Get desired energy need from states
-        desired_energy = float(states.get("desired_energy_need", [0.0])[0])
+        desired_energy = float(states.get("s_desired_energy_need", [0.0])[0])
 
         # Sum all energy-related actions (positive = produce, negative = consume)
         actual_energy = sum(
             float(np.atleast_1d(actions[k])[0])
             for k in actions.keys()
-            if "_action" in k
+            if k.startswith("a_")
         )
 
         # Only penalize when underproducing, not when overproducing

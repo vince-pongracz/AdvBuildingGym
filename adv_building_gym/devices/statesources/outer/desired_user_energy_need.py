@@ -68,18 +68,18 @@ class DesiredUserEnergyNeed(StateSource):
                     action_spaces: OrderedDict) -> tuple[OrderedDict, OrderedDict]:
         """Setup observation spaces for desired user energy need."""
 
-        if "desired_energy_need" not in state_spaces.keys():
-            state_spaces["desired_energy_need"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
+        if "s_desired_energy_need" not in state_spaces.keys():
+            state_spaces["s_desired_energy_need"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
 
         # Raw maximum household consumption (kW) — changes only when a new
         # data variant is loaded.
-        if "hh_consumption_max" not in state_spaces.keys():
-            state_spaces["hh_consumption_max"] = Box(
+        if "ctxt_hh_consumption_max" not in state_spaces.keys():
+            state_spaces["ctxt_hh_consumption_max"] = Box(
                 low=0, high=np.inf, shape=(1,), dtype=np.float32
             )
 
-        if "sim_hour" not in state_spaces.keys():
-            state_spaces["sim_hour"] = Box(low=np.full((1,), 0, dtype=np.float32),
+        if "raw_sim_hour" not in state_spaces.keys():
+            state_spaces["raw_sim_hour"] = Box(low=np.full((1,), 0, dtype=np.float32),
                                             high=np.full((1,), np.inf, dtype=np.float32),
                                             shape=(1,),
                                             dtype=np.float32)
@@ -92,7 +92,7 @@ class DesiredUserEnergyNeed(StateSource):
             row = self.ts.iloc[min(self.effective_index, len(self.ts) - 1)]
             desired_energy = float(row[NORM_COLUMN])
         else:
-            current_sim_hour = states.get("sim_hour", np.zeros(shape=(1,), dtype=np.float32))[0]
+            current_sim_hour = states.get("raw_sim_hour", np.zeros(shape=(1,), dtype=np.float32))[0]
             current_sim_hour = current_sim_hour % 24
             # Synthetic time-based energy need profile when no CSV data is provided
             if current_sim_hour < 6:
@@ -106,9 +106,9 @@ class DesiredUserEnergyNeed(StateSource):
             else:
                 desired_energy = 0.3  # Evening low
 
-        states["desired_energy_need"][0] = np.float32(desired_energy)
+        states["s_desired_energy_need"][0] = np.float32(desired_energy)
         # Raw maximum consumption (kW) — constant within an episode.
-        states["hh_consumption_max"][0] = np.float32(self.consumption_max)
+        states["ctxt_hh_consumption_max"][0] = np.float32(self.consumption_max)
 
     @property
     def consumption_max_raw(self) -> float:

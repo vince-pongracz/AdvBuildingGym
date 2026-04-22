@@ -62,14 +62,14 @@ class OperatorEnergyControl(StateSource):
                     action_spaces: OrderedDict) -> tuple[OrderedDict, OrderedDict]:
         """Setup observation spaces for operator energy control limit."""
         # Normalized to [0, 1] range (non-negative power limit)
-        if "operator_energy_max" not in state_spaces.keys():
-            state_spaces["operator_energy_max"] = Box(
+        if "s_operator_energy_max" not in state_spaces.keys():
+            state_spaces["s_operator_energy_max"] = Box(
                 low=0, high=1, shape=(1,), dtype=np.float32)
 
         # Raw maximum operator power limit (kW) — static context variable,
         # only changes when a new data variant is loaded.
-        if "operator_max_power_kW" not in state_spaces.keys():
-            state_spaces["operator_max_power_kW"] = Box(
+        if "ctxt_operator_max_power_kW" not in state_spaces.keys():
+            state_spaces["ctxt_operator_max_power_kW"] = Box(
                 low=0, high=np.inf, shape=(1,), dtype=np.float32)
 
         # Instantaneous grid power consumption in kW
@@ -77,8 +77,8 @@ class OperatorEnergyControl(StateSource):
         # grid_power_kW removed from observation space — it was never updated
         # and the actual value is available via info["step_power_kW"].
 
-        if "sim_hour" not in state_spaces.keys():
-            state_spaces["sim_hour"] = Box(low=0,
+        if "raw_sim_hour" not in state_spaces.keys():
+            state_spaces["raw_sim_hour"] = Box(low=0,
                 high=np.inf,
                 shape=(1,),
                 dtype=np.float32
@@ -95,7 +95,7 @@ class OperatorEnergyControl(StateSource):
             else:
                 operator_energy_max_norm = float(self.ts.iloc[-1]["operator_energy_max_norm"])
         else:
-            current_sim_hour = states.get("sim_hour", np.zeros(shape=(1,), dtype=np.float32))[0]
+            current_sim_hour = states.get("raw_sim_hour", np.zeros(shape=(1,), dtype=np.float32))[0]
             # Apply a simple time-based power limit profile
             # Peak hours (morning/evening): lower limit to encourage load shifting
             # Off-peak hours (night/midday): higher limit
@@ -123,9 +123,9 @@ class OperatorEnergyControl(StateSource):
 
         # Ensure float32 dtype and clip to bounds [0, 1]
         operator_energy_max_norm = np.float32(np.clip(operator_energy_max_norm, 0.0, 1.0))
-        states["operator_energy_max"][0] = operator_energy_max_norm
+        states["s_operator_energy_max"][0] = operator_energy_max_norm
         # Raw maximum power limit (kW) — constant within an episode.
-        states["operator_max_power_kW"][0] = np.float32(self.max_power_kW)
+        states["ctxt_operator_max_power_kW"][0] = np.float32(self.max_power_kW)
 
 
 # Register OperatorEnergyControl with the component registry

@@ -107,28 +107,28 @@ class LinearEVCharger(Infrastructure):
         """
 
         # Actions
-        if "lin_ev_charger_action" not in action_spaces.keys():
+        if "a_lin_ev_charger" not in action_spaces.keys():
             low:float = -1.0 if self.v2g_enabled else 0.0
-            action_spaces["lin_ev_charger_action"] = Box(low=low, high=1, shape=(1,), dtype=np.float32)
+            action_spaces["a_lin_ev_charger"] = Box(low=low, high=1, shape=(1,), dtype=np.float32)
 
         # States
-        if "ev_soc" not in state_spaces.keys():
-            state_spaces["ev_soc"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
-        if "ev_target_soc" not in state_spaces.keys():
-            state_spaces["ev_target_soc"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
-        if "ev_connected" not in state_spaces.keys():
+        if "s_ev_soc" not in state_spaces.keys():
+            state_spaces["s_ev_soc"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
+        if "s_ev_target_soc" not in state_spaces.keys():
+            state_spaces["s_ev_target_soc"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
+        if "s_ev_connected" not in state_spaces.keys():
             # Binary: 0 = not connected, 1 = connected
-            state_spaces["ev_connected"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
-        if "ev_soc_hist" not in state_spaces.keys():
-            state_spaces["ev_soc_hist"] = Box(low=0, high=1, shape=(self.history_length,), dtype=np.float32)
-        if "ev_charge_to_target_hrs_norm" not in state_spaces.keys():
+            state_spaces["s_ev_connected"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
+        if "hst_s_ev_soc" not in state_spaces.keys():
+            state_spaces["hst_s_ev_soc"] = Box(low=0, high=1, shape=(self.history_length,), dtype=np.float32)
+        if "s_ev_charge_to_target_hrs_norm" not in state_spaces.keys():
             # Normalized: 0 = no time left or disconnected, 1 = max_charge_time_hrs remaining
-            state_spaces["ev_charge_to_target_hrs_norm"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
+            state_spaces["s_ev_charge_to_target_hrs_norm"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
 
         # Raw maximum charging power (kW) — changes only when a new EV
         # connects with different specs (via EvSpec).
-        if "ev_max_charging_kW" not in state_spaces.keys():
-            state_spaces["ev_max_charging_kW"] = Box(
+        if "ctxt_ev_max_charging_kW" not in state_spaces.keys():
+            state_spaces["ctxt_ev_max_charging_kW"] = Box(
                 low=0, high=np.inf, shape=(1,), dtype=np.float32
             )
 
@@ -186,9 +186,9 @@ class LinearEVCharger(Infrastructure):
                 max_charging_kW=float(info["ev_schedule_max_charging_kW"]),
                 charger_efficiency=float(info["ev_schedule_charger_eff"]),
                 discharge_efficiency=float(info["ev_schedule_discharge_eff"]),
-                v2g_enabled=bool(info["ev_schedule_v2g"] > 0.5),
-                start_soc=float(info["ev_schedule_start_soc"]),
-                target_soc=float(info["ev_schedule_target_soc"]),
+                v2g_enabled=bool(info["ctxt_ev_schedule_v2g"] > 0.5),
+                start_soc=float(info["ctxt_ev_schedule_start_soc"]),
+                target_soc=float(info["ctxt_ev_schedule_target_soc"]),
                 charge_to_target_in_hrs=float(info.get("ev_schedule_charge_to_target_hrs", 8.0)),
             )
             logger.debug("EV schedule: CONNECT (cap=%.1f, soc=%.2f->%.2f)",
@@ -205,11 +205,11 @@ class LinearEVCharger(Infrastructure):
 
         if not self.ev_connected:
             # EV not connected --> no action
-            actions["lin_ev_charger_action"][0] = 0.0
+            actions["a_lin_ev_charger"][0] = 0.0
             self.actual_power_kW = 0.0
             return
 
-        action = float(np.atleast_1d(actions["lin_ev_charger_action"])[0])
+        action = float(np.atleast_1d(actions["a_lin_ev_charger"])[0])
 
         # Clip action based on V2G capability — only allow discharge when the
         # EV has enough charge.  Discharging a car that still needs charging
@@ -217,7 +217,7 @@ class LinearEVCharger(Infrastructure):
         # V2G is permitted only when SoC >= (target - playroom).
         if not self.v2g_enabled or self.soc < self.target_soc - self.v2g_playroom:
             action = max(0.0, action)
-            actions["lin_ev_charger_action"][0] = action
+            actions["a_lin_ev_charger"][0] = action
 
         # Calculate energy transfer in kWh for this timestep
         # action in [-1, 1] maps to [-max_charging_kW, +max_charging_kW]
@@ -265,16 +265,16 @@ class LinearEVCharger(Infrastructure):
             self.soc = new_soc
 
         # Write adjusted action back and store actual power for consumption reporting
-        actions["lin_ev_charger_action"][0] = np.float32(action)
+        actions["a_lin_ev_charger"][0] = np.float32(action)
         self.actual_power_kW = action * self.max_charging_kW
 
     def update_state(self, states: Dict, info=None) -> None:
         """Update observable state."""
         super().update_state(states, info)
-        states["ev_soc"][0] = np.float32(self.soc)
-        states["ev_target_soc"][0] = np.float32(self.target_soc)
-        states["ev_connected"][0] = np.float32(1.0 if self.ev_connected else 0.0)
-        states["ev_max_charging_kW"][0] = np.float32(self.max_charging_kW)
+        states["s_ev_soc"][0] = np.float32(self.soc)
+        states["s_ev_target_soc"][0] = np.float32(self.target_soc)
+        states["s_ev_connected"][0] = np.float32(1.0 if self.ev_connected else 0.0)
+        states["ctxt_ev_max_charging_kW"][0] = np.float32(self.max_charging_kW)
 
         # Decrement charge_to_target_in_hrs by control_step (convert seconds to hours)
         if self.ev_connected and self.charge_to_target_in_hrs > 0:
@@ -283,10 +283,10 @@ class LinearEVCharger(Infrastructure):
 
         # Normalize charge_to_target_in_hrs to [0, 1] for state space
         normalized_time = self.charge_to_target_in_hrs / self.max_charge_time_hrs if self.max_charge_time_hrs > 0 else 0.0
-        states["ev_charge_to_target_hrs_norm"][0] = np.float32(np.clip(normalized_time, 0.0, 1.0))
+        states["s_ev_charge_to_target_hrs_norm"][0] = np.float32(np.clip(normalized_time, 0.0, 1.0))
 
         # Update SoC history (rolling window)
-        history = states["ev_soc_hist"]
+        history = states["hst_s_ev_soc"]
         history[:-1] = history[1:]
         history[-1] = np.float32(self.soc)
 
@@ -294,7 +294,8 @@ class LinearEVCharger(Infrastructure):
         # (e.g. EVChargingOnTimeReward) that need them without holding an
         # infrastructure reference.
         if info is not None:
-            info["ev_max_charging_kW"] = self.max_charging_kW
+            info["ctxt_ev_max_charging_kW"] = self.max_charging_kW
+            # TODO VP 2026.04.22. : These are contextual parameters that only change when a new EV connects.
             info["ev_max_cap_kWh"] = self.max_cap_kWh
             info["ev_charger_efficiency"] = self.charger_efficiency
             info["ev_max_charge_time_hrs"] = self.max_charge_time_hrs

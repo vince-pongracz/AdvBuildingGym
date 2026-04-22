@@ -61,22 +61,22 @@ class HP(Infrastructure):
                     action_spaces: OrderedDict) -> tuple[OrderedDict, OrderedDict]:
         # HP action is 1D: [-1, 1]
         # Negative = cooling, positive = heating, magnitude = energy level
-        action_spaces["HP_action"] = Box(
+        action_spaces["a_hp"] = Box(
             low=np.array([-1.0], dtype=np.float32),
             high=np.array([1.0], dtype=np.float32),
             shape=(1,),
             dtype=np.float32
         )
 
-        if "temp_in_norm" not in state_spaces:
-            state_spaces["temp_in_norm"] = Box(low=-1, high=1, shape=(1,), dtype=np.float32)
-        if "temp_out_norm" not in state_spaces:
-            state_spaces["temp_out_norm"] = Box(low=-1, high=1, shape=(1,), dtype=np.float32)
+        if "s_temp_in_norm" not in state_spaces:
+            state_spaces["s_temp_in_norm"] = Box(low=-1, high=1, shape=(1,), dtype=np.float32)
+        if "s_temp_out_norm" not in state_spaces:
+            state_spaces["s_temp_out_norm"] = Box(low=-1, high=1, shape=(1,), dtype=np.float32)
 
         # Raw electric capacity (kW) — static context variable, only
         # changes between episodes if the config is swapped.
-        if "hp_max_power_kW" not in state_spaces:
-            state_spaces["hp_max_power_kW"] = Box(
+        if "ctxt_hp_max_power_kW" not in state_spaces:
+            state_spaces["ctxt_hp_max_power_kW"] = Box(
                 low=0, high=np.inf, shape=(1,), dtype=np.float32
             )
 
@@ -84,7 +84,7 @@ class HP(Infrastructure):
 
     def exec_action(self, actions, states, info=None) -> None:
         # Action is 1D: [-1, 1]. Negative = cooling, positive = heating.
-        hp_action = float(np.atleast_1d(actions["HP_action"])[0])
+        hp_action = float(np.atleast_1d(actions["a_hp"])[0])
         energy = abs(hp_action)
 
         # NOTE VP 2026.01.20. : Thermal model is 1R1C, same as links below
@@ -125,7 +125,7 @@ class HP(Infrastructure):
         dTemp = 0.001 * self.control_step * q_hp / self.mC
 
         # Check if temperature would be clipped after the change
-        current_temp = states["temp_in_norm"][0]
+        current_temp = states["s_temp_in_norm"][0]
         new_temp = current_temp + dTemp
 
         if new_temp > 1.0 or new_temp < -1.0:
@@ -148,7 +148,7 @@ class HP(Infrastructure):
 
             # Update action preserving sign (cooling/heating direction)
             sign = -1.0 if hp_action < 0 else 1.0
-            actions["HP_action"][0] = np.float32(sign * actual_energy)
+            actions["a_hp"][0] = np.float32(sign * actual_energy)
 
             # Store the actual temperature change and power consumption
             self.temp_in_norm_change = actual_dTemp
@@ -160,10 +160,10 @@ class HP(Infrastructure):
 
     def update_state(self, states, info=None) -> None:
         super().update_state(states, info)
-        new_temp = states["temp_in_norm"][0] + self.temp_in_norm_change
+        new_temp = states["s_temp_in_norm"][0] + self.temp_in_norm_change
         # Clipping ensured in exec_action -- maybe reintroduction needed later
-        states["temp_in_norm"][0] = np.float32(new_temp)
-        states["hp_max_power_kW"][0] = np.float32(self.max_power_kW)
+        states["s_temp_in_norm"][0] = np.float32(new_temp)
+        states["ctxt_hp_max_power_kW"][0] = np.float32(self.max_power_kW)
 
     def get_electric_consumption(self, actions) -> float:
         """Get current electric energy consumption from heat pump in kW.

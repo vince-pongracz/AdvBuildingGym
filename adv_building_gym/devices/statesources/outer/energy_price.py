@@ -40,16 +40,16 @@ class EnergyPriceDataSource(StateSource):
                     state_spaces,
                     action_spaces) -> tuple:
 
-        if "E_price" not in state_spaces.keys():
-            state_spaces["E_price"] = Box(low=-1, high=1, shape=(1,), dtype=np.float32)
+        if "s_E_price" not in state_spaces.keys():
+            state_spaces["s_E_price"] = Box(low=-1, high=1, shape=(1,), dtype=np.float32)
         # Raw maximum energy price (€/kWh) — changes only when a new data
         # variant is loaded.  Allows the policy to reconstruct physical
         # price from the normalised E_price observation.
-        if "E_price_max" not in state_spaces.keys():
-            state_spaces["E_price_max"] = Box(low=0, high=np.inf, shape=(1,), dtype=np.float32)
+        if "ctxt_E_price_max" not in state_spaces.keys():
+            state_spaces["ctxt_E_price_max"] = Box(low=0, high=np.inf, shape=(1,), dtype=np.float32)
 
-        if "sim_hour" not in state_spaces.keys():
-            state_spaces["sim_hour"] = Box(low=np.full((1,), 0, dtype=np.float32),
+        if "raw_sim_hour" not in state_spaces.keys():
+            state_spaces["raw_sim_hour"] = Box(low=np.full((1,), 0, dtype=np.float32),
                                             high=np.full((1,), np.inf, dtype=np.float32),
                                             shape=(1,), dtype=np.float32)
 
@@ -60,7 +60,7 @@ class EnergyPriceDataSource(StateSource):
             row = self.ts.iloc[min(self.effective_index, len(self.ts) - 1)]
             energy_price = float(row["E_price_norm"])
         else:
-            current_sim_hour = states.get("sim_hour", np.zeros(shape=(1,), dtype=np.float32))[0]
+            current_sim_hour = states.get("raw_sim_hour", np.zeros(shape=(1,), dtype=np.float32))[0]
             current_sim_hour = current_sim_hour % 24
             # Apply a simple time-of-use tariff if no CSV data is provided
             if current_sim_hour < 4:
@@ -70,10 +70,10 @@ class EnergyPriceDataSource(StateSource):
             else:
                 energy_price = 0.75
 
-        states["E_price"][0] = np.float32(energy_price)
+        states["s_E_price"][0] = np.float32(energy_price)
         # Raw maximum price (€/kWh) — constant within an episode, changes
         # only when a new data variant is loaded.
-        states["E_price_max"][0] = np.float32(self.price_max)
+        states["ctxt_E_price_max"][0] = np.float32(self.price_max)
 
     @property
     def E_price_max_raw(self) -> float:
