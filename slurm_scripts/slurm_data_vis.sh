@@ -1,17 +1,21 @@
 #!/usr/bin/env bash
 # Author: Vince Pongracz
-# Created: 2026-04-11 | Version: 1.0
-# Description: Submit a SLURM job that runs plot_cross_year_combined and
-#              plot_monthly_overview in parallel.
-
-# -----------------------------------------------------------------------------
-# Usage:
-#   sbatch slurm_scripts/slurm_data_vis.sh
+# Created: 2026-04-11 | Version: 1.1
+# Description: SLURM job that runs data-visualisation plotting scripts (CPU only).
 #
-# Note: Data visualisation runs on CPU only. No GPU is requested.
-# -----------------------------------------------------------------------------
-
-# Link to SLURM params: https://www.nhr.kit.edu/userdocs/haicore/batch/
+# Usage:
+#   sbatch slurm_scripts/slurm_data_vis.sh              # run all plots in parallel
+#   sbatch slurm_scripts/slurm_data_vis.sh cross_year   # run a single plot
+#   sbatch slurm_scripts/slurm_data_vis.sh monthly
+#
+# Logs: slurm_logs/data_vis/slurm-data-vis-<jobid>.out  (combined stdout+stderr)
+#       slurm_logs/data_vis/slurm-data-vis-<jobid>_<tag>.err (per-plot stderr)
+#
+# Future-date warnings ('No data for <date>') are OFF by default — the plot
+# scripts default `--warn-future-data` to False, and this script forwards no
+# extra args. To enable them, invoke the plot module directly with the flag.
+#
+# SLURM params: https://www.nhr.kit.edu/userdocs/haicore/batch/
 
 #SBATCH --partition=normal
 #SBATCH --nodes=1
@@ -21,64 +25,56 @@
 #SBATCH --output=slurm_logs/data_vis/slurm-data-vis-%j.out
 #SBATCH --job-name=data-vis-%j
 
-# stderr is merged into --output (no separate top-level .err file);
-# per-script stderr goes to slurm-data-vis-<jobid>_{cross_year,monthly}.err
-
 set -euo pipefail
 
-mkdir -p slurm_logs/data_vis
-
-# Activate virtual environment
+# --- Config ------------------------------------------------------------------
+LOG_DIR="slurm_logs/data_vis"
 PYTHON_ENV="../adv_env"
-if [ -d "$PYTHON_ENV" ]; then
-  source "${PYTHON_ENV}/bin/activate"
-  echo "=== Python and pip versions ==="
-  python --version
-  pip --version
-else
-  echo "[WARN] Python environment not found at ${PYTHON_ENV}; continuing without activation"
-fi
 
-echo "=== SLURM Resource Info ==="
-echo "SLURM_CPUS_PER_TASK : ${SLURM_CPUS_PER_TASK:-}"
-echo "Node                : $(hostname)"
+declare -A PLOTS=(
+  [cross_year]="plotting.data_plotting.plot_cross_year_combined"
+  [monthly]="plotting.data_plotting.plot_monthly_overview"
+)
 
+# --- Parse argument (optional -- prefix, empty = run all) --------------------
+TARGET="${1:-}"; TARGET="${TARGET#--}"
+case "${TARGET}" in
+  "")                 TAGS=("${!PLOTS[@]}") ;;
+  cross_year|monthly) TAGS=("${TARGET}") ;;
+  *) echo "[ERROR] Unknown target '${TARGET}' (expected: cross_year, monthly, or empty)"; exit 2 ;;
+esac
+
+# --- Environment -------------------------------------------------------------
+mkdir -p "${LOG_DIR}"
+LOG_PREFIX="${LOG_DIR}/slurm-data-vis-${SLURM_JOB_ID}"
 export PYTHONUNBUFFERED=1
 
-LOG_DIR="slurm_logs/data_vis"
-LOG_PREFIX="${LOG_DIR}/slurm-data-vis-${SLURM_JOB_ID}"
+if [ -d "${PYTHON_ENV}" ]; then
+  source "${PYTHON_ENV}/bin/activate"
+  echo "=== Python: $(python --version 2>&1) | pip: $(pip --version)"
+else
+  echo "[WARN] Python env not found at ${PYTHON_ENV}; continuing without activation"
+fi
+echo "=== Node: $(hostname) | SLURM_CPUS_PER_TASK: ${SLURM_CPUS_PER_TASK:-?}"
 
-echo "======"
-echo "Launching plot_cross_year_combined and plot_monthly_overview in parallel"
-echo "Per-script logs:"
-echo " ${LOG_PREFIX}_cross_year.err"
-echo " ${LOG_PREFIX}_monthly.err"
-echo "======"
+# --- Launch ------------------------------------------------------------------
+echo "=== Launching ${#TAGS[@]} plot(s) in parallel:"
+declare -A PIDS=()
+for tag in "${TAGS[@]}"; do
+  echo "  - ${PLOTS[${tag}]}  (stderr -> ${LOG_PREFIX}_${tag}.err)"
+  python -u -m "${PLOTS[${tag}]}" 2>"${LOG_PREFIX}_${tag}.err" &
+  PIDS[${tag}]=$!
+done
 
-# SLURM manages CPU affinity via cgroups — do not use taskset, as the
-# allocated core IDs are not guaranteed to be 0, 1, etc.
-python -u -m plotting.data_plotting.plot_cross_year_combined \
-  2>"${LOG_PREFIX}_cross_year.err" &
-PID_CROSS_YEAR=$!
-
-python -u -m plotting.data_plotting.plot_monthly_overview \
-  2>"${LOG_PREFIX}_monthly.err" &
-PID_MONTHLY=$!
-
+# --- Wait and report ---------------------------------------------------------
 STATUS=0
-wait "${PID_CROSS_YEAR}" || STATUS=$?
-if [ "${STATUS}" -ne 0 ]; then
-  echo "[ERROR] plot_cross_year_combined failed with exit code ${STATUS}"
-  echo "        See ${LOG_PREFIX}_cross_year.err"
-fi
-
-wait "${PID_MONTHLY}" || MONTHLY_STATUS=$?
-MONTHLY_STATUS=${MONTHLY_STATUS:-0}
-if [ "${MONTHLY_STATUS}" -ne 0 ]; then
-  echo "[ERROR] plot_monthly_overview failed with exit code ${MONTHLY_STATUS}"
-  echo "        See ${LOG_PREFIX}_monthly.err"
-  STATUS=${MONTHLY_STATUS}
-fi
+for tag in "${TAGS[@]}"; do
+  rc=0; wait "${PIDS[${tag}]}" || rc=$?
+  if [ "${rc}" -ne 0 ]; then
+    echo "[ERROR] ${PLOTS[${tag}]} failed (exit ${rc}); see ${LOG_PREFIX}_${tag}.err"
+    STATUS=${rc}
+  fi
+done
 
 if [ "${STATUS}" -eq 0 ]; then
   echo "Data visualisation completed successfully."
@@ -86,12 +82,3 @@ else
   echo "Data visualisation completed with errors."
   exit "${STATUS}"
 fi
-
-# -------------------------------------------------------------------------------
-# Notes:
-# - Make the script executable:
-#     chmod +x slurm_scripts/slurm_data_vis.sh
-# - Submit:
-#     sbatch slurm_scripts/slurm_data_vis.sh
-# - Output and error logs will be written to `slurm_logs/data_vis/`.
-# -------------------------------------------------------------------------------

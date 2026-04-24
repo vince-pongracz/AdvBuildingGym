@@ -7,10 +7,11 @@
 # Usage:
 #   sbatch slurm_scripts/slurm_plot_trajectory.sh [OPTIONS]
 #
-# All arguments are forwarded directly to plotting.src.trajectory_plot.
+# All arguments are forwarded directly to plotting.traj_plotting.trajectory_plot.
 # Available options:
 #   --hdf5 PATH             Path to trajectories.hdf5 file (default: auto-discover latest)
 #   --episode ID            Episode ID to plot (default: best by --select-by metric)
+#   --all-episodes          Plot every episode in the HDF5 (one subdir per episode)
 #   --output-dir PATH       Output directory (default: plotting/out/<episode_id>/)
 #   --format FMT [FMT ...]  Output format(s): html, png, svg, pdf (default: html svg)
 #   --control-step N        Control timestep in seconds (default: 300)
@@ -20,6 +21,7 @@
 #   sbatch slurm_scripts/slurm_plot_trajectory.sh
 #   sbatch slurm_scripts/slurm_plot_trajectory.sh --hdf5 ep_metrics/trajectories/trajectories.hdf5
 #   sbatch slurm_scripts/slurm_plot_trajectory.sh --episode ep_42 --format html svg png
+#   sbatch slurm_scripts/slurm_plot_trajectory.sh --all-episodes --hdf5 eval_results/run_X/trajectories.hdf5
 #   sbatch slurm_scripts/slurm_plot_trajectory.sh --select-by achieved_reward
 #
 # Note: Plotting runs on CPU only. No GPU is requested.
@@ -56,7 +58,7 @@ echo "Node                : $(hostname)"
 export PYTHONUNBUFFERED=1
 
 # Forward all arguments directly to the plotting module
-CMD=(python -u -m plotting.src.trajectory_plot "$@")
+CMD=(python -u -m plotting.traj_plotting.trajectory_plot "$@")
 
 echo "======"
 echo "Running: ${CMD[*]}"
