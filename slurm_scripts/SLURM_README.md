@@ -81,11 +81,10 @@ Key `run_train_ray.py` options:
 |------|-------------|---------|
 | `--algorithm` | `ppo` or `sac` | `ppo` |
 | `--episodes N` | Total training episodes | 3500 |
-| `-cn NAME` | Configuration name | `env_test1_{s/m/l}` |
+| `--load-config PATH` | Load env config from YAML (**required**) | - |
 | `--seed N` | Random seed | 42 |
 | `--metric METRIC` | Optimisation target (`reward_rate`, `achieved_reward`, `episode_return_mean`) | `reward_rate` |
 | `--checkpoint-frequency-episodes N` | Checkpoint every N episodes | 20 |
-| `--load-config PATH` | Load config from YAML | - |
 | `--save-config PATH` | Save config to YAML | - |
 | `--log-trajectories` | Save per-step trajectory JSON during eval | off |
 
@@ -98,9 +97,10 @@ Runs CPU-only inference (no GPU needed for the small `[32,32,32]` network).
 All arguments are forwarded to `run_eval_ray.py`.
 
 ```bash
-sbatch slurm_scripts/slurm_eval_ray.sh --algorithm ppo --episodes 10 --seed 42
-sbatch slurm_scripts/slurm_eval_ray.sh --algorithm sac -cn env_test1_{s/m/l} --episodes 20
-sbatch slurm_scripts/slurm_eval_ray.sh --checkpoint models/env_test1_{s/m/l}/ray/ppo/best_model_ep100
+sbatch slurm_scripts/slurm_eval_ray.sh --algorithm ppo --load-config configs/env_cfg/env_test1_small.yaml --episodes 10 --seed 42
+sbatch slurm_scripts/slurm_eval_ray.sh --algorithm sac --load-config configs/env_cfg/env_test1_mid.yaml --episodes 20
+sbatch slurm_scripts/slurm_eval_ray.sh --algorithm ppo --load-config configs/env_cfg/env_test1_small.yaml \
+    --checkpoint models/env_test1_small/ray/ppo/best_model_ep100
 ```
 
 Key `run_eval_ray.py` options:
@@ -109,7 +109,7 @@ Key `run_eval_ray.py` options:
 |------|-------------|---------|
 | `--algorithm, -a` | `ppo` or `sac` | `ppo` |
 | `--checkpoint PATH` | Checkpoint directory (auto-detects best if omitted) | - |
-| `-cn NAME` | Configuration name | - |
+| `--load-config PATH` | Load env config from YAML (**required**) | - |
 | `--episodes N` | Number of eval episodes | 10 |
 | `--seed N` | Random seed | 42 |
 | `--output-dir PATH` | Results directory | `eval_results` |

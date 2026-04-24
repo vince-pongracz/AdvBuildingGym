@@ -27,6 +27,8 @@ class BatteryLinear(Infrastructure):
         delta_SoC = delta_E / max_cap_kWh
     """
 
+    POWER_FLOW = "bidirectional"
+
     _context_params: ClassVar[Set[str]] = {'control_step'}
 
     _exclude_params: ClassVar[Set[str]] = {
@@ -67,10 +69,6 @@ class BatteryLinear(Infrastructure):
         self.soc_max = soc_max
 
         self.actual_power_kW = 0.0
-
-    @property
-    def max_export_kW(self) -> float:
-        return self.max_power_kW
 
     def setup_spaces(self,
                     state_spaces,

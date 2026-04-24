@@ -4,6 +4,9 @@
 # deviation per column, and optional lower-bound clipping to keep values
 # physically plausible.
 
+# TODO VP 2026.04.23. : add more data augmentation configs, 
+# different augmentation strengths are needed.
+
 seed: 42
 
 price:

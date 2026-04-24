@@ -19,6 +19,7 @@ import argparse
 import logging
 import os
 
+import h5py
 import plotly.graph_objects as go
 
 from plotting.utils import (
@@ -144,6 +145,11 @@ def main() -> None:
         help="Episode ID to plot. Default: best by --select-by metric.",
     )
     parser.add_argument(
+        "--all-episodes", action="store_true",
+        help="Plot every episode in the HDF5 file (one subdir per episode). "
+            "Mutually exclusive with --episode.",
+    )
+    parser.add_argument(
         "--output-dir", type=str, default=None,
         help="Output directory. Default: plotting/out/<episode_id>/.",
     )
@@ -163,16 +169,41 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    if args.all_episodes and args.episode is not None:
+        parser.error("--all-episodes and --episode are mutually exclusive.")
+
     hdf5_path = args.hdf5 if args.hdf5 else find_latest_hdf5()
 
-    paths = generate_all_plots(
-        hdf5_path=hdf5_path,
-        episode_id=args.episode,
-        output_dir=args.output_dir,
-        control_step_seconds=args.control_step,
-        formats=args.format,
-        select_by=args.select_by,
-    )
+    if args.all_episodes:
+        with h5py.File(hdf5_path, "r") as hf:
+            episode_ids = list(hf.keys())
+        base_output_dir = args.output_dir or str(get_output_root())
+        paths: list[str] = []
+        for ep_id in episode_ids:
+            ep_label = f"ep_{ep_id}"
+            ep_output_dir = os.path.join(base_output_dir, ep_label)
+            paths.extend(generate_all_plots(
+                hdf5_path=hdf5_path,
+                episode_id=ep_id,
+                output_dir=ep_output_dir,
+                control_step_seconds=args.control_step,
+                formats=args.format,
+                select_by=args.select_by,
+                file_prefix=ep_label,
+            ))
+        logger.info(
+            "Generated %d plot files for %d episodes under %s",
+            len(paths), len(episode_ids), base_output_dir,
+        )
+    else:
+        paths = generate_all_plots(
+            hdf5_path=hdf5_path,
+            episode_id=args.episode,
+            output_dir=args.output_dir,
+            control_step_seconds=args.control_step,
+            formats=args.format,
+            select_by=args.select_by,
+        )
 
     for p in paths:
         print(f"Saved: {p}")

@@ -31,7 +31,7 @@ from adv_building_gym.utils import setup_warning_filters
 
 # Trigger registration of the custom Gym IDs
 from adv_building_gym import EnvConfigManager
-from adv_building_gym.config import config as default_config, load_data_combinator_config
+from adv_building_gym.config import load_data_combinator_config
 from adv_building_gym.config.reward_schedule_manager import RewardScheduleManager, RewardScheduleMode
 from adv_building_gym.envs import adv_building_env_creator
 from adv_building_gym.ray_training import common_model_setup, select_model
@@ -100,12 +100,8 @@ def main():
         "--algorithm", default="ppo", choices=["ppo", "sac", "ddpg", "td3", "a2c"]
     )
     parser.add_argument(
-        "-cn", "--config_name", type=str,
-        help="Name of the configuration file or experiment setup to use"
-    )
-    parser.add_argument(
-        "--load-config", type=str,
-        help="Path to YAML config file to load (e.g., 'configs/my_config.yaml')"
+        "--load-config", type=str, required=True,
+        help="Path to YAML env config file to load (required, e.g., 'configs/env_cfg/env_test1_small.yaml')"
     )
     parser.add_argument(
         "--save-config", type=str,
@@ -197,12 +193,9 @@ def main():
     else:
         args.seed = training_param_config.seed
 
-    # Load config from file if specified, otherwise use default
-    if args.load_config:
-        logger.info("Loading config from: %s", args.load_config)
-        active_config = EnvConfigManager.load(args.load_config)
-    else:
-        active_config = default_config
+    # Load env config strictly from the YAML path provided via --load-config.
+    logger.info("Loading env config from: %s", args.load_config)
+    active_config = EnvConfigManager.load(args.load_config)
 
     # Load data combinator from YAML (separate from env config)
     data_combinator = load_data_combinator_config(
@@ -262,10 +255,6 @@ def main():
     # they use the factory methods directly via adv_building_env_creator.
     active_config.init_singletons()
 
-    # Action space is handled by env wrappers (FlattenAction + RescaleAction)
-    # applied in env_creator.
-
-    args.config_name = active_config.env_config_name if args.config_name is None else args.config_name
 
     # Save config to file if specified
     if args.save_config:
@@ -335,7 +324,7 @@ def main():
     exec_date_dt = datetime.datetime.now()
     exec_date = exec_date_dt.strftime("%Y%m%d_%H%M%S")
     run_name = f"{args.algorithm}_seed{args.seed}_{exec_date}"
-    storage_path = os.path.abspath(f"models/{args.config_name}/ray/{args.algorithm}")
+    storage_path = os.path.abspath(f"models/{active_config.env_config_name}/ray/{args.algorithm}")
     os.makedirs(storage_path, exist_ok=True)
 
     env_creator_config = {
@@ -568,12 +557,8 @@ if __name__ == "__main__":
 # Usage examples:
 # On slurm: sbatch slurm_scripts/slurm_train_ray.sh
 
-# Default settings (3500 episodes, checkpoint every 20 episodes, optimize reward_rate)
-# python run_train_ray.py --algorithm ppo --seed 42 --episodes 3500
-
-# Custom episode count, checkpoint frequency, and metric
-# python run_train_ray.py --algorithm ppo --seed 42 --episodes 5000 --checkpoint-frequency-episodes 50 --metric achieved_reward
-
-# SAC with specific config name
-# python run_train_ray.py --algorithm sac --seed 18 -cn env_test1_{s/m/l} --episodes 3500 --metric reward_rate
+# --load-config is REQUIRED — there is no default env config.
+# python run_train_ray.py --algorithm ppo --load-config configs/env_cfg/env_test1_small.yaml --seed 42 --episodes 3500
+# python run_train_ray.py --algorithm ppo --load-config configs/env_cfg/env_test1_mid.yaml --seed 42 --episodes 5000 --checkpoint-frequency-episodes 50 --metric achieved_reward
+# python run_train_ray.py --algorithm sac --load-config configs/env_cfg/env_test1_large.yaml --seed 18 --episodes 3500 --metric reward_rate
 

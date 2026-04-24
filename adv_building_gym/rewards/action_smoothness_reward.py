@@ -24,9 +24,10 @@ class ActionSmoothnessReward(RewardFunction):
     4. Normalise by the maximum possible ``accel²`` (16 per dimension
        per pair, since each diff ∈ [-2, 2] and worst-case swing is 4).
 
-    The per-key penalty is averaged across all checked pairs and lives
-    in [-1, 0].  Summing across action keys and shifting by
-    ``max_reward`` gives a raw reward in
+    The per-key penalty is the summed squared acceleration on reversal
+    pairs divided by the worst-case total (``16 * n_dims * n_pairs``),
+    so it lives in ``[-1, 0]``. Summing across action keys and shifting
+    by ``max_reward`` gives a raw reward in
     ``[max_reward - n_keys, max_reward]``.
 
     This design ensures:
@@ -34,13 +35,11 @@ class ActionSmoothnessReward(RewardFunction):
     - Single justified step-changes from steady state: zero penalty
       (``sign(0) * sign(x) = 0``, not negative).
     - Persistent oscillation: heavy penalty, proportional to amplitude.
-
-    Reference: Higher-Order Action Regularisation for RL in Building
-    Energy Management (NeurIPS 2025 UrbanAI Workshop)
-    Link: https://arxiv.org/abs/2601.02061
     """
     
-    # TODO VP 2026.04.22. : Rewrite docsstring
+    # TODO VP 2026.04.24. : Read reference: Higher-Order Action Regularisation for RL in Building
+    # Energy Management (NeurIPS 2025 UrbanAI Workshop)
+    # Link: https://arxiv.org/abs/2601.02061
 
     max_reward: float = 0.3
 

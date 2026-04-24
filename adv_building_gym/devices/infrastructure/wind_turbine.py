@@ -27,6 +27,8 @@ class WindTurbine(Infrastructure):
     wind_action value: 1 = full rated production, 0 = no production.
     """
 
+    POWER_FLOW = "generator"
+
     _exclude_params: ClassVar[Set[str]] = {
         'iteration', 'wind_speed_raw', 'available_power_kW',
         'current_production_kW', 'wind_speed_abs_max'
@@ -75,14 +77,6 @@ class WindTurbine(Infrastructure):
         self.wind_speed_raw = 0.0          # Denormalised wind speed (m/s)
         self.available_power_kW = 0.0      # Power before curtailment (kW)
         self.current_production_kW = 0.0   # Power after curtailment (kW)
-
-    @property
-    def max_consumption_kW(self) -> float:
-        return 0.0
-
-    @property
-    def max_export_kW(self) -> float:
-        return self.max_power_kW
 
     def setup_spaces(self,
                     state_spaces,

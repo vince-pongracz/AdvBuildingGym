@@ -1,5 +1,5 @@
 """
-Episode metrics callback for Ray RLlib training.
+Episode metrics callback for RLlib training.
 
 Provides EpisodeMetricsCallback via a factory function that logs scalar
 episode metrics (achieved_reward, reward_rate, cum_E_kWh) and saves
@@ -24,7 +24,7 @@ from ..utils import CustomJSONEncoder
 logger = logging.getLogger(__name__)
 
 
-def _extract_clipped_actions(episode: "SingleAgentEpisode") -> list | None:
+def _extract_clipped_actions(episode: SingleAgentEpisode) -> list | None:
     """Extract clipped actions from episode info dicts.
 
     Each info dict may contain an "action" key with the post-clip action
@@ -189,8 +189,7 @@ def make_episode_metrics_cb_class(
 
             reward_rate = (
                 ep_achieved_reward / max_achievable_reward
-                if max_achievable_reward > 0
-                else 0.0
+                if max_achievable_reward > 0 else 0.0
             )
 
             # Register custom metrics with RLlib's metrics system
@@ -205,6 +204,8 @@ def make_episode_metrics_cb_class(
             # Log cumulative energy consumption
             if cum_E_kWh is not None:
                 metrics_logger.log_value("cum_E_kWh", cum_E_kWh, reduce="mean")
+                metrics_logger.log_value("cum_E_kWh_min", cum_E_kWh, reduce="min")
+                metrics_logger.log_value("cum_E_kWh_max", cum_E_kWh, reduce="max")
 
             # Log per-component reward breakdown for TensorBoard.
             # Appears under env_runners/reward/<name> (training) and

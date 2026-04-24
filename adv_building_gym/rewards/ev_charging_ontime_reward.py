@@ -57,8 +57,8 @@ class EVChargingOnTimeReward(RewardFunction):
             actions: Dictionary of actions taken by the agent.
             states: Dictionary of current environment states.
             info: Shared inter-component dict containing EV charger params
-                (ev_max_charging_kW, ev_max_cap_kWh, ev_charger_efficiency,
-                ev_max_charge_time_hrs).
+                (ctxt_ev_max_charging_kW, ctxt_ev_max_cap_kWh,
+                ctxt_ev_charger_efficiency, ctxt_ev_max_charge_time_hrs).
 
         Returns:
             Tuple of (reward, max_reward_for_this_step):
@@ -84,9 +84,9 @@ class EVChargingOnTimeReward(RewardFunction):
 
         # Read EV charger parameters from info dict (published by LinearEVCharger)
         max_charging_kW = info["ctxt_ev_max_charging_kW"]
-        max_cap_kWh = info["ev_max_cap_kWh"]
-        charger_efficiency = info["ev_charger_efficiency"]
-        max_charge_time_hrs = info["ev_max_charge_time_hrs"]
+        max_cap_kWh = info["ctxt_ev_max_cap_kWh"]
+        charger_efficiency = info["ctxt_ev_charger_efficiency"]
+        max_charge_time_hrs = info["ctxt_ev_max_charge_time_hrs"]
 
         # Denormalize remaining time from [0, 1] to hours
         normalized_time = states["s_ev_charge_to_target_hrs_norm"][0]

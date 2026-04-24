@@ -10,6 +10,17 @@ from adv_building_gym.utils.serializable import ComponentRegistry
 
 logger = logging.getLogger(__name__)
 
+# TODO VP 2026.04.24. : Maybe refactor this one to the actions, as it changes the environment
+# statesources just provide passive information about the state, 
+# but this one actually changes the state based on the physics. 
+# Maybe it should be an infra component that applies the heat loss in its exec_action method, 
+# instead of a statesource that updates the state in update_state? 
+# Or maybe we can keep it as a statesource but make it clear that it is applying physics-based state updates, 
+# not just providing passive observations. 
+# Have to think about the architectural implications of this design choice.
+# I think statesources should be passive, they just provide the time series data, which can't really be controlled.
+# Statesources are the environment in some sense, we have no influence on them, we just observe them.
+# The infrastructure, the building is what we can control, and it applies the physics in its exec_action, which is what we can influence with our actions.
 
 class BuildingHeatLoss(StateSource):
     """

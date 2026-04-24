@@ -1,11 +1,7 @@
-# Reward schedule configuration for evaluation.
-# During evaluation all rewards should be active (mode: off) so that
-# the agent is scored on the full multi-objective reward.
+# See README.md in this directory for field documentation.
 
-# Path to the shared reward definitions (relative to this file).
 rewards_file: rewards_all.yaml
 
 mode: "off"
-
 swap_every_n_iterations: 1
 seed: 42

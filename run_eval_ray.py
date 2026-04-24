@@ -12,7 +12,6 @@ import sys
 from pathlib import Path
 
 from adv_building_gym import EnvConfigManager, evaluate_model
-from adv_building_gym.config import config as default_config
 from adv_building_gym.config.data_config import load_data_combinator_config
 from adv_building_gym.config.reward_schedule_manager import RewardScheduleManager
 from adv_building_gym.utils import resolve_checkpoint_path, RngService, setup_warning_filters
@@ -40,12 +39,8 @@ def parse_args() -> argparse.Namespace:
         help="RL algorithm to evaluate",
     )
     parser.add_argument(
-        "-cn", "--config-name", type=str,
-        help="Name of the configuration (used for checkpoint search path)",
-    )
-    parser.add_argument(
-        "--load-config", type=str,
-        help="Path to YAML config file to load (e.g., 'configs/my_config.yaml')",
+        "--load-config", type=str, required=True,
+        help="Path to YAML env config file to load (required, e.g., 'configs/env_cfg/env_test1_small.yaml')",
     )
     parser.add_argument(
         "--checkpoint", type=str, default=None,
@@ -106,8 +101,6 @@ def parse_args() -> argparse.Namespace:
 
     # --plot / --plot-all require trajectory data; force --log-trajectories on
     if args.plot or args.plot_all:
-        if not args.log_trajectories:
-            logger.info("--plot/--plot-all implies --log-trajectories; enabling trajectory logging.")
         args.log_trajectories = True
 
     return args
@@ -117,12 +110,9 @@ def main() -> None:
     """Parse arguments and run evaluation."""
     args = parse_args()
 
-    # Load config from file if specified, otherwise use default
-    if args.load_config:
-        logger.info("Loading config from: %s", args.load_config)
-        active_config = EnvConfigManager.load(args.load_config)
-    else:
-        active_config = default_config
+    # Load env config strictly from the YAML path provided via --load-config.
+    logger.info("Loading env config from: %s", args.load_config)
+    active_config = EnvConfigManager.load(args.load_config)
 
     # Load reward functions from reward schedule YAML (same rewards.yaml used
     # by training) so evaluation always matches the training reward definition.
@@ -144,11 +134,7 @@ def main() -> None:
     # Initialize centralized RNG service for all components
     RngService.initialize(args.seed)
 
-    config_name = (
-        args.config_name
-        if args.config_name is not None
-        else active_config.env_config_name
-    )
+    config_name = active_config.env_config_name
 
     # Build DataCombinator from YAML if specified
     data_combinator = None
@@ -239,17 +225,17 @@ if __name__ == "__main__":
     main()
 
 # Usage examples:
-# Evaluate best PPO model with default config
-# python run_eval_ray.py --algorithm ppo --episodes 10 --seed 42
+# --load-config is REQUIRED — there is no default env config.
 #
-# Evaluate with a custom config file (matching training config)
-# python run_eval_ray.py --algorithm ppo --load-config configs/my_config.yaml --episodes 10
+# Evaluate best PPO model for a given env config
+# python run_eval_ray.py --algorithm ppo --load-config configs/env_cfg/env_test1_small.yaml --episodes 10 --seed 42
 #
 # Evaluate latest SAC model
-# python run_eval_ray.py --algorithm sac --config-name env_test1_{s/m/l} --episodes 10
+# python run_eval_ray.py --algorithm sac --load-config configs/env_cfg/env_test1_mid.yaml --episodes 10
 #
 # Evaluate specific checkpoint
-# python run_eval_ray.py --checkpoint models/env_test1_{s/m/l}/ray/ppo/checkpoints_ppo_seed42_20260106/best_model_ep100_...
+# python run_eval_ray.py --algorithm ppo --load-config configs/env_cfg/env_test1_small.yaml \
+#     --checkpoint models/env_test1_small/ray/ppo/checkpoints_ppo_seed42_20260106/best_model_ep100_...
 #
 # Evaluate without saving results
-# python run_eval_ray.py --algorithm ppo --episodes 50 --no-save
+# python run_eval_ray.py --algorithm ppo --load-config configs/env_cfg/env_test1_small.yaml --episodes 50 --no-save

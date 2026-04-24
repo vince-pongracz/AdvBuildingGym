@@ -65,6 +65,9 @@ class EnvConfig(LoggableConfig):
         Returns:
             List of newly created StateSource instances.
         """
+        
+        # TODO VP 2026.04.24. : How are the statesources created in the envs? Are they always created here, or are they specified in yamls?
+        # Statesources are outer components -- usually we can't really change them (except the s_temp_in_norm)
         return [
             EnergyPriceDataSource("E_price"),
             WeatherDataSource("weather"),
@@ -74,7 +77,6 @@ class EnvConfig(LoggableConfig):
                 name="building_heat_loss",
                 K=self.building_props.K,
                 mC=self.building_props.mC,
-                timestep=self.CONTROL_STEP
             ),
             EVState("ev_schedule"),
         ]
@@ -109,7 +111,6 @@ class EnvConfig(LoggableConfig):
             SolarPanel(
                 "solar",
                 max_power_kW=5.0,
-                peak_power_kW=5.0,
             ),
             WindTurbine(
                 "wind_turbine",

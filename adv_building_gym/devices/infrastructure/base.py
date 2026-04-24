@@ -1,6 +1,6 @@
 import logging
 from collections import OrderedDict
-from typing import Any, ClassVar, Dict, Set, Type, TypeVar
+from typing import Any, ClassVar, Dict, Literal, Set, Type, TypeVar
 
 from adv_building_gym.utils import EnvSyncInterface
 from adv_building_gym.utils.serializable import Serializable, ComponentRegistry
@@ -8,6 +8,8 @@ from adv_building_gym.utils.serializable import Serializable, ComponentRegistry
 logger = logging.getLogger(__name__)
 
 T = TypeVar('T', bound='Infrastructure')
+
+PowerFlow = Literal["consumer", "generator", "bidirectional"]
 
 
 class Infrastructure(EnvSyncInterface, Serializable):
@@ -19,10 +21,20 @@ class Infrastructure(EnvSyncInterface, Serializable):
     # Internal state - never serialize
     _exclude_params: ClassVar[Set[str]] = {'iteration', 'row_offset'}
 
-    def __init__(self,
-                name: str,
-                max_power_kW: float
-                ) -> None:
+    # Class-level declaration of power-flow direction. Every concrete subclass
+    # MUST set this; enforced in __init_subclass__. Not an __init__ arg, so it
+    # is not serialised into YAML.
+    POWER_FLOW: ClassVar[PowerFlow | None] = None
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        super().__init_subclass__(**kwargs)
+        if (cls.POWER_FLOW is None or
+                cls.POWER_FLOW not in ("consumer", "generator", "bidirectional")):
+            raise TypeError(
+                f"{cls.__name__} must declare {cls.__name__}.POWER_FLOW as one of 'consumer', 'generator', or 'bidirectional'."
+            )
+
+    def __init__(self, name: str, max_power_kW: float) -> None:
         super().__init__()
 
         self.name = name
@@ -30,21 +42,21 @@ class Infrastructure(EnvSyncInterface, Serializable):
 
     @property
     def max_consumption_kW(self) -> float:
-        """Maximum power this component can draw from the grid (kW).
+        """Maximum power possibly DRAWN from the grid (kW).
 
-        Defaults to max_power_kW (consumption-only device).
-        Override in subclasses with different power flow directions.
+        Derived from POWER_FLOW. Override only when the bound depends on
+        runtime state (e.g., a flag toggling a direction).
         """
-        return self.max_power_kW
+        return self.max_power_kW if self.POWER_FLOW in ("consumer", "bidirectional") else 0.0
 
     @property
     def max_export_kW(self) -> float:
-        """Maximum power this component can export to the grid (kW).
+        """Maximum power possibly EXPORTED to the grid (kW).
 
-        Defaults to 0 (consumption-only device).
-        Override in subclasses that can produce or discharge.
+        Derived from POWER_FLOW. Override only when the bound depends on
+        runtime state (e.g., a flag toggling a direction).
         """
-        return 0.0
+        return self.max_power_kW if self.POWER_FLOW in ("generator", "bidirectional") else 0.0
 
     def setup_spaces(self,
                     state_spaces: OrderedDict,

@@ -6,7 +6,7 @@ from dataclasses import fields
 
 
 class LoggableConfig(ABC):
-    """Mixin for configuration classes that support structured logging.
+    """Mixin for config classes, supporting structured logging.
 
     Provides a default implementation that logs all dataclass fields.
     Non-dataclass configs should override ``log_values()``.
@@ -20,7 +20,6 @@ class LoggableConfig(ABC):
         """Log all config field values at INFO level."""
         logger = logging.getLogger(self.__module__)
 
-        # TODO VP 2026.04.22. : Is there a nicer way to query all the public fields of a dataclass?
         lines = [
             f"  {f.name} = {getattr(self, f.name)}" for f in fields(self) if not f.name.startswith("_")
         ]

@@ -12,12 +12,11 @@ logger = logging.getLogger(__name__)
 
 
 class HouseholdEnergyConsumers(Infrastructure):
-    """Passive household energy consumers infrastructure.
+    """Passive household energy consumer infrastructure.
 
     Reads the normalized consumption signal from the DesiredUserEnergyNeed
     statesource (``desired_energy_need`` in states) and converts it to a
-    physical kW consumption value — the same pattern SolarPanel uses with
-    irradiance.
+    physical kW consumption value.
 
     There is no policy-controlled action. The actual consumption is written
     into ``actions['hh_consumption_action']`` as a read-only output so that
@@ -27,15 +26,14 @@ class HouseholdEnergyConsumers(Infrastructure):
     hh_consumption_action value: 0 = no consumption, 1 = peak consumption.
     """
 
+    POWER_FLOW = "consumer"
+
     # Internal state variables — don't serialize
     _exclude_params: ClassVar[Set[str]] = {
         'iteration', 'consumption_norm', 'current_consumption_kW'
     }
 
-    def __init__(self,
-                name: str,
-                peak_consumption_kW: float = 8.0
-                ) -> None:
+    def __init__(self, name: str, peak_consumption_kW: float) -> None:
         """Initialize household energy consumers infrastructure.
 
         Args:
@@ -60,14 +58,10 @@ class HouseholdEnergyConsumers(Infrastructure):
         Only state space is registered.
         """
         if "s_hh_consumption_norm" not in state_spaces:
-            state_spaces["s_hh_consumption_norm"] = Box(
-                low=0, high=1, shape=(1,), dtype=np.float32
-            )
+            state_spaces["s_hh_consumption_norm"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
         
         if "ctxt_peak_consumption_kW" not in state_spaces:
-            state_spaces["ctxt_peak_consumption_kW"] = Box(
-                low=0, high=np.inf, shape=(1,), dtype=np.float32
-            )
+            state_spaces["ctxt_peak_consumption_kW"] = Box(low=0, high=np.inf, shape=(1,), dtype=np.float32)
 
         return state_spaces, action_spaces
 

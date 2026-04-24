@@ -1,4 +1,4 @@
-env_config_name: env_test1_small
+env_config_name: env_test1_mid
 EPISODE_LENGTH: 288
 control_step: 300
 
@@ -14,17 +14,17 @@ infras:
 - class: BatteryTremblay
   name: battery
   max_power_kW: 19.0
-  cell_capacity_Ah: 3.5
+  cell_capacity_Ah: 5.0
   max_charge_amps: 48.0
   max_charge_voltage: 420.0
   target_soc: 1.0
   max_charge_rate: 1.5
   history_length: 4
   E0: 3.2
-  K: 0.009
+  K: 0.0063
   A: 0.468
-  B: 3.529
-  R_cell: 0.01
+  B: 2.470
+  R_cell: 0.007
   n_series: 125
   n_parallel: 10
   charge_efficiency: 0.95
@@ -33,8 +33,8 @@ infras:
   soc_max: 0.95
 - class: LinearEVCharger
   name: ev_charger
-  max_power_kW: 7.0
-  max_charging_kW: 7.0
+  max_power_kW: 11.0
+  max_charging_kW: 11.0
   charger_efficiency: 0.92
   discharge_efficiency: 0.92
   v2g_enabled: true
@@ -44,7 +44,7 @@ infras:
   v2g_playroom: 0.1
 - class: SolarPanel
   name: solar
-  max_power_kW: 5.0
+  max_power_kW: 15.0
 - class: HouseholdEnergyConsumers
   name: hh_consumers
   peak_consumption_kW: 8.0

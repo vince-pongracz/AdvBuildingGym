@@ -630,10 +630,7 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
 
 
 # TODO VP 2026.03.23. : encourage exploration more
-# TODO VP 2026.03.23. : Use more history as state input -- from the 6h , 5h, 4h, 3h, 2h and 1h ago -- and the last 30min: each step from here
-# To this, implement a history collector -- collect specified timesteps from the past, according to the current simulation time: t-6h, t-4h, etc... -- can be generalised, it only needs the spec, the time series and the current simulation time.
-# Maybe not only for states, but for trajectory as well -- so that complete (s, a, r, s') tuples caputured from the past...
-# TODO VP 2026.03.23. : Eval script -- Plot all (reward, cum_E_usage) eval curves together -- with avg and variance
+# TODO VP 2026.03.23. : Eval script -- at the --plot-all option plot all (reward, cum_E_usage) eval curves from the trajectories together -- with avg and variance. Make sure the plotting and the eval parts are not mixed architecturally, reuse the standalone trajectory plotting.
 # TODO VP 2026.03.23. : Add standalone input and output heads for the policy NN, fix the core policy NN -- investigate this option
 
     def _get_raw_state_values(self) -> dict[str, float]:

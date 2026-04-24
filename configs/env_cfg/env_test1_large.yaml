@@ -47,7 +47,6 @@ infras:
 - class: SolarPanel
   name: solar
   max_power_kW: 30.0
-  peak_power_kW: 30.0
 - class: HouseholdEnergyConsumers
   name: hh_consumers
   peak_consumption_kW: 12.0

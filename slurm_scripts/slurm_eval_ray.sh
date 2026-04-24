@@ -9,8 +9,7 @@
 #
 # All arguments are forwarded directly to run_eval_ray.py. Available options:
 #   --algorithm, -a ALGO    Algorithm to evaluate (ppo, sac) [default: ppo]
-#   --config-name, -cn NAME Configuration name (used in checkpoint search path)
-#   --load-config PATH      Path to YAML config file to load
+#   --load-config PATH      Path to YAML env config file to load (REQUIRED)
 #   --checkpoint PATH       Path to Ray checkpoint directory (auto-detects best if omitted)
 #   --episodes N            Number of evaluation episodes [default: 10]
 #   --seed N                Random seed [default: 42]
@@ -19,10 +18,11 @@
 #   --log-trajectories      Save per-step trajectory JSON per episode [default: on]
 #   --no-log-trajectories   Disable trajectory logging
 #
-# Examples:
-#   sbatch slurm_scripts/slurm_eval_ray.sh --algorithm ppo --episodes 10 --seed 42
-#   sbatch slurm_scripts/slurm_eval_ray.sh --algorithm sac -cn env_test1_{s/m/l} --episodes 20
-#   sbatch slurm_scripts/slurm_eval_ray.sh --checkpoint models/env_test1_{s/m/l}/ray/ppo/best_model_ep100
+# Examples (--load-config is REQUIRED):
+#   sbatch slurm_scripts/slurm_eval_ray.sh --algorithm ppo --load-config configs/env_cfg/env_test1_small.yaml --episodes 10 --seed 42
+#   sbatch slurm_scripts/slurm_eval_ray.sh --algorithm sac --load-config configs/env_cfg/env_test1_mid.yaml --episodes 20
+#   sbatch slurm_scripts/slurm_eval_ray.sh --algorithm ppo --load-config configs/env_cfg/env_test1_small.yaml \
+#         --checkpoint models/env_test1_small/ray/ppo/best_model_ep100
 #
 # Note: Inference runs on CPU (sufficient for the small [32,32,32] network).
 # No GPU is requested.
@@ -33,7 +33,6 @@
 #SBATCH --partition=normal
 #SBATCH --nodes=1
 #SBATCH --tasks-per-node=1
-# TODO VP / NOTE: paralellise eval script -- run episodes parallel
 #SBATCH --cpus-per-task=2
 #SBATCH --time=00:10:00
 #SBATCH --output=slurm_logs/eval/slurm-eval-ray-%j.out

@@ -2,6 +2,6 @@
 
 rewards_file: rewards.yaml
 
-mode: "off"
+mode: "random"
 swap_every_n_iterations: 100
 seed: 42

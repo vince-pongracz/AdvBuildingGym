@@ -24,6 +24,8 @@ class HP(Infrastructure):
     Heat pumps only consume energy (|action| * max_power_kW).
     """
 
+    POWER_FLOW = "consumer"
+
     # K and mC come from building_props context
     _context_params: ClassVar[Set[str]] = {'K', 'mC'}
 

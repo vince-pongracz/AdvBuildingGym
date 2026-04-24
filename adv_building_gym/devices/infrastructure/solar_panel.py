@@ -30,6 +30,8 @@ class SolarPanel(Infrastructure):
     - Synthetic time-based profile (default)
     """
 
+    POWER_FLOW = "generator"
+
     # Internal state variables - don't serialize
     _exclude_params: ClassVar[Set[str]] = {
         'iteration', 'irradiance_norm', 'current_production_kW'
@@ -38,32 +40,21 @@ class SolarPanel(Infrastructure):
     def __init__(self,
                 name: str,
                 max_power_kW: float,
-                peak_power_kW: float,
                 ) -> None:
         """Initialize Solar Panel infrastructure.
 
         Args:
             name: Component identifier
-            max_power_kW: Maximum power production in kW (typically = peak_power_kW)
-            peak_power_kW: Peak power output under standard test conditions (STC)
+            max_power_kW: Peak power output under standard test conditions (STC).
+                ``-1.0`` in ``a_solar`` corresponds to production at this value.
         """
-        super().__init__(name, max_power_kW)
-
         # NOTE VP 2026.01.24. : Inverter efficiency is not considered,
-        # peak power means peak output power, produced by the solar panel
-        self.peak_power_kW = peak_power_kW # -1.0 at actions means the peak power
+        # max power means peak output power, produced by the solar panel.
+        super().__init__(name, max_power_kW)
 
         # State variables
         self.irradiance_norm = 0.0  # Normalized irradiance [0, 1]
         self.current_production_kW = 0.0  # Actual power production in kW
-
-    @property
-    def max_consumption_kW(self) -> float:
-        return 0.0
-
-    @property
-    def max_export_kW(self) -> float:
-        return self.max_power_kW
 
     def setup_spaces(self,
                     state_spaces,
@@ -82,8 +73,8 @@ class SolarPanel(Infrastructure):
 
         # Raw peak power capacity (kW) — static context variable, only
         # changes between episodes if the config is swapped.
-        if "ctxt_solar_peak_power_kW" not in state_spaces.keys():
-            state_spaces["ctxt_solar_peak_power_kW"] = Box(
+        if "ctxt_solar_max_power_kW" not in state_spaces.keys():
+            state_spaces["ctxt_solar_max_power_kW"] = Box(
                 low=0, high=np.inf, shape=(1,), dtype=np.float32
             )
 
@@ -111,7 +102,7 @@ class SolarPanel(Infrastructure):
             self.irradiance_norm = self._synthetic_irradiance(states)
 
         # Production = irradiance * peak_power
-        self.current_production_kW = self.irradiance_norm * self.peak_power_kW
+        self.current_production_kW = self.irradiance_norm * self.max_power_kW
 
         # Write normalized production as read-only output (negative = production)
         solar_action = -self.irradiance_norm
@@ -123,7 +114,7 @@ class SolarPanel(Infrastructure):
     def update_state(self, states: Dict, info=None) -> None:
         """Publish static peak power into the observable state."""
         super().update_state(states, info)
-        states["ctxt_solar_peak_power_kW"][0] = np.float32(self.peak_power_kW)
+        states["ctxt_solar_max_power_kW"][0] = np.float32(self.max_power_kW)
 
     def _synthetic_irradiance(self, states: Dict) -> float:
         """Generate synthetic irradiance based on time of day.

@@ -1,7 +1,7 @@
-"""Iteration-aligned data variant scheduling via RLlib callback (Approach D1).
+"""Iteration-aligned data variant scheduling via RLlib callback.
 
-Pushes a new DataCombinator variant to all env_runners at training iteration
-boundaries, ensuring all workers change dataset simultaneously.
+Pushes a new variant coming from the DataCombinator to all env_runners at training iteration
+boundaries, ensuring all workers holding an env change dataset simultaneously -- so they all see the same dataset at the same time.
 
 Compatible with Approach A: if the environment also has its own episode counter
 the two swap schedules are independent and additive.  Use an empty
@@ -12,6 +12,12 @@ callback if iteration-aligned swapping is desired.
 function that can be passed directly as a keyword argument to
 ``config.callbacks(ExistingClass, on_train_result=func)``.
 """
+# TODO VP 2026.04.23. : How is the random day swap within a variant?
+# TODO VP 2026.04.23. : Is it still important, is there any constraint, what enforces that "all workers holding an env change dataset simultaneously"?
+# It should not be because of the normalisation of the data as the max values of a dataset, a time series should be provided as context to the policy network, so it can take that factor into account.
+# Is it only because of the during training eval calls, that should eval the same env as the training workers were working on? What if that picks a random year with a random day?
+
+# TODO VP 2026.04.23. : Rewrite the about_data_mgmt.md. Adjust the docsstring to that.
 
 import logging
 
@@ -25,7 +31,7 @@ def create_data_schedule_on_train_result_cb(
     combinator: DataCombinator,
     swap_every_n_iterations: int,
 ):
-    """Factory that returns an ``on_train_result`` function for ``config.callbacks()``.
+    """Factory returning an ``on_train_result`` function for ``config.callbacks()``.
 
     Usage::
 
@@ -49,12 +55,12 @@ def create_data_schedule_on_train_result_cb(
         if not variant:
             return
 
-        _push_variant_to_runners(algorithm, variant, iteration)
+        _publish_variant_to_runners(algorithm, variant, iteration)
 
     return on_train_result
 
 
-def _push_variant_to_runners(algorithm, variant: dict[str, str], iteration: int) -> None:
+def _publish_variant_to_runners(algorithm, variant: dict[str, str], iteration: int) -> None:
     """Apply a data variant to all env_runners (training + evaluation)."""
 
     def apply(env_runner) -> None:
@@ -71,12 +77,9 @@ def _push_variant_to_runners(algorithm, variant: dict[str, str], iteration: int)
             if isinstance(unwrapped, DataVariantProvider):
                 unwrapped.apply_data_variant(variant)
 
-    algorithm.env_runner_group.foreach_env_runner(
-        apply, local_env_runner=True, timeout_seconds=None
-    )
+    algorithm.env_runner_group.foreach_env_runner(apply, local_env_runner=True, timeout_seconds=None)
+
     if algorithm.eval_env_runner_group is not None:
-        algorithm.eval_env_runner_group.foreach_env_runner(
-            apply, local_env_runner=True, timeout_seconds=None
-        )
+        algorithm.eval_env_runner_group.foreach_env_runner(apply, local_env_runner=True, timeout_seconds=None)
     
     logger.info("Iteration %d: all env_runners switched to variant %s", iteration, variant)

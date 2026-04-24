@@ -10,8 +10,7 @@
 #
 # All arguments are forwarded directly to run_train_ray.py. Available options:
 #   --algorithm ALGO          Algorithm to use (ppo, sac) [default: ppo]
-#   --config_name, -cn NAME   Configuration name for the experiment
-#   --load-config PATH        Path to YAML config file to load
+#   --load-config PATH        Path to YAML env config file to load (REQUIRED)
 #   --save-config PATH        Path to save config as YAML
 #   --episodes N              Total training episodes [default: 3500]
 #   --timesteps N             (Deprecated, prefer --episodes) Total timesteps
@@ -22,10 +21,10 @@
 #   --log-trajectories              Save per-step trajectory JSON during eval episodes [default: off]
 #   --no-log-trajectories           Disable trajectory logging (default)
 #
-# Examples:
-#   sbatch slurm_scripts/slurm_train_ray.sh --algorithm ppo --episodes 3500 --seed 42
-#   sbatch slurm_scripts/slurm_train_ray.sh --algorithm sac --load-config configs/my_config.yaml
-#   sbatch slurm_scripts/slurm_train_ray.sh --algorithm ppo --episodes 5000 --checkpoint-frequency-episodes 50
+# Examples (--load-config is REQUIRED):
+#   sbatch slurm_scripts/slurm_train_ray.sh --algorithm ppo --load-config configs/env_cfg/env_test1_small.yaml --episodes 3500 --seed 42
+#   sbatch slurm_scripts/slurm_train_ray.sh --algorithm sac --load-config configs/env_cfg/env_test1_mid.yaml
+#   sbatch slurm_scripts/slurm_train_ray.sh --algorithm ppo --load-config configs/env_cfg/env_test1_large.yaml --episodes 5000 --checkpoint-frequency-episodes 50
 #
 # The script activates the project's Python virtualenv and runs the training
 # script while logging SLURM and GPU info.

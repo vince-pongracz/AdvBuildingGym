@@ -25,6 +25,9 @@ class LinearEVCharger(Infrastructure):
     The EV availability can be controlled via CSV or synthetic schedule.
     """
 
+    # Runtime v2g_enabled flag still gates export; see max_export_kW override.
+    POWER_FLOW = "bidirectional"
+
     # control_step comes from config context
     _context_params: ClassVar[Set[str]] = {'control_step'}
 
@@ -90,12 +93,11 @@ class LinearEVCharger(Infrastructure):
 
     @property
     def max_export_kW(self) -> float:
+        # Override needed because v2g_enabled is a runtime (per-instance) gate,
+        # which POWER_FLOW (class-level) cannot express.
         return self.max_power_kW if self.v2g_enabled else 0.0
 
-    def setup_spaces(self,
-                     state_spaces,
-                     action_spaces
-                     ):
+    def setup_spaces(self, state_spaces, action_spaces):
         """Setup observation and action spaces for EV charger.
 
         Action convention: positive = consumption (charging from grid), negative = production (V2G to grid).
@@ -290,10 +292,9 @@ class LinearEVCharger(Infrastructure):
         # infrastructure reference.
         if info is not None:
             info["ctxt_ev_max_charging_kW"] = self.max_charging_kW
-            # TODO VP 2026.04.22. : These are contextual parameters that only change when a new EV connects.
-            info["ev_max_cap_kWh"] = self.max_cap_kWh
-            info["ev_charger_efficiency"] = self.charger_efficiency
-            info["ev_max_charge_time_hrs"] = self.max_charge_time_hrs
+            info["ctxt_ev_max_cap_kWh"] = self.max_cap_kWh
+            info["ctxt_ev_charger_efficiency"] = self.charger_efficiency
+            info["ctxt_ev_max_charge_time_hrs"] = self.max_charge_time_hrs
 
     def get_penalisable_consumption(self, actions: Dict, states: Dict) -> float:
         """Exempt charging when EV is connected and below target SoC."""

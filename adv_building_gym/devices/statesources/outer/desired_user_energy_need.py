@@ -37,7 +37,7 @@ class DesiredUserEnergyNeed(StateSource):
     _exclude_params: ClassVar[Set[str]] = {'iteration', 'ts', 'consumption_max'}
 
     def __init__(self, name: str, ds_path: str | None = None,
-                 normalise: Normalisation | str | None = Normalisation.MIN_MAX_SCALING) -> None:
+                normalise: Normalisation | str | None = Normalisation.MIN_MAX_SCALING) -> None:
         super().__init__(name, ds_path)
 
         normalise = Normalisation.init(normalise)
@@ -63,8 +63,7 @@ class DesiredUserEnergyNeed(StateSource):
                 self.ts[SOURCE_COLUMN], self.normalise
             )
 
-    def setup_spaces(self,
-                    state_spaces: OrderedDict,
+    def setup_spaces(self, state_spaces: OrderedDict,
                     action_spaces: OrderedDict) -> tuple[OrderedDict, OrderedDict]:
         """Setup observation spaces for desired user energy need."""
 

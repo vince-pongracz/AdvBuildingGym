@@ -10,6 +10,8 @@ swap_every_n_iterations: 300   # hold each config for N training iterations
 # simultaneously (battery, EV, solar all differ).  Intermediate YAML
 # files should be created to satisfy the one-change-at-a-time constraint.
 configs:
-  - configs/env_cfg/env_test1_small.yaml
-  - configs/env_cfg/env_test1_mid.yaml
-  - configs/env_cfg/env_test1_large.yaml
+  - configs/env_gen_solar_power/env_solar_1.yaml
+  - configs/env_gen_solar_power/env_solar_2.yaml
+  - configs/env_gen_solar_power/env_solar_3.yaml
+  - configs/env_gen_solar_power/env_solar_4.yaml
+  - configs/env_gen_solar_power/env_solar_5.yaml

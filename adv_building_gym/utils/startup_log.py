@@ -24,7 +24,7 @@ from typing import Any
 
 logger = logging.getLogger("startup")
 
-_HR = "=" * 70
+_HORIZONTAL_LINE = "=" * 70
 
 # Each section builder returns one or more (title, body_lines) tuples.
 # Numbering is applied at render time from the order of the list below, so
@@ -33,7 +33,7 @@ Section = tuple[str, list[str]]
 
 
 def _header(title: str) -> str:
-    return f"{_HR}\n{title}\n{_HR}"
+    return f"{_HORIZONTAL_LINE}\n{title}\n{_HORIZONTAL_LINE}"
 
 
 def _fmt_infra(infra: Any) -> str:
@@ -42,7 +42,7 @@ def _fmt_infra(infra: Any) -> str:
     cls = type(infra).__name__
     fields: list[str] = []
     for attr in (
-        "max_power_kW", "peak_power_kW", "rated_power_kW", "max_charging_kW",
+        "max_power_kW", "rated_power_kW", "max_charging_kW",
         "peak_consumption_kW", "cop_heat", "cop_cool", "capacity_kWh",
     ):
         if hasattr(infra, attr):
@@ -61,7 +61,7 @@ def _fmt_statesource(src: Any) -> str:
     return f"  - {name:<20} [{cls}]{tail}"
 
 
-def _section_invocation(seed: int) -> list[Section]:
+def _section_invocation(seed: int, config_path: str | None = None) -> list[Section]:
     job_id = os.environ.get("SLURM_JOB_ID", "n/a")
     host = socket.gethostname()
     cmd = " ".join(sys.argv)
@@ -71,6 +71,7 @@ def _section_invocation(seed: int) -> list[Section]:
             f"  CMD       : {cmd}",
             f"  HOST/JOB  : {host} / SLURM {job_id}",
             f"  SEED      : {seed}",
+            f"  ENV CFG   : {config_path or '(not set)'}",
             f"  PYTHON    : {sys.version.split()[0]}",
         ],
     )]
@@ -114,7 +115,7 @@ def _section_eval(
     args: Namespace, env_config: Any, experiment_path: str, seed: int
 ) -> list[Section]:
     algo = args.algorithm
-    cfg_name = getattr(env_config, "env_config_name", "")
+    load_config = getattr(args, "load_config", None) or "<env_config.yaml>"
 
     # Forward the reward schedule training used so the printed eval command
     # reproduces training's reward definition. Data schedules are eval-specific
@@ -126,17 +127,19 @@ def _section_eval(
         "  Explicit checkpoint path (this run):",
         "    sbatch slurm_scripts/slurm_eval_ray.sh \\",
         f"        --algorithm {algo} --seed {seed} \\",
+        f"        --load-config {load_config} \\",
     ]
     if reward_flag:
         explicit_lines.append(f"        {reward_flag} \\")
+
     explicit_lines.append(
         f"        --checkpoint {experiment_path}/best_model_ep{{checkpoint_serial}}"
     )
 
     auto_lines = [
-        "  Auto-resolve best checkpoint for this config-name:",
+        "  Auto-resolve best checkpoint for this env config:",
         "    sbatch slurm_scripts/slurm_eval_ray.sh \\",
-        f"        --algorithm {algo} --seed {seed} -cn {cfg_name}"
+        f"        --algorithm {algo} --seed {seed} --load-config {load_config}"
         + (" \\" if reward_flag else ""),
     ]
     if reward_flag:
@@ -304,7 +307,7 @@ def log_startup_banner(
     reordering or adding sections does not require touching any `[i/N]` label.
     """
     sections: list[Section] = [
-        *_section_invocation(seed),
+        *_section_invocation(seed, getattr(args, "load_config", None)),
         *_section_tensorboard(experiment_path, storage_path, exec_date),
         *_section_eval(args, env_config, experiment_path, seed),
         *_section_env_config(env_config),
@@ -327,13 +330,13 @@ def log_startup_banner(
     banner = "\n".join(rendered)
     # Single logger.info call so the timestamp prefix appears only once and
     # the box borders stay vertically aligned.
-    logger.info("\n%s\nStartup summary:\n%s\n%s", _HR, banner, _HR)
+    logger.info("\n%s\nStartup summary:\n%s\n%s", _HORIZONTAL_LINE, banner, _HORIZONTAL_LINE)
 
     if write_to_disk:
         try:
             os.makedirs(experiment_path, exist_ok=True)
             out = Path(experiment_path) / "startup.txt"
             out.write_text(banner + "\n", encoding="utf-8")
-            logger.info("Startup snapshot written to %s\n%s", out, _HR)
+            logger.info("Startup snapshot written to %s\n%s", out, _HORIZONTAL_LINE)
         except OSError as e:
             logger.warning("Could not write startup.txt: %s", e)

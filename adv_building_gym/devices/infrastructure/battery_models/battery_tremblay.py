@@ -73,6 +73,8 @@ class BatteryTremblay(Infrastructure):
         - Cell current: I_cell = I_pack / n_parallel
     """
 
+    POWER_FLOW = "bidirectional"
+
     # control_step comes from config context
     _context_params: ClassVar[Set[str]] = {'control_step'}
 
@@ -159,10 +161,6 @@ class BatteryTremblay(Infrastructure):
         self.current_amps = 0.0
         self.actual_voltage = self._calculate_terminal_voltage(self.soc, 0.0)
         self.actual_power_kW = 0.0  # Track actual power for consumption reporting
-
-    @property
-    def max_export_kW(self) -> float:
-        return self.max_power_kW
 
     def setup_spaces(self,
                     state_spaces,

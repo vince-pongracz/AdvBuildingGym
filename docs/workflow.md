@@ -227,11 +227,10 @@ sbatch slurm_scripts/slurm_train_ray.sh --algorithm ppo --episodes 3500 --log-tr
 | `--seed N` | `42` (from YAML) | Random seed |
 | `--metric {reward_rate,achieved_reward,episode_return_mean}` | `reward_rate` | Optimisation metric |
 | `--checkpoint-frequency-episodes N` | `20` | Save checkpoint every N episodes |
-| `--load-config PATH` | — | Environment YAML to load |
+| `--load-config PATH` | — (**required**) | Environment YAML to load; `env_config_name` inside sets the checkpoint dir name |
 | `--save-config PATH` | — | Save final config as YAML |
 | `--data-config PATH` | `configs/train_data_combinator_config.yaml` | Data combinator YAML |
 | `--log-trajectories` | off | Save per-step trajectory JSON during eval |
-| `-cn NAME` | — | Configuration name for experiment directories |
 
 **What the script does:**
 

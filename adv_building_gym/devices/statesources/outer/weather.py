@@ -93,7 +93,7 @@ class WeatherDataSource(StateSource):
                     state_spaces: OrderedDict,
                     action_spaces: OrderedDict
                     ) -> tuple[OrderedDict, OrderedDict]:
-        # TODO VP 2026.04.22. : Remove hst variables, use frame stacking instead -- more flexible and doesn't require predefining a fixed history length in the state space.
+
         if "s_temp_out_norm" not in state_spaces.keys():
             state_spaces["s_temp_out_norm"] = Box(low=-1, high=1, shape=(1,), dtype=np.float32)
         if "s_solar_irradiance_norm" not in state_spaces.keys():
@@ -174,6 +174,9 @@ class WeatherDataSource(StateSource):
 
         # Expose scale factors via info for inter-component use
         # (e.g. InsideTemperature normalises on the same temp scale).
+        # TODO VP 2026.04.24. : Remove this info writes, because the context states are already published in the state dict.
+        # Use the context states where it is needed (e.g. in InsideTemperature) instead of passing via info, to avoid confusion about where to get the values from.
+        # Keep the get_raw_values method for the cases when the changing raw values are needed.
         if info is not None:
             info["_temp_abs_max"] = self.temp_abs_max
             info["_wind_speed_abs_max"] = self.wind_speed_abs_max
