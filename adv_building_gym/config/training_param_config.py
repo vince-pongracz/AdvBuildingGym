@@ -61,6 +61,17 @@ class TrainingParamConfig(LoggableConfig):
     sac_training_intensity: float = 1.0
     sac_rollout_fragment_length: int = 288
 
+    # Per-key strided history (see docs/hst_mgmt.md).
+    # tracked_keys: obs-space keys fed to StridedHistoryConnector; each
+    # tracked key's obs entry is replaced with a stack along the offsets.
+    # For action history, list the "<action_key>_prev" obs entries the env
+    # publishes each step — those are plain obs keys.
+    # offsets: step lags (negative = past). Offset 0 is prepended automatically
+    # so the current step is always the first slice of the stack.
+    # Empty tracked_keys disables the connector (flatten-only pipeline).
+    hst_tracked_keys: list[str] = field(default_factory=list)
+    hst_offsets: list[int] = field(default_factory=list)
+
     _source_file: str | None = field(default=None, repr=False)
 
     @staticmethod
@@ -78,17 +89,18 @@ class TrainingParamConfig(LoggableConfig):
         Returns:
             TrainingParamConfig populated from the file.
         """
-        with open(path, "r") as f:
-            data = yaml.safe_load(f)
+        with open(path, "r") as cfg_file:
+            tparam_cfg = yaml.safe_load(cfg_file)
 
         flat: dict = {}
-        for section in ("common", "ppo", "sac"):
-            section_data = data.pop(section, {}) or {}
-            prefix = "" if section == "common" else f"{section}_"
+        for cfg_section in ("common", "ppo", "sac", "hst"):
+            section_data = tparam_cfg.pop(cfg_section, {}) or {}
+            section_prefix = "" if cfg_section == "common" else f"{cfg_section}_"
             for key, value in section_data.items():
-                flat[f"{prefix}{key}"] = value
+                flat[f"{section_prefix}{key}"] = value
         # Allow top-level keys as well (backwards compatibility)
-        flat.update(data)
+        # TODO VP 2026.04.22. : Is this really needed?
+        flat.update(tparam_cfg)
 
         config = TrainingParamConfig(**flat)
         config._source_file = Path(path).name
@@ -97,5 +109,5 @@ class TrainingParamConfig(LoggableConfig):
 
     def _log_label(self) -> str:
         if self._source_file:
-            return f"TrainingParamConfig ({self._source_file})"
+            return f"TrainingParamConfig (src file: {self._source_file})"
         return "TrainingParamConfig"

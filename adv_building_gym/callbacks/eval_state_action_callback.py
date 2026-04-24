@@ -57,8 +57,7 @@ def make_eval_state_action_cb_class(
     # the correct location regardless of process cwd (Ray Tune changes the
     # Trainable actor's cwd to the trial log directory).
     tb_log_dir = os.path.join(
-        os.path.abspath(metrics_base_dir), "eval_trajectories",
-        exec_date.strftime("%Y%m%d_%H%M%S"),
+        os.path.abspath(metrics_base_dir), "eval_trajectories", exec_date.strftime("%Y%m%d_%H%M%S"),
     )
 
     # Closure state shared across all callback instances on this worker.

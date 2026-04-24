@@ -41,7 +41,7 @@ class EnvConfig(LoggableConfig):
 
     EPISODE_LENGTH: int = 288 # a day
     CONTROL_STEP: int = 300  # seconds (5 minutes)
-    ACTION_HISTORY_LENGTH: int = 4  # rolling window of past actions exposed in observations
+    ACTION_HISTORY_LENGTH: int = 15  # rolling window of past actions kept in env for reward functions (not in obs)
 
     building_props: BuildingProps = field(default_factory=lambda:
         BuildingProps(mC=300, K=20)

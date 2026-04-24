@@ -119,8 +119,8 @@ class LinearEVCharger(Infrastructure):
         if "s_ev_connected" not in state_spaces.keys():
             # Binary: 0 = not connected, 1 = connected
             state_spaces["s_ev_connected"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
-        if "hst_s_ev_soc" not in state_spaces.keys():
-            state_spaces["hst_s_ev_soc"] = Box(low=0, high=1, shape=(self.history_length,), dtype=np.float32)
+        # Policy-side history of s_ev_soc is assembled by
+        # StridedHistoryConnector; env no longer stores it in obs.
         if "s_ev_charge_to_target_hrs_norm" not in state_spaces.keys():
             # Normalized: 0 = no time left or disconnected, 1 = max_charge_time_hrs remaining
             state_spaces["s_ev_charge_to_target_hrs_norm"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
@@ -284,11 +284,6 @@ class LinearEVCharger(Infrastructure):
         # Normalize charge_to_target_in_hrs to [0, 1] for state space
         normalized_time = self.charge_to_target_in_hrs / self.max_charge_time_hrs if self.max_charge_time_hrs > 0 else 0.0
         states["s_ev_charge_to_target_hrs_norm"][0] = np.float32(np.clip(normalized_time, 0.0, 1.0))
-
-        # Update SoC history (rolling window)
-        history = states["hst_s_ev_soc"]
-        history[:-1] = history[1:]
-        history[-1] = np.float32(self.soc)
 
         # Publish static charger params into info for downstream consumers
         # (e.g. EVChargingOnTimeReward) that need them without holding an

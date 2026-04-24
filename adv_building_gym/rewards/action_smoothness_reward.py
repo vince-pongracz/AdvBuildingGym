@@ -39,6 +39,8 @@ class ActionSmoothnessReward(RewardFunction):
     Energy Management (NeurIPS 2025 UrbanAI Workshop)
     Link: https://arxiv.org/abs/2601.02061
     """
+    
+    # TODO VP 2026.04.22. : Rewrite docsstring
 
     max_reward: float = 0.3
 
@@ -49,26 +51,35 @@ class ActionSmoothnessReward(RewardFunction):
     @property
     def min_reward(self) -> float:
         """Minimum raw (unweighted) reward: -1 per action key."""
+        # TODO VP 2026.04.22. : Refactor this, add weigthing and -1 is not always the min.
         return -self._n_action_keys
 
     def get_reward(self, actions: dict, states: dict, info: dict | None = None) -> tuple[float, float]:
         max_step = self.weight * self.max_reward
         penalties: list[float] = []
 
+        # Action history for the reward lives in the env's rolling deque,
+        # published via info["action_history"]. The policy sees a separate
+        # "<action_key>_prev" obs channel each step (optionally stacked by
+        # StridedHistoryConnector); this reward uses the env deque directly.
+        # Link: docs/hst_mgmt.md
+        action_history = (info or {}).get("action_history")
+        if not action_history:
+            return 0.0, max_step
+
         for key, current_action in actions.items():
-            hist_key = f"hst_{key}"
-            if hist_key not in states:
+            a_current = np.atleast_1d(current_action).astype(np.float32)
+            history_rows = [
+                np.atleast_1d(snapshot[key]).astype(np.float32).reshape(-1)
+                for snapshot in action_history
+                if key in snapshot
+            ]
+            if not history_rows:
                 continue
 
-            a_current = np.atleast_1d(current_action).astype(np.float32)
-            a_history = states[hist_key]  # shape (window, *action_shape)
-
-            # Build the full action sequence: history rows + current action.
-            # a_history is oldest-first; append current at the end.
-            # Result shape: (window + 1, n_dims)
-            sequence = np.vstack(
-                [a_history.reshape(a_history.shape[0], -1), a_current.reshape(1, -1)]
-            )
+            # Build the full action sequence: deque entries (oldest-first)
+            # followed by the just-taken action.  Shape: (len + 1, n_dims).
+            sequence = np.vstack(history_rows + [a_current.reshape(-1)])
 
             # First differences: d[i] = sequence[i+1] - sequence[i]
             diffs = np.diff(sequence, axis=0)  # (window, n_dims)

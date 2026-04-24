@@ -1,6 +1,6 @@
 import sys
 from typing import Any, Dict
-from collections import OrderedDict
+from collections import OrderedDict, deque
 import logging
 
 import gymnasium as gym
@@ -211,6 +211,21 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
             infr.setup_spaces(observation_space, action_space)
         self.action_space_keys = list(action_space.keys())
 
+        # For each action key, publish a matching ``<key>_prev`` observation
+        # carrying the most recent applied action. Policies that want action
+        # history consume these as plain obs keys (e.g. via
+        # StridedHistoryConnector, which only needs to handle obs keys), so
+        # there is no need to reconstruct per-key actions from the flat
+        # Box stored in episodes by FlattenAction + RescaleAction.
+        # Link: docs/hst_mgmt.md
+        for act_key, act_box in action_space.items():
+            observation_space[f"{act_key}_prev"] = spaces.Box(
+                low=act_box.low,
+                high=act_box.high,
+                shape=act_box.shape,
+                dtype=act_box.dtype,
+            )
+
         self.statesources = statesources
         for ds in self.statesources:
             ds.setup_spaces(observation_space, action_space)
@@ -221,30 +236,19 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         # within the episode.  Used by statesource synthetic profiles
         # and SolarPanel for time-of-day logic.
         # Managed directly by the environment (not a StateSource).
-        observation_space["raw_sim_hour"] = spaces.Box(
-            low=0.0, high=24.0, shape=(1,), dtype=np.float32,
-        )
+        observation_space["raw_sim_hour"] = spaces.Box(low=0.0, high=24.0, shape=(1,), dtype=np.float32)
 
-        # Add per-key action history windows to the observation space.
-        # Each entry ``hst_{key}`` has shape ``(action_history_length, *action_shape)``
-        # and stores a rolling window of the N most recent executed actions
-        # (oldest first, newest last).  The agent can use this to reason about
-        # action smoothness and the ActionSmoothnessReward reads the latest
-        # entry to compute the change penalty.
-        # FlattenObservations (RLlib connector) handles flattening for the RL module.
-        self.action_history_length = action_history_length if action_history_length is not None else env_config.ACTION_HISTORY_LENGTH
-        for key, space in action_space.items():
-            hist_shape = (self.action_history_length, *space.shape)
-            obs_key = f"hst_{key}"
-            # Tile per-action bounds across the history window
-            low_tiled = np.tile(space.low, (self.action_history_length, 1)).reshape(hist_shape)
-            high_tiled = np.tile(space.high, (self.action_history_length, 1)).reshape(hist_shape)
-            observation_space[obs_key] = spaces.Box(
-                low=low_tiled.astype(np.float32),
-                high=high_tiled.astype(np.float32),
-                shape=hist_shape,
-                dtype=np.float32,
-            )
+        # Action history is now stored as an in-memory deque (``self.action_history``)
+        # for reward functions such as ActionSmoothnessReward.  The policy no longer
+        # receives a per-action ``hst_{key}`` observation from the env — the
+        # StridedHistoryConnector assembles that on the rollout/learner side.
+        # Link: docs/hst_mgmt.md
+        self.action_history_length = (
+            action_history_length
+            if action_history_length is not None
+            else env_config.ACTION_HISTORY_LENGTH
+        )
+        self.action_history: deque[Dict[str, np.ndarray]] = deque(maxlen=self.action_history_length,)
 
         # Assign spaces
         self.observation_space = SDict(observation_space)
@@ -424,6 +428,7 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         # ======== Reset state and synchronise datasources/infras ========
         self.iteration = 0
         self.cum_E_kWh = 0.0  # Reset cumulative energy on episode reset
+        self.action_history.clear()
         for sync in self.infras + self.statesources:
             sync.synchronise(self.iteration, row_offset)
 
@@ -459,9 +464,17 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
             "raw": self._get_raw_state_values(),  # Denormalised physical values (°C, €, etc.)
         }
         if self.log_full_info:
-            info["state"] = {k: np.array(v, copy=True) for k, v in self.state.items()}
+            info["state"] = {
+                k: np.array(v, copy=True) for k, v in self.state.items() if isinstance(v, np.ndarray)
+            }
 
-        return self.state, info
+        # Return a fresh-array copy of the state. Statesources/infras mutate
+        # state arrays in place each step, so without copying the episode
+        # buffer (which stores obs by reference) would show every past
+        # observation as the CURRENT state. Gymnasium's SyncVectorEnv
+        # deepcopies by default and hides this in training; direct stepping
+        # (eval) needs the same discipline here.
+        return {k: np.array(v, copy=True) for k, v in self.state.items()}, info
 
     def _get_observation(self) -> dict:
         # Start with the current env state so statesources have access to
@@ -544,6 +557,14 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
             for infra in self.infras
         )
 
+        # Expose the rolling action history to reward functions via
+        # _component_info (consumed by ActionSmoothnessReward). The policy
+        # sees the most recent action through the <key>_prev obs keys
+        # instead — StridedHistoryConnector stacks those as plain obs,
+        # so no obs-side action channel runs through the connector.
+        # Link: docs/hst_mgmt.md
+        self._component_info["action_history"] = self.action_history
+
         # Calculate reward with per-function breakdown
         reward: float = 0
         reward_breakdown = {}
@@ -555,19 +576,22 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
             reward += rew_val
             max_reward_step += rew_max
 
-        # Track executed actions in a rolling history window (oldest first, newest last).
-        # Must happen AFTER reward computation so that ActionSmoothnessReward can
-        # compare the current action against the previous one stored in history[-1].
+        # Append the just-executed action to the deque AFTER reward computation
+        # so ActionSmoothnessReward still compares "current action" (passed via
+        # its ``actions`` arg) to the previous one at ``action_history[-1]``.
+        snapshot = {
+            key: np.asarray(action.get(key, 0.0), dtype=np.float32).copy()
+            for key in self.action_space_keys
+        }
+        self.action_history.append(snapshot)
+
+        # Mirror each just-executed action into ``<key>_prev`` observation
+        # entries. The next observation returned to the policy carries these
+        # as its "previous action" signal — no separate action-history
+        # channel is needed for the RLModule.
         for key in self.action_space_keys:
-            obs_key = f"hst_{key}"
-            history = self.state[obs_key]
-            # Shift rows up (drop oldest) and insert latest action at the end
-            history[:-1] = history[1:]
-            act_val = action.get(key)
-            if act_val is not None:
-                history[-1] = np.asarray(act_val, dtype=np.float32)
-            else:
-                history[-1] = 0.0
+            dest = self.state[f"{key}_prev"]
+            dest[...] = snapshot[key].astype(dest.dtype).reshape(dest.shape)
 
         # Guard against NaN/Inf in state — these propagate through the neural
         # network and crash the action distribution (std = NaN → RuntimeError).
@@ -595,9 +619,14 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
             "raw": self._get_raw_state_values(),  # Denormalised physical values (°C, €, etc.)
         }
         if self.log_full_info:
-            info["state"] = {k: np.array(v, copy=True) for k, v in self.state.items()}
+            info["state"] = {
+                k: np.array(v, copy=True) for k, v in self.state.items() if isinstance(v, np.ndarray)
+            }
 
-        return self.state, reward, terminated, truncated, info
+        # Return a fresh-array copy — see note in reset().  Without this,
+        # past observations stored in SingleAgentEpisode alias the live
+        # state buffer and every lookback returns the current values.
+        return {k: np.array(v, copy=True) for k, v in self.state.items()}, reward, terminated, truncated, info
 
 
 # TODO VP 2026.03.23. : encourage exploration more

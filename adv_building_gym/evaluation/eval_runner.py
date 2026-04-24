@@ -9,20 +9,27 @@ import logging
 import os
 import signal
 import time
+from pathlib import Path
 
 import numpy as np
 import ray
-from ray.rllib.connectors.env_to_module import FlattenObservations
+from ray.rllib.core.columns import Columns
 from ray.rllib.env.single_agent_episode import SingleAgentEpisode
 
+from adv_building_gym.config.training_param_config import TrainingParamConfig
 from adv_building_gym.data_combinator import DataCombinator
 from adv_building_gym.envs import AdvBuildingGym
 from adv_building_gym.envs.env_creator import wrap_action_space
+from adv_building_gym.ray_training.history_connector import build_env_to_module_connectors
 from adv_building_gym.ray_training.rl_module_inference import (
     infer_action,
     load_rl_module,
 )
 from adv_building_gym.utils import TrajectoryCollector, check_space_compatibility
+
+_DEFAULT_TRAINING_CONFIG = (
+    Path(__file__).resolve().parents[2] / "configs" / "training_param_config.yaml"
+)
 
 from .results import EpisodeStats, EvalResults
 
@@ -44,6 +51,7 @@ def evaluate_model(
     algorithm_hint: str | None = None,
     timeout_seconds: int = 300,
     data_combinator: DataCombinator | None = None,
+    training_config: TrainingParamConfig | None = None,
 ) -> EvalResults:
     """Evaluate a Ray/RLlib trained model on AdvBuildingGym.
 
@@ -67,6 +75,11 @@ def evaluate_model(
     Returns:
         ``EvalResults`` with per-episode stats and summary.
     """
+    # Load the default YAML training config if the caller didn't pass one —
+    # eval MUST use the same hst settings as training or obs dimensions diverge.
+    if training_config is None:
+        training_config = TrainingParamConfig.from_yaml(_DEFAULT_TRAINING_CONFIG)
+
     # Create a timestamped subdirectory so successive eval runs never collide
     run_stamp = datetime.datetime.now().strftime("%Y%m%d_%H%M") + "_eval"
     output_dir = os.path.join(output_dir, run_stamp)
@@ -124,15 +137,26 @@ def evaluate_model(
     collector = TrajectoryCollector(base_env) if log_trajectories else None
 
     env = wrap_action_space(base_env)
-    check_space_compatibility(rl_module, env)
 
-    # Use the same FlattenObservations connector as training to guarantee
-    # identical observation key ordering (dm-tree sorted).
-    # Link: https://docs.ray.io/en/latest/rllib/package_ref/connectors.html#flattenobservations
-    flatten_obs_connector = FlattenObservations(
+    # Use the same env-to-module connector pipeline as training, built from
+    # the *same* training_config so the flat obs dim matches the checkpoint.
+    # ``hst_tracked_keys`` set  →  [StridedHistoryConnector] (stack + flatten)
+    # otherwise                 →  [FlattenObservations]
+    # Offset 0 is always prepended automatically. The connector tracks obs
+    # keys only; to stack previous actions, list the "<action_key>_prev"
+    # obs entries that the env publishes each step.
+    # Link: docs/hst_mgmt.md
+    pipeline = build_env_to_module_connectors(
+        training_config,
         base_env.observation_space,
         base_env.action_space,
+        as_learner_connector=False,
     )
+
+    # Run the space compatibility check *after* the pipeline is built so the
+    # model's input dim is compared against the post-connector flat size (e.g.
+    # with StridedHistoryConnector stacking obs history), not the raw env obs.
+    check_space_compatibility(rl_module, env, pipeline=pipeline)
 
     episode_stats: list[EpisodeStats] = []
     start_time = time.time()
@@ -168,21 +192,40 @@ def evaluate_model(
                 collector.reset()
                 collector.on_reset(reset_info)
 
+            # Persistent episode buffer — ``StridedHistoryConnector`` needs
+            # the full observation/action lookback to materialise ``hst_*``
+            # stacks at decision time.
+            sa_episode = SingleAgentEpisode(
+                observation_space=base_env.observation_space,
+                action_space=base_env.action_space,
+                observations=[obs],
+            )
+
             while not done and episode_length < MAX_STEPS_PER_EPISODE:
-                # Flatten dict obs via the same connector used in training.
-                sa_episode = SingleAgentEpisode(
-                    observation_space=base_env.observation_space,
-                    action_space=base_env.action_space,
-                    observations=[obs],
-                )
-                flatten_obs_connector(
-                    rl_module=None, batch={}, episodes=[sa_episode],
-                    explore=False, shared_data={},
-                )
-                flat_obs = sa_episode.get_observations(-1)
+                batch: dict = {}
+                for connector in pipeline:
+                    batch = connector(
+                        rl_module=None,
+                        batch=batch,
+                        episodes=[sa_episode],
+                        explore=False,
+                        shared_data={},
+                    )
+                # ``add_batch_item`` stores: {Columns.OBS: {ep_id: [flat_obs]}}.
+                obs_column = batch[Columns.OBS]
+                flat_obs = next(iter(obs_column.values()))[-1]
                 raw_action = infer_action(rl_module, flat_obs)
 
                 next_obs, reward, terminated, truncated, step_info = env.step(raw_action)
+
+                sa_episode.add_env_step(
+                    observation=next_obs,
+                    action=raw_action,
+                    reward=reward,
+                    terminated=terminated,
+                    truncated=truncated,
+                    infos=step_info,
+                )
 
                 if collector is not None:
                     collector.on_step(

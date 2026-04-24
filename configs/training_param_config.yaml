@@ -18,3 +18,19 @@ sac:
   days_to_keep_in_replay_buffer: 1500
   training_intensity: 64
   rollout_fragment_length: 64
+
+# Per-key strided history via StridedHistoryConnector.
+# tracked_keys: observation-space keys (obs only). The Dict obs entry
+# for each tracked key is replaced with a stacked tensor along the
+# offsets. Offset 0 is prepended automatically so the current step is
+# the first slice; offsets listed below are step lags (negative = past).
+# Non-tracked keys pass through unchanged.
+#
+# For "previous action" history, list the ``<action_key>_prev`` obs
+# entries published by the env (see building_adv.py:step) — these are
+# plain obs keys and stack via the same uniform code path.
+# Link: docs/hst_mgmt.md
+hst:
+  # TODO VP 2026.04.22. : Extend tracked keys with others.
+  tracked_keys: [s_battery_pct, s_ev_soc, s_temp_in_norm, s_temp_out_norm, s_solar_irradiance_norm, a_hp_prev, a_battery_prev]
+  offsets: [-1, -2, -3, -4, -6, -12, -18, -24, -36, -48, -60, -72, -84, -96, -108, -120, -132, -144]

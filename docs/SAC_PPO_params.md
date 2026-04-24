@@ -272,7 +272,7 @@ Parameters like `conv_filters`, `conv_activation`, etc. are for image/grid obser
 common:
   learning_rate: 3.0e-4
   seed: 42
-  episode_lookback_horizon_steps: 120  # 5 min steps, 120 steps = 10 hours
+  episode_lookback_horizon_steps: 120  # 5 min steps, 120 steps = 10 hours; auto-raised to max(|hst.offsets|) if smaller
   max_episodes_to_run: 7000
 
 ppo:

@@ -82,8 +82,9 @@ class BatteryLinear(Infrastructure):
             state_spaces["s_battery_pct"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
         if "s_battery_target_pct" not in state_spaces.keys():
             state_spaces["s_battery_target_pct"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
-        if "hst_s_battery_pct" not in state_spaces.keys():
-            state_spaces["hst_s_battery_pct"] = Box(low=0, high=1, shape=(self.history_length,), dtype=np.float32)
+        # Policy-side history of s_battery_pct is assembled by
+        # StridedHistoryConnector on the rollout/learner side; the env no
+        # longer stores it in the observation dict.
 
         # Raw battery capacity (kWh) — constant hardware parameter.
         if "ctxt_battery_capacity_kWh" not in state_spaces.keys():
@@ -139,10 +140,6 @@ class BatteryLinear(Infrastructure):
         states["s_battery_pct"][0] = np.float32(self.soc)
         states["s_battery_target_pct"][0] = np.float32(self.target_soc)
         states["ctxt_battery_capacity_kWh"][0] = np.float32(self.max_cap_kWh)
-
-        history = states["hst_s_battery_pct"]
-        history[:-1] = history[1:]
-        history[-1] = np.float32(self.soc)
 
     def get_penalisable_consumption(self, actions: Dict, states: Dict) -> float:
         """Exempt charging when battery is below target SoC."""

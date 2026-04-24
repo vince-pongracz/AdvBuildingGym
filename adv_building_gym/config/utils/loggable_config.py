@@ -18,9 +18,12 @@ class LoggableConfig(ABC):
 
     def log_values(self) -> None:
         """Log all config field values at INFO level."""
-        logger = logging.getLogger(type(self).__module__)
+        logger = logging.getLogger(self.__module__)
+
+        # TODO VP 2026.04.22. : Is there a nicer way to query all the public fields of a dataclass?
         lines = [
-            f"  {f.name} = {getattr(self, f.name)}"
-            for f in fields(self) if not f.name.startswith("_")
+            f"  {f.name} = {getattr(self, f.name)}" for f in fields(self) if not f.name.startswith("_")
         ]
-        logger.info("%s:\n%s", self._log_label(), "\n".join(lines))
+        lines = "\n".join(lines)
+
+        logger.info("%s:\n%s", self._log_label(), lines)

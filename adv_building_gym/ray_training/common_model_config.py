@@ -8,8 +8,9 @@ including environment setup, resource allocation, and callback configuration.
 import datetime
 import logging
 
-from ray.rllib.connectors.env_to_module import FlattenObservations
 from ray.rllib.algorithms.algorithm_config import AlgorithmConfig
+
+from adv_building_gym.ray_training.history_connector import build_env_to_module_connectors
 
 from adv_building_gym.callbacks import (
     create_data_schedule_on_train_result_cb,
@@ -249,14 +250,59 @@ def common_model_setup(
         num_cpus_per_learner=num_cpus_per_learner,
     )
     # Sampling actions (querying the env, using the policy, sample trajectories) -- no GPU needed
+    # Episode lookback horizon controls how far back the env-to-module connector
+    # can index into the current episode; must cover the largest |offset| used
+    # by StridedHistoryConnector, else mid-episode lookups silently fall back
+    # to padding.
+    # Link: https://docs.ray.io/en/latest/rllib/env-to-module-connector.html
+    max_abs_offset = max((abs(offset) for offset in training_config.hst_offsets), default=0)
+    effective_lookback = max(training_config.episode_lookback_horizon_steps, max_abs_offset)
+    if effective_lookback > training_config.episode_lookback_horizon_steps:
+        logger.warning(
+            "episode_lookback_horizon_steps=%d is smaller than max(|hst.offsets|)=%d; "
+            "raising episode_lookback_horizon to %d for StridedHistoryConnector.",
+            training_config.episode_lookback_horizon_steps, max_abs_offset,
+            effective_lookback
+        )
+
     config.env_runners(
         num_env_runners=num_env_runners,
         num_cpus_per_env_runner=num_cpus_per_env_runner,
-        episode_lookback_horizon=training_config.episode_lookback_horizon_steps,  # RLlib default: 1
-        # Flatten dict observation space into a single vector for the RL module.
-        # Action space flattening + rescaling is handled by env wrappers
-        # (FlattenAction + RescaleAction) applied in env_creator.
-        env_to_module_connector=lambda env, spaces, device: FlattenObservations(),  # type: ignore
+        episode_lookback_horizon=effective_lookback,  # RLlib default: 1
+        # Dict obs is transformed by the shared connector factory:
+        #   hst_tracked_keys set  →  [StridedHistoryConnector] (stack + flatten)
+        #   otherwise             →  [FlattenObservations]
+        # The two branches are mutually exclusive — StridedHistoryConnector
+        # handles its own flattening. Action space flattening + rescaling
+        # is handled by env wrappers (FlattenAction + RescaleAction) applied
+        # in env_creator; the connector never reads the action space
+        # (action history reaches the policy via <action_key>_prev obs keys
+        # published by the env each step).
+        # RLlib invokes this factory on every env runner. On remote workers
+        # `env` is the wrapped env instance; on the driver-side local runner
+        # `env` is None (no env is built there when num_env_runners >= 1 — see
+        # env_runner_group.py:319 "local worker has no env"). The authoritative
+        # spaces always live in the `spaces` dict under '__env_single__', so
+        # prefer that and fall back to `env` only as a convenience.
+        # Link: https://docs.ray.io/en/latest/rllib/connector.html
+        env_to_module_connector=lambda env, spaces, device: build_env_to_module_connectors(
+            training_config,
+            env.observation_space if env is not None else spaces["__env_single__"][0],
+            env.action_space if env is not None else spaces["__env_single__"][1],
+            as_learner_connector=False,
+        ),  # type: ignore
+    )
+    # The learner pipeline must mirror the env-to-module pipeline so that
+    # replayed (SAC) or on-policy (PPO) episodes produce the same flat obs
+    # dim the RLModule was built from.
+    # Link: https://docs.ray.io/en/latest/rllib/learner-connector.html
+    config.training(
+        learner_connector=lambda obs_sp, act_sp: build_env_to_module_connectors(
+            training_config,
+            obs_sp,
+            act_sp,
+            as_learner_connector=True,
+        ),  # type: ignore
     )
     # Evaluation runs the current policy without exploration noise to provide
     # an unbiased performance signal for model selection (analogous to a
