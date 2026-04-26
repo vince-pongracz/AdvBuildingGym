@@ -34,8 +34,8 @@ def merge_dataframes(dataframes: dict[str, pd.DataFrame]) -> pd.DataFrame | None
     """Merge multiple DataFrames on MESS_DATUM with outer join for full coverage."""
     merged: pd.DataFrame | None = None
 
-    for _, df in dataframes.items():
-        df = select_columns(df, KEEP_COLUMNS)
+    for data_type, df in dataframes.items():
+        df = select_columns(df, KEEP_COLUMNS, source=data_type)
 
         if merged is None:
             merged = df
@@ -117,34 +117,11 @@ def upsample_to_5min(df: pd.DataFrame, method: str = "average") -> pd.DataFrame:
     return upsampled
 
 
-def normalize_abs_min_max(df: pd.DataFrame, measurement_cols: list[str]) -> pd.DataFrame:
-    """Apply absolute min-max normalisation per measurement column to [-1, 1].
-
-    norm = val / max(|min|, |max|)
-
-    NaN values are excluded from min/max computation and stay NaN.
-    """
-    norm_df = df.copy()
-    for col in measurement_cols:
-        series = df[col].copy()
-        valid = series.dropna()
-        if valid.empty:
-            norm_df[col] = np.nan
-            continue
-        abs_max = max(abs(valid.min()), abs(valid.max()))
-        if abs_max == 0:
-            norm_df[col] = 0.0
-        else:
-            norm_df[col] = series / abs_max
-    return norm_df
-
-
 def split_by_year(
     merged: pd.DataFrame,
     output_dir: Path,
     station_id: str,
     upsample_method: str = "average",
-    normalize: bool = False,
 ) -> None:
     """Split by year, write missing reports, then upsample per year.
 
@@ -152,7 +129,6 @@ def split_by_year(
       1. Write missing-entry report (on original 10-min data)
       2. Upsample to 5-min resolution
       3. Write upsampled CSV
-      4. (Optional) Normalise and write normalised CSV
     """
     measurement_cols = get_measurement_columns(merged)
     years = merged["timestamp"].dt.year
@@ -187,20 +163,12 @@ def split_by_year(
         year_df.to_csv(year_csv, index=False)
         logger.info("Written %s (%d rows)", year_csv.name, len(year_df))
 
-        # 4. Optionally normalise and write
-        if normalize:
-            norm_df = normalize_abs_min_max(year_df, measurement_cols)
-            norm_csv = output_dir / f"{year}_merged_{station_id}_norm.csv"
-            norm_df.to_csv(norm_csv, index=False)
-            logger.info("Written %s (normalised)", norm_csv.name)
-
 
 def preprocess(
     dataframes: dict[str, pd.DataFrame],
     output_dir: Path,
     station_id: str,
     upsample_method: str = "average",
-    normalize: bool = False,
 ) -> pd.DataFrame | None:
     """Run the full preprocessing pipeline.
 
@@ -208,11 +176,9 @@ def preprocess(
       1. Merge data types on MESS_DATUM, rename columns, drop all-missing rows
       2. Write full merged CSV (10-min resolution)
       3. Per year: missing report -> upsample to 5-min -> write CSV
-      4. (Optional) Normalise and write normalised CSV per year
 
     Args:
         upsample_method: 'average' (linear interpolation) or 'duplicate' (forward-fill).
-        normalize: If True, write additional normalised CSVs per year.
     """
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -229,34 +195,23 @@ def preprocess(
         full_path, len(merged), len(merged.columns),
     )
 
-    # Split by year: missing reports, upsample, optionally normalise
-    split_by_year(merged, output_dir, station_id, upsample_method, normalize=normalize)
+    split_by_year(merged, output_dir, station_id, upsample_method)
 
     return merged
 
 
 def main() -> None:
-    import argparse
-
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     )
-
-    parser = argparse.ArgumentParser(description="Preprocess DWD weather data")
-    parser.add_argument(
-        "--normalize",
-        action="store_true",
-        help="Write additional normalised CSVs per year (abs-max to [-1, 1])",
-    )
-    args = parser.parse_args()
 
     dataframes = fetch_all()
     if not dataframes:
         logger.error("No data fetched for any type. Exiting.")
         return
 
-    preprocess(dataframes, PREPROCESS_DIR, STATION_ID, normalize=args.normalize)
+    preprocess(dataframes, PREPROCESS_DIR, STATION_ID)
 
 
 if __name__ == "__main__":

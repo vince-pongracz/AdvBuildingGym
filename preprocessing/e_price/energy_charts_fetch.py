@@ -9,7 +9,7 @@ OpenAPI spec: https://api.energy-charts.info/openapi.json
 License: CC BY 4.0 from Bundesnetzagentur | SMARD.de (for DE-LU)
 """
 
-# Usage: python preproc/e_price/energy_charts_fetch.py
+# Usage: python preprocessing/e_price/energy_charts_fetch.py
 # Link: https://api.energy-charts.info/#/prices/day_ahead_price_price_get
 
 import logging

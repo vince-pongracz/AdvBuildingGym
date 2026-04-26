@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Sequence
+from typing import TYPE_CHECKING, Sequence
 
 import pandas as pd
 
-from adv_building_gym.devices.statesources import StateSource
+if TYPE_CHECKING:
+    from adv_building_gym.devices.statesources import StateSource
 
 
 def resolve_episode_date(

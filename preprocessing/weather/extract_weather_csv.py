@@ -8,9 +8,9 @@ and saves to CSV.
 Usage:
     python -m preproc.weather.extract_weather_csv
     # or
-    python preproc/weather/extract_weather_csv.py
+    python preprocessing/weather/extract_weather_csv.py
     # or with custom input file
-    python preproc/weather/extract_weather_csv.py --input data/weather/zenodo/2018_weather.hdf5
+    python preprocessing/weather/extract_weather_csv.py --input data/weather/zenodo/2018_weather.hdf5
 """
 
 import argparse
@@ -162,9 +162,11 @@ def extract_weather_data(
                 if df.index.duplicated().any():
                     n_dups = df.index.duplicated().sum()
                     logger.warning(
-                        "%s has %d duplicate timestamps, keeping first occurrence",
+                        "%s/%s has %d duplicate timestamps, keeping first occurrence (source: %s)",
+                        hdf5_path_obj.name,
                         key.split("/")[-1],
                         n_dups,
+                        hdf5_path_obj,
                     )
                     df = df[~df.index.duplicated(keep="first")]
 
@@ -191,17 +193,30 @@ def extract_weather_data(
 
         stats["rows_before_dropna"] = len(df_merged)
 
+        # Per-column NaN counts: how many rows each column would have dropped on its own
+        nan_per_col = df_merged.isna().sum()
+        nan_breakdown = {col: int(n) for col, n in nan_per_col.items() if n > 0}
+
         # Drop rows with any NaN
         df_merged = df_merged.dropna()
         stats["rows_after_dropna"] = len(df_merged)
 
         rows_dropped = stats["rows_before_dropna"] - stats["rows_after_dropna"]
-        logger.info(
-            "Merged data: %d rows (%d dropped due to NaN), %d columns",
-            stats["rows_after_dropna"],
-            rows_dropped,
-            len(df_merged.columns),
-        )
+        if nan_breakdown:
+            breakdown_str = ", ".join(f"{c}={n}" for c, n in sorted(nan_breakdown.items(), key=lambda kv: -kv[1]))
+            logger.info(
+                "Merged data: %d rows (%d dropped due to NaN; per-column NaN counts: %s), %d columns",
+                stats["rows_after_dropna"],
+                rows_dropped,
+                breakdown_str,
+                len(df_merged.columns),
+            )
+        else:
+            logger.info(
+                "Merged data: %d rows (0 dropped due to NaN), %d columns",
+                stats["rows_after_dropna"],
+                len(df_merged.columns),
+            )
 
         # Rename columns to match environment statesource conventions
         df_merged.rename(columns=COLUMN_RENAMES, inplace=True)

@@ -1,17 +1,17 @@
 """Unified data setup script for AdvBuildingGym.
 
 By default, this script runs all three pipelines:
-1) electricity price fetch + preprocessing (+ optional augmentation)
+1) electricity price fetch + preprocessing (+ optional synthesis)
 2) weather/Zenodo fetch + preprocessing
 3) DWD CDC weather download + preprocessing
 
 Examples:
-    python preproc/data_setup.py
-    python preproc/data_setup.py --skip-weather
-    python preproc/data_setup.py --skip-prices --steps zenodo-extract weather-csv
-    python preproc/data_setup.py --skip-weather --years 2025 --skip-price-fetch --raw-price-files data/e_price/2025_prices.csv
-    python preproc/data_setup.py --skip-prices --skip-wpuq --steps dwd-fetch dwd-preprocess
-    python preproc/data_setup.py --skip-prices --skip-wpuq --dwd-station-id 04177 --dwd-upsample-method duplicate
+    python preprocessing/data_setup.py
+    python preprocessing/data_setup.py --skip-weather
+    python preprocessing/data_setup.py --skip-prices --steps zenodo-extract weather-csv
+    python preprocessing/data_setup.py --skip-weather --years 2025 --skip-price-fetch --raw-price-files data/e_price/2025_prices.csv
+    python preprocessing/data_setup.py --skip-prices --skip-wpuq --steps dwd-fetch dwd-preprocess
+    python preprocessing/data_setup.py --skip-prices --skip-wpuq --dwd-station-id 04177 --dwd-upsample-method duplicate
 """
 
 from __future__ import annotations
@@ -27,12 +27,12 @@ if _PROJECT_ROOT_STR not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT_STR)
 
 from preprocessing.pipelines import (
-    run_augmentation,
+    run_price_pipeline,
+    run_weather_pipeline,
     run_dwd_pipeline,
     run_hh_consumption_pipeline,
-    run_price_pipeline,
+    run_synthesize,
     run_quality_report,
-    run_weather_pipeline,
 )
 
 logger = logging.getLogger(__name__)
@@ -191,22 +191,24 @@ def _parse_args() -> argparse.Namespace:
     )
 
     parser.add_argument(
-        "--normalize",
-        action="store_true",
-        help="Enable normalization in preprocessing (price and DWD weather pipelines)",
-    )
-
-    parser.add_argument(
         "--quality-report-dir",
+        nargs="?",
+        const="data/quality_reports",
         default="data/quality_reports",
-        help="Output directory for the data quality report CSV and chart",
+        help="Output directory for the data quality report CSV and chart "
+             "(default: data/quality_reports; bare flag uses the same default)",
     )
 
     parser.add_argument(
-        "--augment",
+        "--synthesize",
         action="store_true",
-        help="Run data augmentation (Gaussian noise) on yearly price and weather CSVs after all pipelines. "
-            "Noise parameters are configured in preproc/augment_config.yaml.",
+        help="Run synthetic dataset generation on yearly price and weather CSVs after all pipelines. "
+            "Active configs are listed in preprocessing/synthesize_config.yaml.",
+    )
+    parser.add_argument(
+        "--synthesize-config",
+        default="preprocessing/synthesize_config.yaml",
+        help="Top-level synthesise config (default: preprocessing/synthesize_config.yaml)",
     )
 
     parser.add_argument(
@@ -220,11 +222,11 @@ def _parse_args() -> argparse.Namespace:
 
 
 def _log_settings(args: argparse.Namespace) -> None:
-    """Log all parsed CLI settings before pipeline execution."""
-    settings = vars(args)
-    max_key_len = max(len(k) for k in settings)
-    lines = [f"  {k:<{max_key_len}} = {v!r}" for k, v in sorted(settings.items())]
-    logger.info("Data setup settings:\n%s", "\n".join(lines))
+    """Log the submitted command and parsed CLI settings before pipeline execution."""
+    settings = ", ".join(f"{k}={v!r}" for k, v in sorted(vars(args).items()))
+    cmd = " ".join(sys.argv)
+    HR = "=" * 80
+    logger.info("\n%s\nCMD: %s\nData setup settings: %s\n%s", HR, cmd, settings, HR)
 
 
 def main() -> None:
@@ -244,26 +246,37 @@ def main() -> None:
 
     has_quality_step = "data-quality-report" in set(args.steps)
     if args.skip_prices and args.skip_wpuq and args.skip_dwd and not has_quality_step:
-        raise ValueError(
-            "Nothing to do: --skip-prices, --skip-wpuq, and --skip-dwd were all set"
-        )
+        raise ValueError("Nothing to do: --skip-prices, --skip-wpuq, and --skip-dwd were all set")
 
-    raw_price_files, preprocessed_price_files = run_price_pipeline(args)
+    def _step_banner(title: str) -> None:
+        HR = "=" * 80
+        logger.info("\n%s\nSTEP: %s\n%s", HR, title, HR)
+
+    _step_banner("Price pipeline")
+    price_stats = run_price_pipeline(args)
+
+    _step_banner("Zenodo weather pipeline")
     weather_stats = run_weather_pipeline(args)
-    dwd_stats, dwd_yearly_csvs = run_dwd_pipeline(args)
+
+    _step_banner("DWD pipeline")
+    dwd_stats = run_dwd_pipeline(args)
+
+    _step_banner("Household consumption pipeline")
     hh_stats = run_hh_consumption_pipeline(args)
 
-    # Augmentation is the final step, applied to yearly CSVs from all pipelines
-    aug_stats = run_augmentation(args, preprocessed_price_files, dwd_yearly_csvs)
+    _step_banner("Synthesis")
+    # Synthesis discovers its inputs by globbing the preprocessed output dirs.
+    syn_stats = run_synthesize(args)
 
-    # Data quality report (runs last so it covers all produced files)
+    _step_banner("Data quality report")
+    # Runs last so it covers all produced files
     quality_stats = run_quality_report(args)
 
     logger.info("====================")
     logger.info("Data setup complete.")
     logger.info("--- Price pipeline ---")
-    logger.info("  Raw price files: %d", len(raw_price_files))
-    logger.info("  Preprocessed price files: %d", len(preprocessed_price_files))
+    logger.info("  Raw price files: %d", price_stats["raw"])
+    logger.info("  Preprocessed price files: %d", price_stats["preprocessed"])
     logger.info("--- Zenodo weather pipeline ---")
     logger.info("  Files downloaded: %d", weather_stats["downloaded"])
     logger.info("  Archives extracted: %d", weather_stats["extracted"])
@@ -275,9 +288,9 @@ def main() -> None:
     logger.info("  Years processed: %d", dwd_stats["years"])
     logger.info("--- Household consumption pipeline ---")
     logger.info("  Files produced: %d", hh_stats["files"])
-    logger.info("--- Augmentation ---")
-    logger.info("  Price files augmented: %d", aug_stats["price"])
-    logger.info("  Weather files augmented: %d", aug_stats["weather"])
+    logger.info("--- Synthesis ---")
+    logger.info("  Price files synthesised: %d", syn_stats["price"])
+    logger.info("  Weather files synthesised: %d", syn_stats["weather"])
     logger.info("--- Data quality report ---")
     logger.info("  Datasets analysed: %d", quality_stats["datasets"])
     logger.info("====================")

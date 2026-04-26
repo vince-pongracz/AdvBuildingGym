@@ -133,12 +133,12 @@ Defaults: `ppo`, `4` envs, `1000000` timesteps, seed `42`.
 ## Data setup (slurm_data_setup.sh)
 
 Fetches and preprocesses energy price and weather data. CPU-only.
-All arguments are forwarded to `preproc/data_setup.py`.
+All arguments are forwarded to `preprocessing/data_setup.py`.
 
 ```bash
 sbatch slurm_scripts/slurm_data_setup.sh
 sbatch slurm_scripts/slurm_data_setup.sh --skip-weather
-sbatch slurm_scripts/slurm_data_setup.sh --skip-weather --skip-price-fetch --years 2023 --augment
+sbatch slurm_scripts/slurm_data_setup.sh --skip-weather --skip-price-fetch --years 2023 --synthesize
 ```
 
 Key options:
@@ -152,7 +152,8 @@ Key options:
 | `--skip-weather` | Skip all weather pipelines (WPuQ/Zenodo and DWD) | - |
 | `--skip-wpuq` | Skip WPuQ/Zenodo weather pipeline only | - |
 | `--skip-dwd` | Skip DWD weather pipeline only | - |
-| `--augment` | Run price augmentation after preprocessing | - |
+| `--synthesize` | Generate synthetic dataset variants as the final pipeline step | - |
+| `--synthesize-config` | Path to top-level synthesise config | `preprocessing/synthesize_config.yaml` |
 
 ## Trajectory plotting (slurm_plot_trajectory.sh)
 

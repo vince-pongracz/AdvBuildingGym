@@ -17,8 +17,8 @@ day: each         # sequential days for reproducible eval
 # Years to include in scenario generation
 years: [2025, 2026]
 
-# Whether to auto-discover and include augmented data files
-include_augmented: true
+# Whether to auto-discover and include synthesised data files
+include_synthesized: true
 
 # Scenario source definitions (same pool as training)
 scenario_sources:
@@ -33,8 +33,8 @@ scenario_sources:
   - weather: data/weather/zenodo/csvs_weather/{year}_weather.csv
     E_price: data/e_price/e_charts/price_data_{year}.csv
 
-# Augmented data discovery paths
-augmented_paths:
+# Synthesised data discovery paths
+synthesized_paths:
   weather_dir: data/weather/dwd/preprocessed
   price_dirs:
     awattar: data/e_price/awattar

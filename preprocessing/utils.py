@@ -46,13 +46,28 @@ def parse_year_from_filename(file_path: Path) -> int:
     return int(match.group(1))
 
 
-def select_columns(df: pd.DataFrame, keep_columns: list[str]) -> pd.DataFrame:
-    """Keep only the requested columns, warn about any that are absent."""
-    available = [col for col in keep_columns if col in df.columns]
-    missing = set(keep_columns) - set(available)
-    if missing:
-        logger.warning("Columns not found in DataFrame: %s", missing)
-    return df[available]
+def select_columns(
+    df: pd.DataFrame,
+    keep_columns: list[str],
+    source: str | None = None,
+) -> pd.DataFrame:
+    """Keep only the requested columns, warn about any that are absent.
+
+    Args:
+        df: Input dataframe.
+        keep_columns: Columns to keep.
+        source: Optional label identifying the source dataframe (e.g. DWD data
+            type or CSV path) — included in the warning so it's clear which
+            input was missing the columns.
+    """
+    available_columns = [col for col in keep_columns if col in df.columns]
+    missing_columns = set(keep_columns) - set(available_columns)
+    if missing_columns:
+        if source:
+            logger.warning("Columns not found in DataFrame [%s]: %s", source, missing_columns)
+        else:
+            logger.warning("Columns not found in DataFrame: %s", missing_columns)
+    return df[available_columns]
 
 
 def get_measurement_columns(df: pd.DataFrame) -> list[str]:
@@ -97,7 +112,7 @@ def fetch_with_retry(
     params: dict | None = None,
     timeout: int = 60,
     max_retries: int = 3,
-    backoff_base: float = 2.0,
+    backoff_base: float = 4.0,
     stream: bool = False,
 ) -> requests.Response:
     """HTTP GET with exponential backoff on transient failures.

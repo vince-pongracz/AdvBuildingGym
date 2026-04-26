@@ -1,0 +1,38 @@
+# Medium synthetic-data preset.
+# Same Gaussian noise as syn_cfg_1 / syn_cfg_3; moderate positive shifts
+# (warmer weather, somewhat pricier electricity).
+
+name: syn_cfg_2
+
+price:
+  baseprice:
+    transforms:
+      - {type: constant_shift, value: +1.0}
+      - {type: gaussian_noise, std: 0.3, smooth: {kind: moving_average, window: 6}}
+
+weather:
+  temp_amb:
+    transforms:
+      - {type: constant_shift, value: +0.5}
+      - {type: gaussian_noise, std: 0.5, smooth: {kind: moving_average, window: 6}}
+    clip: {min: -50.0, max: 60.0}
+  avg_wind_speed:
+    transforms:
+      - {type: constant_shift, value: +0.3}
+      - {type: gaussian_noise, std: 0.3, smooth: {kind: moving_average, window: 6}}
+    clip: {min: 0.0}
+  sun_shine:
+    transforms:
+      - {type: constant_shift, value: +2.0}
+      - {type: gaussian_noise, std: 5.0, smooth: {kind: moving_average, window: 6}}
+    clip: {min: 0.0}
+  direct_sun_shine:
+    transforms:
+      - {type: constant_shift, value: +1.0}
+      - {type: gaussian_noise, std: 3.0, smooth: {kind: moving_average, window: 6}}
+    clip: {min: 0.0}
+  diff_sun_shine:
+    transforms:
+      - {type: constant_shift, value: +1.0}
+      - {type: gaussian_noise, std: 2.0, smooth: {kind: moving_average, window: 6}}
+    clip: {min: 0.0}

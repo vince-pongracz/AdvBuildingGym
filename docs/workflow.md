@@ -14,19 +14,19 @@ Fetch and preprocess electricity prices and weather data into 5-minute resolutio
 (raw physical units). Normalisation to agent-friendly ranges happens at runtime in the
 statesources, not here.
 
-**Script:** `preproc/data_setup.py`
+**Script:** `preprocessing/data_setup.py`
 **SLURM:** `sbatch slurm_scripts/slurm_data_setup.sh [OPTIONS]`
 
 ```bash
 # Full pipeline (prices + weather)
-python preproc/data_setup.py
+python preprocessing/data_setup.py
 
 # Prices only, specific years
-python preproc/data_setup.py --skip-weather --years 2023 2024 2025
+python preprocessing/data_setup.py --skip-weather --years 2023 2024 2025
 
-# Reuse existing raw files, add augmentation
-python preproc/data_setup.py --skip-weather --skip-price-fetch \
-    --years 2023 --raw-price-files data/e_price/awattar/2023_prices.csv --augment
+# Reuse existing raw files, then synthesise dataset variants
+python preprocessing/data_setup.py --skip-weather --skip-price-fetch \
+    --years 2023 --raw-price-files data/e_price/awattar/2023_prices.csv --synthesize
 ```
 
 **Key arguments:**
@@ -37,7 +37,7 @@ python preproc/data_setup.py --skip-weather --skip-price-fetch \
 | `--price-source {awattar,energy-charts}` | Price API source |
 | `--skip-weather` | Skip weather (WPuQ and DWD) pipeline |
 | `--skip-price-fetch` | Skip API calls, use local CSVs |
-| `--augment` | Run price augmentation after preprocessing |
+| `--synthesize` | Run synthetic dataset generation as the final pipeline step |
 
 **Output:** raw 5-minute CSVs in `data/`:
 - `data/e_price/awattar/price_data_<YEAR>.csv` (baseprice in ct/kWh)
@@ -45,78 +45,87 @@ python preproc/data_setup.py --skip-weather --skip-price-fetch \
 - `data/weather/dwd/preprocessed/<YEAR>_merged_04177.csv` (temp in °C, wind in m/s, etc.)
 - `data/ev_usage_profiles/ev_*.csv` (pre-existing)
 
-### 1.1 Data Augmentation
+### 1.1 Synthetic Dataset Generation
 
-Augmentation adds Gaussian noise to preprocessed CSVs, creating additional training
-variants that improve generalisation. Runs as the final pipeline step when `--augment`
-is passed, or standalone via `preproc/augment.py`.
+Synthesis produces noised / shifted copies of the preprocessed price and weather CSVs,
+expanding the scenario pool used by `DataCombinator`. Runs as the final pipeline step
+when `--synthesize` is passed, or standalone via `preprocessing/synthesize.py`. See
+[preprocessing/SYNTHESIZE_README.md](../preprocessing/SYNTHESIZE_README.md) for the
+full reference.
 
-**Configuration:** `preproc/augment_config.yaml`
+**Configuration:**
+- Top level: `preprocessing/synthesize_config.yaml` — base seed and the list of
+  active per-level configs.
+- Per level: `preprocessing/syn_cfgs/syn_cfg_*.yaml` — for each domain (`price`,
+  `weather`) and each column, a transform pipeline (Gaussian noise with optional
+  smoothing, constant shifts, linear scaling) plus optional clip bounds. The three
+  shipped presets share noise levels and only differ in their `constant_shift`
+  values, covering three "climate / market" offsets at the same noise budget.
 
 ```yaml
+# preprocessing/synthesize_config.yaml
 seed: 42
+syn_cfg_dir: preprocessing/syn_cfgs
+active_configs: [syn_cfg_1, syn_cfg_2, syn_cfg_3]
+```
+
+```yaml
+# preprocessing/syn_cfgs/syn_cfg_2.yaml (excerpt)
+name: syn_cfg_2
 
 price:
-  columns: [baseprice]
-  noise_std:
-    baseprice: 0.3          # ct/kWh
+  baseprice:
+    transforms:
+      - {type: gaussian_noise, std: 0.3, smooth: {kind: moving_average, window: 6}}
+      - {type: constant_shift, value: +1.0}
 
 weather:
-  columns: [temp_amb, avg_wind_speed, sun_shine, direct_sun_shine, diff_sun_shine]
-  noise_std:
-    temp_amb: 0.5           # °C
-    avg_wind_speed: 0.3     # m/s
-    sun_shine: 5.0          # J/cm²
-    direct_sun_shine: 3.0   # J/cm²
-    diff_sun_shine: 2.0     # J/cm²
-  clip_min:                 # physical plausibility bounds
-    avg_wind_speed: 0.0
-    sun_shine: 0.0
-    direct_sun_shine: 0.0
-    diff_sun_shine: 0.0
-    rel_humidity: 0.0
+  temp_amb:
+    transforms:
+      - {type: gaussian_noise, std: 0.5, smooth: {kind: moving_average, window: 6}}
+      - {type: constant_shift, value: +0.5}
+    clip: {min: -50.0, max: 60.0}
 ```
 
 **Integrated usage** (via `data_setup.py`):
 
 ```bash
-# Full pipeline with augmentation as final step
-python preproc/data_setup.py --augment
+# Full pipeline with synthesis as final step
+python preprocessing/data_setup.py --synthesize
 
-# Augment existing price data only
-python preproc/data_setup.py --skip-weather --skip-price-fetch \
-    --raw-price-files data/e_price/awattar/2023_prices.csv --augment
+# Synthesise from existing preprocessed files only
+python preprocessing/data_setup.py --skip-weather --skip-price-fetch \
+    --raw-price-files data/e_price/awattar/2023_prices.csv --synthesize
 ```
 
-**Standalone usage** (via `preproc/augment.py`):
+**Standalone usage** (via `preprocessing/synthesize.py`, handy for debugging a config):
 
 ```bash
-# Price augmentation with defaults from config
-python preproc/augment.py price data/e_price/awattar/price_data_2023.csv
+# Run all active configs on a single weather CSV
+python preprocessing/synthesize.py --domain weather \
+    --input data/weather/dwd/preprocessed/2023_merged_04177.csv
 
-# Weather augmentation with custom per-column noise
-python preproc/augment.py weather data/weather/dwd/preprocessed/2023_merged_04177.csv \
-    --noise-std '{"temp_amb":0.3,"avg_wind_speed":0.1}' --seed 18
-
-# Custom output path and seed
-python preproc/augment.py price data/e_price/awattar/price_data_2023.csv \
-    -o data/e_price/awattar/price_data_2023_aug_v2.csv --seed 99
+# Restrict to a subset of active_configs
+python preprocessing/synthesize.py --domain price \
+    --input data/e_price/awattar/price_data_2023.csv --only syn_cfg_2
 ```
 
-| Flag | Default | Purpose |
-|------|---------|---------|
-| `--noise-std` | from config | Noise std: single float (all columns) or JSON dict (per-column) |
-| `--seed` | `42` | Random seed for reproducibility |
-| `-o, --output` | `<input>_aug_seed<seed>.csv` | Output path |
-| `--normalize` | off | (price only) Recompute `price_normalized` column after augmentation |
+| Flag | Purpose |
+|------|---------|
+| `--domain {price,weather}` | Which domain block to use from each `syn_cfg_*.yaml` |
+| `--input PATH` | Source CSV (one of the preprocessed files) |
+| `--only CFG [CFG ...]` | Restrict to a subset of `active_configs` |
+| `--config PATH` | Override the top-level synthesise config |
 
-**Output files:**
-- Price: `price_data_<YEAR>_aug.csv` (same directory as source)
-- Weather: `<YEAR>_merged_<STATION>_aug_seed<SEED>.csv` (same directory as source)
+**Output naming:** each input `<stem>.csv` produces one
+`<stem>_<syn_cfg_name>.csv` per active config, written next to the source file.
+Each (syn_cfg, file) pair gets a deterministic seed derived from the base seed,
+so re-running with the same configs is reproducible.
 
-**Training integration:** Set `include_augmented: true` in
-`configs/train_data_combinator_config.yaml` to auto-discover augmented files and add
-them to the scenario pool (see section 2.3).
+**Training integration:** set `include_synthesized: true` in
+`configs/train_data_combinator_config.yaml` so `discover_synthetic_scenarios`
+auto-discovers `*_syn_cfg_*.csv` files and adds them to the scenario pool
+(see section 2.3).
 
 ---
 
@@ -177,7 +186,7 @@ mode: cycle                     # round-robin through variants
 day: random                     # random day within each scenario
 
 years: [2018, 2019, 2020, 2021, 2022, 2023, 2024]
-include_augmented: true
+include_synthesized: true
 
 scenario_sources:               # Cartesian product across years
   - weather: data/weather/dwd/preprocessed/{year}_merged_04177.csv

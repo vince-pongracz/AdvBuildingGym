@@ -9,7 +9,7 @@ from pathlib import Path
 
 import yaml
 
-from adv_building_gym.config.utils import discover_augmented_scenarios
+from adv_building_gym.config.utils import discover_synthetic_scenarios
 from adv_building_gym.data_combinator import DataCombinator
 
 logger = logging.getLogger(__name__)
@@ -44,7 +44,7 @@ def load_data_combinator_config(
     seed = seed_override if seed_override is not None else cfg["seed"]
     shuffle = cfg["shuffle"]
     years = cfg["years"]
-    include_augmented = cfg["include_augmented"]
+    include_synthesized = cfg["include_synthesized"]
 
     # Build scenario list from templates x years, skipping missing files
     scenarios: list[dict[str, str]] = []
@@ -60,21 +60,21 @@ def load_data_combinator_config(
                 missing = [p for p in scenario.values() if not Path(p).exists()]
                 logger.debug("Skipping scenario for year %d: missing %s", year, missing)
 
-    # Auto-discover augmented scenarios
-    if include_augmented:
-        aug_cfg = cfg["augmented_paths"]
-        augmented = discover_augmented_scenarios(
+    # Auto-discover synthesised scenarios
+    if include_synthesized:
+        syn_cfg = cfg["synthesized_paths"]
+        synthesized = discover_synthetic_scenarios(
             years=range(min(years), max(years) + 1),
-            weather_dir=aug_cfg["weather_dir"],
-            price_dirs=aug_cfg["price_dirs"],
+            weather_dir=syn_cfg["weather_dir"],
+            price_dirs=syn_cfg["price_dirs"],
         )
-        scenarios.extend(augmented)
+        scenarios.extend(synthesized)
 
     variable = cfg["variable"]
 
     logger.info(
-        "Loaded data combinator from %s: %d scenario templates, years %s, augmented=%s",
-        yaml_path.name, len(scenarios), years, include_augmented,
+        "Loaded data combinator from %s: %d scenario templates, years %s, synthesized=%s",
+        yaml_path.name, len(scenarios), years, include_synthesized,
     )
 
     return DataCombinator(

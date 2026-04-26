@@ -4,7 +4,7 @@ Retrieves hourly EPEX Spot prices for a given date range and saves them as CSV.
 API docs: https://www.awattar.at/services/api
 """
 
-# NOTE VP 2026.02.28. : Usage: python preproc/e_price/awattar_fetch.py
+# NOTE VP 2026.02.28. : Usage: python preprocessing/e_price/awattar_fetch.py
 
 # aWATTar fair-use policy: max 100 requests/day
 # Link: https://www.awattar.at/services/api

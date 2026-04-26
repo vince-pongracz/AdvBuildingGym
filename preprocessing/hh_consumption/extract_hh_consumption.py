@@ -149,10 +149,10 @@ def extract_hh_consumption(
 
     for csv_path in sfh_files:
         building_name = csv_path.stem  # e.g. "SFH10"
-        logger.info("Processing %s ...", building_name)
 
         result = process_single_building(csv_path)
         if result is None:
+            logger.info("Processing %s ... skipped (no usable data)", building_name)
             continue
 
         # Save individual building CSV
@@ -162,11 +162,12 @@ def extract_hh_consumption(
         stats["files_created"].append(str(out_path))
 
         logger.info(
-            "  %s: %d rows, max %.2f kW, mean %.2f kW",
+            "Processing %s ... %d rows, mean %.2f kW, min %.2f kW, max %.2f kW",
             building_name,
             len(result),
-            result[OUTPUT_COLUMN].max(),
             result[OUTPUT_COLUMN].mean(),
+            result[OUTPUT_COLUMN].min(),
+            result[OUTPUT_COLUMN].max(),
         )
 
         building_frames.append(result)
@@ -189,10 +190,11 @@ def extract_hh_consumption(
         stats["files_created"].append(str(agg_path))
 
         logger.info(
-            "Aggregated: %d rows, max %.2f kW, mean %.2f kW",
+            "Aggregated ... %d rows, mean %.2f kW, min %.2f kW, max %.2f kW",
             len(aggregated),
-            aggregated[OUTPUT_COLUMN].max(),
             aggregated[OUTPUT_COLUMN].mean(),
+            aggregated[OUTPUT_COLUMN].min(),
+            aggregated[OUTPUT_COLUMN].max(),
         )
 
     return stats

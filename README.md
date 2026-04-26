@@ -21,12 +21,14 @@ Data link: https://zenodo.org/records/5642902
 
 <!-- TODO VP: add it to the repo setup description... -->
 
+TODO VP: Show expert trajectories to the policies, which work fine -- Programming using expert knowledge
+
 TODO VP: Idea 2. The "Mixture of Experts" or Hierarchical Approach
 You can have a single agent that switches between different policies based on the state.
 
-How it works: You define a multi-agent setup where one "Manager" policy selects which "Worker" policy to use. Even though it's technically a single entity in the game, RLlib treats it as a coordination task between multiple policies.
+Define a multi-agent setup where one "Manager" policy selects which "Worker" policy to use. Even though it's technically a single entity in the game, RLlib treats it as a coordination task between multiple policies.
 
-Use case: An agent that has a "Combat Policy" and a "Navigation Policy."
+TODO VP: Rework this part
 
 Script to download data from zenedo:
 ```bash
@@ -53,14 +55,14 @@ https://en.wikipedia.org/wiki/AC_power
 All data fetching and preprocessing is handled by a single entry point:
 
 ```bash
-python preproc/data_setup.py
+python preprocessing/data_setup.py
 ```
 
-This runs three pipelines:
+Runs three pipelines:
 
-1. **Electricity prices** — fetches day-ahead EPEX Spot prices from aWATTar and Energy Charts APIs, resamples to 5-minute resolution, and normalizes
-2. **Zenodo weather** — downloads the WPuQ dataset (residential heat pump load profiles), extracts HDF5 archives, and produces per-house weather CSVs
-3. **DWD weather** — downloads 10-minute station data from the DWD Climate Data Center, merges parameters, upsamples to 5 minutes, and normalizes
+1. **Electricity prices** — fetch day-ahead EPEX Spot prices from aWATTar and Energy Charts APIs, converts units (Eur/MWh → ct/kWh), and resample to 5-minute resolution
+2. **Zenodo weather** — download WPuQ dataset (residential heat pump load profiles), extract HDF5 archives, and produce per-house weather CSVs.
+3. **DWD weather** — download 10-minute station data from the DWD Climate Data Center, merge parameters, and upsample to 5 minutes
 
 Preprocessed files are written to `data/e_price/` and `data/weather/`.
 
@@ -68,19 +70,19 @@ Preprocessed files are written to `data/e_price/` and `data/weather/`.
 
 ```bash
 # Run only the price pipeline for specific years
-python preproc/data_setup.py --skip-weather --years 2024 2025
+python preprocessing/data_setup.py --skip-weather --years 2024 2025
 
 # Run only the DWD weather pipeline
-python preproc/data_setup.py --skip-prices --skip-wpuq --dwd-station-id 04177
+python preprocessing/data_setup.py --skip-prices --skip-wpuq --dwd-station-id 04177
 
 # Run only the WPuQ/Zenodo weather pipeline
-python preproc/data_setup.py --skip-prices --skip-dwd
+python preprocessing/data_setup.py --skip-prices --skip-dwd
 
-# Apply Gaussian noise augmentation after all pipelines
-python preproc/data_setup.py --augment
+# Generate synthetic (noised + shifted) dataset variants after all pipelines
+python preprocessing/data_setup.py --synthesize
 
 # Preprocess existing raw price files without re-fetching
-python preproc/data_setup.py --skip-weather --skip-price-fetch --raw-price-files data/e_price/2025_prices.csv
+python preprocessing/data_setup.py --skip-weather --skip-price-fetch --raw-price-files data/e_price/2025_prices.csv
 ```
 
 EV usage profiles (`data/ev_usage_profiles/ev_*.csv`) are manually authored and do not require fetching.
@@ -433,8 +435,9 @@ LLECBuildingGym/                              # Root directory of the project
 ├── README.md                                 # Repo documentation and usage instructions
 ├── pyproject.toml                            # Build system configuration
 ├── requirements.txt                          # Python dependencies
-├── run_evaluation.py                         # Evaluate trained models
-└── run_train_rl.py                           # Train RL models (PPO, SAC, DDPG,TD3, A2C)
+├── run_train_ray.py                          # Train RL models on the Ray RLlib new API stack
+├── run_eval_ray.py                           # Evaluate Ray-trained models
+└── run_train_sb.py                           # (Secondary) Stable-Baselines3 training
 ```
 
 </details>
@@ -520,114 +523,78 @@ By default it runs **both** pipelines: electricity prices and weather/Zenodo.
 
 ```bash
 # Recommended: full setup (price + weather)
-python preproc/data_setup.py
+python preprocessing/data_setup.py
 
 # Price-focused run only (disable weather pipeline)
-python preproc/data_setup.py --skip-weather --years 2023 2024 2025 2026
+python preprocessing/data_setup.py --skip-weather --years 2023 2024 2025 2026
 
 # If raw prices already exist locally, skip API calls
-python preproc/data_setup.py --skip-weather --years 2025 --skip-price-fetch --raw-price-files data/e_price/2025_prices.csv
+python preprocessing/data_setup.py --skip-weather --years 2025 --skip-price-fetch --raw-price-files data/e_price/2025_prices.csv
 
 # Weather-focused run only (disable price pipeline)
-python preproc/data_setup.py --skip-prices --skip-zenodo-download
+python preprocessing/data_setup.py --skip-prices --skip-zenodo-download
 ```
 
 See [data/DATA_README.md](data/DATA_README.md) for all options and manual fallback commands.
 
-## 3.Training and Evaluation
+## 3. Training and Evaluation
 
-<details>
-  <summary>Click to expand/collapse</summary>
+The current training stack is **Ray RLlib (new API stack)**. RL training and
+evaluation each have their own driver scripts; baseline controllers (PI, PID,
+Fuzzy, MPC) live in `adv_building_gym/controllers/` and are reachable from the
+evaluation flow.
 
-This repository supports both RL agent training and controller evaluation via script-based workflows.
-RL training is handled using **[stable-baselines3](https://github.com/DLR-RM/stable-baselines3)** algorithms, while evaluation supports classical control strategies such as PI, PID, Fuzzy Logic, and MPC Controllers.
+### 3.1 RL Training (Ray RLlib)
 
-### 3.1 RL Training:
-
-Train RL agents using the script **[run_train_rl.py](run_train_rl.py)**.
-
-Two reward modes and multiple observation variants are supported for flexible evaluations.
-
-- `temperature`: Temperature-based reward (single-objective)
-- `combined`: Temperature and energy cost combined (multi-objective)
-
-#### Command-line Arguments:
-
-| Argument              | Type  | Default Value                | Choices                                         | Description                                                  |
-| --------------------- | ----- | ---------------------------- | ----------------------------------------------- | ------------------------------------------------------------ |
-| `--algorithm`         | str   | `"ppo"`                      | `ppo`, `sac`, `ddpg`,`td3`, `a2c`               | RL algorithm to use (from Stable-Baselines3).                |
-| `--timesteps`         | float | `1e6`                        | Any positive float                              | Total number of environment steps.                           |
-| `--num-envs`          | int   | `4`                          | >= 1                                            | Number of parallel environments (for vectorized training).   |
-| `--seed`              | int   | `42`                         | Any integer                                     | Random seed for reproducibility.                             |
-| `--eval-freq`         | int   | `5000`                       | >= 1                                            | Evaluation frequency (in timesteps).                         |
-| `--reward_mode`       | str   | `"temperature"`              | `temperature`, `combined`                       | Reward mode: temperature (single-reward) or combined (multi-reward). |
-| `--energy-price-path` | str   | `"data/e_price/price_data_2025_norm.csv"` | Valid CSV path                                  | Path to normalized energy price CSV file.                    |
-| `--training`          | flag  | `False`                      | `False`, `True`                                 | Use training data for energy prices (default: `TOU Prices`). |
-| `--obs_variant`       | str   | `T01`                        | `T01`,`T02`.`T03`,`T04`,`C01`,`C02`.`C03`,`C04` | Select observation variant (see detailed list below).        |
-
-#### Observation Variants:
-
-| Variant | Features Included                                       | Description                                |
-| ------- | ------------------------------------------------------- | ------------------------------------------ |
-| `T01`   | `noisy_temp_deviation`                                  | Temperature deviation only                 |
-| `T02`   | `noisy_temp_deviation`, `time_of_day`                   | Add normalized time of day                 |
-| `T03`   | `noisy_temp_deviation`, `prev_action`                   | Add previous normalized action             |
-| `T04`   | `noisy_temp_deviation`, `time_of_day`, `prev_action`    | Full thermal state                         |
-| `C01`   | `noisy_temp_deviation`, `energy_price`, `future_prices` | Thermal + current and future energy prices |
-| `C02`   | `C01` + `prev_action`                                   | C01 + previous action                      |
-| `C03`   | `C01` + `time_of_day`                                   | C01 + time of day                          |
-| `C04`   | `C01` + `time_of_day`, `prev_action`                    | Full combined state                        |
-
----
-
-#### Example Usage
+Driver: [run_train_ray.py](run_train_ray.py). Requires an env-topology YAML
+via `--load-config`; SLURM-allocated GPU is required.
 
 ```bash
-python run_train_rl.py --algorithm ppo --reward_mode temperature --training
+# PPO on the small env, 3500 episodes
+python run_train_ray.py --algorithm ppo --load-config configs/env_cfg/env_test1_small.yaml --episodes 3500
+
+# SAC, custom seed and best-checkpoint metric
+python run_train_ray.py --algorithm sac --load-config configs/env_cfg/env_test1_mid.yaml --seed 18 --episodes 5000 --metric achieved_reward
 ```
 
-### 3.2 Evaluation:
+Common flags: `--algorithm {ppo,sac}`, `--episodes`, `--seed`,
+`--metric {reward_rate,achieved_reward,episode_return_mean}`,
+`--checkpoint-frequency-episodes`, `--data-config`, `--reward-schedule`,
+`--infra-schedule`, `--grad-train`, `--log-trajectories`, `--save-config`.
 
-The evaluation supports both RL agents and advanced control strategies from control theory.  
-These include:
+TODO VP: Remove the save-config option as confgis are only allowed from yamls, no code defined config.
 
-- **PI/PID Control** – widely used feedback controllers based on proportional, integral, and derivative action
-- **Fuzzy Control** – heuristic rule-based controller using fuzzy logic for handling uncertainty
-- **MPC Control** – model predictive control with configurable prediction horizon
+Hyperparameters (algorithm-agnostic + per-algorithm) live in
+[configs/training_param_config.yaml](configs/training_param_config.yaml). See
+[docs/workflow.md](docs/workflow.md) for the end-to-end flow.
 
-#### Command-line Arguments:
+### 3.2 Evaluation (Ray RLlib)
 
-| Argument        | Type | Default Value                                                                                       | Choices                                                | Description                                                                                                                                                                                       |
-| --------------- | ---- | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--algorithms`  | list | `["ppo", "sac", "ddpg", "td3", "a2c", "PI Control", "PID Control", "Fuzzy Control", "MPC Control"]` | Any combination of supported controllers and RL models | List of algorithms or controllers to evaluate.                                                                                                                                                    |
-| `--episodes`    | int  | `10`                                                                                                | >= 1                                                   | Number of evaluation episodes per algorithm.                                                                                                                                                      |
-| `--seed`        | int  | `58`                                                                                                | Any integer                                            | Random seed for reproducibility.                                                                                                                                                                  |
-| `--model_seed`  | int  | `42`                                                                                                | Any integer                                            | Seed number used during training for selecting the correct model file.                                                                                                                                                                  |
-| `--mpc_horizon` | int  | `72`                                                                                                | >= 1 (typically multiples of 12)                       | Prediction horizon for MPC (in 5-minute steps, e.g., 12 = 1 hour).                                                                                                                               |
-| `--reward_mode` | str  | `"temperature"`                                                                                     | `temperature`, `combined`                              | Reward mode: temperature or combined (multi-objective).                                                                                                                                      |
-| `--energy_price_path` | str  | `"data/e_price/price_data_2025_norm.csv"`                                                     | `data/e_price/price_data_2025_norm.csv`                | Path to normalized energy price CSV.                                                                                                                                      |
-| `--outdoor_temperature_path` | str  | `"data/weather/LLEC_outdoor_temperature_5min_data.csv"`                                | `data/weather/LLEC_outdoor_temperature_5min_data.csv`  | If not provided, a synthetic temperature profile is used.                                                                                                                                      |
-| `--obs_variant` | str  | `T01`                                                                                               | `T01`,`T02`.`T03`,`T04`,`C01`,`C02`.`C03`,`C04`        | Select observation variant (see detailed list below).                                                                                                                                             |
-| `--prefer_best` | flag | `False`                                                                                             | `False`,`True`                                         | If set, prefers loading `best_model.zip` instead of `<algorithm>_model_seed<seed>.zip` (e.g., `ppo_model_seed42.zip`) during evaluation. Supported algorithms: `ppo`, `sac`, `ddpg`,`td3`, `a2c`. |
-
----
-
-#### Example Usage
+Driver: [run_eval_ray.py](run_eval_ray.py). Runs CPU-only, loads an `RLModule`
+checkpoint, and replays episodes through the same connector pipeline used at
+training time.
 
 ```bash
-# Evaluate PPO agent for temperature based rewards
-python run_evaluation.py --algorithms ppo --reward_mode temperature --obs_variant T01
-
-# Evaluate all available agents and controllers
-chmod +x slurm_script/slurm_train_01_rl_batch.sh
-./slurm_script/slurm_train_01_rl_batch.sh
+python run_eval_ray.py --algorithm ppo --load-config configs/env_cfg/env_test1_small.yaml --checkpoint <path> --episodes 10
+python run_eval_ray.py --algorithm sac --load-config configs/env_cfg/env_test1_mid.yaml --plot
 ```
 
-The modular design allows users to plug in their own controllers or extend the environment with new features, e.g., building dynamics or pricing schemes.
+Outputs (mean / std / min / max per metric, per-episode trajectory JSON, and
+`trajectories.hdf5`) land in `eval_results/<YYYYmmdd_HHMM>_eval/`.
 
+### 3.3 Baselines
 
+`adv_building_gym/controllers/` contains PI, PID, Fuzzy and MPC (Pyomo)
+implementations that share the env's Dict action space — useful as
+non-learning baselines for evaluation comparisons.
 
-</details>
+### 3.4 Stable-Baselines3 (secondary)
+
+[run_train_sb.py](run_train_sb.py) provides a Stable-Baselines3 path for the
+same env. It is kept around for cross-checking but is not the primary
+training stack.
+
+TODO VP: Rework this part
 
 <h2>4. Citation &#128221;</h2>
 <p>

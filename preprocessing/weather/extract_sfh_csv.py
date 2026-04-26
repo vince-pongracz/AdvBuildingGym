@@ -7,9 +7,9 @@ from both HEATPUMP and HOUSEHOLD datasets, merged into a single CSV per SFH.
 Usage:
     python -m preproc.weather.extract_sfh_csv
     # or
-    python preproc/weather/extract_sfh_csv.py
+    python preprocessing/weather/extract_sfh_csv.py
     # or with custom input file
-    python preproc/weather/extract_sfh_csv.py --input data/weather/zenodo/2018_data_1min.hdf5
+    python preprocessing/weather/extract_sfh_csv.py --input data/weather/zenodo/2018_data_1min.hdf5
 """
 
 import argparse
@@ -120,6 +120,10 @@ def extract_sfh_data(
                     how="inner",
                 )
 
+                # Per-column NaN counts: how many rows each column would have dropped on its own
+                nan_per_col = df_merged.isna().sum()
+                nan_breakdown = {col: int(n) for col, n in nan_per_col.items() if n > 0}
+
                 # Drop rows with any NaN in _TOT columns
                 rows_before = len(df_merged)
                 df_merged = df_merged.dropna()
@@ -136,13 +140,23 @@ def extract_sfh_data(
                 stats["successful"] += 1
                 stats["files_created"].append(str(output_file))
 
-                logger.info(
-                    "Extracted %s: %d rows (%d dropped due to NaN), columns: %s",
-                    building,
-                    rows_after,
-                    rows_dropped,
-                    list(df_merged.columns),
-                )
+                if nan_breakdown:
+                    breakdown_str = ", ".join(f"{c}={n}" for c, n in sorted(nan_breakdown.items(), key=lambda kv: -kv[1]))
+                    logger.info(
+                        "Extracted %s: %d rows (%d dropped due to NaN; per-column NaN counts: %s), columns: %s",
+                        building,
+                        rows_after,
+                        rows_dropped,
+                        breakdown_str,
+                        list(df_merged.columns),
+                    )
+                else:
+                    logger.info(
+                        "Extracted %s: %d rows (0 dropped due to NaN), columns: %s",
+                        building,
+                        rows_after,
+                        list(df_merged.columns),
+                    )
 
             except Exception as e:
                 stats["failed"] += 1

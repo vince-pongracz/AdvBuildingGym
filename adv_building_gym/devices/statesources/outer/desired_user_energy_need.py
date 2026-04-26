@@ -11,7 +11,7 @@ from adv_building_gym.utils.normalisation import Normalisation, normalise_series
 
 logger = logging.getLogger(__name__)
 
-# CSV column produced by preproc/hh_consumption/extract_hh_consumption.py
+# CSV column produced by preprocessing/hh_consumption/extract_hh_consumption.py
 SOURCE_COLUMN: str = "hh_consumption_kW"
 
 # Normalised column name added by _post_load_data_processing

@@ -2,7 +2,7 @@
 
 ## Unified Setup Script (Recommended)
 
-Use `preproc/data_setup.py` to orchestrate all data-fetch and preprocessing
+Use `preprocessing/data_setup.py` to orchestrate all data-fetch and preprocessing
 steps from one command.
 
 By default, it runs both pipelines:
@@ -11,22 +11,22 @@ By default, it runs both pipelines:
 
 ```bash
 # Full setup (prices + weather/Zenodo)
-python preproc/data_setup.py
+python preprocessing/data_setup.py
 
 # Price-only setup (disable weather pipeline)
-python preproc/data_setup.py --skip-weather --years 2023 2024 2025 2026
+python preprocessing/data_setup.py --skip-weather --years 2023 2024 2025 2026
 
 # Price preprocessing only (reuse local raw files)
-python preproc/data_setup.py --skip-weather --years 2025 --skip-price-fetch --raw-price-files data/e_price/awattar/2025_prices.csv
+python preprocessing/data_setup.py --skip-weather --years 2025 --skip-price-fetch --raw-price-files data/e_price/awattar/2025_prices.csv
 
-# Price preprocessing with augmentation
-python preproc/data_setup.py --skip-weather --years 2023 --skip-price-fetch --raw-price-files data/e_price/e_charts/2023_15m_prices.csv --augment
+# Price preprocessing followed by synthetic dataset generation
+python preprocessing/data_setup.py --skip-weather --years 2023 --skip-price-fetch --raw-price-files data/e_price/e_charts/2023_15m_prices.csv --synthesize
 
 # Weather-only setup (disable price pipeline)
-python preproc/data_setup.py --skip-prices
+python preprocessing/data_setup.py --skip-prices
 
 # Run only specific steps within a pipeline
-python preproc/data_setup.py --skip-prices --steps zenodo-extract weather-csv
+python preprocessing/data_setup.py --skip-prices --steps zenodo-extract weather-csv
 ```
 
 ### Typical options
@@ -39,17 +39,18 @@ python preproc/data_setup.py --skip-prices --steps zenodo-extract weather-csv
 - `--skip-wpuq`: disable WPuQ/Zenodo weather pipeline only
 - `--skip-dwd`: disable DWD weather pipeline only
 - `--steps ...`: select which steps to run (price-fetch, price-preproc, zenodo-download, zenodo-extract, weather-csv, sfh-csv; default: all)
-- `--augment`: run price augmentation after preprocessing
-- `--augment-noise-std`: Gaussian noise std in ct/kWh (default: 0.3)
-- `--augment-seed`: random seed for augmentation
+- `--synthesize`: run synthetic dataset generation as the final pipeline step
+  (per-column Gaussian noise + shifts on price and weather CSVs)
+- `--synthesize-config`: path to the top-level synthesise config (default:
+  `preprocessing/synthesize_config.yaml`)
 
-Run `python preproc/data_setup.py --help` for full CLI documentation.
+Run `python preprocessing/data_setup.py --help` for full CLI documentation.
 
 ### SLURM submission
 
 On HPC clusters, submit data setup as a SLURM job via
 `slurm_scripts/slurm_data_setup.sh`. All arguments are forwarded directly to
-`preproc/data_setup.py`.
+`preprocessing/data_setup.py`.
 
 ```bash
 # Full setup (prices + weather/Zenodo) on a compute node
@@ -58,8 +59,8 @@ sbatch slurm_scripts/slurm_data_setup.sh
 # Price-only setup
 sbatch slurm_scripts/slurm_data_setup.sh --skip-weather --years 2023 2024 2025 2026
 
-# Price preprocessing with augmentation (skip fetch, use local raw files)
-sbatch slurm_scripts/slurm_data_setup.sh --skip-weather --skip-price-fetch --years 2023 --raw-price-files data/e_price/awattar/2023_prices.csv --augment
+# Price preprocessing followed by synthetic dataset generation (skip fetch, use local raw files)
+sbatch slurm_scripts/slurm_data_setup.sh --skip-weather --skip-price-fetch --years 2023 --raw-price-files data/e_price/awattar/2023_prices.csv --synthesize
 
 # Weather-only setup
 sbatch slurm_scripts/slurm_data_setup.sh --skip-prices --steps zenodo-extract weather-csv sfh-csv
@@ -82,43 +83,43 @@ Electricity prices are fetched from the aWATTar API (German EPEX Spot day-ahead 
 ### Preprocessing Pipeline
 
 The pipeline converts raw hourly aWATTar market data into 5-minute resolution
-normalized CSV files that the `EnergyPrice` statesource can consume directly.
+CSV files (raw `ct/kWh` units) that the `EnergyPrice` statesource consumes
+directly. Runtime normalisation happens inside the statesource.
 
 #### Step 1: Fetch raw prices
 
-Script: `preproc/e_price/awattar_fetch.py`
+Script: `preprocessing/e_price/awattar_fetch.py`
 
 Fetches hourly EPEX Spot prices for a given year from the aWATTar API and saves
 them as CSV. This is the low-level/manual script; for normal usage prefer
-`preproc/data_setup.py`.
+`preprocessing/data_setup.py`.
 
 ```bash
-python preproc/e_price/awattar_fetch.py
+python preprocessing/e_price/awattar_fetch.py
 ```
 
 Output: `data/e_price/awattar/<YEAR>_prices.csv`
 Columns: `start_timestamp, end_timestamp, marketprice, unit, marketprice_eur_per_kwh`
 
-#### Step 2: Preprocess and normalize
+#### Step 2: Preprocess
 
-Script: `preproc/e_price/awattar_price_preproc.py`
+Script: `preprocessing/e_price/awattar_price_preproc.py`
 
-Converts hourly data to 5-minute resolution (forward-fill), converts units from
-Eur/MWh to ct/kWh, and applies absolute-max normalization to [-1, 1].
+Converts hourly data to 5-minute resolution (forward-fill) and converts units
+from Eur/MWh to ct/kWh.
 
 ```bash
-python preproc/e_price/awattar_price_preproc.py data/e_price/awattar/<YEAR>_prices.csv
-# Output: data/e_price/awattar/price_data_<YEAR>_norm.csv
+python preprocessing/e_price/awattar_price_preproc.py data/e_price/awattar/<YEAR>_prices.csv
+# Output: data/e_price/awattar/price_data_<YEAR>.csv
 
 # Or with explicit output path:
-python preproc/e_price/awattar_price_preproc.py data/e_price/awattar/<YEAR>_prices.csv -o data/e_price/awattar/custom_output.csv
+python preprocessing/e_price/awattar_price_preproc.py data/e_price/awattar/<YEAR>_prices.csv -o data/e_price/awattar/custom_output.csv
 ```
 
-Output: `data/e_price/awattar/price_data_<YEAR>_norm.csv`
-Columns: `start, baseprice, unit, hour, price_normalized`
+Output: `data/e_price/awattar/price_data_<YEAR>.csv`
+Columns: `start, baseprice, unit, hour`
 
 - `baseprice`: price in ct/kWh
-- `price_normalized`: absolute-max normalized to [-1, 1], sign-preserving
 - `unit`: always `ct/kWh`
 - `hour`: hour of day (0-23)
 
@@ -126,17 +127,17 @@ Columns: `start, baseprice, unit, hour, price_normalized`
 
 ```bash
 # Recommended default full flow (prices + weather/Zenodo):
-python preproc/data_setup.py
+python preprocessing/data_setup.py
 
 # Price-only variant:
-python preproc/data_setup.py --skip-weather --years 2023 2024 2025 2026
+python preprocessing/data_setup.py --skip-weather --years 2023 2024 2025 2026
 
 # Equivalent manual flow (aWATTar):
-python preproc/e_price/awattar_fetch.py   # repeat per YEAR (edit script constant)
-python preproc/e_price/awattar_price_preproc.py data/e_price/awattar/2023_prices.csv
-python preproc/e_price/awattar_price_preproc.py data/e_price/awattar/2024_prices.csv
-python preproc/e_price/awattar_price_preproc.py data/e_price/awattar/2025_prices.csv
-python preproc/e_price/awattar_price_preproc.py data/e_price/awattar/2026_prices.csv
+python preprocessing/e_price/awattar_fetch.py   # repeat per YEAR (edit script constant)
+python preprocessing/e_price/awattar_price_preproc.py data/e_price/awattar/2023_prices.csv
+python preprocessing/e_price/awattar_price_preproc.py data/e_price/awattar/2024_prices.csv
+python preprocessing/e_price/awattar_price_preproc.py data/e_price/awattar/2025_prices.csv
+python preprocessing/e_price/awattar_price_preproc.py data/e_price/awattar/2026_prices.csv
 ```
 
 ### Current Data Files
@@ -144,16 +145,16 @@ python preproc/e_price/awattar_price_preproc.py data/e_price/awattar/2026_prices
 | File | Description |
 |------|-------------|
 | `awattar/<YEAR>_prices.csv` | Raw hourly aWATTar fetch output |
-| `awattar/price_data_<YEAR>_norm.csv` | Preprocessed 5-min resolution, normalized (aWATTar) |
+| `awattar/price_data_<YEAR>.csv` | Preprocessed 5-min resolution (aWATTar, ct/kWh) |
 | `e_charts/<YEAR>_15m_prices.csv` | Raw 15-min Energy Charts fetch output |
-| `e_charts/price_data_<YEAR>_norm.csv` | Preprocessed 5-min resolution, normalized (Energy Charts) |
+| `e_charts/price_data_<YEAR>.csv` | Preprocessed 5-min resolution (Energy Charts, ct/kWh) |
 | `prices.csv` | Copy of one year's raw fetch (reference/legacy) |
 | `price_data_2025_raw.csv` | Legacy raw price data (SMARD.de, pre-aWATTar) |
 | `price_data_2025.xlsx` | Legacy Excel price data (SMARD.de, pre-aWATTar) |
 
 ### Visualization
 
-Use `preproc/e_price/plot_price.ipynb` to inspect and plot the preprocessed price data.
+Use `preprocessing/e_price/plot_price.ipynb` to inspect and plot the preprocessed price data.
 
 ---
 
@@ -185,7 +186,7 @@ into HDF5 files (`*_weather.hdf5`, `*_data_1min.hdf5`).
 
 #### Step 2: Extract weather CSV from HDF5
 
-Script: `preproc/weather/extract_weather_csv.py`
+Script: `preprocessing/weather/extract_weather_csv.py`
 
 Reads `WEATHER_SERVICE/IN` from the HDF5 file, merges all variables (inner
 join), drops NaN rows, renames columns, and drops unused ones.
@@ -204,31 +205,31 @@ Dropped columns: `atmospheric_pressure`, `precipitation_rate`,
 `probability_of_precipitation`, `apparent_temperature`, `wind_gust_speed`
 
 ```bash
-python preproc/weather/extract_weather_csv.py --input data/weather/zenodo/2018_weather.hdf5
+python preprocessing/weather/extract_weather_csv.py --input data/weather/zenodo/2018_weather.hdf5
 # Output: data/weather/zenodo/csvs_weather/2018_weather.csv
 ```
 
 #### Step 3: Extract SFH (Single Family Home) CSV from HDF5
 
-Script: `preproc/weather/extract_sfh_csv.py`
+Script: `preprocessing/weather/extract_sfh_csv.py`
 
 Reads `NO_PV` group: per building (SFH10, SFH11, …), keeps `_TOT` columns from
 HEATPUMP (`hp_` prefix) and HOUSEHOLD (`hh_` prefix), merges on timestamp.
 
 ```bash
-python preproc/weather/extract_sfh_csv.py --input data/weather/zenodo/2018_data_1min.hdf5
+python preprocessing/weather/extract_sfh_csv.py --input data/weather/zenodo/2018_data_1min.hdf5
 # Output: data/weather/zenodo/csvs_2018_data_1min/SFH10.csv, SFH11.csv, ...
 ```
 
 #### Full example (Zenodo/WPuQ)
 
 ```bash
-python preproc/data_setup.py --skip-prices
+python preprocessing/data_setup.py --skip-prices
 # Or skip download if HDF5 files exist:
-python preproc/data_setup.py --skip-prices --steps zenodo-extract weather-csv sfh-csv
+python preprocessing/data_setup.py --skip-prices --steps zenodo-extract weather-csv sfh-csv
 ```
 
-Use `preproc/weather/explore_hdf5.py` or `explore_hdf5_notebook.ipynb` to
+Use `preprocessing/weather/explore_hdf5.py` or `explore_hdf5_notebook.ipynb` to
 inspect HDF5 structure before extraction.
 
 ---
@@ -242,14 +243,14 @@ Default station: **04177** (Rheinstetten). Data types: `wind`, `solar`, `air_tem
 
 #### Step 1: Fetch raw data
 
-Script: `preproc/weather/dwd/dwd_fetch.py`
+Script: `preprocessing/weather/dwd/dwd_fetch.py`
 
 Downloads historical + recent zip archives, extracts `produkt_*.txt` files,
 converts to CSV, concatenates and deduplicates per data type.
 
 #### Step 2: Preprocess and merge
 
-Script: `preproc/weather/dwd/dwd_preprocess.py`
+Script: `preprocessing/weather/dwd/dwd_preprocess.py`
 
 Selects relevant columns, merges on `MESS_DATUM` (outer join), renames, adds
 combined solar column, converts timestamp to UTC datetime, drops all-missing
@@ -275,22 +276,31 @@ Per-year upsample from 10-min to 5-min:
 - `average` (default): linear interpolation, skips `-999` values
 - `duplicate`: forward-fill
 
-#### Step 4 (optional): Normalize and augment
+#### Step 4 (optional): Synthesize
 
-- `--normalize`: absolute-max normalization to [-1, 1], `-999` → NaN
-- `--augment` (via `data_setup.py`): per-column Gaussian noise, configured in
-  `preproc/augment_config.yaml`
+`--synthesize` (via `data_setup.py`) runs the synthetic dataset generator as
+a final pipeline step on the preprocessed (raw-unit) price and weather CSVs.
+The set of active configs is selected in
+`preprocessing/synthesize_config.yaml`; per-level transforms (Gaussian noise,
+constant shift, linear scaling, optional smoothing/clipping) live in
+`preprocessing/syn_cfgs/syn_cfg_*.yaml`. Each input `<stem>.csv` produces one
+sibling `<stem>_<syn_cfg_name>.csv` per active config, picked up
+automatically by `discover_synthetic_scenarios` when `include_synthesized:
+true` is set in the data combinator config. See
+[preprocessing/SYNTHESIZE_README.md](../preprocessing/SYNTHESIZE_README.md)
+for the full reference.
+
+> **Normalisation note.** Preprocessing only emits raw-unit CSVs; runtime
+> normalisation is handled inside the statesources (`WeatherDataSource`,
+> `EnergyPriceDataSource`), which compute scale factors from the loaded series
+> and expose them via `ctxt_*` keys.
 
 Per-year `<YEAR>_missing_entries.txt` reports list days with `-999` values.
 
 #### Full example (DWD)
 
 ```bash
-python preproc/data_setup.py --skip-prices --skip-wpuq --steps dwd-fetch dwd-preprocess
-# With normalization:
-python preproc/data_setup.py --skip-prices --skip-wpuq --steps dwd-fetch dwd-preprocess --normalize
-# Standalone:
-python preproc/weather/dwd/dwd_preprocess.py --normalize
+python preprocessing/data_setup.py --skip-prices --skip-wpuq --steps dwd-fetch dwd-preprocess
 ```
 
 ### Current Weather Data Files
@@ -303,14 +313,13 @@ python preproc/weather/dwd/dwd_preprocess.py --normalize
 | `weather/zenodo/csvs_<stem>/*.csv` | Extracted SFH CSVs (one per building) |
 | `weather/dwd/preprocessed/merged_04177.csv` | Full merged DWD data (10-min) |
 | `weather/dwd/preprocessed/<YEAR>_merged_04177.csv` | Per-year DWD (5-min) |
-| `weather/dwd/preprocessed/<YEAR>_merged_04177_norm.csv` | Per-year DWD (5-min, normalized) |
 
 ### Weather pipeline via unified script
 
 ```bash
-python preproc/data_setup.py --skip-prices                    # Full weather setup
-python preproc/data_setup.py --skip-prices --skip-dwd         # Zenodo only
-python preproc/data_setup.py --skip-prices --skip-wpuq        # DWD only
+python preprocessing/data_setup.py --skip-prices                    # Full weather setup
+python preprocessing/data_setup.py --skip-prices --skip-dwd         # Zenodo only
+python preprocessing/data_setup.py --skip-prices --skip-wpuq        # DWD only
 ```
 
 ## Other Data Sources (Reference)

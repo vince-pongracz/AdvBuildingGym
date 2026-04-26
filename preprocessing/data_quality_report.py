@@ -5,12 +5,12 @@ values (-999). Produces a summary CSV and a combined chart (PNG) showing
 which days have missing data per dataset and year.
 
 Usage (standalone):
-    python preproc/data_quality_report.py
-    python preproc/data_quality_report.py --output-dir reports/quality
-    python preproc/data_quality_report.py --dwd-dir data/weather/dwd/preprocessed
+    python preprocessing/data_quality_report.py
+    python preprocessing/data_quality_report.py --output-dir reports/quality
+    python preprocessing/data_quality_report.py --dwd-dir data/weather/dwd/preprocessed
 
 Integrated into the unified pipeline as the ``data-quality-report`` step:
-    python preproc/data_setup.py --steps data-quality-report
+    python preprocessing/data_setup.py --steps data-quality-report
 """
 
 from __future__ import annotations
@@ -205,9 +205,6 @@ def discover_csvs(
             sub = price_path / subdir
             if sub.is_dir():
                 for csv in sorted(sub.glob("price_data_*.csv")):
-                    # Skip augmented files
-                    if "_aug" in csv.stem:
-                        continue
                     source_label = f"Price/{subdir}"
                     files.append((csv, source_label, False))
 
@@ -267,18 +264,40 @@ def write_summary_csv(reports: list[DatasetReport], output_path: Path) -> None:
     logger.info("Summary CSV written to %s", output_path)
 
 
-def plot_missing_days(reports: list[DatasetReport], output_path: Path) -> None:
-    """Create a combined horizontal chart showing missing days per dataset/year.
+MAX_ROWS_PER_CHART: int = 18
 
-    Each row is one dataset file. The x-axis represents days of the year (1-366).
-    Partially missing days are shown in orange, completely missing days in red.
+
+def _paginate_reports(
+    reports: list[DatasetReport],
+    max_rows: int = MAX_ROWS_PER_CHART,
+) -> list[list[DatasetReport]]:
+    """Split reports into pages of <= max_rows entries.
+
+    Originals and their synthesised siblings (same `source`, same `year`) are
+    kept together on the same page — a group is never split across pages.
+    Groups that on their own exceed `max_rows` are still emitted as a single
+    page (chart row count just exceeds the cap in that case).
     """
-    # Filter to reports that have any missing days
-    reports_with_data = [r for r in reports if r.nr_expected_days > 0]
-    if not reports_with_data:
-        logger.warning("No datasets with date ranges found; skipping chart.")
-        return
+    # Group by (source, year), preserving the input order within each group.
+    groups: dict[tuple[str, int], list[DatasetReport]] = {}
+    for r in reports:
+        groups.setdefault((r.source, r.year), []).append(r)
 
+    pages: list[list[DatasetReport]] = []
+    current: list[DatasetReport] = []
+    for key in groups:
+        group = groups[key]
+        if current and len(current) + len(group) > max_rows:
+            pages.append(current)
+            current = []
+        current.extend(group)
+    if current:
+        pages.append(current)
+    return pages
+
+
+def _plot_single_chart(reports_with_data: list[DatasetReport], output_path: Path) -> None:
+    """Render a single missing-days chart for the given reports."""
     labels = [f"{r.dataset_name} ({r.year})" for r in reports_with_data]
     n_rows = len(labels)
 
@@ -357,6 +376,29 @@ def plot_missing_days(reports: list[DatasetReport], output_path: Path) -> None:
     fig.savefig(output_path, dpi=150)
     plt.close(fig)
     logger.info("Chart saved to %s", output_path)
+
+
+def plot_missing_days(reports: list[DatasetReport], output_path: Path) -> None:
+    """Create one or more missing-days charts.
+
+    Pagination: each chart contains at most ``MAX_ROWS_PER_CHART`` rows.
+    Synthetic and original CSVs that share the same ``(source, year)`` are
+    always placed on the same chart. Output files are named
+    ``<stem>_<NN>.png`` with a 2-digit zero-padded sequence index, alongside
+    ``output_path``'s suffix and parent directory.
+    """
+    reports_with_data = [r for r in reports if r.nr_expected_days > 0]
+    if not reports_with_data:
+        logger.warning("No datasets with date ranges found; skipping chart.")
+        return
+
+    pages = _paginate_reports(reports_with_data)
+    base = output_path.with_suffix("")
+    suffix = output_path.suffix or ".png"
+    width = max(2, len(str(len(pages))))
+    for idx, page in enumerate(pages, start=1):
+        page_path = base.with_name(f"{base.name}_{idx:0{width}d}{suffix}")
+        _plot_single_chart(page, page_path)
 
 
 def run_data_quality_report(

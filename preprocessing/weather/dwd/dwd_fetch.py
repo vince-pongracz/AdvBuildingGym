@@ -31,7 +31,7 @@ URL_BASE_TEMPLATE: str = (
     "observations_germany/climate/10_minutes/{data_type}/{period}/"
 )
 PERIODS: list[str] = ["historical", "recent"]
-# Resolve project root relative to this file: dwd_fetch.py -> preproc/weather/dwd/
+# Resolve project root relative to this file: dwd_fetch.py -> preprocessing/weather/dwd/
 PROJECT_ROOT: Path = Path(__file__).resolve().parents[3]
 DWD_DIR: Path = PROJECT_ROOT / "data" / "weather" / "dwd"
 DOWNLOAD_DIR: Path = DWD_DIR / "downloaded"

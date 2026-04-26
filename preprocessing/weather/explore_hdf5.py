@@ -7,7 +7,7 @@ Configuration is loaded from config.yaml in the same directory.
 Usage:
     python -m preproc.weather.explore_hdf5
     # or
-    python preproc/weather/explore_hdf5.py
+    python preprocessing/weather/explore_hdf5.py
 """
 
 import json

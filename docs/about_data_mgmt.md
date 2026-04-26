@@ -153,7 +153,7 @@ Training and evaluation each have their own DataCombinator config:
 
 These YAML configs define `scenario_sources` with `{year}` placeholders and a `years` list;
 the DataCombinator expands these into concrete file paths at construction time. Augmented
-data files (e.g. from data augmentation pipelines) can be auto-discovered via `augmented_paths`.
+data files (e.g. from data synthesize pipelines) can be auto-discovered via `synthesized_paths`.
 
 #### Code changes (implemented)
 
@@ -171,7 +171,7 @@ call the hook so subclasses define post-processing once.
 | File | What moves into `_post_load_data_processing()` |
 |---|---|
 | `outer/weather.py` | Column normalisation via `self.normalise` strategy → `self.ts["temp_out_norm"]` |
-| `outer/energy_price.py` | `self.price_max = float(self.ts["price_normalized"].max())` |
+| `outer/energy_price.py` | `normalise_series(self.ts["baseprice"], self.normalise)` → `self.ts["E_price_norm"]` |
 | `outer/ev_state.py` | Runtime state reset (`_ev_connected`, `_current_spec`, `_events`, `_event_lookup`) + `_parse_events()` |
 | `outer/inside_temperature.py` | Column detection + min-max normalisation to `[-1, 1]` |
 
