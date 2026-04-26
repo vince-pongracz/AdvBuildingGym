@@ -179,6 +179,7 @@ def main():
             "When provided, infrastructure parameters cycle according "
             "to the schedule. When omitted, a single config is used."
     )
+    # TODO VP 2026.04.26. : Check and decouple the infra and data source schedules and their definitions, configurations.
 
     # Load configs:
     # Load training hyperparameters (shared across select_model and checkpoint calc)
@@ -405,6 +406,9 @@ def main():
         max_report_frequency=30,  # Report every 30 seconds
         print_intermediate_tables=True,
     )
+    
+    # TODO VP 2026.04.26. : Simplify the configuration and the training setup, the RL algorithms... 
+    # Take a look at the Mistral session -- eval and consider proposals.
 
     tuner = tune.Tuner(
         args.algorithm.upper(),  # e.g.: "PPO" or "SAC"

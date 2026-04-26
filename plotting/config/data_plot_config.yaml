@@ -42,12 +42,12 @@ price:
     file_pattern: "price_data_{year}.csv"
     timestamp_col: start
 
-  # TODO VP 2026.03.24. : Check this out, the file and directory namings...
   test1:
-    # test1 scenario price data (single pre-built scenario file).
-    # Includes pre-computed price_normalized column.
+    # test1 scenario price data (single pre-built legacy scenario file).
+    # Includes a pre-computed price_normalized column (preprocessing no longer
+    # generates this column; the file is kept here only as a static scenario).
     # Columns: start, baseprice, unit, hour, price_normalized
-    dir: data/env_test1
+    dir: data/test1
     file_pattern: "price_data_2025_1.csv"
     timestamp_col: start
 

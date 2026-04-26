@@ -9,8 +9,11 @@ Modes:
                    swap cycle.  Once all are added they stay active.
     iterate      — Only one reward is active at a time; rotate to the
                    next every swap cycle (round-robin).
-    random       — Each swap randomly selects a subset of rewards
-                   (at least 1, up to all).
+    random       — Maintain a stable active set of ``random_active_count``
+                   rewards.  Each swap, ``random_swap_count`` currently
+                   active rewards are swapped out for the same number of
+                   currently inactive rewards.  The active-set size stays
+                   constant (so at least N rewards are always live).
 
 Usage::
 
@@ -67,15 +70,41 @@ class RewardScheduleManager:
         swap_every_n_iterations: int,
         seed: int,
         reward_specs: list[dict[str, Any]],
+        random_active_count: int | None = None,
+        random_swap_count: int = 1,
     ) -> None:
         if not reward_specs:
             raise ValueError("reward_specs must contain at least one entry")
 
+        n = len(reward_specs)
         self.mode = mode
         self.swap_every_n_iterations = max(1, swap_every_n_iterations)
         self._reward_specs = reward_specs
         self._rng = np.random.default_rng(seed)
         self._swap_index: int = 0
+
+        # RANDOM-mode parameters: keep a stable active set and swap a fraction
+        # of it on each cycle.
+        if random_active_count is None:
+            random_active_count = max(1, (n + 1) // 2)
+        if not 1 <= random_active_count <= n:
+            raise ValueError(
+                f"random_active_count must be in [1, {n}], got {random_active_count}"
+            )
+        max_swap = min(random_active_count, n - random_active_count)
+        if random_swap_count < 0:
+            raise ValueError(
+                f"random_swap_count must be >= 0, got {random_swap_count}"
+            )
+        if random_swap_count > max_swap and mode is RewardScheduleMode.RANDOM:
+            logger.warning(
+                "random_swap_count=%d clamped to %d (active=%d, total=%d)",
+                random_swap_count, max_swap, random_active_count, n,
+            )
+        self.random_active_count = random_active_count
+        self.random_swap_count = max(0, min(random_swap_count, max_swap))
+        self._random_active_indices: list[int] | None = None
+
         # Cached active specs — ensures RNG-dependent modes (RANDOM) produce
         # a consistent selection between get_active_reward_names() and
         # create_active_rewards() within the same swap step.
@@ -98,12 +127,10 @@ class RewardScheduleManager:
         """
         path = Path(path)
         if not path.exists():
-            raise FileNotFoundError(
-                f"Reward schedule YAML not found: {path}"
-            )
+            raise FileNotFoundError(f"Reward schedule YAML not found: {path}")
 
-        with open(path, "r") as f:
-            cfg = yaml.safe_load(f)
+        with open(path, "r") as reward_cfg_file:
+            cfg = yaml.safe_load(reward_cfg_file)
 
         if "rewards_file" not in cfg:
             raise ValueError(
@@ -114,11 +141,10 @@ class RewardScheduleManager:
         rewards_path = path.parent / cfg["rewards_file"]
         if not rewards_path.exists():
             raise FileNotFoundError(
-                f"Rewards YAML referenced by {path.name} not found: "
-                f"{rewards_path}"
+                f"Rewards YAML referenced by {path.name} not found: {rewards_path}"
             )
-        with open(rewards_path, "r") as f:
-            rewards_cfg = yaml.safe_load(f)
+        with open(rewards_path, "r") as reward_cfg_file:
+            rewards_cfg = yaml.safe_load(reward_cfg_file)
         reward_entries = rewards_cfg["rewards"]
 
         reward_specs: list[dict[str, Any]] = []
@@ -134,6 +160,8 @@ class RewardScheduleManager:
             swap_every_n_iterations=cfg.get("swap_every_n_iterations", 50),
             seed=cfg.get("seed", 42),
             reward_specs=reward_specs,
+            random_active_count=cfg.get("random_active_count"),
+            random_swap_count=cfg.get("random_swap_count", 1),
         )
         reward_lines = [
             f"  {s['class_name']}: weight={s['weight']}"
@@ -207,11 +235,14 @@ class RewardScheduleManager:
             return [self._reward_specs[idx]]
 
         if self.mode is RewardScheduleMode.RANDOM:
-            # Random subset: at least 1, up to all.
-            # RNG is consumed exactly once per swap step (cache ensures this).
-            k = int(self._rng.integers(1, n + 1))
-            indices = self._rng.choice(n, size=k, replace=False)
-            return [self._reward_specs[i] for i in sorted(indices)]
+            # Lazy-init the stable active set on first compute. The set is
+            # mutated by ``advance()`` (swap_count out, swap_count in).
+            if self._random_active_indices is None:
+                indices = self._rng.choice(
+                    n, size=self.random_active_count, replace=False,
+                )
+                self._random_active_indices = sorted(int(i) for i in indices)
+            return [self._reward_specs[i] for i in self._random_active_indices]
 
         # Should not reach here due to __init__ validation
         return list(self._reward_specs)
@@ -223,9 +254,13 @@ class RewardScheduleManager:
     def advance(self) -> bool:
         """Advance the schedule by one swap step.
 
+        For RANDOM mode this swaps ``random_swap_count`` currently active
+        rewards out for the same number of currently inactive ones, keeping
+        the active-set size constant.
+
         Invalidates the active-specs cache so the next call to
         ``create_active_rewards()`` / ``get_active_reward_names()``
-        recomputes (and, for RANDOM mode, draws fresh RNG values).
+        recomputes.
 
         Returns:
             True if the active reward set changed (caller should push to
@@ -233,14 +268,22 @@ class RewardScheduleManager:
         """
         old_names = self.get_active_reward_names()
         self._swap_index += 1
+
+        if (
+            self.mode is RewardScheduleMode.RANDOM
+            and self._random_active_indices is not None
+            and self.random_swap_count > 0
+        ):
+            self._apply_random_swap()
+
         self._active_specs_cache = None  # invalidate before recompute
         new_names = self.get_active_reward_names()
         changed = old_names != new_names
         if changed:
-            active_specs = self._get_active_specs()
+            active_reward_specs = self._get_active_specs()
             reward_details = [
-                f"{s['class_name']} (weight={s.get('weight', 1.0)})"
-                for s in active_specs
+                f"{reward_spec['class_name']} (weight={reward_spec.get('weight', 1.0)})"
+                for reward_spec in active_reward_specs
             ]
             logger.info(
                 "Reward schedule advanced (swap_index=%d): %s",
@@ -251,3 +294,21 @@ class RewardScheduleManager:
     def get_active_reward_names(self) -> list[str]:
         """Return class names of currently active rewards (for logging)."""
         return [s["class_name"] for s in self._get_active_specs()]
+
+    def _apply_random_swap(self) -> None:
+        """Swap ``random_swap_count`` active indices for inactive ones.
+
+        Mutates ``self._random_active_indices`` in place. Called from
+        ``advance()``. Caller is responsible for invalidating the spec cache.
+        """
+        n = len(self._reward_specs)
+        active = set(self._random_active_indices or [])
+        inactive = [i for i in range(n) if i not in active]
+        k = min(self.random_swap_count, len(active), len(inactive))
+        if k == 0:
+            return
+        out = self._rng.choice(sorted(active), size=k, replace=False)
+        in_ = self._rng.choice(inactive, size=k, replace=False)
+        active.difference_update(int(i) for i in out)
+        active.update(int(i) for i in in_)
+        self._random_active_indices = sorted(active)

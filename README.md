@@ -562,7 +562,7 @@ Common flags: `--algorithm {ppo,sac}`, `--episodes`, `--seed`,
 `--checkpoint-frequency-episodes`, `--data-config`, `--reward-schedule`,
 `--infra-schedule`, `--grad-train`, `--log-trajectories`, `--save-config`.
 
-TODO VP: Remove the save-config option as confgis are only allowed from yamls, no code defined config.
+TODO VP: Remove the save-config option as configs are only allowed from yamls, no code defined config.
 
 Hyperparameters (algorithm-agnostic + per-algorithm) live in
 [configs/training_param_config.yaml](configs/training_param_config.yaml). See

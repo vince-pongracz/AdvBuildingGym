@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 # I think statesources should be passive, they just provide the time series data, which can't really be controlled.
 # Statesources are the environment in some sense, we have no influence on them, we just observe them.
 # The infrastructure, the building is what we can control, and it applies the physics in its exec_action, which is what we can influence with our actions.
+# Maybe split actions to active and passive actions, where passive actions are the physics-based updates that happen every step, and active actions are the ones we can control?
 
 class BuildingHeatLoss(StateSource):
     """

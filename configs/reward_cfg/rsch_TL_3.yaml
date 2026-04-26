@@ -1,9 +1,13 @@
 # See README.md in this directory for field documentation.
 # TODO VP 2026.04.23. : Check why 'sun_shine' column is missing and falls back to 'direct_sun_shine' in WeatherDataSource.
-# TODO VP 2026.04.23. : Refactor random mode to pick 3 rewards and randomly swap one out for a new one each step, so at least 3 rewards are always active.
 
 rewards_file: rewards.yaml
 
 mode: "random"
 swap_every_n_iterations: 100
 seed: 42
+
+# RANDOM-mode tuning: keep `random_active_count` rewards active at all times
+# and rotate `random_swap_count` of them on each swap cycle.
+random_active_count: 3
+random_swap_count: 1
