@@ -21,7 +21,7 @@ infras:
   cell_capacity_Ah: 5.0
   max_charge_amps: 48.0
   max_charge_voltage: 420.0
-  target_soc: 1.0
+  start_soc_percentage: 0.3
   max_charge_rate: 1.5
   history_length: 4
   E0: 3.2

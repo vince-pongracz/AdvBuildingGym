@@ -258,7 +258,10 @@ HP_CHANNEL = {
 BATTERY_CHANNEL = {
     "action_key": "battery_action",
     "action_dim": 1,
-    "setpoint_key": "battery_target_pct",   # Target SoC
+    # The battery component is hardware-only and no longer publishes a
+    # target SoC into the obs space.  A PID-style controller must supply
+    # its own setpoint.
+    "setpoint_key": "battery_target_pct",   # Caller-supplied; not in obs
     "measurement_key": "battery_pct",       # Current SoC
     "kp": 1.0,                              # Tune via Ray Tune
     "ki": 0.0,

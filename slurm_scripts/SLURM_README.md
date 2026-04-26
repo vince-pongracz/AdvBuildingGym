@@ -85,7 +85,6 @@ Key `run_train_ray.py` options:
 | `--seed N` | Random seed | 42 |
 | `--metric METRIC` | Optimisation target (`reward_rate`, `achieved_reward`, `episode_return_mean`) | `reward_rate` |
 | `--checkpoint-frequency-episodes N` | Checkpoint every N episodes | 20 |
-| `--save-config PATH` | Save config to YAML | - |
 | `--log-trajectories` | Save per-step trajectory JSON during eval | off |
 
 The script also sets up CUDA environment variables and fixes cuDNN library

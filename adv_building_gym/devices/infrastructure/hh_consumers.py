@@ -94,6 +94,12 @@ class HouseholdEnergyConsumers(Infrastructure):
         states["s_hh_consumption_norm"][0] = np.float32(self.consumption_norm)
         states["ctxt_peak_consumption_kW"][0] = np.float32(self.peak_consumption_kW)
 
+    def reset(self, states: Dict, info=None) -> None:
+        """Clear per-episode consumption readouts."""
+        self.consumption_norm = 0.0
+        self.current_consumption_kW = 0.0
+        super().reset(states, info)
+
     def _synthetic_consumption(self, states: Dict) -> float:
         """Generate synthetic consumption based on time of day.
 

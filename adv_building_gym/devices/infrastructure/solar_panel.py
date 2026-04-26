@@ -116,6 +116,12 @@ class SolarPanel(Infrastructure):
         super().update_state(states, info)
         states["ctxt_solar_max_power_kW"][0] = np.float32(self.max_power_kW)
 
+    def reset(self, states: Dict, info=None) -> None:
+        """Clear per-episode irradiance/production readouts."""
+        self.irradiance_norm = 0.0
+        self.current_production_kW = 0.0
+        super().reset(states, info)
+
     def _synthetic_irradiance(self, states: Dict) -> float:
         """Generate synthetic irradiance based on time of day.
 

@@ -16,7 +16,7 @@ infras:
   max_power_kW: 10.0
   max_cap_kWh: 25.0
   start_soc_percentage: 0.3
-  target_soc: 0.95
+  start_soc_percentage: 0.3
   history_length: 4
   soc_min: 0.1
   soc_max: 0.95

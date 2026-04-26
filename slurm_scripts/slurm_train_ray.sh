@@ -11,7 +11,6 @@
 # All arguments are forwarded directly to run_train_ray.py. Available options:
 #   --algorithm ALGO          Algorithm to use (ppo, sac) [default: ppo]
 #   --load-config PATH        Path to YAML env config file to load (REQUIRED)
-#   --save-config PATH        Path to save config as YAML
 #   --episodes N              Total training episodes [default: 3500]
 #   --timesteps N             (Deprecated, prefer --episodes) Total timesteps
 #   --seed N                  Random seed

@@ -1,5 +1,5 @@
 import logging
-from typing import ClassVar, Dict, Optional, Set
+from typing import ClassVar, Dict, Set
 
 import numpy as np
 from gymnasium.spaces import Box
@@ -25,6 +25,18 @@ class BatteryLinear(Infrastructure):
     Energy change per timestep:
         delta_E (kWh) = action * max_power_kW (kW) * control_step (s) / 3600
         delta_SoC = delta_E / max_cap_kWh
+
+    NOTE on healthy-band semantics:
+        Reward-related concepts (the (min_pct, max_pct) operating band, any
+        target SoC setpoint) live on the reward side, not on the battery.
+        BatteryTargetReward owns ``min_pct`` / ``max_pct`` as constructor
+        arguments and reads ``s_battery_pct`` from the obs.  An alternative
+        we considered (Option B) was to drive the band from a CSV schedule —
+        each row gives a (min, max) pair, allowing the band to vary over
+        time (e.g. wider during the day, narrower overnight).  We chose the
+        static form for simplicity; if a time-varying band is ever wanted,
+        plumb a small data source that publishes the two values and have
+        the reward (or a connector) pull them per step.
     """
 
     POWER_FLOW = "bidirectional"
@@ -40,7 +52,6 @@ class BatteryLinear(Infrastructure):
                 max_cap_kWh: float,
                 control_step: int,
                 start_soc_percentage: float,
-                target_soc: float,
                 history_length: int,
                 soc_min: float,
                 soc_max: float,
@@ -51,18 +62,17 @@ class BatteryLinear(Infrastructure):
             name: Component identifier
             max_power_kW: Maximum charge/discharge power in kW
             max_cap_kWh: Battery capacity in kWh
-            start_soc_percentage: Initial state of charge [0, 1]
-            target_soc: Target state of charge [0, 1]
             control_step: Timestep duration in seconds
+            start_soc_percentage: Initial state of charge [0, 1]
             history_length: Number of past SoC values to track
-            soc_min: Minimum allowed SoC to prevent damage
-            soc_max: Maximum allowed SoC to prevent damage
+            soc_min: Hardware minimum SoC (clipping floor)
+            soc_max: Hardware maximum SoC (clipping ceiling)
         """
         super().__init__(name, max_power_kW)
 
         self.max_cap_kWh = max_cap_kWh
+        self.start_soc_percentage = start_soc_percentage
         self.soc = start_soc_percentage
-        self.target_soc = target_soc
         self.control_step = control_step
         self.history_length = history_length
         self.soc_min = soc_min
@@ -78,8 +88,6 @@ class BatteryLinear(Infrastructure):
 
         if "s_battery_pct" not in state_spaces.keys():
             state_spaces["s_battery_pct"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
-        if "s_battery_target_pct" not in state_spaces.keys():
-            state_spaces["s_battery_target_pct"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
         # Policy-side history of s_battery_pct is assembled by
         # StridedHistoryConnector on the rollout/learner side; the env no
         # longer stores it in the observation dict.
@@ -91,9 +99,6 @@ class BatteryLinear(Infrastructure):
             )
 
         return state_spaces, action_spaces
-
-    def set_target(self, target: Optional[float] = None) -> None:
-        self.target_soc = target
 
     def exec_action(self, actions: Dict, states: Dict, info=None) -> None:
         """Execute battery charge/discharge action using linear model.
@@ -136,15 +141,17 @@ class BatteryLinear(Infrastructure):
     def update_state(self, states: Dict, info=None) -> None:
         super().update_state(states, info)
         states["s_battery_pct"][0] = np.float32(self.soc)
-        states["s_battery_target_pct"][0] = np.float32(self.target_soc)
         states["ctxt_battery_capacity_kWh"][0] = np.float32(self.max_cap_kWh)
 
-    def get_penalisable_consumption(self, actions: Dict, states: Dict) -> float:
-        """Exempt charging when battery is below target SoC."""
-        power = self.get_electric_consumption(actions)
-        if power > 0 and self.soc < self.target_soc:
-            return 0.0
-        return power
+    def reset(self, states: Dict, info=None) -> None:
+        """Re-initialise transient state at the start of every episode.
+
+        The base implementation only re-emits update_state(), which would
+        leave self.soc carrying over from the previous episode.
+        """
+        self.soc = self.start_soc_percentage
+        self.actual_power_kW = 0.0
+        super().reset(states, info)
 
     def get_electric_consumption(self, actions: Dict) -> float:
         """Get current electric energy consumption from battery in kW.

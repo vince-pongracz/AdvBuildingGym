@@ -86,6 +86,17 @@ class LinearEVCharger(Infrastructure):
         self.charge_to_target_in_hrs = 0.0  # Time remaining to reach target SoC
         self.actual_power_kW = 0.0  # Track actual electric consumption for reporting
 
+        # Capture initial values so reset() can restore the EV to the same
+        # starting condition each episode rather than inheriting whatever
+        # state the previous episode (or schedule) left behind.
+        self._initial_max_cap_kWh = max_cap_kWh
+        self._initial_max_charging_kW = max_charging_kW
+        self._initial_charger_efficiency = charger_efficiency
+        self._initial_discharge_efficiency = discharge_efficiency
+        self._initial_v2g_enabled = v2g_enabled
+        self._initial_start_soc = start_soc
+        self._initial_target_soc = target_soc
+
         if charger_efficiency <= 0 or charger_efficiency > 1:
             raise ValueError("charger_efficiency must be in (0, 1].")
         if discharge_efficiency <= 0 or discharge_efficiency > 1:
@@ -295,6 +306,26 @@ class LinearEVCharger(Infrastructure):
             info["ctxt_ev_max_cap_kWh"] = self.max_cap_kWh
             info["ctxt_ev_charger_efficiency"] = self.charger_efficiency
             info["ctxt_ev_max_charge_time_hrs"] = self.max_charge_time_hrs
+
+    def reset(self, states: Dict, info=None) -> None:
+        """Restore the charger to its constructor configuration.
+
+        Without this, an EV connection (and its CSV-driven spec overrides)
+        from one episode would persist into the next.  EVState will
+        re-trigger set_ev_connected on the first step if the new episode
+        actually starts with the EV plugged in.
+        """
+        self.max_cap_kWh = self._initial_max_cap_kWh
+        self.max_charging_kW = self._initial_max_charging_kW
+        self.charger_efficiency = self._initial_charger_efficiency
+        self.discharge_efficiency = self._initial_discharge_efficiency
+        self.v2g_enabled = self._initial_v2g_enabled
+        self.soc = self._initial_start_soc
+        self.target_soc = self._initial_target_soc
+        self.ev_connected = False
+        self.charge_to_target_in_hrs = 0.0
+        self.actual_power_kW = 0.0
+        super().reset(states, info)
 
     def get_penalisable_consumption(self, actions: Dict, states: Dict) -> float:
         """Exempt charging when EV is connected and below target SoC."""

@@ -167,6 +167,13 @@ class HP(Infrastructure):
         states["s_temp_in_norm"][0] = np.float32(new_temp)
         states["ctxt_hp_max_power_kW"][0] = np.float32(self.max_power_kW)
 
+    def reset(self, states, info=None) -> None:
+        """Clear per-episode transient state before publishing initial obs."""
+        self.temp_in_norm = 0
+        self.temp_in_norm_change = 0
+        self.actual_power_kW = 0.0
+        super().reset(states, info)
+
     def get_electric_consumption(self, actions) -> float:
         """Get current electric energy consumption from heat pump in kW.
 

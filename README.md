@@ -28,16 +28,6 @@ You can have a single agent that switches between different policies based on th
 
 Define a multi-agent setup where one "Manager" policy selects which "Worker" policy to use. Even though it's technically a single entity in the game, RLlib treats it as a coordination task between multiple policies.
 
-TODO VP: Rework this part
-
-Script to download data from zenedo:
-```bash
-while IFS= read -r link; do
-  [[ -z "${link//[[:space:]]/}" ]] && continue
-  curl -L --progress-bar -OJ "$link"
-done < ds_links.txt
-```
-
 Diff between local and district heating networks: https://www.npro.energy/main/en/district-heating-cooling/local-district-heating
 
 District heating grid ^^
@@ -56,6 +46,8 @@ All data fetching and preprocessing is handled by a single entry point:
 
 ```bash
 python preprocessing/data_setup.py
+sbatch slurm_scripts/slurm_data_setup.sh
+sbatch slurm_scripts/slurm_data_setup.sh --synthesize --quality-report-dir
 ```
 
 Runs three pipelines:
@@ -281,14 +273,14 @@ Summary:
 - E_price and renewable production data from Finland
 - optimisation on "gross energy profit from operations, and optimal use of local resources and flexibility components"
 - they use real multi agent setup (with 3 layer architecture: control, information and physical layers)
-- TODO VP: continue
+- TODO VP: continue here
 
 Conclusion:
 - 
 
 TODO VP: Fingrid datasets, maybe something useful, but it rather seems like they rather have energy time series than weather and price time series -- https://data.fingrid.fi/en -- but they gather a lots of data with any kind, so can be useful.
 
-
+TODO VP: https://www.clear.kit.edu/sparkassenpreis.php -- Thesis einreichen.
 
 #### Deep Reinforcement Learning for Real-Time Energy Management in Smart Home
 
@@ -560,9 +552,7 @@ python run_train_ray.py --algorithm sac --load-config configs/env_cfg/env_test1_
 Common flags: `--algorithm {ppo,sac}`, `--episodes`, `--seed`,
 `--metric {reward_rate,achieved_reward,episode_return_mean}`,
 `--checkpoint-frequency-episodes`, `--data-config`, `--reward-schedule`,
-`--infra-schedule`, `--grad-train`, `--log-trajectories`, `--save-config`.
-
-TODO VP: Remove the save-config option as configs are only allowed from yamls, no code defined config.
+`--infra-schedule`, `--grad-train`, `--log-trajectories`.
 
 Hyperparameters (algorithm-agnostic + per-algorithm) live in
 [configs/training_param_config.yaml](configs/training_param_config.yaml). See

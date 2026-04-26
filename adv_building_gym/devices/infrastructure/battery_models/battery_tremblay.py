@@ -86,30 +86,30 @@ class BatteryTremblay(Infrastructure):
 
     def __init__(self, name: str,
                  control_step: int,  # Timesteps in seconds
-                 max_power_kW: float = 19.0,  # Max charge/discharge power in kW (400V × 48A)
-                 cell_capacity_Ah: float = 3.5,  # Single cell capacity in Ah (typical 21700)
-                 max_charge_amps: float = 48.0,  # Max pack current in A
-                 max_charge_voltage: float = 420.0,  # Max pack voltage in V
-                 start_soc_percentage: float = 0.3,  # Initial SoC [0, 1]
-                 target_soc: float = 1.0,  # Target SoC
-                 max_charge_rate: float = 1.5,  # C-rate limit
-                 history_length: int = 4,  # Number of past SoC values to track
-                 # Tremblay model parameters (Li-ion LFP defaults, per cell)
-                 E0: float = 3.2,  # Constant voltage (V per cell)
-                 K: float = 0.009,  # Polarization constant (V/Ah)
-                 A: float = 0.468,  # Exponential zone amplitude (V)
-                 B: float = 3.529,  # Exponential zone time constant inverse (1/Ah)
-                 R_cell: float = 0.01,  # Single cell internal resistance (Ohms)
-                 # Cell configuration (NsNp topology) - defaults for ~14 kWh pack
-                 # 125s10p: 125 × 3.2V = 400V, 10 × 3.5Ah = 35Ah → 14 kWh
-                 n_series: int = 125,  # Number of cells in series per string
-                 n_parallel: int = 10,  # Number of parallel strings
+                 max_power_kW: float,  # Max charge/discharge power in kW (e.g. 400V × 48A ≈ 19.0)
+                 cell_capacity_Ah: float,  # Single cell capacity in Ah (typical 21700: 3.5)
+                 max_charge_amps: float,  # Max pack current in A (e.g. 48)
+                 max_charge_voltage: float,  # Max pack voltage in V (e.g. 420)
+                 start_soc_percentage: float,  # Initial SoC [0, 1]
+                 max_charge_rate: float,  # C-rate limit (e.g. 1.5)
+                 history_length: int,  # Number of past SoC values to track
+                 # Tremblay model parameters (per cell). Li-ion LFP reference values:
+                 #   E0=3.2 V, K=0.009 V/Ah, A=0.468 V, B=3.529 1/Ah, R_cell=0.01 Ω
+                 E0: float,  # Constant voltage (V per cell)
+                 K: float,  # Polarization constant (V/Ah)
+                 A: float,  # Exponential zone amplitude (V)
+                 B: float,  # Exponential zone time constant inverse (1/Ah)
+                 R_cell: float,  # Single cell internal resistance (Ohms)
+                 # Cell configuration (NsNp topology). Reference 125s10p ≈ 14 kWh pack:
+                 #   125 × 3.2V = 400V, 10 × 3.5Ah = 35Ah → 14 kWh
+                 n_series: int,  # Number of cells in series per string
+                 n_parallel: int,  # Number of parallel strings
                  # Efficiency parameters
-                 charge_efficiency: float = 0.95,  # Coulombic efficiency for charging
-                 discharge_efficiency: float = 0.95,  # Coulombic efficiency for discharging
+                 charge_efficiency: float,  # Coulombic efficiency for charging [0, 1]
+                 discharge_efficiency: float,  # Coulombic efficiency for discharging [0, 1]
                  # Operating limits -- prevent battery damage
-                 soc_min: float = 0.1,  # Minimum SoC to prevent damage
-                 soc_max: float = 0.95,  # Maximum SoC to prevent damage
+                 soc_min: float,  # Hardware minimum SoC (clipping floor)
+                 soc_max: float,  # Hardware maximum SoC (clipping ceiling)
                  ) -> None:
         super().__init__(name, max_power_kW)
 
@@ -118,8 +118,8 @@ class BatteryTremblay(Infrastructure):
         self.max_charge_voltage = max_charge_voltage
 
         # State of Charge (SoC) as a percentage [0, 1]
+        self.start_soc_percentage = start_soc_percentage
         self.soc = start_soc_percentage
-        self.target_soc = target_soc
         self.history_length = history_length
         self.control_step = control_step
         # Link: https://www.batterypowertips.com/how-to-read-battery-discharge-curves-faq/
@@ -178,8 +178,6 @@ class BatteryTremblay(Infrastructure):
         # States
         if "s_battery_pct" not in state_spaces.keys():
             state_spaces["s_battery_pct"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
-        if "s_battery_target_pct" not in state_spaces.keys():
-            state_spaces["s_battery_target_pct"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
         # Policy-side history of s_battery_pct is assembled by
         # StridedHistoryConnector; env no longer stores it in obs.
 
@@ -190,11 +188,6 @@ class BatteryTremblay(Infrastructure):
             )
 
         return state_spaces, action_spaces
-
-    # TODO VP 2026.01.13. : How to set it dinamically, at eval? -- Do we want to allow it?
-    # NOTE VP 2026.01.13. : Let's say it's an improvement opportunity, but not a priority for now.
-    def set_target(self, target: Optional[float] = None) -> None:
-        self.target_soc = target
 
     def _calculate_terminal_voltage(self, soc: float, pack_current: float) -> float:
         """Calculate battery terminal voltage using Tremblay model at cell level.
@@ -358,15 +351,21 @@ class BatteryTremblay(Infrastructure):
         super().update_state(states, info)
         # Ensure float32 dtype for all updates
         states["s_battery_pct"][0] = np.float32(self.soc)
-        states["s_battery_target_pct"][0] = np.float32(self.target_soc)
         states["ctxt_battery_capacity_kWh"][0] = np.float32(self.max_cap_kWh)
 
-    def get_penalisable_consumption(self, actions: Dict, states: Dict) -> float:
-        """Exempt charging when battery is below target SoC."""
-        power = self.get_electric_consumption(actions)
-        if power > 0 and self.soc < self.target_soc:
-            return 0.0
-        return power
+    def reset(self, states: Dict, info=None) -> None:
+        """Re-initialise transient state at the start of every episode.
+
+        The base implementation only re-emits update_state(), which would
+        leave self.soc carrying over from the previous episode.  Restore it
+        (and the derived voltage/current/power readouts) to the values set
+        in __init__ so each episode starts from a clean battery.
+        """
+        self.soc = self.start_soc_percentage
+        self.current_amps = 0.0
+        self.actual_voltage = self._calculate_terminal_voltage(self.soc, 0.0)
+        self.actual_power_kW = 0.0
+        super().reset(states, info)
 
     def get_electric_consumption(self, actions: Dict) -> float:
         """Get current electric energy consumption from battery in kW.

@@ -104,10 +104,6 @@ def main():
         help="Path to YAML env config file to load (required, e.g., 'configs/env_cfg/env_test1_small.yaml')"
     )
     parser.add_argument(
-        "--save-config", type=str,
-        help="Path where to save the config as YAML (e.g., 'configs/my_config.yaml')"
-    )
-    parser.add_argument(
         "--episodes", type=int, default=None,
         help="Total training episodes. Primary stopping criterion. "
             "Converted to timesteps internally (episodes × EPISODE_LENGTH). "
@@ -255,13 +251,6 @@ def main():
     # Ray worker subprocesses (EnvRunners, SAC actor, Learner) never call this —
     # they use the factory methods directly via adv_building_env_creator.
     active_config.init_singletons()
-
-
-    # Save config to file if specified
-    if args.save_config:
-        logger.info("Saving config to: %s", args.save_config)
-        EnvConfigManager.save(active_config, args.save_config)
-        logger.info("Config saved successfully")
 
     # Add evaluation/env_runners/ prefix to metric if not already present
     # RLlib reports custom metrics under evaluation/env_runners/ in the results dict

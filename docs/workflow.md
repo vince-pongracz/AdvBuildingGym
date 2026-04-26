@@ -147,7 +147,6 @@ evaluation — pass the same YAML to `run_eval_ray.py` via `--load-config`.
 | `rewards` | Objective functions | TempReward, EconomicReward, ... (each with `weight`) |
 
 Load with `--load-config configs/env_cfg/env_test1_{s/m/l}.yaml` on training or eval scripts.
-Save a modified config with `--save-config configs/my_run.yaml` on the training script.
 
 ### 2.2 Training hyperparameters — `configs/training_param_config.yaml`
 
@@ -237,7 +236,6 @@ sbatch slurm_scripts/slurm_train_ray.sh --algorithm ppo --episodes 3500 --log-tr
 | `--metric {reward_rate,achieved_reward,episode_return_mean}` | `reward_rate` | Optimisation metric |
 | `--checkpoint-frequency-episodes N` | `20` | Save checkpoint every N episodes |
 | `--load-config PATH` | — (**required**) | Environment YAML to load; `env_config_name` inside sets the checkpoint dir name |
-| `--save-config PATH` | — | Save final config as YAML |
 | `--data-config PATH` | `configs/train_data_combinator_config.yaml` | Data combinator YAML |
 | `--log-trajectories` | off | Save per-step trajectory JSON during eval |
 

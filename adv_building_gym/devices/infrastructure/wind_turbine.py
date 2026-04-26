@@ -172,6 +172,13 @@ class WindTurbine(Infrastructure):
         super().update_state(states, info)
         states["ctxt_wind_rated_power_kW"][0] = np.float32(self.rated_power_kW)
 
+    def reset(self, states: Dict, info=None) -> None:
+        """Clear per-episode wind/production readouts."""
+        self.wind_speed_raw = 0.0
+        self.available_power_kW = 0.0
+        self.current_production_kW = 0.0
+        super().reset(states, info)
+
     def get_electric_consumption(self, actions: Dict) -> float:
         """Get current electric energy consumption (production) from wind turbine.
 
