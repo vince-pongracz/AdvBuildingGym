@@ -1,7 +1,7 @@
 """Schedule infrastructure config YAML files for curriculum training.
 
-Cycles through env config YAML files during training so the agent
-generalises across many building configurations.
+Cycles through infra YAMLs (``configs/infras/*.yaml``) during training so
+the agent generalises across many building configurations.
 
 The swap is synchronised across all Ray workers via the companion
 ``infra_schedule_callback`` (iteration-aligned ``on_train_result``).
@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 class _ParsedConfig:
-    """One parsed env config YAML (infras + building_props only)."""
+    """One parsed infra YAML (building_props + infras)."""
 
     __slots__ = ("name", "infra_dicts", "building_props", "context")
 
@@ -38,14 +38,17 @@ class _ParsedConfig:
 
 
 class InfraCombinator:
-    """Schedule env config YAML files for infrastructure curriculum training.
+    """Schedule infra YAML files for infrastructure curriculum training.
 
-    Loads a sequence of env config YAMLs and cycles through them during
-    training.  Only the ``infras`` and ``building_props`` sections are
-    extracted -- statesources and rewards are managed separately.
+    Loads a sequence of infra YAMLs (``configs/infras/*.yaml``) and cycles
+    through them during training.  Each file declares only ``infras`` and
+    ``building_props`` -- statesources, timing, and rewards are managed
+    separately.
 
     Args:
-        config_paths: Ordered list of env config YAML file paths.
+        config_paths: Ordered list of infra YAML file paths.
+        control_step: Control step (seconds) of the active env config; used
+            as deserialisation context for all entries.
         swap_every_n_iterations: Hold each config for N training iterations.
         mode: ``"cycle"`` for round-robin, ``"off"`` to disable swapping.
     """
@@ -53,19 +56,19 @@ class InfraCombinator:
     def __init__(
         self,
         config_paths: list[str],
+        control_step: int,
         swap_every_n_iterations: int = 300,
         mode: Literal["cycle", "off"] = "cycle",
     ) -> None:
         self.config_paths = config_paths
+        self.control_step = control_step
         self.swap_every_n_iterations = swap_every_n_iterations
         self.mode = mode
         self._swap_index: int = 0
 
-        self._configs: list[_ParsedConfig] = []
-        for path_str in config_paths:
-            self._configs.append(self._load_config(path_str))
-
-        self._validate_control_step_consistency()
+        self._configs: list[_ParsedConfig] = [
+            self._load_config(p, control_step) for p in config_paths
+        ]
 
         logger.info(
             "InfraCombinator: %d configs loaded, mode=%s, "
@@ -76,33 +79,31 @@ class InfraCombinator:
             logger.info("  [%d] %s", i, cfg.name)
 
     @staticmethod
-    def _load_config(path_str: str) -> _ParsedConfig:
+    def _load_config(path_str: str, control_step: int) -> _ParsedConfig:
         path = Path(path_str)
         if not path.exists():
             raise FileNotFoundError(f"InfraCombinator: config file not found: {path}")
 
         with open(path) as f:
-            raw = yaml.safe_load(f)
+            raw = yaml.safe_load(f) or {}
+
+        if "statesources" in raw or "EPISODE_LENGTH" in raw or "control_step" in raw:
+            raise ValueError(
+                f"InfraCombinator: {path} appears to be an old-style env config. "
+                f"Infra schedule entries must point at infra-only YAMLs "
+                f"(configs/infras/*.yaml) containing only 'building_props' and 'infras'."
+            )
 
         bp_dict = raw.get("building_props", {})
         return _ParsedConfig(
-            name=raw.get("env_config_name", path.stem),
+            name=path.stem,
             infra_dicts=raw.get("infras", []),
             building_props=BuildingProps(
                 mC=bp_dict.get("mC", 300),
                 K=bp_dict.get("K", 20),
             ),
-            control_step=raw.get("control_step", 300),
+            control_step=control_step,
         )
-
-    def _validate_control_step_consistency(self) -> None:
-        """All configs must share ``control_step``."""
-        steps = {cfg.context["control_step"] for cfg in self._configs}
-        if len(steps) > 1:
-            raise ValueError(
-                f"InfraCombinator: all configs must share the same "
-                f"control_step. Found: {sorted(steps)}"
-            )
 
     # ------------------------------------------------------------------
     # Runtime API
@@ -128,7 +129,7 @@ class InfraCombinator:
         return True
 
     def get_active_config_name(self) -> str:
-        """Return the ``env_config_name`` of the currently active YAML."""
+        """Return the name (file stem) of the currently active YAML."""
         if not self._configs:
             return "<none>"
         return self._configs[self._swap_index % len(self._configs)].name
@@ -142,7 +143,7 @@ class InfraCombinator:
     # ------------------------------------------------------------------
 
     @classmethod
-    def from_yaml(cls, path: str | Path) -> "InfraCombinator":
+    def from_yaml(cls, path: str | Path, control_step: int) -> "InfraCombinator":
         """Load an infra schedule from a YAML config file.
 
         Expected format::
@@ -150,18 +151,19 @@ class InfraCombinator:
             mode: cycle
             swap_every_n_iterations: 300
             configs:
-            - configs/env_cfg/env_test1_small.yaml
-            - configs/env_cfg/env_test1_mid.yaml
+            - configs/infras/test1_small.yaml
+            - configs/infras/test1_mid.yaml
         """
         path = Path(path)
         if not path.exists():
             raise FileNotFoundError(f"InfraCombinator schedule file not found: {path}")
 
         with open(path) as f:
-            raw = yaml.safe_load(f)
+            raw = yaml.safe_load(f) or {}
 
         return cls(
             config_paths=raw.get("configs", []),
+            control_step=control_step,
             swap_every_n_iterations=raw.get("swap_every_n_iterations", 300),
             mode=raw.get("mode", "cycle"),
         )

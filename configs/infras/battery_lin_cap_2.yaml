@@ -1,0 +1,34 @@
+building_props:
+  mC: 300
+  K: 20
+infras:
+- class: HP
+  name: HP
+  max_power_kW: 5.0
+  cop_heat: 3.0
+  cop_cool: 2.5
+- class: BatteryLinear
+  name: battery
+  max_power_kW: 10.0
+  max_cap_kWh: 10.0
+  start_soc_percentage: 0.3
+  history_length: 4
+  soc_min: 0.1
+  soc_max: 0.95
+- class: LinearEVCharger
+  name: ev_charger
+  max_power_kW: 11.0
+  max_charging_kW: 11.0
+  charger_efficiency: 0.92
+  discharge_efficiency: 0.92
+  v2g_enabled: true
+  history_length: 4
+  target_soc: 0.9
+  max_charge_time_hrs: 24.0
+  v2g_playroom: 0.1
+- class: SolarPanel
+  name: solar
+  max_power_kW: 15.0
+- class: HouseholdEnergyConsumers
+  name: hh_consumers
+  peak_consumption_kW: 8.0

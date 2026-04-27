@@ -21,9 +21,9 @@
 #   --no-log-trajectories           Disable trajectory logging (default)
 #
 # Examples (--load-config is REQUIRED):
-#   sbatch slurm_scripts/slurm_train_ray.sh --algorithm ppo --load-config configs/env_cfg/env_test1_small.yaml --episodes 3500 --seed 42
-#   sbatch slurm_scripts/slurm_train_ray.sh --algorithm sac --load-config configs/env_cfg/env_test1_mid.yaml
-#   sbatch slurm_scripts/slurm_train_ray.sh --algorithm ppo --load-config configs/env_cfg/env_test1_large.yaml --episodes 5000 --checkpoint-frequency-episodes 50
+#   sbatch slurm_scripts/slurm_train_ray.sh --algorithm ppo --load-config configs/env/env_test1_small.yaml --episodes 3500 --seed 42
+#   sbatch slurm_scripts/slurm_train_ray.sh --algorithm sac --load-config configs/env/env_test1_mid.yaml
+#   sbatch slurm_scripts/slurm_train_ray.sh --algorithm ppo --load-config configs/env/env_test1_large.yaml --episodes 5000 --checkpoint-frequency-episodes 50
 #
 # The script activates the project's Python virtualenv and runs the training
 # script while logging SLURM and GPU info.

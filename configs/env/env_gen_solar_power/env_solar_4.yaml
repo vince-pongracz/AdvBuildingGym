@@ -1,0 +1,4 @@
+env_config_name: env_solar_4
+infras: configs/infras/solar_4.yaml
+statesources: configs/statesources/default.yaml
+env_meta: configs/env_meta/default.yaml

@@ -1,0 +1,4 @@
+env_config_name: env_solar_eval
+infras: configs/infras/solar_6_eval.yaml
+statesources: configs/statesources/default.yaml
+env_meta: configs/env_meta/default.yaml

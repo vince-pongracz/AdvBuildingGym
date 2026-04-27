@@ -1,24 +1,15 @@
 
 import logging
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
-# TODO VP 2026.02.20. : Simplyfy env config somehow, too much code here, too little declarative stuff...
 from adv_building_gym.envs.utils import BuildingProps
 from adv_building_gym.config.utils.loggable_config import LoggableConfig
 
 logger = logging.getLogger(__name__)
 
-from adv_building_gym.devices.infrastructure import (
-    Infrastructure, HP, BatteryTremblay,
-    SolarPanel, WindTurbine, LinearEVCharger, HouseholdEnergyConsumers
-)
-
-from adv_building_gym.devices.statesources import (
-    StateSource, BuildingHeatLoss, DesiredUserEnergyNeed, EVState, InsideTemperature,
-    EnergyPriceDataSource, WeatherDataSource
-)
-
+from adv_building_gym.devices.infrastructure import Infrastructure
+from adv_building_gym.devices.statesources import StateSource
 from adv_building_gym.config.reward_config import RewardConfig
 
 
@@ -26,16 +17,20 @@ from adv_building_gym.config.reward_config import RewardConfig
 class EnvConfig(LoggableConfig):
     """Environment topology configuration — state sources, infrastructure, and physics.
 
-    Config serialisation -- by ConfigManager.
-    - Save config: ConfigManager.save(config, path)
-    - Load config: ConfigManager.load(path)
+    Components are always declared in YAML (``configs/infras/*.yaml`` and
+    ``configs/statesources/*.yaml``) and reach this dataclass via
+    ``EnvConfigManager.load(...)``, which populates ``infra_specs`` and
+    ``statesource_specs`` (the raw component dicts).  The factory methods
+    ``create_infras`` / ``create_statesources`` deserialise those specs into
+    fresh component instances per call.
 
-    **IMPORTANT**: Use the factory methods (create_infras, create_statesources)
-    when creating env instances to ensure each env gets independent component instances.
-    Direct access to self.infras/statesources returns shared singletons and should
-    only be used for inspection, not for passing to AdvBuildingGym in parallel environments.
+    **IMPORTANT**: Use the factory methods (``create_infras``,
+    ``create_statesources``) when creating env instances to ensure each env
+    gets independent component instances.  Direct access to ``self.infras`` /
+    ``self.statesources`` returns shared singletons populated by
+    ``init_singletons()`` and is intended for inspection only.
 
-    Reward composition is managed by ``reward_config`` (RewardConfig).
+    Reward composition is managed by ``reward_config`` (``RewardConfig``).
     """
     env_config_name: str = "env_test1_small"
 
@@ -47,102 +42,64 @@ class EnvConfig(LoggableConfig):
         BuildingProps(mC=300, K=20)
     )
 
-    # Cached singleton instances (for backward compatibility and inspection)
-    # WARNING: Do not pass these to parallel environments - use factory methods instead
+    # Raw component specs as parsed from YAML.  Source of truth for the
+    # factory methods below; never reach into hardcoded defaults.
+    infra_specs: List[Dict[str, Any]] = field(default_factory=list)
+    statesource_specs: List[Dict[str, Any]] = field(default_factory=list)
+
+    # Cached singleton instances populated by init_singletons().
+    # Do NOT pass these to parallel environments — use the factory methods.
     infras: Optional[List[Infrastructure]] = None
     statesources: Optional[List[StateSource]] = None
 
     # Reward composition — separate config
     reward_config: RewardConfig = field(default_factory=RewardConfig)
 
+    def _infra_context(self) -> Dict[str, Any]:
+        return {
+            "K": self.building_props.K,
+            "mC": self.building_props.mC,
+            "control_step": self.CONTROL_STEP,
+        }
+
+    def _statesource_context(self) -> Dict[str, Any]:
+        return {
+            "K": self.building_props.K,
+            "mC": self.building_props.mC,
+            "timestep": self.CONTROL_STEP,
+        }
+
     def create_statesources(self) -> List[StateSource]:
-        """
-        Factory method to create fresh StateSource instances.
+        """Deserialise fresh StateSource instances from ``statesource_specs``.
 
-        Each call returns NEW independent instances, safe for parallel environments.
-        Components have their own iteration counter and state.
-
-        Returns:
-            List of newly created StateSource instances.
+        Each call returns NEW independent instances, safe for parallel
+        environments.  Raises if no specs were loaded — every env config
+        must declare its statesources via YAML.
         """
-        
-        # TODO VP 2026.04.24. : How are the statesources created in the envs? Are they always created here, or are they specified in yamls?
-        # Statesources are outer components -- usually we can't really change them (except the s_temp_in_norm)
-        return [
-            EnergyPriceDataSource("E_price"),
-            WeatherDataSource("weather"),
-            InsideTemperature("desired_temp_in"),
-            DesiredUserEnergyNeed("user_energy_need"),
-            BuildingHeatLoss(
-                name="building_heat_loss",
-                K=self.building_props.K,
-                mC=self.building_props.mC,
-            ),
-            EVState("ev_schedule"),
-        ]
+        if not self.statesource_specs:
+            raise RuntimeError(
+                "EnvConfig.create_statesources: no statesource_specs loaded. "
+                "Statesources must be declared in a YAML file referenced by "
+                "the env wrapper (configs/env/<name>.yaml → statesources)."
+            )
+        ctx = self._statesource_context()
+        return [StateSource.from_dict(spec, ctx) for spec in self.statesource_specs]
 
     def create_infras(self) -> List[Infrastructure]:
-        """
-        Factory method to create fresh Infrastructure instances.
+        """Deserialise fresh Infrastructure instances from ``infra_specs``.
 
-        Each call returns NEW independent instances, safe for parallel environments.
-        Components have their own iteration counter and state.
-
-        Returns:
-            List of newly created Infrastructure instances.
+        Each call returns NEW independent instances, safe for parallel
+        environments.  Raises if no specs were loaded — every env config
+        must declare its infras via YAML.
         """
-        return [
-            HP(
-                name="HP",
-                max_power_kW=5.0,  # kW (consistent with battery 19 kW, EV 7 kW, solar 5 kW)
-                K=self.building_props.K,
-                mC=self.building_props.mC,
-                cop_heat=3.0,
-                cop_cool=2.5,
-                control_step=self.CONTROL_STEP
-            ),
-            BatteryTremblay(
-                "battery",
-                control_step=self.CONTROL_STEP,
-                max_power_kW=19.0,
-                cell_capacity_Ah=3.5,
-                max_charge_amps=48.0,
-                max_charge_voltage=420.0,
-                start_soc_percentage=0.3,
-                max_charge_rate=1.5,
-                history_length=4,
-                E0=3.2,
-                K=0.009,
-                A=0.468,
-                B=3.529,
-                R_cell=0.01,
-                n_series=125,
-                n_parallel=10,
-                charge_efficiency=0.95,
-                discharge_efficiency=0.95,
-                soc_min=0.1,
-                soc_max=0.95,
-            ),
-            LinearEVCharger(
-                "ev_charger",
-                max_power_kW=7.0,
-                max_charging_kW=7.0,
-                control_step=self.CONTROL_STEP
-            ),
-            SolarPanel(
-                "solar",
-                max_power_kW=5.0,
-            ),
-            WindTurbine(
-                "wind_turbine",
-                max_power_kW=5.0,
-                rated_power_kW=5.0,
-            ),
-            HouseholdEnergyConsumers(
-                "hh_consumers",
-                peak_consumption_kW=8.0,
-            ),
-        ]
+        if not self.infra_specs:
+            raise RuntimeError(
+                "EnvConfig.create_infras: no infra_specs loaded. "
+                "Infras must be declared in a YAML file referenced by "
+                "the env wrapper (configs/env/<name>.yaml → infras)."
+            )
+        ctx = self._infra_context()
+        return [Infrastructure.from_dict(spec, ctx) for spec in self.infra_specs]
 
     def __post_init__(self):
         """Lightweight post-init — does NOT eagerly call factory methods.
@@ -193,5 +150,8 @@ class EnvConfig(LoggableConfig):
         logger.info("%s:\n%s", self._log_label(), "\n".join(lines))
         self.reward_config.log_values()
 
-# default/config instance
+
+# Default empty instance for module-level imports.  Real configs are produced
+# by EnvConfigManager.load from a wrapper YAML; this singleton has no
+# infra/statesource specs and its factory methods will raise if called.
 config = EnvConfig()

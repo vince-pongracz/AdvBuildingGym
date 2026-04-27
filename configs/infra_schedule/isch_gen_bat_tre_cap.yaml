@@ -1,12 +1,13 @@
 # Infrastructure schedule configuration
-# Controls which env config YAML is active during training.
-# Only the "infras" and "building_props" sections are used from each config.
+# Cycles through infra YAMLs (configs/infras/*.yaml) during training.
+# Each entry must declare only `infras` and `building_props`.
 mode: cycle                    # "cycle" = round-robin through configs, "off" = disabled
+# TODO VP 2026.04.27. : Iteration and episode mean the same here..?
 swap_every_n_iterations: 300   # hold each config for N training iterations
 
 configs:
-  - configs/env_gen_battery_tre_cap/env_battery_1.yaml
-  - configs/env_gen_battery_tre_cap/env_battery_2.yaml
-  - configs/env_gen_battery_tre_cap/env_battery_3.yaml
-  - configs/env_gen_battery_tre_cap/env_battery_4.yaml
-  - configs/env_gen_battery_tre_cap/env_battery_5.yaml
+  - configs/infras/battery_tre_cap_1.yaml
+  - configs/infras/battery_tre_cap_2.yaml
+  - configs/infras/battery_tre_cap_3.yaml
+  - configs/infras/battery_tre_cap_4.yaml
+  - configs/infras/battery_tre_cap_5.yaml

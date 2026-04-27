@@ -96,9 +96,9 @@ Runs CPU-only inference (no GPU needed for the small `[32,32,32]` network).
 All arguments are forwarded to `run_eval_ray.py`.
 
 ```bash
-sbatch slurm_scripts/slurm_eval_ray.sh --algorithm ppo --load-config configs/env_cfg/env_test1_small.yaml --episodes 10 --seed 42
-sbatch slurm_scripts/slurm_eval_ray.sh --algorithm sac --load-config configs/env_cfg/env_test1_mid.yaml --episodes 20
-sbatch slurm_scripts/slurm_eval_ray.sh --algorithm ppo --load-config configs/env_cfg/env_test1_small.yaml \
+sbatch slurm_scripts/slurm_eval_ray.sh --algorithm ppo --load-config configs/env/env_test1_small.yaml --episodes 10 --seed 42
+sbatch slurm_scripts/slurm_eval_ray.sh --algorithm sac --load-config configs/env/env_test1_mid.yaml --episodes 20
+sbatch slurm_scripts/slurm_eval_ray.sh --algorithm ppo --load-config configs/env/env_test1_small.yaml \
     --checkpoint models/env_test1_small/ray/ppo/best_model_ep100
 ```
 

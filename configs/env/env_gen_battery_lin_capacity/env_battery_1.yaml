@@ -1,0 +1,4 @@
+env_config_name: env_battery_1
+infras: configs/infras/battery_lin_cap_1.yaml
+statesources: configs/statesources/default.yaml
+env_meta: configs/env_meta/default.yaml

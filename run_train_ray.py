@@ -101,7 +101,8 @@ def main():
     )
     parser.add_argument(
         "--load-config", type=str, required=True,
-        help="Path to YAML env config file to load (required, e.g., 'configs/env_cfg/env_test1_small.yaml')"
+        help="Path to env wrapper YAML to load (required, e.g., 'configs/env/env_test1_small.yaml'). "
+             "The wrapper references separate infras / statesources / env_meta YAMLs."
     )
     parser.add_argument(
         "--episodes", type=int, default=None,
@@ -175,7 +176,6 @@ def main():
             "When provided, infrastructure parameters cycle according "
             "to the schedule. When omitted, a single config is used."
     )
-    # TODO VP 2026.04.26. : Check and decouple the infra and data source schedules and their definitions, configurations.
 
     # Load configs:
     # Load training hyperparameters (shared across select_model and checkpoint calc)
@@ -222,7 +222,7 @@ def main():
     infra_combinator = None
     if args.infra_schedule:
         from adv_building_gym.infra_combinator import InfraCombinator
-        infra_combinator = InfraCombinator.from_yaml(args.infra_schedule)
+        infra_combinator = InfraCombinator.from_yaml(args.infra_schedule, control_step=active_config.CONTROL_STEP)
         logger.info(
             "Infrastructure schedule enabled: mode=%s, %d configs, "
             "swap every %d iterations",
@@ -318,6 +318,7 @@ def main():
     os.makedirs(storage_path, exist_ok=True)
 
     env_creator_config = {
+        "env_config": active_config,
         "data_combinator": data_combinator,
         "reward_schedule_manager": reward_manager,
     }
@@ -551,7 +552,7 @@ if __name__ == "__main__":
 # On slurm: sbatch slurm_scripts/slurm_train_ray.sh
 
 # --load-config is REQUIRED — there is no default env config.
-# python run_train_ray.py --algorithm ppo --load-config configs/env_cfg/env_test1_small.yaml --seed 42 --episodes 3500
-# python run_train_ray.py --algorithm ppo --load-config configs/env_cfg/env_test1_mid.yaml --seed 42 --episodes 5000 --checkpoint-frequency-episodes 50 --metric achieved_reward
-# python run_train_ray.py --algorithm sac --load-config configs/env_cfg/env_test1_large.yaml --seed 18 --episodes 3500 --metric reward_rate
+# python run_train_ray.py --algorithm ppo --load-config configs/env/env_test1_small.yaml --seed 42 --episodes 3500
+# python run_train_ray.py --algorithm ppo --load-config configs/env/env_test1_mid.yaml --seed 42 --episodes 5000 --checkpoint-frequency-episodes 50 --metric achieved_reward
+# python run_train_ray.py --algorithm sac --load-config configs/env/env_test1_large.yaml --seed 18 --episodes 3500 --metric reward_rate
 

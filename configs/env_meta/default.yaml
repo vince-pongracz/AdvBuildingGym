@@ -1,0 +1,5 @@
+# Environment timing constants.
+# Referenced by env wrapper YAMLs in configs/env/.
+EPISODE_LENGTH: 288       # 288 = one day at 5-min steps
+# NOTE VP 2026.04.27. : Later longer eval runs possible
+control_step: 300         # seconds

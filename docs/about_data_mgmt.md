@@ -455,9 +455,9 @@ length) are required.
 | `adv_building_gym/callbacks/__init__.py` | Export `create_data_schedule_on_train_result` | Done |
 | `adv_building_gym/ray_training/common_model_config.py` | D1 callback wiring | Done |
 | `run_train_ray.py` | Pass `data_combinator` to `common_model_config()` | Done |
-| `configs/env_cfg/env_test1_small.yaml` | **Created** — small env config (YAML, replaces `test1.json`) | Done |
-| `configs/env_cfg/env_test1_mid.yaml` | **Created** — mid env config (YAML) | Done |
-| `configs/env_cfg/env_test1_large.yaml` | **Created** — large env config (YAML) | Done |
+| `configs/env/env_test1_small.yaml` (+ `configs/infras/test1_small.yaml`) | **Created** — small env config (YAML, replaces `test1.json`); originally a single `configs/env_cfg/env_test1_small.yaml`, later split into wrapper + infras + statesources + env_meta | Done |
+| `configs/env/env_test1_mid.yaml` (+ `configs/infras/test1_mid.yaml`) | **Created** — mid env config (YAML); later split as above | Done |
+| `configs/env/env_test1_large.yaml` (+ `configs/infras/test1_large.yaml`) | **Created** — large env config (YAML); later split as above | Done |
 | `configs/train_data_combinator_config.yaml` | **Created** — training DataCombinator config | Done |
 | `configs/eval_data_combinator_config.yaml` | **Created** — evaluation DataCombinator config | Done |
 | `configs/training_param_config.yaml` | **Created** — algorithm hyperparameters (YAML) | Done |

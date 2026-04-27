@@ -1,0 +1,4 @@
+env_config_name: default
+infras: configs/infras/default.yaml
+statesources: configs/statesources/with_user_norm.yaml
+env_meta: configs/env_meta/default.yaml

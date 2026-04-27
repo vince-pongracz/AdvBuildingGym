@@ -543,10 +543,10 @@ via `--load-config`; SLURM-allocated GPU is required.
 
 ```bash
 # PPO on the small env, 3500 episodes
-python run_train_ray.py --algorithm ppo --load-config configs/env_cfg/env_test1_small.yaml --episodes 3500
+python run_train_ray.py --algorithm ppo --load-config configs/env/env_test1_small.yaml --episodes 3500
 
 # SAC, custom seed and best-checkpoint metric
-python run_train_ray.py --algorithm sac --load-config configs/env_cfg/env_test1_mid.yaml --seed 18 --episodes 5000 --metric achieved_reward
+python run_train_ray.py --algorithm sac --load-config configs/env/env_test1_mid.yaml --seed 18 --episodes 5000 --metric achieved_reward
 ```
 
 Common flags: `--algorithm {ppo,sac}`, `--episodes`, `--seed`,
@@ -565,8 +565,8 @@ checkpoint, and replays episodes through the same connector pipeline used at
 training time.
 
 ```bash
-python run_eval_ray.py --algorithm ppo --load-config configs/env_cfg/env_test1_small.yaml --checkpoint <path> --episodes 10
-python run_eval_ray.py --algorithm sac --load-config configs/env_cfg/env_test1_mid.yaml --plot
+python run_eval_ray.py --algorithm ppo --load-config configs/env/env_test1_small.yaml --checkpoint <path> --episodes 10
+python run_eval_ray.py --algorithm sac --load-config configs/env/env_test1_mid.yaml --plot
 ```
 
 Outputs (mean / std / min / max per metric, per-episode trajectory JSON, and

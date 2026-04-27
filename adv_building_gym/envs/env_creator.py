@@ -37,6 +37,9 @@ def adv_building_env_creator(config: dict) -> gymnasium.Env:
 
     Args:
         config: Configuration dict passed by Ray Tune. Required keys:
+            - ``env_config``: EnvConfig instance carrying the YAML-loaded
+              component specs. Each call deserialises fresh component
+              instances from those specs.
             - ``reward_schedule_manager``: RewardScheduleManager instance.
               Rewards are created from the manager's active subset
               (mode=OFF returns all rewards).
@@ -48,10 +51,15 @@ def adv_building_env_creator(config: dict) -> gymnasium.Env:
     Returns:
         Wrapped AdvBuildingGym with flat Box(-1, 1) action space.
     """
-    # Import config here to avoid circular imports
-    from ..config import config as env_config
+    env_config = config.get("env_config")
+    if env_config is None:
+        raise ValueError(
+            "adv_building_env_creator: 'env_config' missing from creator config. "
+            "The training driver must register the env with the active EnvConfig "
+            "(e.g. env_creator_config={'env_config': active_config, ...})."
+        )
 
-    # Create fresh instances for this environment using factory methods.
+    # Create fresh instances for this environment from the YAML-loaded specs.
     # Each env gets its own infras/statesources/rewards with independent state.
     infras = env_config.create_infras()
     statesources = env_config.create_statesources()

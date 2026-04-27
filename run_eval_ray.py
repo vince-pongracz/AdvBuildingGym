@@ -40,7 +40,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--load-config", type=str, required=True,
-        help="Path to YAML env config file to load (required, e.g., 'configs/env_cfg/env_test1_small.yaml')",
+        help="Path to env wrapper YAML to load (required, e.g., 'configs/env/env_test1_small.yaml').",
     )
     parser.add_argument(
         "--checkpoint", type=str, default=None,
@@ -228,14 +228,14 @@ if __name__ == "__main__":
 # --load-config is REQUIRED — there is no default env config.
 #
 # Evaluate best PPO model for a given env config
-# python run_eval_ray.py --algorithm ppo --load-config configs/env_cfg/env_test1_small.yaml --episodes 10 --seed 42
+# python run_eval_ray.py --algorithm ppo --load-config configs/env/env_test1_small.yaml --episodes 10 --seed 42
 #
 # Evaluate latest SAC model
-# python run_eval_ray.py --algorithm sac --load-config configs/env_cfg/env_test1_mid.yaml --episodes 10
+# python run_eval_ray.py --algorithm sac --load-config configs/env/env_test1_mid.yaml --episodes 10
 #
 # Evaluate specific checkpoint
-# python run_eval_ray.py --algorithm ppo --load-config configs/env_cfg/env_test1_small.yaml \
+# python run_eval_ray.py --algorithm ppo --load-config configs/env/env_test1_small.yaml \
 #     --checkpoint models/env_test1_small/ray/ppo/checkpoints_ppo_seed42_20260106/best_model_ep100_...
 #
 # Evaluate without saving results
-# python run_eval_ray.py --algorithm ppo --load-config configs/env_cfg/env_test1_small.yaml --episodes 50 --no-save
+# python run_eval_ray.py --algorithm ppo --load-config configs/env/env_test1_small.yaml --episodes 50 --no-save

@@ -1,0 +1,4 @@
+env_config_name: env_tre_battery_1
+infras: configs/infras/battery_tre_cap_1.yaml
+statesources: configs/statesources/default.yaml
+env_meta: configs/env_meta/default.yaml

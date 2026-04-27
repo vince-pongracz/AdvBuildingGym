@@ -1,0 +1,4 @@
+env_config_name: env_test1_small
+infras: configs/infras/test1_small.yaml
+statesources: configs/statesources/default.yaml
+env_meta: configs/env_meta/default.yaml
