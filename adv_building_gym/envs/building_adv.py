@@ -543,6 +543,12 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         # Link: docs/hst_mgmt.md
         self._component_info["action_history"] = self.action_history
 
+        # Publish episode horizon so reward functions don't have to duplicate
+        # EPISODE_LENGTH in their YAML params (single source of truth:
+        # configs/env_meta/*.yaml → EnvConfig.EPISODE_LENGTH).
+        self._component_info["episode_length"] = self.max_iteration
+        self._component_info["iteration"] = self.iteration
+
         # Calculate reward with per-function breakdown
         reward: float = 0
         reward_breakdown = {}

@@ -4,6 +4,7 @@ from .base import RewardFunction
 from .action_smoothness_reward import ActionSmoothnessReward
 from .battery_target_reward import BatteryTargetReward
 from .economic_reward import EconomicReward
+from .long_term_economic_reward import LongTermEconomicReward
 from .energy_consumption_reward import MinimiseEnergyConsumptionReward
 from .ev_charging_ontime_reward import EVChargingOnTimeReward
 from .ev_charging_reward import EVChargingReward
@@ -16,6 +17,7 @@ __all__ = [
     "ActionSmoothnessReward",
     "BatteryTargetReward",
     "EconomicReward",
+    "LongTermEconomicReward",
     "EVChargingOnTimeReward",
     "EVChargingReward",
     "MinimiseEnergyConsumptionReward",

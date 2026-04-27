@@ -9,7 +9,13 @@ rewards:
       wrong_direction_penalty: -1.0
 
   - class_name: EconomicReward
-    weight: 1.0
+    weight: 0.1
+    params:
+      reference_power_kW: 15.0
+      export_bonus: 3.0
+
+  - class_name: LongTermEconomicReward
+    weight: 0.9
     params:
       reference_power_kW: 15.0
       export_bonus: 3.0
