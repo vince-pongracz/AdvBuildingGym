@@ -3,7 +3,7 @@
 Configuration is split across three concerns, glued by a wrapper YAML:
 
     configs/env/<name>.yaml         # wrapper — references the three files below
-    configs/infras/<name>.yaml      # building_props + infras list
+    configs/infras/<name>.yaml      # infras list (building envelope params live on BuildingHeatLoss)
     configs/statesources/<name>.yaml # statesources list
     configs/env_meta/<name>.yaml    # EPISODE_LENGTH, control_step
 
@@ -25,8 +25,6 @@ import logging
 
 if TYPE_CHECKING:
     from adv_building_gym.config.env_config import EnvConfig
-
-from adv_building_gym.envs.utils import BuildingProps
 
 logger = logging.getLogger(__name__)
 
@@ -61,12 +59,6 @@ class EnvConfigManager:
         from adv_building_gym.config.env_config import EnvConfig
         from adv_building_gym.config.reward_config import RewardConfig
 
-        bp_dict = infras_doc.get("building_props", {})
-        building_props = BuildingProps(
-            mC=bp_dict.get("mC", 300),
-            K=bp_dict.get("K", 20),
-        )
-
         control_step = env_meta_doc.get("control_step", 300)
         episode_length = env_meta_doc.get("EPISODE_LENGTH", 288)
 
@@ -77,7 +69,6 @@ class EnvConfigManager:
             env_config_name=wrapper.get("env_config_name", "loaded_config"),
             EPISODE_LENGTH=episode_length,
             CONTROL_STEP=control_step,
-            building_props=building_props,
             infra_specs=infra_specs,
             statesource_specs=statesource_specs,
             infras=None,
@@ -142,10 +133,6 @@ class EnvConfigManager:
         statesource_specs = list(config.statesource_specs) if config.statesource_specs \
             else [s.to_dict() for s in (config.statesources or [])]
         infras_doc = {
-            "building_props": {
-                "mC": config.building_props.mC,
-                "K": config.building_props.K,
-            },
             "infras": infra_specs,
         }
         statesources_doc = {

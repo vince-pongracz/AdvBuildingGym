@@ -12,5 +12,9 @@ statesources:
   name: user_energy_need
 - class: BuildingHeatLoss
   name: building_heat_loss
+  # # NOTE VP 2026.01.20. : These params are not constant for real for the building's lifetime...
+  # Link: https://www.researchgate.net/publication/301310479_Particle_Swarm_Optimization_and_Kalman_Filtering_for_Demand_Prediction_of_Commercial_Buildings
+  K: 20      # heat transfer coefficient [W/K] / K: Thermal conductance [W/K]. Default: 20.
+  mC: 300    # thermal mass × heat capacity [J/K] / Thermal mass times heat capacity [J/K]. Default: 300.
 - class: EVState
   name: ev_schedule

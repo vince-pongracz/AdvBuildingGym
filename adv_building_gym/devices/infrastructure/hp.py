@@ -26,8 +26,8 @@ class HP(Infrastructure):
 
     POWER_FLOW = "consumer"
 
-    # K and mC come from building_props context
-    _context_params: ClassVar[Set[str]] = {'K', 'mC'}
+    # control_step comes from env_meta context; mC is read from ctxt_building_mC obs at run time.
+    _context_params: ClassVar[Set[str]] = {'control_step'}
 
     # Internal state variables - don't serialize
     _exclude_params: ClassVar[Set[str]] = {'iteration', 'temp_in_norm', 'temp_in_norm_change', 'control_step', 'actual_power_kW'}
@@ -35,8 +35,6 @@ class HP(Infrastructure):
     def __init__(self,
                 name: str,
                 max_power_kW: float,
-                K: float,
-                mC: float,
                 control_step: int,
                 cop_heat: float = 1.0,
                 cop_cool: float = 1.0,
@@ -48,8 +46,6 @@ class HP(Infrastructure):
         self.cop_heat = cop_heat  # [-] heating COP
         self.cop_cool = cop_cool  # [-] cooling COP
         self.control_step = control_step
-        self.K = K
-        self.mC = mC
 
         self.temp_in_norm = 0
         self.temp_in_norm_change = 0
@@ -89,6 +85,12 @@ class HP(Infrastructure):
         hp_action = float(np.atleast_1d(actions["a_hp"])[0])
         energy = abs(hp_action)
 
+        # Building thermal mass is owned and published by BuildingHeatLoss.
+        # Reading it as an observation keeps envelope params on a single owner
+        # and removes the implicit context injection that used to duplicate
+        # K/mC across components.
+        mC = float(states["ctxt_building_mC"][0])
+
         # NOTE VP 2026.01.20. : Thermal model is 1R1C, same as links below
         # Thermal power Q_thermal = energy * max_power_kW * COP
         # Sign of q_hp follows the action: positive = heating, negative = cooling
@@ -124,7 +126,7 @@ class HP(Infrastructure):
         # Link: https://www.sciencedirect.com/science/article/pii/S0378778812003039?via%3Dihub
         # NOTE VP 2026.01.20. : According to paper2, 1R1C mean RMS error to the reality is ~0.47 C --> influences precision
 
-        dTemp = 0.001 * self.control_step * q_hp / self.mC
+        dTemp = 0.001 * self.control_step * q_hp / mC
 
         # Check if temperature would be clipped after the change
         current_temp = states["s_temp_in_norm"][0]
@@ -140,7 +142,7 @@ class HP(Infrastructure):
             # Back-calculate actual q_hp from actual dTemp
             # dTemp = 0.001 * control_step * q_hp / mC
             # => q_hp = dTemp * mC / (0.001 * control_step)
-            actual_q_hp = actual_dTemp * self.mC / (0.001 * self.control_step)
+            actual_q_hp = actual_dTemp * mC / (0.001 * self.control_step)
 
             # Back-calculate actual energy from actual q_hp
             # |q_hp| = energy * max_power_kW * cop
@@ -162,6 +164,7 @@ class HP(Infrastructure):
 
     def update_state(self, states, info=None) -> None:
         super().update_state(states, info)
+
         new_temp = states["s_temp_in_norm"][0] + self.temp_in_norm_change
         # Clipping ensured in exec_action -- maybe reintroduction needed later
         states["s_temp_in_norm"][0] = np.float32(new_temp)

@@ -61,8 +61,7 @@ def evaluate_model(
 
     Args:
         checkpoint_path: Absolute path to the Ray checkpoint directory.
-        active_config: Config object with infras, statesources, rewards,
-            building_props.
+        active_config: Config object with infras, statesources, rewards.
         num_episodes: Number of evaluation episodes.
         seed: Random seed for reproducibility.
         save_results: Whether to persist results to disk.
@@ -126,7 +125,6 @@ def evaluate_model(
         infras=active_config.infras,
         statesources=active_config.statesources,
         rewards=active_config.reward_config.rewards,
-        building_props=active_config.building_props,
         data_combinator=data_combinator,
     )
 

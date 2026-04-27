@@ -1,6 +1,3 @@
-building_props:
-  mC: 300
-  K: 20
 infras:
 - class: HP
   name: HP

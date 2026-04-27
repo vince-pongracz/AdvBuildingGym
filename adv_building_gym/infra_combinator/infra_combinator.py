@@ -14,36 +14,29 @@ from typing import Literal
 import yaml
 
 from adv_building_gym.devices.infrastructure.base import Infrastructure
-from adv_building_gym.envs.utils import BuildingProps
 
 logger = logging.getLogger(__name__)
 
 
 class _ParsedConfig:
-    """One parsed infra YAML (building_props + infras)."""
+    """One parsed infra YAML (infras only)."""
 
-    __slots__ = ("name", "infra_dicts", "building_props", "context")
+    __slots__ = ("name", "infra_dicts", "context")
 
-    def __init__(self, name: str, infra_dicts: list[dict],
-                building_props: BuildingProps, control_step: int) -> None:
+    def __init__(self, name: str, infra_dicts: list[dict], control_step: int) -> None:
         self.name = name
         self.infra_dicts = infra_dicts
-        self.building_props = building_props
-        # Deserialization context (same keys as EnvConfigManager)
-        self.context = {
-            "K": building_props.K,
-            "mC": building_props.mC,
-            "control_step": control_step,
-        }
+        # Deserialization context (same key as EnvConfigManager).
+        self.context = {"control_step": control_step}
 
 
 class InfraCombinator:
     """Schedule infra YAML files for infrastructure curriculum training.
 
     Loads a sequence of infra YAMLs (``configs/infras/*.yaml``) and cycles
-    through them during training.  Each file declares only ``infras`` and
-    ``building_props`` -- statesources, timing, and rewards are managed
-    separately.
+    through them during training.  Each file declares only the ``infras``
+    list -- statesources, timing, building envelope, and rewards are
+    managed separately.
 
     Args:
         config_paths: Ordered list of infra YAML file paths.
@@ -87,21 +80,17 @@ class InfraCombinator:
         with open(path) as f:
             raw = yaml.safe_load(f) or {}
 
-        if "statesources" in raw or "EPISODE_LENGTH" in raw or "control_step" in raw:
+        if "statesources" in raw or "EPISODE_LENGTH" in raw or "control_step" in raw \
+                or "building_props" in raw:
             raise ValueError(
-                f"InfraCombinator: {path} appears to be an old-style env config. "
+                f"InfraCombinator: {path} is not a pure infra YAML. "
                 f"Infra schedule entries must point at infra-only YAMLs "
-                f"(configs/infras/*.yaml) containing only 'building_props' and 'infras'."
+                f"(configs/infras/*.yaml) containing only 'infras'."
             )
 
-        bp_dict = raw.get("building_props", {})
         return _ParsedConfig(
             name=path.stem,
             infra_dicts=raw.get("infras", []),
-            building_props=BuildingProps(
-                mC=bp_dict.get("mC", 300),
-                K=bp_dict.get("K", 20),
-            ),
             control_step=control_step,
         )
 
@@ -116,10 +105,6 @@ class InfraCombinator:
             Infrastructure.from_dict(spec, cfg.context)
             for spec in cfg.infra_dicts
         ]
-
-    def get_building_props(self, swap_index: int) -> BuildingProps:
-        """Return the BuildingProps for the config at *swap_index*."""
-        return self._configs[swap_index % len(self._configs)].building_props
 
     def advance(self) -> bool:
         """Advance to the next config. Returns True if changed."""

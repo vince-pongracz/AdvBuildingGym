@@ -3,7 +3,6 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
-from adv_building_gym.envs.utils import BuildingProps
 from adv_building_gym.config.utils.loggable_config import LoggableConfig
 
 logger = logging.getLogger(__name__)
@@ -38,12 +37,10 @@ class EnvConfig(LoggableConfig):
     CONTROL_STEP: int = 300  # seconds (5 minutes)
     ACTION_HISTORY_LENGTH: int = 15  # rolling window of past actions kept in env for reward functions (not in obs)
 
-    building_props: BuildingProps = field(default_factory=lambda:
-        BuildingProps(mC=300, K=20)
-    )
-
     # Raw component specs as parsed from YAML.  Source of truth for the
     # factory methods below; never reach into hardcoded defaults.
+    # Building envelope params (K, mC) live on BuildingHeatLoss directly —
+    # there is no separate building_props on the env config.
     infra_specs: List[Dict[str, Any]] = field(default_factory=list)
     statesource_specs: List[Dict[str, Any]] = field(default_factory=list)
 
@@ -56,18 +53,10 @@ class EnvConfig(LoggableConfig):
     reward_config: RewardConfig = field(default_factory=RewardConfig)
 
     def _infra_context(self) -> Dict[str, Any]:
-        return {
-            "K": self.building_props.K,
-            "mC": self.building_props.mC,
-            "control_step": self.CONTROL_STEP,
-        }
+        return {"control_step": self.CONTROL_STEP}
 
     def _statesource_context(self) -> Dict[str, Any]:
-        return {
-            "K": self.building_props.K,
-            "mC": self.building_props.mC,
-            "timestep": self.CONTROL_STEP,
-        }
+        return {"timestep": self.CONTROL_STEP}
 
     def create_statesources(self) -> List[StateSource]:
         """Deserialise fresh StateSource instances from ``statesource_specs``.
@@ -143,7 +132,6 @@ class EnvConfig(LoggableConfig):
             f"  EPISODE_LENGTH = {self.EPISODE_LENGTH}",
             f"  CONTROL_STEP = {self.CONTROL_STEP}",
             f"  ACTION_HISTORY_LENGTH = {self.ACTION_HISTORY_LENGTH}",
-            f"  building_props = mC={self.building_props.mC}, K={self.building_props.K}",
             f"  infras = {_names(self.infras)}",
             f"  statesources = {_names(self.statesources)}",
         ]

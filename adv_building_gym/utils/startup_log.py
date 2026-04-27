@@ -159,16 +159,12 @@ def _section_eval(
 
 
 def _section_env_config(env_config: Any) -> list[Section]:
-    bp = getattr(env_config, "building_props", None)
-    mC = getattr(bp, "mC", "?")
-    K = getattr(bp, "K", "?")
     return [(
         f"ENV CONFIG  ({env_config.env_config_name})",
         [
             f"  EPISODE_LENGTH   = {env_config.EPISODE_LENGTH} steps",
             f"  CONTROL_STEP     = {env_config.CONTROL_STEP} s",
             f"  ACTION_HISTORY   = {env_config.ACTION_HISTORY_LENGTH}",
-            f"  building_props   : mC={mC}  K={K}",
         ],
     )]
 

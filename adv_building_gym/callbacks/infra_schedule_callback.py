@@ -1,8 +1,8 @@
 """Iteration-aligned infrastructure config scheduling via RLlib callback.
 
-Pushes fresh Infrastructure instances (and optionally updated
-BuildingProps) to all env_runners at training iteration boundaries,
-ensuring all workers change configuration simultaneously.
+Pushes fresh Infrastructure instances to all env_runners at training
+iteration boundaries, ensuring all workers change configuration
+simultaneously.
 
 Pattern mirrors ``data_schedule_callback.py`` (Approach D1).
 
@@ -47,7 +47,6 @@ def _push_infras_to_runners(
     """Create fresh infra instances and push to all env_runners."""
 
     swap_index = infra_combinator._swap_index
-    building_props = infra_combinator.get_building_props(swap_index)
 
     def apply(env_runner) -> None:
         # env_runner.env is wrapped:
@@ -63,9 +62,7 @@ def _push_infras_to_runners(
             if hasattr(unwrapped, "set_infras"):
                 # Each sub-env gets its own fresh infra instances
                 new_infras = infra_combinator.create_infras(swap_index)
-                unwrapped.set_infras(
-                    new_infras, building_props=building_props,
-                )
+                unwrapped.set_infras(new_infras)
 
     algorithm.env_runner_group.foreach_env_runner(
         apply, local_env_runner=True, timeout_seconds=None,

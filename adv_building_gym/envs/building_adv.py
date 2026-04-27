@@ -18,7 +18,6 @@ from adv_building_gym.devices.infrastructure import Infrastructure
 from adv_building_gym.utils.episode_date import resolve_episode_date
 from adv_building_gym.utils.warning_filters import setup_warning_filters
 from adv_building_gym.envs.data_variant import DataVariantProvider
-from adv_building_gym.envs.utils import BuildingProps
 
 from adv_building_gym.config.env_config import config as env_config
 
@@ -85,8 +84,6 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
     - rewards: list[RewardFunction]
             List of reward function objects used to compute the environment reward at
             each step. Each reward function is queried via get_reward(action, state).
-    - building_props: BuildingProps
-            Static description of building parameters used by infras/datasources/rewards.
     - control_step: int (seconds, default 300)
             Duration of a single control step / time advancement between calls to step.
     - render_mode: optional
@@ -152,7 +149,7 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         single numpy arrays; agents must map their policies to the composite action
         dictionary expected by the registered infrastructures.
     Example (high level)
-            env = AdvBuildingGym(infras, datasources, rewards, building_props)
+            env = AdvBuildingGym(infras, datasources, rewards)
             state, info = env.reset()
             action = {infra.name: infra.default_action() for infra in infras}
             next_state, reward, done, truncated, info = env.step(action)
@@ -163,7 +160,6 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         infras: list[Infrastructure],
         statesources: list[StateSource],
         rewards: list[RewardFunction],
-        building_props: BuildingProps,
         control_step: int | None = None,
         render_mode=None,
         data_combinator: DataCombinator | None = None,
@@ -177,9 +173,10 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
                 that define controllable action and observation sub-spaces.
             statesources: External state sources (weather, pricing, schedules)
                 that inject uncontrollable observations into the state.
+                Must include ``BuildingHeatLoss`` which owns the building
+                envelope params (K, mC) and publishes them as observations.
             rewards: Reward functions evaluated at each step to produce
                 the scalar reward signal.
-            building_props: Physical and thermal properties of the building.
             control_step: Time between control actions in seconds (default: 300 s).
             render_mode: Gymnasium render mode (currently unused).
         """
@@ -268,7 +265,6 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         # flat [-1, 1] interface expected by RL libraries and this Dict space.
         self.action_space = SDict(action_space)
 
-        self.building_props = building_props
         # NOTE VP 2026.02.28. : Simulation time is in seconds
         self.simulation_time = env_config.CONTROL_STEP * env_config.EPISODE_LENGTH
         self.control_step = control_step if control_step is not None else env_config.CONTROL_STEP
@@ -306,11 +302,7 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
             [r.name for r in rewards],
         )
 
-    def set_infras(
-        self,
-        infras: list[Infrastructure],
-        building_props: BuildingProps | None = None,
-    ) -> None:
+    def set_infras(self, infras: list[Infrastructure]) -> None:
         """Hot-swap infrastructure components.
 
         Called by the infra_schedule callback to change which
@@ -318,15 +310,9 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         parameters differ -- names and types must match.  Spaces are
         invariant (all infra ``setup_spaces`` use normalised bounds).
 
-        When *building_props* is provided, also updates
-        ``self.building_props`` and propagates K/mC to statesources
-        that depend on them (e.g. BuildingHeatLoss).
-
-        Args:
-            infras: New Infrastructure instances.  Must have the same
-                names in the same order as the current infras.
-            building_props: Updated building thermal properties.  When
-                ``None`` the existing props are kept.
+        Building envelope params (K, mC) are owned by ``BuildingHeatLoss``;
+        if the schedule needs to vary them, swap the statesource list
+        instead.
         """
         old_names = [i.name for i in self.infras]
         new_names = [i.name for i in infras]
@@ -336,14 +322,6 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
                 f"Old: {old_names}, New: {new_names}"
             )
         self.infras = infras
-
-        # Propagate building_props to dependent statesources
-        if building_props is not None:
-            self.building_props = building_props
-            for src in self.statesources:
-                if hasattr(src, "K") and hasattr(src, "mC"):
-                    src.K = building_props.K
-                    src.mC = building_props.mC
 
         logger.debug(
             "Infrastructure swapped: %s",
