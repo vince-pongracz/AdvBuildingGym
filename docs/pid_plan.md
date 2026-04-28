@@ -407,7 +407,6 @@ if isinstance(config, PIDConfig):
         env="AdvBuilding",
         observation_space=_obs_space,  # Provide Dict obs space
         action_space=action_space,
-        clip_actions=clip_actions,
     )
 ```
 
@@ -487,7 +486,7 @@ tune.Tuner(
 
 ## 8. Verification Plan
 
-1. Run `python run_train_ray.py --algorithm pid --timesteps 10000` and verify:
+1. Run `python run_train_ray.py --algorithm pid --episodes 35` and verify:
    - No crashes during rollout
    - Episode metrics logged (reward_rate, achieved_reward, cum_E_kWh)
    - Checkpoint saved successfully

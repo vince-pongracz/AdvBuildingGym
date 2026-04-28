@@ -96,8 +96,8 @@ class SolarPanel(Infrastructure):
         # Use synthetic irradiance ONLY when no weather data source is active.
         # When a weather source exists, irradiance=0.0 means "no sunshine"
         # (e.g. nighttime, overcast), not "data unavailable".
-        # The weather source writes _temp_abs_max to info when active.
-        weather_active = (info or {}).get("_temp_abs_max") is not None
+        # The weather source publishes ctxt_temp_abs_max into the state dict when active.
+        weather_active = "ctxt_temp_abs_max" in states
         if not weather_active and self.irradiance_norm == 0.0 and "raw_sim_hour" in states:
             self.irradiance_norm = self._synthetic_irradiance(states)
 

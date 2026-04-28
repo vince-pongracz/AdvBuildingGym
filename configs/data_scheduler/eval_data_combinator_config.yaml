@@ -11,7 +11,7 @@ shuffle: false
 
 # Variant cycling settings -- deterministic for eval
 swap_every_n_episodes: 1
-mode: cycle       # round-robin through all variants
+mode: random       # round-robin through all variants
 day: each         # sequential days for reproducible eval
 
 # Years to include in scenario generation

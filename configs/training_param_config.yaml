@@ -5,6 +5,7 @@ common:
   seed: 42
   episode_lookback_horizon_steps: 120 # 5min steps, 12 steps = 1h --> 120 steps = 10h
   max_episodes_to_run: 7000
+  clip_actions_to_env_bounds: True
 
 # PPO-specific (on-policy)
 ppo:
@@ -14,10 +15,13 @@ ppo:
 
 # SAC-specific (off-policy)
 sac:
-  replay_batch_size: 128
-  days_to_keep_in_replay_buffer: 1500
-  training_intensity: 64
-  rollout_fragment_length: 64
+  replay_batch_size: 144
+  training_intensity: 144
+  # UTD ≈ training_intensity / train_batch_size_per_learner
+  # Update-To-Data ratio
+  episodes_to_keep_in_replay_buffer: 1500
+  n_step_return: 6
+  learning_starts_after_n_episodes: 50 # Warm up replay buffer with 50 episodes before learning starts.
 
 # Per-key strided history via StridedHistoryConnector.
 # tracked_keys: observation-space keys (obs only). The Dict obs entry

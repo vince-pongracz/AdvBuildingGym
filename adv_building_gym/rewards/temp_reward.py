@@ -58,8 +58,8 @@ class TempReward(RewardFunction):
         diff_norm = abs(actual_temp - desired_temp)
 
         # Convert zero-crossing threshold from °C to normalised space.
-        # temp_abs_max is written to _component_info by WeatherDataSource.
-        temp_abs_max: float = float((info or {}).get("_temp_abs_max", 60.0))
+        # temp_abs_max is published into the state dict by WeatherDataSource.
+        temp_abs_max: float = float(states["ctxt_temp_abs_max"][0]) if "ctxt_temp_abs_max" in states else 60.0
         zero_norm = self.zero_reward_diff_celsius / temp_abs_max if temp_abs_max != 0 else 0.0
 
         # Scale so that the curve crosses zero at exactly zero_norm.

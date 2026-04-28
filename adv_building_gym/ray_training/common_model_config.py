@@ -147,7 +147,6 @@ def common_model_setup(
     slurm_resources: SlurmResources,
     training_config: TrainingParamConfig,
     metrics_base_dir: str = "ep_metrics",
-    clip_actions: bool = True,
     data_combinator: DataCombinator | None = None,
     log_trajectories: bool = False,
     reward_schedule_manager: RewardScheduleManager | None = None,
@@ -175,7 +174,6 @@ def common_model_setup(
         config: Algorithm config object (e.g., PPOConfig instance)
         slurm_resources: SLURM-allocated CPU/GPU resources
         metrics_base_dir: Base directory for episode metrics (default: "ep_metrics")
-        clip_actions: Whether to clip actions to action space bounds
         data_combinator: DataCombinator for iteration-aligned variant
             scheduling via DataScheduleCallback (Approach D1). An empty
             DataCombinator() acts as a no-op (no variant swapping).
@@ -222,7 +220,7 @@ def common_model_setup(
     )
     config.environment(
         env="AdvBuilding",
-        clip_actions=clip_actions,  # RLlib default: False
+        clip_actions=training_config.clip_actions_to_env_bounds,  # RLlib default: False
     )
     config.debugging(
         # WARN: Reduces verbosity (suppress connector pipeline INFO messages)
@@ -318,7 +316,7 @@ def common_model_setup(
     # would crash, so TUNE_DISABLE_STRICT_METRIC_CHECKING must be set in the
     # driver process (run_train_ray.py).
     config.evaluation(
-        evaluation_interval=4,  # RLlib default: None
+        evaluation_interval=10,  # RLlib default: None
         evaluation_duration_unit="episodes",  # RLlib default
         evaluation_duration=2,  # RLlib default: 10
         evaluation_parallel_to_training=False,  # RLlib default

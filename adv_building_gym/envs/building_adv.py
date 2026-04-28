@@ -16,6 +16,7 @@ from adv_building_gym.rewards import RewardFunction
 from adv_building_gym.devices.infrastructure import Infrastructure
 
 from adv_building_gym.utils.episode_date import resolve_episode_date
+from adv_building_gym.utils.rng_service import RngService
 from adv_building_gym.utils.warning_filters import setup_warning_filters
 from adv_building_gym.envs.data_variant import DataVariantProvider
 
@@ -64,7 +65,7 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         2. **Component info** (``self._component_info``):
            Shared inter-component dict for raw physical values that other
            components need but the policy must not see (e.g. EV schedule
-           kWh/kW capacities, ``_temp_abs_max`` scale factor). Passed as
+           kWh/kW capacities, net power, action history). Passed as
            the ``info`` argument to ``update_state()`` and ``exec_action()``.
 
         3. **Step/reset info** (returned to the caller):
@@ -164,6 +165,7 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         render_mode=None,
         data_combinator: DataCombinator | None = None,
         action_history_length: int | None = None,
+        instance_id: str | None = None,
         **kwargs,
     ):
         """Initialise the building-energy gym environment.
@@ -192,7 +194,17 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         
         self.episode_count: int = 0
         self.data_combinator = data_combinator if data_combinator is not None else DataCombinator()
-        self._rng: np.random.Generator = np.random.default_rng()
+        # Each env instance is a distinct caller in the RngService registry, keyed
+        # by instance_id (worker_index + vector_index passed by env_creator). That
+        # gives every worker its own deterministic seed chain — independent of
+        # which worker's RPC reaches the actor first. Falls back to "AdvBuildingGym"
+        # for single-env paths (eval, tests) where there is no ambiguity.
+        # Gymnasium's reset(seed=...) contract overrides this further down.
+        self._rng_caller_id: str = instance_id or "AdvBuildingGym"
+        self._rng: np.random.Generator = np.random.default_rng(
+            RngService.get().get_random(self._rng_caller_id)
+        )
+
         self._episode_date: str = ""
         self._episode_day_mode: str = "none"
 

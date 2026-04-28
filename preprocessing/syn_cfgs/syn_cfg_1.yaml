@@ -15,7 +15,7 @@ price:
 weather:
   temp_amb:
     transforms:
-      - {type: constant_shift, value: -0.3}                                            # °C
+      - {type: constant_shift, value: -0.3}                                           # °C
       - {type: gaussian_noise, std: 0.5, smooth: {kind: moving_average, window: 6}}   # °C
     clip: {min: -50.0, max: 60.0}
   avg_wind_speed:

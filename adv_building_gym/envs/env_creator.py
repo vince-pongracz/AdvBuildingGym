@@ -5,6 +5,9 @@ This module provides the factory function used by Ray Tune to create
 AdvBuildingGym environment instances with the configured settings.
 """
 
+import itertools
+import logging
+import os
 import gymnasium
 
 from gymnasium.wrappers import RescaleAction
@@ -12,6 +15,14 @@ from gymnasium.wrappers import RescaleAction
 from .building_adv import AdvBuildingGym
 from .wrappers import FlattenAction
 
+logger = logging.getLogger(__name__)
+
+# Per-process counter for the vector_index portion of instance_id. RLlib's new
+# API stack passes a plain dict (not EnvContext) to env_creator, so worker_index
+# and vector_index are unavailable. PID is unique per Ray remote worker; this
+# counter disambiguates multiple envs created within the same process (when
+# num_envs_per_env_runner > 1).
+_env_instance_counter = itertools.count()
 
 def wrap_action_space(env: gymnasium.Env) -> gymnasium.Env:
     """Apply FlattenAction + RescaleAction wrapper chain.
@@ -68,12 +79,28 @@ def adv_building_env_creator(config: dict) -> gymnasium.Env:
     reward_manager = config["reward_schedule_manager"]
     rewards = reward_manager.create_active_rewards()
 
+    # New-API-stack env_runners pass a plain dict here (no EnvContext), so
+    # worker_index/vector_index aren't available. Use PID + a process-local
+    # counter to give each env instance a globally unique caller_id in the
+    # RngService registry — making per-env seeds reproducible regardless of
+    # RPC arrival order. Prefer EnvContext attrs when present (legacy stack).
+    worker_index = getattr(config, "worker_index", config.get("worker_index", None))
+    vector_index = getattr(config, "vector_index", config.get("vector_index", None))
+    if worker_index is None or vector_index is None:
+        worker_index = os.getpid()
+        vector_index = next(_env_instance_counter)
+    instance_id = f"AdvBuildingGym_w{worker_index}_v{vector_index}"
+
     env = AdvBuildingGym(
         infras=infras,
         statesources=statesources,
         rewards=rewards,
         data_combinator=config.get("data_combinator"),
+        instance_id=instance_id,
     )
+    
+    logger.info("env_creator: instance_id=%s (config type=%s)",
+            instance_id, type(config).__name__)
 
     # Set by Ray's evaluation env_config — only eval EnvRunners pass this.
     if config.get("log_full_info", False):

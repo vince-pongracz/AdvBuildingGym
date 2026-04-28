@@ -172,15 +172,6 @@ class WeatherDataSource(StateSource):
         states["ctxt_temp_abs_max"][0] = np.float32(self.temp_abs_max)
         states["ctxt_wind_speed_abs_max"][0] = np.float32(self.wind_speed_abs_max)
 
-        # Expose scale factors via info for inter-component use
-        # (e.g. InsideTemperature normalises on the same temp scale).
-        # TODO VP 2026.04.24. : Remove this info writes, because the context states are already published in the state dict.
-        # Use the context states where it is needed (e.g. in InsideTemperature) instead of passing via info, to avoid confusion about where to get the values from.
-        # Keep the get_raw_values method for the cases when the changing raw values are needed.
-        if info is not None:
-            info["_temp_abs_max"] = self.temp_abs_max
-            info["_wind_speed_abs_max"] = self.wind_speed_abs_max
-
     def get_raw_values(self) -> dict[str, float]:
         return {
             "raw_temp_out": self.temp_out_raw,

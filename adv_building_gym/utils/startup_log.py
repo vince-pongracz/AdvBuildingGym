@@ -189,9 +189,8 @@ def _section_training_setup(
         hp = (
             f"lr={tpc.learning_rate}  "
             f"replay_batch={tpc.sac_replay_batch_size}  "
-            f"days_in_buffer={tpc.sac_days_to_keep_in_replay_buffer}  "
+            f"days_in_buffer={tpc.sac_episodes_to_keep_in_replay_buffer}  "
             f"train_intensity={tpc.sac_training_intensity}  "
-            f"rollout_fragment={tpc.sac_rollout_fragment_length}"
         )
     else:
         hp = f"lr={tpc.learning_rate}"
@@ -201,7 +200,7 @@ def _section_training_setup(
         [
             f"  Algorithm       : {algo}  (new API stack)",
             f"  Hyperparams     : {hp}",
-            f"  Episodes        : {args.episodes}  (-> {args.timesteps} timesteps)",
+            f"  Episodes        : {args.episodes}",
             f"  Ray resources   : cpus={slurm_resources.num_cpus}  gpus={slurm_resources.num_gpus}",
             f"  Metric          : {args.metric}  (mode=max)",
             f"  Checkpoint freq : every {args.checkpoint_frequency_episodes} episodes",

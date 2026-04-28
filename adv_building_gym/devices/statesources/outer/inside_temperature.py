@@ -66,9 +66,9 @@ class InsideTemperature(StateSource):
         (ABS_MIN_MAX_SCALING with temp_abs_max from WeatherDataSource).
         This ensures the reward function sees comparable values.
         """
-        # Shared temperature scale written by WeatherDataSource to info.
+        # Shared temperature scale published by WeatherDataSource into the state dict.
         # Fallback 60 °C is a safe default when no weather data is loaded.
-        temp_abs_max: float = float((info or {}).get("_temp_abs_max", 60.0))
+        temp_abs_max: float = float(states["ctxt_temp_abs_max"][0]) if "ctxt_temp_abs_max" in states else 60.0
 
         if self.ts is not None:
             # Profile CSVs cover a single day (e.g. 288 rows at 5-min steps).
@@ -112,7 +112,7 @@ class InsideTemperature(StateSource):
         if "s_temp_in_norm" in states and "s_desired_temp_in_norm" in states:
             # ±2 °C variance in normalised space (temp_abs_max default 60 °C
             # ⇒ 2/60 ≈ 0.033 normalised units)
-            temp_abs_max = float((info or {}).get("_temp_abs_max", 60.0))
+            temp_abs_max = float(states["ctxt_temp_abs_max"][0]) if "ctxt_temp_abs_max" in states else 60.0
             max_offset_norm = 2.0 / temp_abs_max if temp_abs_max != 0 else 0.0
             rng = np.random.default_rng(RngService.get().get_random(self.name))
             variance = rng.uniform(-max_offset_norm, max_offset_norm)

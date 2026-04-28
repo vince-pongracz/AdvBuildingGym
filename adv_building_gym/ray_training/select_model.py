@@ -48,8 +48,6 @@ def select_model(
     if training_config is None:
         training_config = TrainingParamConfig.from_yaml(_DEFAULT_TRAINING_CONFIG)
 
-    learning_starts = 10 * episode_length
-
     # Algorithm-specific configuration
     if algorithm == "ppo":
         config = PPOConfig()
@@ -87,7 +85,7 @@ def select_model(
         # Collect complete episodes before returning to learner.
         # Without this, SAC defaults rollout_fragment_length to 1, causing
         # training episodes to be reported as length = 1 in callbacks.
-        config.env_runners(rollout_fragment_length=training_config.sac_rollout_fragment_length)
+        config.env_runners(rollout_fragment_length=episode_length)
         config.training(
             # NOTE VP 2026.02.11. : Actor critic methods SAC & PPO - blog
             # Link: https://joel-baptista.github.io/phd-weekly-report/posts/ac/
@@ -100,13 +98,13 @@ def select_model(
             # Link: https://github.com/ray-project/ray/issues/50966
             replay_buffer_config={
                 "type": "EpisodeReplayBuffer",
-                "capacity": episode_length * training_config.sac_days_to_keep_in_replay_buffer,
+                "capacity": episode_length * training_config.sac_episodes_to_keep_in_replay_buffer,
             },
             # SAC-specific hyperparameters
             twin_q=True,  # Use twin Q-networks to reduce overestimation bias. RLlib default
             initial_alpha=1.0,  # Initial entropy coefficient (auto-tuned via alpha_lr). RLlib default
             target_network_update_freq=1,  # Update target networks every step. RLlib default: 0
-            n_step=6,  # RLlib default: 1
+            n_step=training_config.sac_n_step_return,  # RLlib default: 1
             tau=0.005,  # Soft update coefficient for target networks (at Polyak averaging). RLlib default
             train_batch_size_per_learner=training_config.sac_replay_batch_size,  # RLlib default: 256
             # training_intensity = replayed_steps / sampled_steps.
@@ -116,7 +114,7 @@ def select_model(
             # UTD = training_intensity / batch_size.
             # Link: https://arxiv.org/abs/1802.09477
             training_intensity=training_config.sac_training_intensity,  # RLlib default: None
-            num_steps_sampled_before_learning_starts=learning_starts,
+            num_steps_sampled_before_learning_starts=training_config.sac_learning_starts_after_n_episodes * episode_length, # Warm up replay buffer with N episodes before learning starts.
             # Gradient clipping mitigates but does NOT fully prevent NaN in
             # the policy network. If the loss itself is NaN/Inf (e.g. from
             # extreme Q-values caused by large reward spikes like the -2.0
@@ -139,7 +137,7 @@ def select_model(
         # Use new API to avoid RLModule(config=RLModuleConfig) deprecation warning
         # TODO VP 2026.01.12. : Use transformer model for better learning, it is a time series after all -- but does it really matter here?
         model_config=DefaultModelConfig(
-            fcnet_activation='relu',  # RLlib default: tanh
+            fcnet_activation='tanh', # RLlib default: tanh
             # NOTE VP 2026.03.10. : What is the NN structure which is needed to learn this task complexity?
             fcnet_hiddens=[256, 256],  # RLlib default: [256, 256]
             # [256, 256, 256]

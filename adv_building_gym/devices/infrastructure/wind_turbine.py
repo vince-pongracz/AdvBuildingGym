@@ -70,7 +70,7 @@ class WindTurbine(Infrastructure):
         self.cut_out_speed = cut_out_speed
 
         # Scale factor for denormalising avg_wind_speed_norm back to m/s.
-        # Set at runtime from info["_wind_speed_abs_max"] (published by WeatherDataSource).
+        # Read at runtime from states["ctxt_wind_speed_abs_max"] (published by WeatherDataSource).
         self.wind_speed_abs_max: float = 1.0
 
         # State variables
@@ -165,11 +165,11 @@ class WindTurbine(Infrastructure):
             return 0.0
 
     def update_state(self, states: Dict, info=None) -> None:
-        """Read wind speed scale factor from info and publish power bounds."""
-        wind_abs_max = (info or {}).get("_wind_speed_abs_max")
-        if wind_abs_max is not None:
-            self.wind_speed_abs_max = float(wind_abs_max)
+        """Read wind speed scale factor from state and publish power bounds."""
         super().update_state(states, info)
+
+        if "ctxt_wind_speed_abs_max" in states:
+            self.wind_speed_abs_max = float(states["ctxt_wind_speed_abs_max"][0])
         states["ctxt_wind_rated_power_kW"][0] = np.float32(self.rated_power_kW)
 
     def reset(self, states: Dict, info=None) -> None:

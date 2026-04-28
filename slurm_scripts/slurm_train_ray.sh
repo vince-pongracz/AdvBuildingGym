@@ -12,7 +12,6 @@
 #   --algorithm ALGO          Algorithm to use (ppo, sac) [default: ppo]
 #   --load-config PATH        Path to YAML env config file to load (REQUIRED)
 #   --episodes N              Total training episodes [default: 3500]
-#   --timesteps N             (Deprecated, prefer --episodes) Total timesteps
 #   --seed N                  Random seed
 #   --eval-freq N             Evaluation frequency [default: 20000]
 #   --metric METRIC           Metric to optimize (episode_return_mean, achieved_reward, reward_rate) [default: reward_rate]

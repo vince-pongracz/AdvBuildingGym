@@ -52,41 +52,31 @@ logging.basicConfig(
 )
 logger = logging.getLogger("main")
 
-# Environment variables to control Ray/RLlib behavior (must be set before ray.init)
-# These propagate to Ray worker processes
-os.environ["PYTHONWARNINGS"] = "ignore::DeprecationWarning,ignore::UserWarning"
-# Suppress TensorFlow C++ logs (oneDNN, CUDA) and disable oneDNN custom ops
-os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
-os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
-# Disable Ray metrics/event services (not needed for training, avoids connection errors in SLURM)
-os.environ["RAY_METRICS_SERVICE_ENABLED"] = "0"
-os.environ["RAY_event_stats"] = "0"
-os.environ["RAY_DEDUP_LOGS"] = "0"
-os.environ["RAY_ACCEL_ENV_VAR_OVERRIDE_ON_ZERO"] = "0"
-# os.environ["RAY_USAGE_STATS_ENABLED"] = "0"
-# Allow evaluation_interval > 1 without crashing on iterations that skip eval.
-# Without this, tune.TuneConfig(metric="evaluation/env_runners/...") raises a
-# ValueError when the metric key is absent from a non-eval iteration's results.
-os.environ["TUNE_DISABLE_STRICT_METRIC_CHECKING"] = "1"
+# Environment variables to control Ray/RLlib behavior (must be set before ray.init).
+# Set in the local process and propagated to Ray workers via runtime_env.
+# Note: PYTHONWARNINGS is comma-separated, not colon-separated.
+# RAY_AIR_NEW_OUTPUT=0 keeps tune.RunConfig(progress_reporter=CLIReporter(...)) honoured;
+#   the new AIR output (default in Ray >=2.7) ignores `metric_columns`.
+#   Link: https://docs.ray.io/en/latest/tune/api/doc/ray.tune.ProgressReporter.html
+# TUNE_DISABLE_STRICT_METRIC_CHECKING allows evaluation_interval > 1 without crashing on
+#   iterations that skip eval (the eval metric key is absent from non-eval results).
+runtime_env_vars = {
+    "PYTHONWARNINGS": "ignore::DeprecationWarning,ignore::UserWarning",
+    "TF_CPP_MIN_LOG_LEVEL": "3",
+    "TF_ENABLE_ONEDNN_OPTS": "0",
+    "RAY_METRICS_SERVICE_ENABLED": "0",
+    "RAY_event_stats": "0",
+    "RAY_DEDUP_LOGS": "0",
+    "RAY_ACCEL_ENV_VAR_OVERRIDE_ON_ZERO": "0",
+    "RAY_AIR_NEW_OUTPUT": "0",
+    "TUNE_DISABLE_STRICT_METRIC_CHECKING": "1",
+    "RAY_COLOR_PREFIX": os.environ.get("RAY_COLOR_PREFIX", ""),
+    "TERM": os.environ.get("TERM", ""),
+}
+os.environ.update(runtime_env_vars)
 
 # Apply warning filters in the main process
 setup_warning_filters()
-
-# Build runtime environment variables to propagate to Ray workers
-runtime_env_vars = {
-    # Suppress deprecation/user warnings in worker processes
-    # Note: comma-separated, not colon-separated
-    "PYTHONWARNINGS": os.environ["PYTHONWARNINGS"],
-    "TF_CPP_MIN_LOG_LEVEL": os.environ["TF_CPP_MIN_LOG_LEVEL"],
-    "TF_ENABLE_ONEDNN_OPTS": os.environ["TF_ENABLE_ONEDNN_OPTS"],
-    "RAY_METRICS_SERVICE_ENABLED": os.environ["RAY_METRICS_SERVICE_ENABLED"],
-    "RAY_event_stats": os.environ["RAY_event_stats"],
-    # Disable log deduplication (prevents "repeated Nx across cluster" messages)
-    "RAY_DEDUP_LOGS": os.environ["RAY_DEDUP_LOGS"],
-    # Disable ANSI color codes in non-interactive environments
-    "RAY_COLOR_PREFIX": os.environ["RAY_COLOR_PREFIX"],
-    "TERM": os.environ["TERM"],  # Prevents color output
-}
 
 logger.info("Runtime environment variables for Ray workers: %s", runtime_env_vars)
 
@@ -102,18 +92,12 @@ def main():
     parser.add_argument(
         "--load-config", type=str, required=True,
         help="Path to env wrapper YAML to load (required, e.g., 'configs/env/env_test1_small.yaml'). "
-             "The wrapper references separate infras / statesources / env_meta YAMLs."
+            "The wrapper references separate infras / statesources / env_meta YAMLs."
     )
     parser.add_argument(
         "--episodes", type=int, default=None,
         help="Total training episodes. Primary stopping criterion. "
-            "Converted to timesteps internally (episodes × EPISODE_LENGTH). "
-            "Takes precedence over --timesteps if both are given."
-    )
-    parser.add_argument(
-        "--timesteps", type=float, default=None,
-        help="(Deprecated, prefer --episodes) Total environment timesteps. "
-            "Ignored when --episodes is given. Legacy default: 1e6."
+            "Defaults to TrainingParamConfig.max_episodes_to_run."
     )
     parser.add_argument(
         "--num-envs", type=int, default=1, help="Number of parallel environments" # Change env number?
@@ -230,21 +214,13 @@ def main():
             infra_combinator.swap_every_n_iterations,
         )
 
-    # Resolve stopping criterion: --episodes takes precedence over --timesteps.
-    # Internally, RLlib always stops on num_env_steps_sampled_lifetime (timesteps),
-    # so we convert episodes → timesteps here for a user-friendly interface.
-    if args.episodes is not None:
-        args.timesteps = args.episodes * active_config.EPISODE_LENGTH
-        logger.info("Stopping after %d episodes (%d timesteps)", args.episodes, args.timesteps)
-    elif args.timesteps is not None:
-        args.timesteps = int(args.timesteps)
-        args.episodes = args.timesteps // active_config.EPISODE_LENGTH
-        logger.info("--timesteps is deprecated, prefer --episodes. "
-                    "Stopping after %d timesteps (~%d episodes)", args.timesteps, args.episodes)
-    else:
+    # Resolve stopping criterion (episodes). Falls back to the YAML default
+    # when --episodes is not given on the CLI.
+    if args.episodes is None:
         args.episodes = training_param_config.max_episodes_to_run
-        args.timesteps = args.episodes * active_config.EPISODE_LENGTH
-        logger.info("Using default: %d episodes (%d timesteps)", args.episodes, args.timesteps)
+        logger.info("Using default: %d episodes", args.episodes)
+    else:
+        logger.info("Stopping after %d episodes", args.episodes)
 
     # Initialise the singleton component instances exactly once in the main process.
     # This triggers CSV parsing (e.g. EVState) here, and only here.
@@ -337,7 +313,6 @@ def main():
         training_config=training_param_config,
         slurm_resources=slurm_resources,
         metrics_base_dir="ep_metrics",
-        clip_actions=True,
         data_combinator=data_combinator,
         log_trajectories=args.log_trajectories,
         reward_schedule_manager=reward_manager,
@@ -376,29 +351,50 @@ def main():
         args.metric,
     )
 
-    # Setup stopping criteria and run configuration for the tuner
-    # Note: In the new API stack, use 'num_env_steps_sampled_lifetime' instead of 'timesteps_total'
-    # Episodes are converted to timesteps above (--episodes × EPISODE_LENGTH)
+    # Stopping criterion (episode-based — primary unit of progress for this env,
+    # since 1 episode = 1 day at the configured 5-min control step). New API stack
+    # exposes the lifetime episode count under env_runners/num_episodes_lifetime.
+    # Tune accepts nested keys via the dotted "/" path in stop dicts.
     stop_criteria = {
-        "num_env_steps_sampled_lifetime": args.timesteps,
+        "env_runners/num_episodes_lifetime": args.episodes,
     }
 
     # Configure progress reporter to show training metrics
+    # Creates the .out log entries about the training progress.
+    # Requires RAY_AIR_NEW_OUTPUT=0 (set above) — otherwise Tune's AIR output
+    # ignores `metric_columns` and renders its own default result tables.
+    # Algorithm-specific learner stats: PPO surfaces KL + entropy as the
+    # quickest signal that LR is too high / policy is collapsing; SAC surfaces
+    # alpha (entropy temperature) and TD error.
+    algo_cols = {}
+    if args.algorithm == "ppo":
+        algo_cols = {
+            "learners/default_policy/policy_loss":"PolLoss",
+            "learners/default_policy/vf_loss": "VfLoss",
+            "learners/default_policy/mean_kl_loss": "KL",
+            "learners/default_policy/mean_entropy": "Ent",
+        }
+    if args.algorithm == "sac":
+        algo_cols = {
+            "learners/default_policy/critic_loss": "QLoss",
+            "learners/default_policy/actor_loss": "PiLoss",
+            "learners/default_policy/alpha_value": "Alpha",
+            "learners/default_policy/td_error_mean": "TDErr",
+        }
+
     progress_reporter = CLIReporter(
         metric_columns={
             "training_iteration": "Iter",
-            "num_env_steps_sampled_lifetime": "Steps",
-            args.metric: "Metric",
-            "evaluation/env_runners/episode_return_mean": "EpRet",
-            "evaluation/env_runners/achieved_reward": "AchRew",
-            "evaluation/env_runners/reward_rate": "RewRate",
+            "env_runners/num_episodes_lifetime": "Episodes",
+            "time_total_s": "Time",
+            "evaluation/env_runners/episode_return_mean": "EpReturnMean",
+            "evaluation/env_runners/reward_rate": "RewardRate",
+            **algo_cols,
         },
         max_report_frequency=30,  # Report every 30 seconds
         print_intermediate_tables=True,
     )
-    
-    # TODO VP 2026.04.26. : Simplify the configuration and the training setup, the RL algorithms... 
-    # Take a look at the Mistral session -- eval and consider proposals.
+    # TODO VP 2026.04.28. : Take a look at the Mistral session -- eval and consider proposals.
 
     tuner = tune.Tuner(
         args.algorithm.upper(),  # e.g.: "PPO" or "SAC"

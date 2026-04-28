@@ -273,9 +273,22 @@ Summary:
 - E_price and renewable production data from Finland
 - optimisation on "gross energy profit from operations, and optimal use of local resources and flexibility components"
 - they use real multi agent setup (with 3 layer architecture: control, information and physical layers)
-- TODO VP: continue here
+- They use a clean MDP -- means no history states or history tracking.
+- They only use ON/OFF at the HP, no exact energy control -- RL only controls if T_in is in a range, otherwise deterministic safety controller against too extreme temperatures. 
+--> TODO VP: build in this safety control mechanism to the HP -- add a positive and negative bound to the desired temp datasource, read them as well as observations and in the case of violation, do max heating/max cooling regardless of rewards to maintain temperature. Maybe a similar mechanism is useful for EV charger -- plan a trajectory in the 1st place, if it's not followed with a margin, charge and do not care about other reward violations.
+- They use discrete observation space, e.g. discrete price levels
+- they can shift consumptions and power grid loads to a certain extent. In each timestep, they choose a set of shifted loads to actually enable/disable -- formula for the choice, at high prices less likely execution, at low prices more likely exec -- Model for price responsive loads.
+- they use single agent setup
+
+- TODO VP: continue here -- "3. Markov decision process formalism"
+
+- TODO VP: What is MLFlow?
+- TODO VP: how is the battery handled by energy consumption reward and pricing? Is it free energy or does it count for the rewards?
 
 Conclusion:
+- Idea: use trajectory tracking for the hard constraints -- for temperature, EV charging, etc.., and use RL based controllers for th ESS -- which can react to the changes, it can plan and follow strategy.
+- Idea: create a plan for EV charge, then track the planned trajectory -- planning can be RL based, trajectory tracking can be rule based.
+- Idea: buying and selling energy prices can differ -- data difference causes then different strategies -- one could show this as well
 - 
 
 TODO VP: Fingrid datasets, maybe something useful, but it rather seems like they rather have energy time series than weather and price time series -- https://data.fingrid.fi/en -- but they gather a lots of data with any kind, so can be useful.
@@ -372,6 +385,13 @@ Conclusion:
 - not really relevant, it's rather large scale and more physical
 - it's a simulator bridge, no control defined -- that's another module
 - it's for testing controllers
+
+
+#### Curriculum learning
+
+Link: https://docs.ray.io/en/latest/rllib/rllib-examples.html#curriculum-learning
+
+Useful docs, link: https://docs.ray.io/en/latest/rllib/rllib-advanced-api.html#curriculum-learning
 
 
 #### Explicable Reward Design for Reinforcement Learning Agents

@@ -51,15 +51,17 @@ class TrainingParamConfig(LoggableConfig):
     episode_lookback_horizon_steps: int = 120
     seed: int = 42
     max_episodes_to_run:int = 10000
+    clip_actions_to_env_bounds: bool = True
     
     ppo_episodes_per_iteration: int = 25
     ppo_minibatch_size: int = 64
     ppo_num_epochs: int = 20
     
     sac_replay_batch_size: int = 256
-    sac_days_to_keep_in_replay_buffer: int = 100
+    sac_episodes_to_keep_in_replay_buffer: int = 100
     sac_training_intensity: float = 1.0
-    sac_rollout_fragment_length: int = 288
+    sac_n_step_return: int = 1
+    sac_learning_starts_after_n_episodes: int = 50 # Warm up replay buffer with 50 episodes before learning starts.
 
     # Per-key strided history (see docs/hst_mgmt.md).
     # tracked_keys: obs-space keys fed to StridedHistoryConnector; each
@@ -98,9 +100,6 @@ class TrainingParamConfig(LoggableConfig):
             section_prefix = "" if cfg_section == "common" else f"{cfg_section}_"
             for key, value in section_data.items():
                 flat[f"{section_prefix}{key}"] = value
-        # Allow top-level keys as well (backwards compatibility)
-        # TODO VP 2026.04.22. : Is this really needed?
-        flat.update(tparam_cfg)
 
         config = TrainingParamConfig(**flat)
         config._source_file = Path(path).name

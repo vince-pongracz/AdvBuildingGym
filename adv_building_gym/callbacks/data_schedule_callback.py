@@ -1,23 +1,42 @@
 """Iteration-aligned data variant scheduling via RLlib callback.
 
-Pushes a new variant coming from the DataCombinator to all env_runners at training iteration
-boundaries, ensuring all workers holding an env change dataset simultaneously -- so they all see the same dataset at the same time.
+Pushes a variant from the DataCombinator to every env_runner — both
+``algorithm.env_runner_group`` and ``algorithm.eval_env_runner_group`` — at
+training-iteration boundaries, so all workers consume the same year-long CSV
+bundle within an iteration window. This is one of three independent and
+additive swap surfaces (the other two being the episode-boundary swap inside
+``AdvBuildingGym.reset()`` and the ``reset(options={"data_variant": ...})``
+external override). See ``docs/about_data_mgmt.md`` for the full picture and
+the wiring entry point in ``ray_training/common_model_config.py``.
 
-Compatible with Approach A: if the environment also has its own episode counter
-the two swap schedules are independent and additive.  Use an empty
-DataCombinator() on the Config (Approach A disabled) and use only this
-callback if iteration-aligned swapping is desired.
+``create_data_schedule_on_train_result_cb(...)`` returns an ``on_train_result``
+function that can be passed directly to
+``config.callbacks(ExistingClass, on_train_result=func)`` or composed with the
+reward / infra curriculum callbacks via ``register_callbacks(...)``.
 
-``create_data_schedule_on_train_result(...)`` returns an ``on_train_result``
-function that can be passed directly as a keyword argument to
-``config.callbacks(ExistingClass, on_train_result=func)``.
+Notes on synchronisation scope:
+
+- Only the year-long variant (CSV bundle) is synchronised across runners. The
+  per-episode day offset is still drawn independently by each env's
+  ``reset()`` via ``DataCombinator.get_day_offset()`` against its local RNG,
+  so with ``day="random"`` training and eval workers land on different days
+  of the same variant.
+- In-training eval is pushed the TRAINING combinator's variant. A held-out
+  eval data config is only honoured by ``run_eval_ray.py``.
+- Iteration-aligned swap is required for interpretability, not correctness:
+  PPO/SAC do not need synchronous variants across runners — the policy is
+  conditioned on per-variant scale factors via ``ctxt_*`` observation keys
+  (e.g. ``ctxt_temp_abs_max``), so mixed-variant batches are fine. The
+  synchronous swap buys clean per-iteration semantics: in-training eval
+  reports on the same variant the training batch was collected on, reward /
+  infra curriculum callbacks (also fired on ``on_train_result``) stay aligned
+  with the data, and TensorBoard curves read as "iteration N had variant Z"
+  instead of a moving cocktail across runners.
+- Episodes longer than one day read consecutively past the day boundary. If
+  ``EPISODE_LENGTH`` exceeds one calendar day, ``steps_per_day`` in
+  ``building_adv.reset()`` should be decoupled from ``EPISODE_LENGTH`` so day
+  indexing remains calendar-aligned.
 """
-# TODO VP 2026.04.23. : How is the random day swap within a variant?
-# TODO VP 2026.04.23. : Is it still important, is there any constraint, what enforces that "all workers holding an env change dataset simultaneously"?
-# It should not be because of the normalisation of the data as the max values of a dataset, a time series should be provided as context to the policy network, so it can take that factor into account.
-# Is it only because of the during training eval calls, that should eval the same env as the training workers were working on? What if that picks a random year with a random day?
-
-# TODO VP 2026.04.23. : Rewrite the about_data_mgmt.md. Adjust the docsstring to that.
 
 import logging
 
