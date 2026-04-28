@@ -21,8 +21,6 @@ class InsideTemperature(StateSource):
         if self.ts is not None:
             logger.info("Use data file: %s", ds_path)
             self._run_post_load()
-        else:
-            logger.debug("No initial data file for '%s', using synthetic temperature profile", name)
 
     def _post_load_data_processing(self) -> None:
         """Detect the raw temperature column after CSV load / reload.
@@ -36,9 +34,10 @@ class InsideTemperature(StateSource):
         elif "desired_temp_in" in self.ts.columns:
             self._raw_column = "desired_temp_in"
         else:
-            logger.warning("No 'desired_temp_in' column found in CSV, will use synthetic data")
-            self.ts = None
-            return
+            raise ValueError(
+                f"InsideTemperature '{self.name}': CSV '{self.ds_path}' has no "
+                "'desired_temp_in [°C]' or 'desired_temp_in' column."
+            )
 
     # NOTE VP 2026.03.24. : Choosing the inside_temperature profile should depend on the date -- or on user interaction, but this part comes later, keep it in the TODO comment
     def setup_spaces(self,
@@ -66,36 +65,26 @@ class InsideTemperature(StateSource):
         (ABS_MIN_MAX_SCALING with temp_abs_max from WeatherDataSource).
         This ensures the reward function sees comparable values.
         """
+        if self.ts is None:
+            raise RuntimeError(
+                f"InsideTemperature '{self.name}': no CSV loaded. The DataCombinator "
+                "must push a desired_temp_in variant before update_state is called."
+            )
+
         # Shared temperature scale published by WeatherDataSource into the state dict.
         # Fallback 60 °C is a safe default when no weather data is loaded.
         temp_abs_max: float = float(states["ctxt_temp_abs_max"][0]) if "ctxt_temp_abs_max" in states else 60.0
 
-        if self.ts is not None:
-            # Profile CSVs cover a single day (e.g. 288 rows at 5-min steps).
-            # Index by time-of-day so the profile repeats daily regardless of
-            # the actual simulation date or row_offset.
-            profile_len = len(self.ts)
-            idx = self.iteration % profile_len
-            row = self.ts.iloc[idx]
-            raw_temp = float(row[self._raw_column])
-            self.desired_temp_in_raw = raw_temp
-            # Normalise on the same scale as temp_out_norm / temp_in_norm
-            desired_temp_in_norm = raw_temp / temp_abs_max if temp_abs_max != 0 else 0.0
-        else:
-            # sim_hour is actual hour of day (0–24)
-            sim_hour = float(states.get("raw_sim_hour", np.zeros(shape=(1,), dtype=np.float32))[0])
-            sim_hour = sim_hour % 24
-            # Synthetic setpoint profile — realistic °C values matching
-            # the CSV profiles (inside_temp_0.csv as reference: 17 °C
-            # night setback, 21 °C daytime comfort).
-            if sim_hour < 8:          # Night / early morning
-                raw_temp = 18.5
-            elif sim_hour < 19:       # Day (occupied hours)
-                raw_temp = 21.3
-            else:                     # Evening / night
-                raw_temp = 18.5
-            self.desired_temp_in_raw = raw_temp
-            desired_temp_in_norm = raw_temp / temp_abs_max if temp_abs_max != 0 else 0.0
+        # Profile CSVs cover a single day (e.g. 288 rows at 5-min steps).
+        # Index by time-of-day so the profile repeats daily regardless of
+        # the actual simulation date or row_offset.
+        profile_len = len(self.ts)
+        idx = self.iteration % profile_len
+        row = self.ts.iloc[idx]
+        raw_temp = float(row[self._raw_column])
+        self.desired_temp_in_raw = raw_temp
+        # Normalise on the same scale as temp_out_norm / temp_in_norm
+        desired_temp_in_norm = raw_temp / temp_abs_max if temp_abs_max != 0 else 0.0
 
         # Ensure float32 dtype and clip to bounds
         desired_temp_in_norm = np.float32(np.clip(desired_temp_in_norm, -1.0, 1.0))

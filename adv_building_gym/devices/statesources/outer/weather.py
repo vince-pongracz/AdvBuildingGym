@@ -123,46 +123,18 @@ class WeatherDataSource(StateSource):
         return state_spaces, action_spaces
 
     def update_state(self, states, info=None) -> None:
-        if self.ts is not None:
-            row = self.ts.iloc[min(self.effective_index, len(self.ts) - 1)]
-            temp_out_norm = float(row["s_temp_out_norm"])
-            self.temp_out_raw = float(row["temp_amb"])
-            solar_irradiance_norm = float(row.get("s_solar_irradiance_norm", 0.0))
-            avg_wind_speed_norm = float(row.get("s_avg_wind_speed_norm", 0.0))
-            self.wind_speed_raw = float(row.get("avg_wind_speed", 0.0))
-        else:
-            # sim_hour is actual hour of day (0–24); modulo ensures correct
-            # wrap-around if the value ever accumulates beyond 24.
-            sim_hour = float(states.get("raw_sim_hour", np.zeros(shape=(1,), dtype=np.float32))[0]) % 24
-            # Synthetic diurnal outdoor temperature profile (normalised)
-            if sim_hour < 5:
-                temp_out_norm = 0.0
-            elif sim_hour < 6:
-                temp_out_norm = 0.3
-            elif sim_hour < 8:
-                temp_out_norm = 0.4
-            elif sim_hour < 12:
-                temp_out_norm = 0.45
-            elif sim_hour < 16:
-                temp_out_norm = 0.5
-            elif sim_hour < 18:
-                temp_out_norm = 0.35
-            elif sim_hour < 21.5:
-                temp_out_norm = 0.2
-            elif sim_hour < 24:
-                temp_out_norm = 0.1
-            else:
-                temp_out_norm = 0.3
-            # Compute raw values from synthetic normalised values so that
-            # get_raw_values() reports physically consistent quantities.
-            self.temp_out_raw = temp_out_norm * self.temp_abs_max
+        if self.ts is None:
+            raise RuntimeError(
+                f"WeatherDataSource '{self.name}': no CSV loaded. The DataCombinator "
+                "must push a weather variant before update_state is called."
+            )
+        row = self.ts.iloc[min(self.effective_index, len(self.ts) - 1)]
+        temp_out_norm = float(row["s_temp_out_norm"])
+        self.temp_out_raw = float(row["temp_amb"])
+        solar_irradiance_norm = float(row.get("s_solar_irradiance_norm", 0.0))
+        avg_wind_speed_norm = float(row.get("s_avg_wind_speed_norm", 0.0))
+        self.wind_speed_raw = float(row.get("avg_wind_speed", 0.0))
 
-            # NOTE VP 2026.03.10. : Maybe add synthetic data to the other variables as well
-            solar_irradiance_norm = 0.0
-            avg_wind_speed_norm = 0.0
-            self.wind_speed_raw = avg_wind_speed_norm * self.wind_speed_abs_max
-
-        # Ensure float32 dtype for all updates
         states["s_temp_out_norm"][0] = np.float32(temp_out_norm)
         states["s_solar_irradiance_norm"][0] = np.float32(solar_irradiance_norm)
         states["s_avg_wind_speed_norm"][0] = np.float32(avg_wind_speed_norm)

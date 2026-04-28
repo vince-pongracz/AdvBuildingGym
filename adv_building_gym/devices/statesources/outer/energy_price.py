@@ -24,17 +24,20 @@ class EnergyPriceDataSource(StateSource):
         normalise = Normalisation.init(normalise)
         self.normalise = normalise
 
+        self.price_max: float = 1.0
         if self.ts is not None:
             logger.info("Use data file: %s", ds_path)
             self._run_post_load()
-        else:
-            self.price_max = 1.0
 
     def _post_load_data_processing(self) -> None:
         """Normalise the baseprice column and cache the raw maximum."""
-        if self.ts is not None:
-            self.price_max = float(self.ts["baseprice"].abs().max())
-            self.ts["E_price_norm"] = normalise_series(self.ts["baseprice"], self.normalise)
+        if "baseprice" not in self.ts.columns:
+            raise ValueError(
+                f"EnergyPriceDataSource '{self.name}': CSV '{self.ds_path}' has no "
+                "'baseprice' column."
+            )
+        self.price_max = float(self.ts["baseprice"].abs().max())
+        self.ts["E_price_norm"] = normalise_series(self.ts["baseprice"], self.normalise)
         
     def setup_spaces(self,
                     state_spaces,
@@ -56,19 +59,13 @@ class EnergyPriceDataSource(StateSource):
         return state_spaces, action_spaces
 
     def update_state(self, states, info=None) -> None:
-        if self.ts is not None:
-            row = self.ts.iloc[min(self.effective_index, len(self.ts) - 1)]
-            energy_price = float(row["E_price_norm"])
-        else:
-            current_sim_hour = states.get("raw_sim_hour", np.zeros(shape=(1,), dtype=np.float32))[0]
-            current_sim_hour = current_sim_hour % 24
-            # Apply a simple time-of-use tariff if no CSV data is provided
-            if current_sim_hour < 4:
-                energy_price = 0.25
-            elif current_sim_hour < 8:
-                energy_price = 0.50
-            else:
-                energy_price = 0.75
+        if self.ts is None:
+            raise RuntimeError(
+                f"EnergyPriceDataSource '{self.name}': no CSV loaded. The DataCombinator "
+                "must push an E_price variant before update_state is called."
+            )
+        row = self.ts.iloc[min(self.effective_index, len(self.ts) - 1)]
+        energy_price = float(row["E_price_norm"])
 
         states["s_E_price"][0] = np.float32(energy_price)
         # Raw maximum price (€/kWh) — constant within an episode, changes

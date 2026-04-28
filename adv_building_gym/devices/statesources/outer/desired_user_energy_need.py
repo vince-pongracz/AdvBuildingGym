@@ -43,25 +43,20 @@ class DesiredUserEnergyNeed(StateSource):
         normalise = Normalisation.init(normalise)
         self.normalise = normalise
 
+        self.consumption_max: float = 1.0
         if self.ts is not None:
             logger.info("Use data file: %s", ds_path)
             self._run_post_load()
-        else:
-            self.consumption_max = 1.0
-            logger.debug("No initial data file for '%s', using synthetic energy need profile", name)
 
     def _post_load_data_processing(self) -> None:
         """Normalise the hh_consumption_kW column and cache the raw maximum."""
-        if self.ts is not None:
-            if SOURCE_COLUMN not in self.ts.columns:
-                raise ValueError(
-                    f"CSV must contain a '{SOURCE_COLUMN}' column. "
-                    f"Found: {list(self.ts.columns)}"
-                )
-            self.consumption_max = float(self.ts[SOURCE_COLUMN].max())
-            self.ts[NORM_COLUMN] = normalise_series(
-                self.ts[SOURCE_COLUMN], self.normalise
+        if SOURCE_COLUMN not in self.ts.columns:
+            raise ValueError(
+                f"DesiredUserEnergyNeed '{self.name}': CSV '{self.ds_path}' has no "
+                f"'{SOURCE_COLUMN}' column. Found: {list(self.ts.columns)}"
             )
+        self.consumption_max = float(self.ts[SOURCE_COLUMN].max())
+        self.ts[NORM_COLUMN] = normalise_series(self.ts[SOURCE_COLUMN], self.normalise)
 
     def setup_spaces(self, state_spaces: OrderedDict,
                     action_spaces: OrderedDict) -> tuple[OrderedDict, OrderedDict]:
@@ -87,23 +82,13 @@ class DesiredUserEnergyNeed(StateSource):
 
     def update_state(self, states, info=None) -> None:
         """Update desired energy need state based on current iteration."""
-        if self.ts is not None:
-            row = self.ts.iloc[min(self.effective_index, len(self.ts) - 1)]
-            desired_energy = float(row[NORM_COLUMN])
-        else:
-            current_sim_hour = states.get("raw_sim_hour", np.zeros(shape=(1,), dtype=np.float32))[0]
-            current_sim_hour = current_sim_hour % 24
-            # Synthetic time-based energy need profile when no CSV data is provided
-            if current_sim_hour < 6:
-                desired_energy = 0.2  # Low demand during night
-            elif current_sim_hour < 9:
-                desired_energy = 0.6  # Morning peak
-            elif current_sim_hour < 17:
-                desired_energy = 0.4  # Daytime moderate
-            elif current_sim_hour < 21:
-                desired_energy = 0.8  # Evening peak
-            else:
-                desired_energy = 0.3  # Evening low
+        if self.ts is None:
+            raise RuntimeError(
+                f"DesiredUserEnergyNeed '{self.name}': no CSV loaded. The DataCombinator "
+                "must push a user_energy_need variant before update_state is called."
+            )
+        row = self.ts.iloc[min(self.effective_index, len(self.ts) - 1)]
+        desired_energy = float(row[NORM_COLUMN])
 
         states["s_desired_energy_need"][0] = np.float32(desired_energy)
         # Raw maximum consumption (kW) — constant within an episode.
