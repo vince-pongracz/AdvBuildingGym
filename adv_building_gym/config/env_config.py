@@ -132,9 +132,3 @@ class EnvConfig(LoggableConfig):
         logger.info("%s:\n%s", self._log_label(), "\n".join(lines))
 
         self.reward_config.log_values()
-
-
-# Default empty instance for module-level imports.  Real configs are produced
-# by EnvConfigManager.load from a wrapper YAML; this singleton has no
-# infra/statesource specs and its factory methods will raise if called.
-config = EnvConfig()

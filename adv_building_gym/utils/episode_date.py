@@ -6,6 +6,8 @@ from typing import TYPE_CHECKING, Sequence
 
 import pandas as pd
 
+from adv_building_gym.utils.constants import SECONDS_PER_DAY
+
 if TYPE_CHECKING:
     from adv_building_gym.devices.statesources import StateSource
 
@@ -29,5 +31,5 @@ def resolve_episode_date(
         if src.ts is not None and "start" in src.ts.columns and row_offset < len(src.ts):
             return str(pd.to_datetime(src.ts.iloc[row_offset]["start"]).date())
     # Fallback: day-of-year index
-    steps_per_day = int(86400 / control_step)
+    steps_per_day = int(SECONDS_PER_DAY / control_step)
     return f"day-{row_offset // steps_per_day}"

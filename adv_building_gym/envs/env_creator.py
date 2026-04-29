@@ -95,6 +95,7 @@ def adv_building_env_creator(config: dict) -> gymnasium.Env:
         infras=infras,
         statesources=statesources,
         rewards=rewards,
+        env_config=env_config,
         data_combinator=config.get("data_combinator"),
         instance_id=instance_id,
     )

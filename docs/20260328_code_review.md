@@ -24,7 +24,6 @@
 
 The codebase implements a well-structured plugin architecture for RL-based building energy control. The component model (Infrastructure, StateSource, RewardFunction) is sound in concept. However, the implementation has accumulated significant technical debt across several dimensions:
 
-- **No test suite exists** -- zero test files in the entire repository
 - **Global mutable state** threatens Ray worker isolation
 - **Circular dependency** in the config module, worked around with `__getattr__` lazy imports
 - **God methods** in core files (`step()` at 115 lines, `reset()` at 95 lines, `main()` at 420+ lines)
@@ -36,12 +35,6 @@ The codebase implements a well-structured plugin architecture for RL-based build
 
 ## 2. Critical Issues
 
-### 2.1 No Test Coverage
-
-No `tests/` directory, no `test_*.py` files, no `*_test.py` files anywhere in the repository. For a system with 9 infrastructure components, 8+ state sources, 9 reward functions, and distributed Ray training, this is the highest-risk gap. Any refactoring or bug fix has no safety net.
-
-**Impact:** High. Physics model regressions, reward signal bugs, and space mismatches can go undetected.
-
 ### 2.2 Global Seed Mutation
 
 `building_adv.py:370-371` sets `np.random.seed(seed)` and `random.seed(seed)` on every `reset()` call. This mutates the global RNG state for all threads/processes sharing the Python interpreter.
@@ -50,22 +43,13 @@ No `tests/` directory, no `test_*.py` files, no `*_test.py` files anywhere in th
 
 **Impact:** In Ray's multi-worker setup, workers calling `reset()` concurrently will interfere with each other's random state, causing non-reproducible results. The environment already has `self._rng` from `gymnasium.Env.reset(seed=seed)` -- the global seed calls are redundant and harmful.
 
-### 2.3 Circular Dependency in Config Module
-
-Documented in `config/__init__.py:5-23`:
-
-```
-config/__init__  (eager import of env_config)
-  -> env_config      (imports devices/rewards at module level)
-    -> devices/statesources/base.py
-      -> config.utils.serializable  (triggers config/__init__.py again)
-```
-
-Worked around with `__getattr__` lazy imports (`config/__init__.py:50-73`). A `TODO` at line 32 acknowledges this needs resolution. The workaround is fragile -- IDE autocompletion, static analysis tools, and refactoring tools cannot follow lazy attribute resolution.
+TODO VP: check this again
 
 ### 2.4 Module-Level Config Singleton
 
 `env_config.py:165` creates `config = EnvConfig()` at module scope and exports it in `__all__`. While factory methods exist (`create_infras()`, `create_statesources()`), the singleton is still importable and used directly. In Ray, each worker gets its own copy via `fork()`, but any code that mutates this shared instance before forking would propagate that state to all workers.
+
+TODO VP: I think this one is not relevant anymore, that config is never used -- verify this and remove if not needed anymore.
 
 ---
 
@@ -76,9 +60,9 @@ Worked around with `__getattr__` lazy imports (`config/__init__.py:50-73`). A `T
 **`envs/building_adv.py` -- AdvBuildingGym class** handles too many concerns:
 - Environment dynamics (step/reset lifecycle)
 - Data variant management (`apply_data_variant`, `_resolve_episode_date`)
-- Raw state collection (`_get_raw_state_values`)
+- Raw state collection (`_get_raw_state_values`) -- TODO VP: not anymore, but verify
 - Component orchestration (infras + statesources + rewards)
-- Action history tracking
+- Action history tracking -- TODO VP: not anymore
 - Energy accounting
 
 The `step()` method (lines 473-587, ~115 lines) performs action execution, time advancement, state updates, energy tracking, reward computation, action history management, NaN/Inf guards, and info dict assembly. The `reset()` method (lines 361-455, ~95 lines) performs seed management, data variant selection (3 different code paths), day offset computation, state initialization, and component synchronization.
@@ -196,7 +180,6 @@ These indicate known technical debt that has not been converted to trackable iss
 
 | File | Line(s) | Value | Context |
 |------|---------|-------|---------|
-| `hp.py` | 86, 91 | `0.4`, `0.6` | Heat pump mode thresholds (heat/cool/deadband) |
 | `hp.py` | 131 | `0.001 * control_step` | Undocumented coefficient |
 | `building_heat_loss.py` | 84 | `0.001 * timestep` | Same undocumented coefficient |
 | `battery_tremblay.py` | 96-100 | `3.2`, `0.009`, `0.468`, `3.529` | Tremblay model constants without source reference |
@@ -265,24 +248,6 @@ The four controllers (`PIDController`, `PIController`, `MPCController`, `FuzzyCo
 
 ## 7. Code Duplication
 
-### 7.1 Exponential Decay Reward Pattern
-
-Three reward functions implement the same threshold + exponential decay pattern:
-
-```python
-if diff < self.diff_threshold:
-    reward = 1.0
-else:
-    reward = np.exp(-diff * self.multiplier)
-```
-
-Found in:
-- `rewards/temp_reward.py:55-58`
-- `rewards/battery_target_reward.py:41-44`
-- `rewards/ev_charging_reward.py:49-52`
-
-**Recommendation:** Extract a `ThresholdedExponentialReward` base class or utility function.
-
 ### 7.2 State Space Registration
 
 The `sim_hour` observation space is registered identically in 4 different state sources:
@@ -342,7 +307,6 @@ This fragile unwrapping logic should be extracted to a shared utility.
 
 | Parameter | Where | Issue |
 |-----------|-------|-------|
-| `schedule_type` | `AdvBuildingGym.__init__()` | Passed through but never validated; unclear semantics. |
 | `training` | `AdvBuildingGym.__init__()` | Passed to infras/statesources but never inspected by the environment itself. |
 | `action_history_length` | `AdvBuildingGym.__init__()` | Nullable with fallback to `env_config.ACTION_HISTORY_LENGTH` -- inconsistent source of truth. |
 | `step` | `TrajectoryCollector.on_step()` | Parameter accepted but never used; step count maintained by list length. |
@@ -356,19 +320,13 @@ This fragile unwrapping logic should be extracted to a shared utility.
 
 ### Priority 1 -- Safety and Correctness
 
-1. **Add a test suite.** Start with unit tests for reward functions (pure input/output), then infrastructure `exec_action()` / `update_state()` cycles, then integration tests for `step()`/`reset()` lifecycle. Even 50% coverage on core components would catch the majority of regression risks.
-
 2. **Remove global seed mutations.** Delete `np.random.seed()` and `random.seed()` calls in `building_adv.py:370-371` and `base_building_gym.py:421`. Use `self.np_random` (Gymnasium's per-instance RNG) exclusively.
-
-3. **Remove hardcoded solver path.** `mpc_controller.py:178` hardcodes `/home/iai/ii6824/.local/bin/ipopt`. Use `shutil.which("ipopt")` or a config parameter.
 
 ### Priority 2 -- Architecture
 
 4. **Resolve circular dependency.** Move component imports in `env_config.py` to factory methods (lazy) rather than module level. Remove the `__getattr__` workaround in `config/__init__.py`.
 
 5. **Extract shared initialization logic** from `run_train_ray.py` and `run_eval_ray.py` into a `setup_session()` utility (config loading, data combinator init, warning filters, seed setup).
-
-6. **Define a Controller ABC** with a `predict(obs) -> tuple[np.ndarray, dict | None]` signature. Remove the unused `deterministic` parameter across all controllers.
 
 7. **Extract env runner traversal** from callbacks into a shared utility function to eliminate the duplicated unwrapping pattern.
 
@@ -381,11 +339,8 @@ This fragile unwrapping logic should be extracted to a shared utility.
 
 9. **Replace magic numbers with named constants.** At minimum:
    - `SECONDS_PER_HOUR = 3600`, `SECONDS_PER_DAY = 86400`
-   - `HP_MODE_COOL_THRESHOLD = 0.4`, `HP_MODE_HEAT_THRESHOLD = 0.6`
    - `WEATHER_SENTINEL = -999`
    - Tremblay model constants should reference their source paper
-
-10. **Extract `ThresholdedExponentialReward`** base class for the three reward functions sharing the identical decay pattern.
 
 11. **Convert TODO comments to issues.** Remove inline TODOs that have been present for multiple commits. Track them as GitHub issues with proper context.
 
@@ -398,7 +353,3 @@ This fragile unwrapping logic should be extracted to a shared utility.
 14. **Fix error suppression** in `json_encoder.py` -- replace bare `except Exception: pass` with specific exception types and logging.
 
 15. **Remove unused parameters** where safe (`ds_path` on `BuildingHeatLoss`, `control_step` on `SolarPanel`, `step` on `TrajectoryCollector.on_step()`).
-
----
-
-*Review generated by static analysis of the full repository. Line numbers reference the `provisional` branch as of 2026-03-28.*

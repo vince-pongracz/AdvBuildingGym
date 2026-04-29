@@ -11,7 +11,7 @@ to ``adv_building_gym.utils.serializable``, which devices and rewards import
 directly. All config sub-modules can now be imported eagerly.
 """
 
-from .env_config import EnvConfig, config
+from .env_config import EnvConfig
 from .reward_config import RewardConfig
 from .env_config_manager import EnvConfigManager
 from .reward_schedule_manager import RewardScheduleManager
@@ -21,7 +21,6 @@ from .data_config import load_data_combinator_config
 
 __all__ = [
     "EnvConfig",
-    "config",
     "RewardConfig",
     "EnvConfigManager",
     "RewardScheduleManager",

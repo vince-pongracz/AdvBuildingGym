@@ -19,8 +19,12 @@ from stable_baselines3.common.vec_env import SubprocVecEnv, DummyVecEnv, VecMoni
 from stable_baselines3.common.callbacks import EvalCallback, BaseCallback
 
 from adv_building_gym import AdvBuildingGym
-from adv_building_gym.config import config as env_config
+from adv_building_gym.config import EnvConfig
 from adv_building_gym.utils import CustomJSONEncoder
+
+# SB3 path keeps its own EnvConfig instance (the Ray driver normally hands
+# one in via EnvConfigManager.load(...) — this script is the secondary path).
+env_config = EnvConfig()
 
 # Logging configuration
 logging.basicConfig(
@@ -266,6 +270,7 @@ def make_env(rank: int, seed: int):
             infras=infras,
             statesources=statesources,
             rewards=rewards,
+            env_config=env_config,
         )
         from adv_building_gym.envs.env_creator import wrap_action_space
         env = wrap_action_space(env)
