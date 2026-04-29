@@ -398,18 +398,6 @@ else:
     )
 ```
 
-Also, when PID is used, the `observation_space` should be provided to the config (since without FlattenObservations, RLlib needs the Dict space):
-
-```python
-if isinstance(config, PIDConfig):
-    _obs_space, action_space = get_env_spaces(env_creator)
-    config.environment(
-        env="AdvBuilding",
-        observation_space=_obs_space,  # Provide Dict obs space
-        action_space=action_space,
-    )
-```
-
 ### 4.3 `run_train_ray.py` — Accept `--algorithm pid`
 
 Add `"pid"` to the `choices` list in the argparse `--algorithm` argument.

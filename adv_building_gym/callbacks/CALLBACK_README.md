@@ -73,14 +73,6 @@ Outputs:
 - Per-episode JSON in `{metrics_base_dir}/{date}/jsons/`
 - Shared HDF5 file (`trajectories.hdf5`) with one group per episode
 
-### BestModelCheckpointCallback (`checkpoint_callbacks.py`)
-
-Factory: `make_checkpoint_callback_class(checkpoint_dir, episode_length, checkpoint_frequency, num_to_keep, metric)`
-
-Fires on `on_train_result` (Algorithm actor). Calculates episode count from
-`num_env_steps_sampled_lifetime / episode_length` (reliable for both PPO and SAC).
-Saves a new checkpoint when the tracked metric improves, then deletes the previous best.
-
 ### DataScheduleCallback (`data_schedule_callback.py`)
 
 Factory: `create_data_schedule_on_train_result(combinator, swap_every_n_iterations)`

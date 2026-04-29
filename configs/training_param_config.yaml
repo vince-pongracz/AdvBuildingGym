@@ -15,11 +15,20 @@ ppo:
 
 # SAC-specific (off-policy)
 sac:
-  replay_batch_size: 144
-  training_intensity: 144
-  # UTD ≈ training_intensity / train_batch_size_per_learner
-  # Update-To-Data ratio
-  episodes_to_keep_in_replay_buffer: 1500
+  replay_batch_size: 512 # aka train_batch_size_per_learner
+  training_intensity: 64
+  # training_intensity (optional; default = "natural" = batch / (rollout_fragment * envs * runners))
+  #
+  # RLlib defines training_intensity as a *timestep* ratio:
+  #     trained_timesteps / inserted_timesteps = training_intensity
+  # The "UTD" of REDQ-style high-update-ratio papers is the gradient-step/env-step ratio:
+  #     UTD_GE = training_intensity / replay_batch_size
+  # Number of gradient updates per RLlib training iteration:
+  #     grad_steps_per_iter = training_intensity * (rollout_fragment_length * num_env_runners * num_envs)
+  #                            / replay_batch_size
+  # If training_intensity is omitted, RLlib uses natural = 1 train batch per inserted batch.
+  # Link: https://docs.ray.io/en/latest/_modules/ray/rllib/algorithms/sac/sac.html
+  episodes_to_keep_in_replay_buffer: 1200
   n_step_return: 6
   learning_starts_after_n_episodes: 50 # Warm up replay buffer with 50 episodes before learning starts.
 

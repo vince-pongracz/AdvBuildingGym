@@ -6,7 +6,7 @@ from gymnasium.spaces import Box
 
 from ..base import StateSource
 from adv_building_gym.utils.serializable import ComponentRegistry
-from adv_building_gym.utils.normalisation import Normalisation, normalise_series
+from adv_building_gym.utils.normalisation import Normalisation, normalise_with_scale_factor
 
 logger = logging.getLogger(__name__)
 
@@ -21,8 +21,7 @@ class EnergyPriceDataSource(StateSource):
                 normalise: Normalisation | str | None = Normalisation.ABS_MIN_MAX_SCALING) -> None:
         super().__init__(name, ds_path)
 
-        normalise = Normalisation.init(normalise)
-        self.normalise = normalise
+        self.normalise = Normalisation.init(normalise)
 
         self.price_max: float = 1.0
         if self.ts is not None:
@@ -36,8 +35,8 @@ class EnergyPriceDataSource(StateSource):
                 f"EnergyPriceDataSource '{self.name}': CSV '{self.ds_path}' has no "
                 "'baseprice' column."
             )
-        self.price_max = float(self.ts["baseprice"].abs().max())
-        self.ts["E_price_norm"] = normalise_series(self.ts["baseprice"], self.normalise)
+
+        self.ts["E_price_norm"], self.price_max = normalise_with_scale_factor(self.ts["baseprice"], self.normalise)
         
     def setup_spaces(self,
                     state_spaces,

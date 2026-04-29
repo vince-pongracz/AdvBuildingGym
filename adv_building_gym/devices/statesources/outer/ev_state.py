@@ -111,7 +111,7 @@ class EVState(StateSource):
 
         self._events.sort(key=lambda e: e[0])
 
-        logger.info(
+        logger.debug(
             "EVState '%s': parsed %d events from %s",
             self.name, len(self._events), self.ds_path,
         )

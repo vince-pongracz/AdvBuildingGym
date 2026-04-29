@@ -1,75 +1,6 @@
-❯ Check the training, plotting and eval scripts and their custom modules for
-dead code
-I'll explore the codebase to identify the relevant scripts and modules, then
-check for dead code systematically.
-
-Explore(Find all training/eval/plot scripts)
-
-Now let me read the main scripts and check for dead code across multiple areas in parallel.
-
-Read 5 files
-Now let me check the custom modules for dead code — imports, unused functions, and unused exports.
-
-Read 13 files
-Now let me check for usages of specific exports and functions that might be
-dead.
-
-Explore(Find dead code across modules)
-⎿  Done (53 tool uses · 62.6k tokens · 1m 31s)
-
-Let me check a few more things I noticed while reading the scripts.
-
-Searched for 11 patterns
-Now let me check the deleted checkpoint_callbacks.py and a few more items.
-
-Searched for 8 patterns, read 1 file
-The controllers are imported from adv_building_gym.envs in __all__ but nobody
-imports them from there — they're imported from adv_building_gym directly. Let me check that path.
-
-Searched for 2 patterns
-Good. Controllers are used in run_evaluation.py (imported from
-adv_building_gym). The re-export from envs/__init__.py is dead though — nobody imports controllers through the envs path.
-
-Let me check a few more things in run_train_rl.py:
-
-Searched for 1 pattern
-So run_train_rl.py has a td3 branch in select_model() but TD3 is not in the
---algorithm choices (["ppo", "sac", "ddpg", "a2c"]), making the TD3 code in
-that function unreachable.
-
-Here's the full dead code report:
-
----
 Dead Code Report
 
 Scripts
-
-run_train_rl.py (legacy SB3 trainer)
-1. import sys (line 8) — never used
-2. BaseBuildingGym import (line 20) — imported but never referenced (only used for side-effect Gym registration, which is now handled by
-adv_building_gym/__init__.py)
-3. TD3 branch in select_model() (lines 109-120) — unreachable; "td3" is not in argparse choices on line 144
-4. EvalCallback import from SB3 (line 17) — imported at top level but used
-only inside main(). Not dead per se, but the entire script is arguably legacy
-since run_train_sb.py supersedes it
-
-run_train_ray.py
-5. import time (line 10) — used (for elapsed time)
-- No dead imports found here; all are used
-
-run_evaluation.py (legacy SB3 evaluator)
-6. import sys (line 2) — never used
-7. import datetime → datetime class used from it, so it's fine
-- The entire script works with BaseBuildingGym (the old single-file env). It's a separate legacy workflow from run_eval_ray.py
-
-Package modules
-
-adv_building_gym/ray_training/env_spaces.py — get_env_spaces()
-8. Entire module is dead. Exported in __init__.py but never imported or called anywhere in actual code
-
-adv_building_gym/utils/checkpoint_finder.py — find_latest_checkpoint()
-9. Dead as public API. Only called internally by resolve_checkpoint_path() in
-the same file. The export in utils/__init__.py is unnecessary
 
 adv_building_gym/evaluation/__init__.py — EpisodeStats export
 10. Dead export. EpisodeStats is exported from the evaluation package
@@ -81,46 +12,9 @@ PIDController are re-exported from envs/__init__.py (line 8), but no code
 imports controllers through the adv_building_gym.envs path — they're all
 imported from adv_building_gym directly
 
-adv_building_gym/envs/__init__.py — Building export
-12. Dead export. Building class is exported but never imported outside
-base_building_gym.py and envs/__init__.py
-
-adv_building_gym/callbacks/checkpoint_callbacks.py
-13. Deleted file (shown as D in git status). Only referenced in
-CALLBACK_README.md. Already removed — clean up the reference in the README
 
 Summary table
 
-#: 1
-Location: run_train_rl.py:8
-Item: import sys
-Status: Unused import
-────────────────────────────────────────
-#: 2
-Location: run_train_rl.py:20
-Item: from adv_building_gym import BaseBuildingGym
-Status: Imported but never referenced
-────────────────────────────────────────
-#: 3
-Location: run_train_rl.py:109-120
-Item: TD3 branch in select_model()
-Status: Unreachable (td3 not in argparse choices)
-────────────────────────────────────────
-#: 4
-Location: run_evaluation.py:2
-Item: import sys
-Status: Unused import
-────────────────────────────────────────
-#: 5
-Location: ray_training/env_spaces.py
-Item: get_env_spaces()
-Status: Entire module unused
-────────────────────────────────────────
-#: 6
-Location: utils/__init__.py
-Item: find_latest_checkpoint export
-Status: Dead public API (internal-only use)
-────────────────────────────────────────
 #: 7
 Location: evaluation/__init__.py
 Item: EpisodeStats export
@@ -130,15 +24,3 @@ Status: Never imported outside evaluation package
 Location: envs/__init__.py:8
 Item: Controller re-exports
 Status: Nobody imports controllers via envs path
-────────────────────────────────────────
-#: 9
-Location: envs/__init__.py:2
-Item: Building re-export
-Status: Never imported outside envs/
-────────────────────────────────────────
-#: 10
-Location: callbacks/checkpoint_callbacks.py
-Item: Deleted file
-Status: Already removed; clean up README reference
-
-Items 1-4 are straightforward cleanup. Items 5-9 are dead exports/modules that add unnecessary coupling. Want me to clean any of these up?

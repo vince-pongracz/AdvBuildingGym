@@ -87,7 +87,7 @@ def main():
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--algorithm", default="ppo", choices=["ppo", "sac", "ddpg", "td3", "a2c"]
+        "--algorithm", default="ppo", choices=["ppo", "sac"], help="RL algorithm to train (default: ppo)"
     )
     parser.add_argument(
         "--load-config", type=str, required=True,

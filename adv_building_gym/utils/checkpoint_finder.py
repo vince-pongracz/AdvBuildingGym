@@ -15,7 +15,7 @@ import os
 logger = logging.getLogger(__name__)
 
 
-def find_latest_checkpoint(base_path: str = "models") -> str:
+def _find_latest_checkpoint(base_path: str = "models") -> str:
     """Find the most recent Ray checkpoint by modification time.
 
     Identifies checkpoint root directories by the presence of
@@ -94,7 +94,7 @@ def resolve_checkpoint_path(
 
     if os.path.exists(search_base):
         logger.info("Searching for latest checkpoint in: %s", search_base)
-        return os.path.abspath(find_latest_checkpoint(search_base))
+        return os.path.abspath(_find_latest_checkpoint(search_base))
 
     logger.warning("Algorithm directory not found: %s — broadening search", search_base)
-    return os.path.abspath(find_latest_checkpoint(models_base))
+    return os.path.abspath(_find_latest_checkpoint(models_base))

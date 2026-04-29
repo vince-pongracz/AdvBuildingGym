@@ -23,27 +23,27 @@ class EconomicReward(RewardFunction):
         export  at positive price → positive reward (income)
         export  at negative price → negative reward (must pay to dump)
 
-    Normalisation uses a single, topology-independent ``reference_power_kW``
-    so the reward magnitude does not depend on how much infrastructure the
-    environment happens to contain.  Keep it aligned with the grid-limit
-    parameter used by ``OperatorEnergyControlReward.max_power_kW`` so both
-    rewards speak the same "typical grid exchange" scale.
+    Normalisation prefers ``ctxt_operator_max_power_kW`` (published every
+    step by ``OperatorEnergyControl``) so the reward magnitude tracks the
+    active grid-exchange limit even when ``InfraCombinator`` swaps configs.
+    The constructor's ``reference_power_kW`` is a fallback for envs that
+    omit ``OperatorEnergyControl``.
 
     Reads ``net_power_kW`` from the ``info`` dict (published by the
     environment from infrastructure power computations).  ``E_price`` is
     read directly from ``states``.
     """
 
-    def __init__(self, weight: float, reference_power_kW: float,
+    def __init__(self, weight: float, reference_power_kW: float = 15.0,
                 name: str = "economic_reward",
                 export_bonus: float = 1.0) -> None:
         """Initialize EconomicReward.
 
         Args:
             weight: Reward weight for multi-objective optimization.
-            reference_power_kW: Power scale (kW) used to normalise the
-                reward into [-1, 1].  Should match the grid-exchange limit
-                used by ``OperatorEnergyControlReward.max_power_kW``.
+            reference_power_kW: Fallback power scale (kW) used when
+                ``ctxt_operator_max_power_kW`` is not present in
+                ``states`` (i.e. envs without ``OperatorEnergyControl``).
             name: Reward function identifier.
             export_bonus: Multiplier applied when the building is exporting
                 to the grid (``net_power_kW < 0``).  Values > 1 make
@@ -55,8 +55,17 @@ class EconomicReward(RewardFunction):
         super().__init__(weight, name)
         if reference_power_kW <= 0:
             raise ValueError("reference_power_kW must be positive.")
+
         self.reference_power_kW = float(reference_power_kW)
         self.export_bonus = export_bonus
+
+    def _resolve_reference_power_kW(self, states) -> float:
+        ctxt = states.get("ctxt_operator_max_power_kW")
+        if ctxt is not None:
+            value = float(ctxt[0])
+            if value > 0:
+                return value
+        return self.reference_power_kW
 
     def get_reward(self, actions, states, info: dict | None = None) -> tuple[float, float]:
         max_step = self.weight * self.max_reward
@@ -72,8 +81,9 @@ class EconomicReward(RewardFunction):
             logger.warning("EconomicReward: missing net_power_kW in info, returning 0")
             return 0.0, max_step
 
+        reference_power_kW = self._resolve_reference_power_kW(states)
         # Negative sign: consumption → negative reward (cost); production → positive reward (income)
-        raw = -net_power_kW * current_energy_price / self.reference_power_kW
+        raw = -net_power_kW * current_energy_price / reference_power_kW
 
         # Export side boost — keyed on the physical direction of power flow,
         # not on the reward sign, so negative prices don't flip the meaning.

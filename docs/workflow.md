@@ -12,7 +12,7 @@ data setup  ──>  train  ──>  evaluate  ──>  plot
 
 Fetch and preprocess electricity prices and weather data into 5-minute resolution CSVs
 (raw physical units). Normalisation to agent-friendly ranges happens at runtime in the
-statesources, not here.
+statesources, not here -- statesources expose the normalisation constants as context variables, so the policy can see this and make decisions on this.
 
 **Script:** `preprocessing/data_setup.py`
 **SLURM:** `sbatch slurm_scripts/slurm_data_setup.sh [OPTIONS]`
@@ -133,6 +133,8 @@ auto-discovers `*_syn_cfg_*.csv` files and adds them to the scenario pool
 
 ### 2.1 Environment config — `configs/env/env_test1_{s/m/l}.yaml`
 
+TODO VP: rewrite this part, it's outdated
+
 Defines the **environment topology**: which infrastructure, statesources, and reward
 functions are instantiated, along with their parameters. This config is shared with
 evaluation — pass the same YAML to `run_eval_ray.py` via `--load-config`.
@@ -167,7 +169,7 @@ ppo:
 
 sac:
   replay_batch_size: 256                # transitions per gradient step
-  days_to_keep_in_replay_buffer: 100
+  episodes_to_keep_in_replay_buffer: 100
 ```
 
 CLI `--seed` overrides `common.seed`. Other values are edited in the YAML directly.

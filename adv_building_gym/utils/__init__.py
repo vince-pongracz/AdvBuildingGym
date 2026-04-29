@@ -8,7 +8,6 @@ from .warning_filters import setup_warning_filters
 from .trajectory_utils import extract_trajectory_from_infos, write_episode_to_hdf5
 from .trajectory_collector import TrajectoryCollector
 from .checkpoint_finder import (
-    find_latest_checkpoint,
     resolve_checkpoint_path,
 )
 from .normalisation import Normalisation, normalise_with_scale_factor, get_scale_factor, normalise_series
@@ -28,7 +27,6 @@ __all__ = [
     "extract_trajectory_from_infos",
     "write_episode_to_hdf5",
     "TrajectoryCollector",
-    "find_latest_checkpoint",
     "resolve_checkpoint_path",
     "Normalisation",
     "normalise_with_scale_factor",

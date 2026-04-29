@@ -10,5 +10,4 @@ spot market: immediate
 futures market: future options, I will buy/sell this amount for this fixed price in the future.
 
 
-TODO VP read it: 
-https://www.openhab.org/addons/bindings/awattar/
+TODO VP read it: https://www.openhab.org/addons/bindings/awattar/

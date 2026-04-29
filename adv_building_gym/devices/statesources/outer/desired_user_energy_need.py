@@ -7,7 +7,7 @@ from gymnasium.spaces import Box
 
 from ..base import StateSource
 from adv_building_gym.utils.serializable import ComponentRegistry
-from adv_building_gym.utils.normalisation import Normalisation, normalise_series
+from adv_building_gym.utils.normalisation import Normalisation, normalise_with_scale_factor
 
 logger = logging.getLogger(__name__)
 
@@ -40,8 +40,7 @@ class DesiredUserEnergyNeed(StateSource):
                 normalise: Normalisation | str | None = Normalisation.MIN_MAX_SCALING) -> None:
         super().__init__(name, ds_path)
 
-        normalise = Normalisation.init(normalise)
-        self.normalise = normalise
+        self.normalise = Normalisation.init(normalise)
 
         self.consumption_max: float = 1.0
         if self.ts is not None:
@@ -55,8 +54,7 @@ class DesiredUserEnergyNeed(StateSource):
                 f"DesiredUserEnergyNeed '{self.name}': CSV '{self.ds_path}' has no "
                 f"'{SOURCE_COLUMN}' column. Found: {list(self.ts.columns)}"
             )
-        self.consumption_max = float(self.ts[SOURCE_COLUMN].max())
-        self.ts[NORM_COLUMN] = normalise_series(self.ts[SOURCE_COLUMN], self.normalise)
+        self.ts[NORM_COLUMN], self.consumption_max = normalise_with_scale_factor(self.ts[SOURCE_COLUMN], self.normalise)
 
     def setup_spaces(self, state_spaces: OrderedDict,
                     action_spaces: OrderedDict) -> tuple[OrderedDict, OrderedDict]:
@@ -68,9 +66,7 @@ class DesiredUserEnergyNeed(StateSource):
         # Raw maximum household consumption (kW) — changes only when a new
         # data variant is loaded.
         if "ctxt_hh_consumption_max" not in state_spaces.keys():
-            state_spaces["ctxt_hh_consumption_max"] = Box(
-                low=0, high=np.inf, shape=(1,), dtype=np.float32
-            )
+            state_spaces["ctxt_hh_consumption_max"] = Box(low=0, high=np.inf, shape=(1,), dtype=np.float32)
 
         if "raw_sim_hour" not in state_spaces.keys():
             state_spaces["raw_sim_hour"] = Box(low=np.full((1,), 0, dtype=np.float32),

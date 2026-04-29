@@ -8,7 +8,7 @@ from gymnasium.spaces import Box
 
 from ..base import StateSource
 from adv_building_gym.utils.serializable import ComponentRegistry
-from adv_building_gym.utils.normalisation import Normalisation, normalise_with_scale_factor, normalise_series
+from adv_building_gym.utils.normalisation import Normalisation, normalise_with_scale_factor
 
 logger = logging.getLogger(__name__)
 
@@ -32,9 +32,6 @@ class WeatherDataSource(StateSource):
         # Raw values for get_raw_values() — updated each step
         self.temp_out_raw: float = 0.0
         self.wind_speed_raw: float = 0.0
-        # Scale factors derived from data in _post_load_data_processing
-        self.temp_abs_max: float = 1.0
-        self.wind_speed_abs_max: float = 1.0
 
         if self.ts is not None:
             logger.info("Use data file: %s", ds_path)
@@ -105,13 +102,9 @@ class WeatherDataSource(StateSource):
         # The policy can use these to reconstruct physical units from
         # normalised observations (e.g. temp_out_raw = temp_out_norm * temp_abs_max).
         if "ctxt_temp_abs_max" not in state_spaces.keys():
-            state_spaces["ctxt_temp_abs_max"] = Box(
-                low=0, high=np.inf, shape=(1,), dtype=np.float32
-            )
+            state_spaces["ctxt_temp_abs_max"] = Box(low=0, high=np.inf, shape=(1,), dtype=np.float32)
         if "ctxt_wind_speed_abs_max" not in state_spaces.keys():
-            state_spaces["ctxt_wind_speed_abs_max"] = Box(
-                low=0, high=np.inf, shape=(1,), dtype=np.float32
-            )
+            state_spaces["ctxt_wind_speed_abs_max"] = Box(low=0, high=np.inf, shape=(1,), dtype=np.float32)
 
         if "raw_sim_hour" not in state_spaces.keys():
             state_spaces["raw_sim_hour"] = Box(low=np.full((1,), 0, dtype=np.float32),

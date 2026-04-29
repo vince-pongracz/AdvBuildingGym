@@ -122,20 +122,15 @@ class EnvConfig(LoggableConfig):
 
     def log_values(self) -> None:
         """Log config values, showing component names instead of object repr."""
-        def _names(components: list | None) -> str:
-            if components is None:
-                return "None"
-            return "[" + ", ".join(c.name for c in components) + "]"
 
         lines = [
             f"  env_config_name = {self.env_config_name}",
             f"  EPISODE_LENGTH = {self.EPISODE_LENGTH}",
             f"  CONTROL_STEP = {self.CONTROL_STEP}",
             f"  ACTION_HISTORY_LENGTH = {self.ACTION_HISTORY_LENGTH}",
-            f"  infras = {_names(self.infras)}",
-            f"  statesources = {_names(self.statesources)}",
         ]
         logger.info("%s:\n%s", self._log_label(), "\n".join(lines))
+
         self.reward_config.log_values()
 
 

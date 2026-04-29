@@ -51,6 +51,9 @@ class OperatorEnergyControl(StateSource):
                 "'operator_energy_max [kW]' or 'operator_energy_max' column."
             )
 
+        # TODO VP 2026.04.28. : Refactor normalisation to use normalisation utils and 
+        # support different normalisation methods (min-max, z-score, etc.) 
+        # instead of hardcoding max-based normalization here.
         self.max_power_kW = float(self.ts[column_name].max())
         # Normalize to [0, 1] based on max_power_kW; clip in case CSV exceeds it.
         self.ts["operator_energy_max_norm"] = (self.ts[column_name] / self.max_power_kW).clip(0.0, 1.0)
@@ -61,14 +64,12 @@ class OperatorEnergyControl(StateSource):
         """Setup observation spaces for operator energy control limit."""
         # Normalized to [0, 1] range (non-negative power limit)
         if "s_operator_energy_max" not in state_spaces.keys():
-            state_spaces["s_operator_energy_max"] = Box(
-                low=0, high=1, shape=(1,), dtype=np.float32)
+            state_spaces["s_operator_energy_max"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
 
         # Raw maximum operator power limit (kW) — static context variable,
         # only changes when a new data variant is loaded.
         if "ctxt_operator_max_power_kW" not in state_spaces.keys():
-            state_spaces["ctxt_operator_max_power_kW"] = Box(
-                low=0, high=np.inf, shape=(1,), dtype=np.float32)
+            state_spaces["ctxt_operator_max_power_kW"] = Box(low=0, high=np.inf, shape=(1,), dtype=np.float32)
 
         # Instantaneous grid power consumption in kW
         # This will be calculated by the environment using infrastructure.get_electric_consumption()
@@ -76,11 +77,8 @@ class OperatorEnergyControl(StateSource):
         # and the actual value is available via info["step_power_kW"].
 
         if "raw_sim_hour" not in state_spaces.keys():
-            state_spaces["raw_sim_hour"] = Box(low=0,
-                high=np.inf,
-                shape=(1,),
-                dtype=np.float32
-            )
+            state_spaces["raw_sim_hour"] = Box(low=0, high=np.inf,
+                shape=(1,), dtype=np.float32)
 
         return state_spaces, action_spaces
 

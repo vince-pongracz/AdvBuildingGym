@@ -11,13 +11,11 @@ rewards:
   - class_name: EconomicReward
     weight: 0.1
     params:
-      reference_power_kW: 15.0
       export_bonus: 3.0
 
   - class_name: LongTermEconomicReward
     weight: 0.9
     params:
-      reference_power_kW: 15.0
       export_bonus: 3.0
 
   # - class_name: MinimiseEnergyConsumptionReward
@@ -25,7 +23,7 @@ rewards:
   #   params: {}
 
   - class_name: OperatorEnergyControlReward
-    weight: 1.0
+    weight: 0.1
     params:
       max_power_kW: 15.0
       harsh_penalty: -2.0
@@ -50,6 +48,6 @@ rewards:
   #   weight: 1.0
   #   params: {}
 
-  - class_name: ActionSmoothnessReward
-    weight: 0.5
-    params: {}
+  # - class_name: ActionSmoothnessReward
+  #   weight: 0.5
+  #   params: {}

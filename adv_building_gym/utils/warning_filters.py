@@ -5,8 +5,16 @@ This module provides a centralized function to configure warning filters
 that should be applied across all Ray worker processes (env_runners, learners).
 """
 
+import logging
 import warnings
 from ray.util.annotations import RayDeprecationWarning
+
+# Silence h5py DEBUG chatter ("h5py._conv - Creating converter from N to M") emitted
+# while h5py builds its type-conversion table at first import. Per-worker package
+# __init__ files set the root logger to DEBUG, so without this the messages bleed
+# into every Ray worker log. Done at module-import time so the level is set before
+# trajectory_utils triggers the h5py import (see adv_building_gym/utils/__init__.py).
+logging.getLogger("h5py").setLevel(logging.WARNING)
 
 
 def setup_warning_filters():

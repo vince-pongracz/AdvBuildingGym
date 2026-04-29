@@ -40,16 +40,18 @@ class LongTermEconomicReward(RewardFunction):
     ``RewardFunction`` while staying robust to early termination.
     """
 
-    def __init__(self, weight: float, reference_power_kW: float,
+    def __init__(self, weight: float, reference_power_kW: float = 15.0,
                 name: str = "long_term_economic_reward",
                 export_bonus: float = 3.0) -> None:
         """Initialize LongTermEconomicReward.
 
         Args:
             weight: Reward weight for multi-objective optimization.
-            reference_power_kW: Power scale (kW) used for the per-step
-                raw term — keep aligned with ``EconomicReward`` and
-                ``OperatorEnergyControlReward.max_power_kW``.
+            reference_power_kW: Fallback power scale (kW) used when
+                ``ctxt_operator_max_power_kW`` is not present in
+                ``states``. Otherwise that ctxt value is preferred so
+                this reward auto-tracks the active grid-exchange limit
+                (matching ``EconomicReward``).
             name: Reward function identifier.
             export_bonus: Multiplier applied when exporting
                 (``net_power_kW < 0``); same semantics as
@@ -58,6 +60,7 @@ class LongTermEconomicReward(RewardFunction):
         super().__init__(weight, name)
         if reference_power_kW <= 0:
             raise ValueError("reference_power_kW must be positive.")
+
         self.reference_power_kW = float(reference_power_kW)
         self.export_bonus = float(export_bonus)
         self._sentinel_key = f"_lt_econ_active_{id(self)}"
@@ -69,6 +72,14 @@ class LongTermEconomicReward(RewardFunction):
     def _reset_window(self) -> None:
         self._step_in_window = 0
         self._accum = 0.0
+
+    def _resolve_reference_power_kW(self, states) -> float:
+        ctxt = states.get("ctxt_operator_max_power_kW")
+        if ctxt is not None:
+            value = float(ctxt[0])
+            if value > 0:
+                return value
+        return self.reference_power_kW
 
     def get_reward(self, actions, states, info: dict | None = None) -> tuple[float, float]:
         if info is None:
@@ -93,8 +104,9 @@ class LongTermEconomicReward(RewardFunction):
 
         current_energy_price = float(states["s_E_price"][0])
 
+        reference_power_kW = self._resolve_reference_power_kW(states)
         # Same sign convention as EconomicReward.
-        raw_step = -net_power_kW * current_energy_price / self.reference_power_kW
+        raw_step = -net_power_kW * current_energy_price / reference_power_kW
         if net_power_kW < 0:  # export
             raw_step *= self.export_bonus
 

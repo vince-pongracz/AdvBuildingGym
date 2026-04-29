@@ -118,8 +118,9 @@ def _section_eval(
     load_config = getattr(args, "load_config", None) or "<env_config.yaml>"
 
     # Forward the reward schedule training used so the printed eval command
-    # reproduces training's reward definition. Data schedules are eval-specific
-    # (eval uses its own data config) and infra schedules are training-only.
+    # reproduces training's reward definition. run_eval_ray.py defaults
+    # --data-config to the eval YAML, so we don't need to forward it here.
+    # Infra schedules are training-only.
     reward_schedule = getattr(args, "reward_schedule", None)
     reward_flag = f"--reward-schedule {reward_schedule}" if reward_schedule else None
 

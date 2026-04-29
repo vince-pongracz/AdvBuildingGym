@@ -158,13 +158,12 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
 
     def __init__(
         self,
+        # TODO VP 2026.04.28. : Remove these, it only needs the schedulers and combinators
         infras: list[Infrastructure],
         statesources: list[StateSource],
         rewards: list[RewardFunction],
-        control_step: int | None = None,
         render_mode=None,
         data_combinator: DataCombinator | None = None,
-        action_history_length: int | None = None,
         instance_id: str | None = None,
         **kwargs,
     ):
@@ -188,12 +187,11 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
 
         super(AdvBuildingGym, self).__init__()
 
-
         self.iteration = 0
         self.cum_E_kWh = 0.0  # Cumulative net energy in kWh (tracked in info, not observation)
-        
         self.episode_count: int = 0
         self.data_combinator = data_combinator if data_combinator is not None else DataCombinator()
+        
         # Each env instance is a distinct caller in the RngService registry, keyed
         # by instance_id (worker_index + vector_index passed by env_creator). That
         # gives every worker its own deterministic seed chain — independent of
@@ -229,10 +227,8 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         # Link: docs/hst_mgmt.md
         for act_key, act_box in action_space.items():
             observation_space[f"{act_key}_prev"] = spaces.Box(
-                low=act_box.low,
-                high=act_box.high,
-                shape=act_box.shape,
-                dtype=act_box.dtype,
+                low=act_box.low, high=act_box.high,
+                shape=act_box.shape, dtype=act_box.dtype,
             )
 
         self.statesources = statesources
@@ -245,6 +241,7 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         # within the episode.  Used by statesource synthetic profiles
         # and SolarPanel for time-of-day logic.
         # Managed directly by the environment (not a StateSource).
+        # TODO VP 2026.04.28. : Is this really needed..?
         observation_space["raw_sim_hour"] = spaces.Box(low=0.0, high=24.0, shape=(1,), dtype=np.float32)
 
         # Action history is now stored as an in-memory deque (``self.action_history``)
@@ -252,11 +249,7 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         # receives a per-action ``hst_{key}`` observation from the env — the
         # StridedHistoryConnector assembles that on the rollout/learner side.
         # Link: docs/hst_mgmt.md
-        self.action_history_length = (
-            action_history_length
-            if action_history_length is not None
-            else env_config.ACTION_HISTORY_LENGTH
-        )
+        self.action_history_length = env_config.ACTION_HISTORY_LENGTH
         self.action_history: deque[Dict[str, np.ndarray]] = deque(maxlen=self.action_history_length,)
 
         # Assign spaces
@@ -277,9 +270,7 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         # flat [-1, 1] interface expected by RL libraries and this Dict space.
         self.action_space = SDict(action_space)
 
-        # NOTE VP 2026.02.28. : Simulation time is in seconds
-        self.simulation_time = env_config.CONTROL_STEP * env_config.EPISODE_LENGTH
-        self.control_step = control_step if control_step is not None else env_config.CONTROL_STEP
+        self.control_step = env_config.CONTROL_STEP
         self.max_iteration = env_config.EPISODE_LENGTH
 
         # When True, step()/reset() include a deep copy of the full named state
@@ -629,6 +620,7 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
 # TODO VP 2026.03.23. : Eval script -- at the --plot-all option plot all (reward, cum_E_usage) eval curves from the trajectories together -- with avg and variance. Make sure the plotting and the eval parts are not mixed architecturally, reuse the standalone trajectory plotting.
 # TODO VP 2026.03.23. : Add standalone input and output heads for the policy NN, fix the core policy NN -- investigate this option
 
+    # TODO VP 2026.04.29. : Review this
     def _get_raw_state_values(self) -> dict[str, float]:
         """Collect raw (unnormalised) physical values from all components.
 
