@@ -65,6 +65,7 @@ class EpisodeData:
     episode_id: str
     seed: int
     length: int
+    episode_date: str | None = None
 
     # Summary scalars (reward_rate, achieved_reward, cum_E_kWh, …)
     summary: dict[str, float] = field(default_factory=dict)
@@ -107,10 +108,22 @@ class EpisodeData:
         ]
 
     def title_suffix(self) -> str:
-        """Short suffix with episode metadata for figure titles."""
+        """Short suffix with episode metadata for figure titles.
+
+        Format: ``ep {id}, date: {YYYY.MM.DD} | reward_rate {x} ; achieved_reward {y}``.
+        Falls back gracefully when the date is missing.
+        """
+        date_str = self.episode_date or ""
+        # Convention: dots between Y/M/D in titles, even if HDF5 stored "YYYY-MM-DD".
+        if date_str:
+            date_str = date_str.replace("-", ".")
+            ep_part = f"ep {self.episode_id}, date: {date_str}"
+        else:
+            ep_part = f"ep {self.episode_id}"
         return (
-            f"ep {self.episode_id}  |  "
-            f"reward_rate {self.summary.get('reward_rate', 0):.3f}"
+            f"{ep_part}  |  "
+            f"reward_rate {self.summary.get('reward_rate', 0):.3f} ; "
+            f"achieved_reward {self.summary.get('achieved_reward', 0):.2f}"
         )
 
 
@@ -200,6 +213,10 @@ def load_episode(
 
         seed = int(ep.attrs.get("seed", 0))
         length = int(ep.attrs.get("length", 0))
+        ep_date_attr = ep.attrs.get("episode_date")
+        if isinstance(ep_date_attr, bytes):
+            ep_date_attr = ep_date_attr.decode("utf-8")
+        episode_date = str(ep_date_attr) if ep_date_attr is not None else None
         summary = {k: float(v) for k, v in ep["summary"].attrs.items()}
 
         traj = ep["trajectory"]
@@ -250,6 +267,7 @@ def load_episode(
         episode_id=episode_id,
         seed=seed,
         length=length,
+        episode_date=episode_date,
         summary=summary,
         time_minutes=time_minutes,
         states=states,

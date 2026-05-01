@@ -182,12 +182,6 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         # dict in info["state"]. Expensive in memory — enable for evaluation only.
         self.log_full_info: bool = False
 
-        # Cache the WeatherDataSource for temp_in_raw denormalisation.
-        self._weather_source = next(
-            (src for src in self.statesources if hasattr(src, "temp_abs_max")),
-            None,
-        )
-
         logger.debug("AdvBuildingGym created!")
         logger.debug("  Objectives: %s", [rew.name for rew in rewards])
         logger.debug("  Actions: %s", [infr.name for infr in infras])
@@ -489,14 +483,12 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         for src in self.statesources + self.infras:
             raw.update(src.get_raw_values())
 
-        temp_abs_max = (
-            float(self._weather_source.temp_abs_max)
-            if self._weather_source is not None
-            else 1.0
-        )
-        temp_in_norm = float(
-            self.state.get("s_temp_in_norm", np.zeros(1, dtype=np.float32))[0]
-        )
+        # ctxt_temp_abs_max is published into self.state by the WeatherDataSource
+        # each step; reading it from state (instead of caching the source at
+        # __init__) ensures the scale factor is up to date even when the
+        # statesource list is hot-swapped or data is loaded after env creation.
+        temp_abs_max = float(self.state.get("ctxt_temp_abs_max", np.ones(1, dtype=np.float32))[0])
+        temp_in_norm = float(self.state.get("s_temp_in_norm", np.zeros(1, dtype=np.float32))[0])
         raw["raw_temp_in"] = temp_in_norm * temp_abs_max
         return raw
 

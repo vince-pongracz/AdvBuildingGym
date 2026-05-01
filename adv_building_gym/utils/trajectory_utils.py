@@ -30,7 +30,7 @@ def write_episode_to_hdf5(hdf5_path: str, episode_id: str, traj_dump: dict) -> N
         ep_grp = f.create_group(episode_id)
 
         # Scalar metadata as group attributes
-        for key in ("version", "episode_id", "seed", "length", "eval"):
+        for key in ("version", "episode_id", "seed", "length", "eval", "episode_date"):
             val = traj_dump.get(key)
             if val is not None:
                 ep_grp.attrs[key] = val

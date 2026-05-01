@@ -128,6 +128,7 @@ def make_trajectory_logging_cb_class(
                     "seed": initial_info.get("seed") if initial_info else None,
                     "length": ep_length,
                     "eval": env_runner.config.in_evaluation,
+                    "episode_date": initial_info.get("episode_date") if initial_info else None,
                     "summary": {
                         "achieved_reward": ep_achieved_reward,
                         "max_achievable_reward": float(max_achievable_reward),

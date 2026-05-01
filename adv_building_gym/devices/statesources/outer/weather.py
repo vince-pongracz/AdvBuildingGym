@@ -22,6 +22,7 @@ class WeatherDataSource(StateSource):
         'iteration', 'ts',
         'temp_abs_max', 'temp_out_raw',
         'wind_speed_abs_max', 'wind_speed_raw',
+        'sun_shine_raw',
     }
 
     def __init__(self, name: str, ds_path: str | None = None,
@@ -32,6 +33,8 @@ class WeatherDataSource(StateSource):
         # Raw values for get_raw_values() — updated each step
         self.temp_out_raw: float = 0.0
         self.wind_speed_raw: float = 0.0
+        # Solar irradiance in J/cm² (DWD/Zenodo unit; see preprocessing).
+        self.sun_shine_raw: float = 0.0
 
         if self.ts is not None:
             logger.info("Use data file: %s", ds_path)
@@ -127,6 +130,7 @@ class WeatherDataSource(StateSource):
         solar_irradiance_norm = float(row.get("s_solar_irradiance_norm", 0.0))
         avg_wind_speed_norm = float(row.get("s_avg_wind_speed_norm", 0.0))
         self.wind_speed_raw = float(row.get("avg_wind_speed", 0.0))
+        self.sun_shine_raw = float(row.get("sun_shine", 0.0))
 
         states["s_temp_out_norm"][0] = np.float32(temp_out_norm)
         states["s_solar_irradiance_norm"][0] = np.float32(solar_irradiance_norm)
@@ -141,6 +145,7 @@ class WeatherDataSource(StateSource):
         return {
             "raw_temp_out": self.temp_out_raw,
             "raw_wind_speed": self.wind_speed_raw,
+            "raw_solar_irradiance": self.sun_shine_raw,
         }
 
     def _get_serialize_value(self, param_name: str, value):

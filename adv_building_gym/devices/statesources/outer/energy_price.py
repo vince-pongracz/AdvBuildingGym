@@ -15,7 +15,7 @@ class EnergyPriceDataSource(StateSource):
     """Data source for energy pricing information."""
 
     # price_max is derived from data, don't serialize
-    _exclude_params: ClassVar[Set[str]] = {'iteration', 'ts', 'price_max'}
+    _exclude_params: ClassVar[Set[str]] = {'iteration', 'ts', 'price_max', 'baseprice_raw'}
 
     def __init__(self, name: str, ds_path: str | None = None,
                 normalise: Normalisation | str | None = Normalisation.ABS_MIN_MAX_SCALING) -> None:
@@ -24,6 +24,8 @@ class EnergyPriceDataSource(StateSource):
         self.normalise = Normalisation.init(normalise)
 
         self.price_max: float = 1.0
+        # Raw baseprice (€/kWh) for the current step — updated by update_state.
+        self.baseprice_raw: float = 0.0
         if self.ts is not None:
             logger.info("Use data file: %s", ds_path)
             self._run_post_load()
@@ -65,6 +67,7 @@ class EnergyPriceDataSource(StateSource):
             )
         row = self.ts.iloc[min(self.effective_index, len(self.ts) - 1)]
         energy_price = float(row["E_price_norm"])
+        self.baseprice_raw = float(row["baseprice"])
 
         states["s_E_price"][0] = np.float32(energy_price)
         # Raw maximum price (€/kWh) — constant within an episode, changes
@@ -75,6 +78,9 @@ class EnergyPriceDataSource(StateSource):
     def E_price_max_raw(self) -> float:
         """Raw (unnormalised) maximum energy price."""
         return float(self.price_max)
+
+    def get_raw_values(self) -> dict[str, float]:
+        return {"raw_E_price": self.baseprice_raw}
 
     def _get_serialize_value(self, param_name: str, value):
         """Handle enum serialization for normalise parameter."""

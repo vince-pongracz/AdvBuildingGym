@@ -24,6 +24,8 @@ _UNIT_LABELS: dict[str, str] = {
     "raw_desired_temp_in": "Temperature (°C)",
     "raw_E_price": "Price (€/kWh)",
     "raw_E_price_max": "Price (€/kWh)",
+    "raw_wind_speed": "Wind speed (m/s)",
+    "raw_solar_irradiance": "Solar irradiance (J/cm²)",
 }
 
 # Suffix-based fallback for keys not in _UNIT_LABELS (auto-discovered _raw attrs).
