@@ -65,6 +65,7 @@ def resolve_checkpoint_path(
     algorithm: str,
     models_base: str = "models",
 ) -> str:
+    # TODO VP 2026.04.29. : Extend it so, that latest checkpoint within a specific training trial can be found
     """Resolve a checkpoint path using a two-step fallback strategy.
 
     1. If *checkpoint* is provided explicitly, use it directly.

@@ -85,7 +85,6 @@ def select_model(
         # Collect complete episodes before returning to learner.
         # Without this, SAC defaults rollout_fragment_length to 1, causing
         # training episodes to be reported as length = 1 in callbacks.
-        config.env_runners(rollout_fragment_length=episode_length)
         config.training(
             # NOTE VP 2026.02.11. : Actor critic methods SAC & PPO - blog
             # Link: https://joel-baptista.github.io/phd-weekly-report/posts/ac/

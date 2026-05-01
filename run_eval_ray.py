@@ -122,10 +122,7 @@ def main() -> None:
     )
     reward_manager = RewardScheduleManager.from_yaml(reward_schedule_path)
     active_config.reward_config.rewards = reward_manager.create_active_rewards()
-    logger.info(
-        "Eval rewards loaded from schedule: %s",
-        reward_manager.get_active_reward_names(),
-    )
+    logger.info("Eval rewards loaded from schedule: %s", reward_manager.get_active_reward_names())
 
     # Initialise singleton component instances (infras, statesources) in the
     # main process.  Rewards are already set above, so init_singletons() will
@@ -134,8 +131,6 @@ def main() -> None:
 
     # Initialize centralized RNG service for all components
     RngService.initialize(args.seed)
-
-    config_name = active_config.env_config_name
 
     # Build DataCombinator from YAML if specified
     data_combinator = None
@@ -155,7 +150,7 @@ def main() -> None:
     # Resolve checkpoint path (auto-discovers if not provided)
     checkpoint_path = resolve_checkpoint_path(
         checkpoint=args.checkpoint,
-        config_name=config_name,
+        config_name=active_config.env_config_name,
         algorithm=args.algorithm,
     )
 
@@ -177,7 +172,6 @@ def main() -> None:
         # Generate trajectory plots if requested
         if (args.plot or args.plot_all) and not args.no_save:
             import os
-
             import h5py
 
             actual_output_dir = results.output_dir or args.output_dir
@@ -213,9 +207,7 @@ def main() -> None:
                     )
                     logger.info("Generated %d plot files in %s", len(paths), plot_dir)
             else:
-                logger.warning(
-                    "No trajectories.hdf5 found at %s — skipping plots.", hdf5_path,
-                )
+                logger.warning("No trajectories.hdf5 found at %s — skipping plots.", hdf5_path)
     except Exception as e:
         logger.error("Evaluation failed: %s", str(e), exc_info=True)
         logger.error("==================")

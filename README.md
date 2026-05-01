@@ -7,11 +7,39 @@
 [![Code Style](https://img.shields.io/badge/Code%20Style-black-000000.svg?logo=python)](https://github.com/psf/black)
 
 
-<h1 align="center">Advanced Deep Reinforcement Learning for Smart Energy Management in Residential Buildings</h1>
+<h1 align="center">Deep Reinforcement Learning for Smart Energy Management in Residential Buildings -- Framework</h1>
 
-<!-- TODO VP: change things here -->
+### Goals
 
-### Data about residental homes and their heat pump energy need
+- Framework for Residual building energy management, flexible environment: flexibility about rewards, infrastructure elements (actuators -- their physics) and state sources.
+
+- Generalisation: train a single PPO/SAC on a set of slightly different building configs, evaluate how it performs generally on unseen, but similar buildings.
+ - context aware observation space, context aware policies
+ - During eval: unseen building, unseen time series data
+ - threats: 
+  - not enough building configurations seen during training
+  - problem is too complex for policy NN
+  - 
+
+- Transfer learning (TL): curriculum learning, change the reward setup -- the goals -- of the optimisation slowly under the RL algorithm and inspect the performance of this approach against the straight away difficult scenario, where all the rewards are present.
+ - Random selection: select always a subset of rewards, replace a subsubset of those, but always maintain a fix ratio, which does not change between 2 consecutive selections.
+
+- Compare energy usage, energy efficiency and temperature comfort of rule based controllers (Fuzzy, PI, PID) to the trained TL solution.
+  - comparison should happen on unseen and seen building configurations (building data hasn't seen, building data already seen -- variable during eval are the price, weather and other user behaviour)
+
+- For each trained RL agent, RL policy -- Monte Carlo rollouts, this should be quite the same as the eval script.
+
+- Multiple agents, cooperation, Mixture of Experts
+ - env, shared state space -- multiple policies running on the same env, each of them with a different (partially overlapping, non-overlapping) set of rewards -- weighting of policies and their actions: can be user preference during eval -- but during training as well
+ - extension opportunity: network to decide about the weighting.
+
+- Extension idea: use expert action trajectories to train policies -- at the SAC it's straightforward (push episodes into the replay buffer, they will be sampled), but at the PPO it shouldn't be too complicated as well
+
+- MORL, achieve Pareto front: reward functions have dynamic weighthing, which is always sampled and added to the state space. During training, the rewards are weighted with these weights. During eval, they are random from the same distribution. During user eval, user gives these weights and eval is based on this -- policy weighting is part of the state space.
+
+## References, data sources
+
+### Data about residental homes and their heat pump energy need (WPuQ dataset)
 
 Paper: Dataset on electrical single-family house and heat pump load profiles in Germany
 
@@ -276,13 +304,19 @@ Summary:
 - They use a clean MDP -- means no history states or history tracking.
 - They only use ON/OFF at the HP, no exact energy control -- RL only controls if T_in is in a range, otherwise deterministic safety controller against too extreme temperatures. 
 --> TODO VP: build in this safety control mechanism to the HP -- add a positive and negative bound to the desired temp datasource, read them as well as observations and in the case of violation, do max heating/max cooling regardless of rewards to maintain temperature. Maybe a similar mechanism is useful for EV charger -- plan a trajectory in the 1st place, if it's not followed with a margin, charge and do not care about other reward violations.
-- They use discrete observation space, e.g. discrete price levels
+- They use discrete observation and discrete action space, e.g. discrete price levels, discrete, level-based actions -- smaller state and action spaces 
 - they can shift consumptions and power grid loads to a certain extent. In each timestep, they choose a set of shifted loads to actually enable/disable -- formula for the choice, at high prices less likely execution, at low prices more likely exec -- Model for price responsive loads.
 - they use single agent setup
+- simple MDP: how is the dependency on the actual state understood? What the environment exposes? Basically yes
+- Rewards only the energy aspects, uses hard constraints -- backup manual control if e.g. it would underheat the building, etc.. 
+--> comfort aspects are not enforced by rewards.
+- They use DQN, SARSA, Double DQN, PPO, SAC, A3C, DDPG
+- 
 
-- TODO VP: continue here -- "3. Markov decision process formalism"
 
-- TODO VP: What is MLFlow?
+- TODO VP: Add FutureObservationCollectorConnector -- to see static future states, like weather, prices, etc... -- add it as optional connector...
+
+- TODO VP: What is MLFlow? -- maybe integrate it?
 - TODO VP: how is the battery handled by energy consumption reward and pricing? Is it free energy or does it count for the rewards?
 
 Conclusion:
@@ -298,6 +332,14 @@ TODO VP: https://www.clear.kit.edu/sparkassenpreis.php -- Thesis einreichen.
 #### Deep Reinforcement Learning for Real-Time Energy Management in Smart Home
 
 Link: https://ieeexplore.ieee.org/document/10066193
+
+
+
+
+- TODO VP: Idea: potential based reward shaping -- to the actual reward: add estimation about next state, substract estimation about the actual state.
+- TODO VP: How to use expert trajectories for reward shaping -- distill reward function from expert trajectories -- inverse reinforcement learning, etc...
+- TODO VP: 4. Preference-Based Construction: Sometimes you don't have full trajectories, or the trajectories are "noisy." You can construct a reward function by having a human (expert) compare two trajectory segments and say which is better.Collect pairs of short clips of the agent's behavior.Expert Labels: The expert identifies which clip is "better."Reward Modeling: A neural network $r_\psi(s, a)$ is trained via cross-entropy loss to predict the expert's preference.RL Training: Use the learned $r_\psi$ as the reward signal for standard RL.
+
 
 
 

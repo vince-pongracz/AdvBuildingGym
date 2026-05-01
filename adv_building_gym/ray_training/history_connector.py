@@ -209,19 +209,27 @@ class StridedHistoryConnector(ConnectorV2):
         )
         return gym.spaces.Box(float("-inf"), float("inf"), (len(sample),), np.float32)
 
-    # TODO VP 2026.04.28. : Fallback obs rather should be null -- if no history available, do not propagate the current one...
     def _obs_at(self, sa_episode, absolute_idx: int, fallback_obs: dict, key: str):
+        # When history isn't available (start of episode, missing key) we return
+        # zeros rather than the current frame. Replicating the current obs across
+        # empty history slots leaks present-time information into the "past" and
+        # makes early-episode inputs indistinguishable from a stationary signal;
+        # zeros at least encode "no information" unambiguously.
+        def _zeros_like_current() -> np.ndarray:
+            ref = np.asarray(fallback_obs[key])
+            return np.zeros_like(ref)
+
         if absolute_idx < 0:
-            return fallback_obs[key]
+            return _zeros_like_current()
         try:
             obs = sa_episode.get_observations(absolute_idx)
         except (IndexError, KeyError):
-            return fallback_obs[key]
+            return _zeros_like_current()
 
         if (obs is None or
-            not isinstance(obs, dict) or 
+            not isinstance(obs, dict) or
             key not in obs):
-            return fallback_obs[key]
+            return _zeros_like_current()
         return obs[key]
 
     def _add_hst_values(self, sa_episode, t: int) -> dict:
@@ -269,14 +277,22 @@ class StridedHistoryConnector(ConnectorV2):
         }
 
         # Index matrix (T+1, O): row t holds [t, t+ofs1, t+ofs2, ...].
-        # Negative indices fall back to t=0 (start-of-episode value), matching the
-        # spirit of the original `_obs_at` boundary handling at scale.
+        # Out-of-range (negative) lookups are zeroed out below — see _obs_at for
+        # the rationale (empty history slots must not leak the current frame).
         offs = np.asarray(self.offsets, dtype=np.int64)
         t_grid = np.arange(T_plus_1, dtype=np.int64)[:, None] + offs[None, :]
+        oob_mask = t_grid < 0
         np.clip(t_grid, 0, T_plus_1 - 1, out=t_grid)
 
-        # Gather: (T+1, O, *obs_shape) per tracked key.
-        gathered = {key: key_bufs[key][t_grid] for key in self.tracked_keys}
+        # Gather: (T+1, O, *obs_shape) per tracked key, then zero OOB slots.
+        gathered: Dict[str, np.ndarray] = {}
+        for key in self.tracked_keys:
+            g = key_bufs[key][t_grid]
+            if oob_mask.any():
+                # Broadcast (T+1, O) mask over trailing obs dims.
+                g = g.copy()
+                g[oob_mask] = 0
+            gathered[key] = g
 
         # Build the flat obs per timestep. Only the final dict assembly + flatten
         # remains per-t; the expensive inner loop is gone.

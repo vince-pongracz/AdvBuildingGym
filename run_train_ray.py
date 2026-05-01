@@ -32,10 +32,11 @@ from ray.tune.registry import register_env
 from adv_building_gym.utils import setup_warning_filters
 
 # Trigger registration of the custom Gym IDs
-from adv_building_gym import EnvConfigManager
-from adv_building_gym.config import load_data_combinator_config
+from adv_building_gym import DataCombinator, EnvConfigManager
+from adv_building_gym.config import EnvConfig, load_data_combinator_config
 from adv_building_gym.config.reward_schedule_manager import RewardScheduleManager, RewardScheduleMode
 from adv_building_gym.envs import adv_building_env_creator
+from adv_building_gym.infra_combinator import InfraCombinator
 from adv_building_gym.ray_training import common_model_setup, select_model
 from adv_building_gym.config.training_param_config import TrainingParamConfig
 from adv_building_gym.utils import (
@@ -172,10 +173,10 @@ def _parse_cli_args() -> argparse.Namespace:
 class LoadedConfigs:
     """Bundle of configuration objects produced by ``_load_configs``."""
     training_param_config: TrainingParamConfig
-    active_config: object  # EnvConfig (typing avoided to dodge circular imports)
-    data_combinator: object
+    active_config: EnvConfig
+    data_combinator: DataCombinator
     reward_manager: RewardScheduleManager
-    infra_combinator: Optional[object]
+    infra_combinator: Optional[InfraCombinator]
 
 
 def _load_configs(args: argparse.Namespace) -> LoadedConfigs:
@@ -215,7 +216,6 @@ def _load_configs(args: argparse.Namespace) -> LoadedConfigs:
 
     infra_combinator = None
     if args.infra_schedule:
-        from adv_building_gym.infra_combinator import InfraCombinator
         infra_combinator = InfraCombinator.from_yaml(
             args.infra_schedule, control_step=active_config.CONTROL_STEP,
         )
@@ -311,6 +311,7 @@ def _build_algo_config(args, configs: LoadedConfigs, slurm_resources, exec_date_
         config=algo_config,
         training_config=configs.training_param_config,
         slurm_resources=slurm_resources,
+        env_config=configs.active_config,
         metrics_base_dir="ep_metrics",
         data_combinator=configs.data_combinator,
         log_trajectories=args.log_trajectories,

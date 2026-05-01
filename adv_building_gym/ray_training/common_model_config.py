@@ -10,6 +10,7 @@ import logging
 
 from ray.rllib.algorithms.algorithm_config import AlgorithmConfig
 
+from adv_building_gym.config.env_config import EnvConfig
 from adv_building_gym.ray_training.history_connector import build_env_to_module_connectors
 
 from adv_building_gym.callbacks import (
@@ -146,6 +147,7 @@ def common_model_setup(
     config: AlgorithmConfig,
     slurm_resources: SlurmResources,
     training_config: TrainingParamConfig,
+    env_config: EnvConfig,
     metrics_base_dir: str = "ep_metrics",
     data_combinator: DataCombinator | None = None,
     log_trajectories: bool = False,
@@ -264,6 +266,7 @@ def common_model_setup(
         )
 
     config.env_runners(
+        rollout_fragment_length=env_config.EPISODE_LENGTH, # Collect complete episodes before returning to learner.
         num_env_runners=num_env_runners,
         num_cpus_per_env_runner=num_cpus_per_env_runner,
         episode_lookback_horizon=effective_lookback,  # RLlib default: 1

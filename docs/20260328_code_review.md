@@ -1,9 +1,5 @@
 # Code Review: AdvBuildingGym
 
-**Date:** 2026-03-28
-**Scope:** Full repository analysis against SOLID principles, clean code, dead code, and architectural quality
-**Branch:** `provisional`
-
 ---
 
 ## Table of Contents
@@ -24,11 +20,7 @@
 
 The codebase implements a well-structured plugin architecture for RL-based building energy control. The component model (Infrastructure, StateSource, RewardFunction) is sound in concept. However, the implementation has accumulated significant technical debt across several dimensions:
 
-- **Global mutable state** threatens Ray worker isolation
-- **Circular dependency** in the config module, worked around with `__getattr__` lazy imports
-- **God methods** in core files (`step()` at 115 lines, `reset()` at 95 lines, `main()` at 420+ lines)
 - **27+ TODO/FIXME comments** indicating known but unaddressed issues
-- **Pervasive magic numbers** throughout physics models, reward functions, and controllers
 - **Duplicated patterns** across reward functions, state sources, and training scripts
 
 ---
@@ -42,8 +34,6 @@ The codebase implements a well-structured plugin architecture for RL-based build
 `base_building_gym.py:421` sets `np.random.seed(42)` during data splitting, which resets the global seed at an unpredictable point.
 
 **Impact:** In Ray's multi-worker setup, workers calling `reset()` concurrently will interfere with each other's random state, causing non-reproducible results. The environment already has `self._rng` from `gymnasium.Env.reset(seed=seed)` -- the global seed calls are redundant and harmful.
-
-TODO VP: check this again
 
 ### 2.4 Module-Level Config Singleton
 

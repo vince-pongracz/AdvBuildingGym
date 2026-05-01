@@ -16,6 +16,7 @@ import ray
 from ray.rllib.core.columns import Columns
 from ray.rllib.env.single_agent_episode import SingleAgentEpisode
 
+from adv_building_gym.config.env_config import EnvConfig
 from adv_building_gym.config.training_param_config import TrainingParamConfig
 from adv_building_gym.data_combinator import DataCombinator
 from adv_building_gym.envs import AdvBuildingGym
@@ -27,9 +28,7 @@ from adv_building_gym.ray_training.rl_module_inference import (
 )
 from adv_building_gym.utils import TrajectoryCollector, check_space_compatibility
 
-_DEFAULT_TRAINING_CONFIG = (
-    Path(__file__).resolve().parents[2] / "configs" / "training_param_config.yaml"
-)
+_DEFAULT_TRAINING_CONFIG = Path(__file__).resolve().parents[2] / "configs" / "training_param_config.yaml"
 
 from .results import EpisodeStats, EvalResults
 
@@ -42,7 +41,7 @@ def _timeout_handler(signum, frame):
 
 def evaluate_model(
     checkpoint_path: str,
-    active_config,
+    active_config: EnvConfig,
     num_episodes: int = 1,
     seed: int = 42,
     save_results: bool = True,
@@ -126,6 +125,7 @@ def evaluate_model(
         statesources=active_config.statesources,
         rewards=active_config.reward_config.rewards,
         data_combinator=data_combinator,
+        env_config=active_config,
     )
 
     if log_trajectories:
