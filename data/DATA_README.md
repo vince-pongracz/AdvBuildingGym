@@ -6,6 +6,7 @@ Use `preprocessing/data_setup.py` to orchestrate all data-fetch and preprocessin
 steps from one command.
 
 By default, it runs both pipelines:
+
 - electricity price fetch + preprocessing
 - weather/Zenodo fetch + preprocessing
 

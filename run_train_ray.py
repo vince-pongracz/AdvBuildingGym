@@ -199,7 +199,7 @@ def main():
 
     # Load data combinator from YAML (separate from env config)
     data_combinator = load_data_combinator_config(
-        yaml_path=args.data_config,
+        cfg_yaml_path=args.data_config,
         seed_override=args.seed,
     )
 

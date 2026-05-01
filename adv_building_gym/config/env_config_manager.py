@@ -163,10 +163,10 @@ class EnvConfigManager:
 
         with open(path, 'r') as f:
             config_dict = yaml.safe_load(f)
-        
+
         config = EnvConfigManager.from_dict(config_dict)
         config.log_values()
-        
+
         logger.info("Config loaded successfully: %s", config.env_config_name)
 
         return config

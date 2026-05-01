@@ -18,7 +18,7 @@ _DEFAULT_YAML_PATH = Path(__file__).resolve().parents[2] / "configs" / "data_sch
 
 
 def load_data_combinator_config(
-    yaml_path: str | Path | None = _DEFAULT_YAML_PATH,
+    cfg_yaml_path: str | Path | None = _DEFAULT_YAML_PATH,
     seed_override: int | None = None,
 ) -> DataCombinator:
     """Build a DataCombinator from a YAML config file.
@@ -26,20 +26,20 @@ def load_data_combinator_config(
     Args:
         yaml_path: Path to the YAML config. Defaults to
             ``configs/data_scheduler/train_data_combinator_config.yaml`` in the project root.
-        seed_override: If provided, overrides the seed in the YAML file.
+        seed_override: If provided, overrides the seed coming from the YAML file.
 
     Returns:
         A fully constructed DataCombinator with scenarios expanded from
         the year/source templates defined in the YAML.
     """
-    yaml_path = Path(yaml_path) if yaml_path is not None else _DEFAULT_YAML_PATH
+    cfg_yaml_path = Path(cfg_yaml_path) if cfg_yaml_path is not None else _DEFAULT_YAML_PATH
 
-    if not yaml_path.exists():
-        logger.error("Data combinator YAML config not found: %s", yaml_path)
-        raise FileNotFoundError(f"Data combinator YAML config not found: {yaml_path}")
+    if not cfg_yaml_path.exists():
+        logger.error("Data combinator YAML config not found: %s", cfg_yaml_path)
+        raise FileNotFoundError(f"Data combinator YAML config not found: {cfg_yaml_path}")
 
-    with open(yaml_path, "r") as f:
-        cfg = yaml.safe_load(f)
+    with open(cfg_yaml_path, "r") as data_combinator_cfg_file:
+        cfg = yaml.safe_load(data_combinator_cfg_file)
 
     seed = seed_override if seed_override is not None else cfg["seed"]
     shuffle = cfg["shuffle"]
@@ -50,14 +50,16 @@ def load_data_combinator_config(
     scenarios: list[dict[str, str]] = []
     for source_template in cfg["scenario_sources"]:
         for year in years:
+            # Dictonary comprehension: fills the year in each path template and constructs the scenario dict entry for this source and year
+            # scenario = { "weather": "data/weather/weather_{year}.csv", "price": "data/prices/price_{year}.csv", ... }
             scenario = {
-                name: pattern.format(year=year)
-                for name, pattern in source_template.items()
+                ts_data_type: path_pattern.format(year=year)
+                for ts_data_type, path_pattern in source_template.items()
             }
-            if all(Path(p).exists() for p in scenario.values()):
+            if all(Path(ds_path).exists() for ds_path in scenario.values()):
                 scenarios.append(scenario)
             else:
-                missing = [p for p in scenario.values() if not Path(p).exists()]
+                missing = [ds_path for ds_path in scenario.values() if not Path(ds_path).exists()]
                 logger.debug("Skipping scenario for year %d: missing %s", year, missing)
 
     # Auto-discover synthesised scenarios
@@ -74,7 +76,7 @@ def load_data_combinator_config(
 
     logger.info(
         "Loaded data combinator from %s: %d scenario templates, years %s, synthesized=%s",
-        yaml_path.name, len(scenarios), years, include_synthesized,
+        cfg_yaml_path.name, len(scenarios), years, include_synthesized,
     )
 
     return DataCombinator(

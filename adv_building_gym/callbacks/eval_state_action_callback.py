@@ -56,9 +56,7 @@ def make_eval_state_action_cb_class(
     # Resolve to absolute path at factory time so that file writes land in
     # the correct location regardless of process cwd (Ray Tune changes the
     # Trainable actor's cwd to the trial log directory).
-    tb_log_dir = os.path.join(
-        os.path.abspath(metrics_base_dir), "eval_trajectories", exec_date.strftime("%Y%m%d_%H%M%S"),
-    )
+    tb_log_dir = os.path.join(os.path.abspath(metrics_base_dir), "eval_trajectories", exec_date.strftime("%Y%m%d_%H%M%S"))
 
     # Closure state shared across all callback instances on this worker.
     # Safe because eval runs on a single EnvRunner sequentially
@@ -78,6 +76,8 @@ def make_eval_state_action_cb_class(
             env,
             **kwargs,
         ):
+            # TODO VP 2026.04.30. : Check all getattr() calls, and consider making these explicit callback args if they are always expected to be present. 
+            # This would make the code clearer and more robust to future changes in the env_runner config structure.
             if not getattr(env_runner.config, "in_evaluation", False):
                 return
 
@@ -92,6 +92,7 @@ def make_eval_state_action_cb_class(
                 if not isinstance(info, dict):
                     continue
 
+                # TODO VP 2026.04.30. : Check whether the keys are still present in the info dict.
                 # Raw (denormalised) physical values: temp_in_raw, temp_out_raw, …
                 for key, val in info.get("raw", {}).items():
                     ep_data[f"raw/{key}"].append(float(val))
@@ -133,6 +134,8 @@ def make_eval_state_action_cb_class(
                 all_keys.update(ep.keys())
 
             # Average trajectories per step across episodes
+            # TODO VP 2026.04.30. : Why do we avg the different eval trajectories? Maybe we should keep them separate to see the variance across episodes?
+            # Or if we do want to average, maybe we should also log the variance and min/max across episodes to get a sense of the variability in the trajectories.
             averaged: dict[str, list[float]] = {}
             for key in sorted(all_keys):
                 arrays = [ep[key] for ep in _episode_buffer if key in ep]
@@ -146,6 +149,8 @@ def make_eval_state_action_cb_class(
             # TensorBoard overlays sub-runs with the same tag in one chart.
             run_name = f"iter_{training_iter:06d}"
             run_dir = os.path.join(tb_log_dir, run_name)
+            # TODO VP 2026.04.30. : SummaryWriter use it with with statement to ensure proper resource cleanup, 
+            # and consider whether we need to call flush() after writing scalars to ensure data is written to disk in a timely manner.
             writer = SummaryWriter(log_dir=run_dir)
 
             for key, vals in averaged.items():
@@ -154,10 +159,10 @@ def make_eval_state_action_cb_class(
 
             writer.close()
 
-            num_steps = max((len(v) for v in averaged.values()), default=0)
+            # TODO VP 2026.04.30. : This logging is a bit weird...
+            num_steps = max((len(values) for values in averaged.values()), default=0)
             logger.info(
-                "Eval trajectory round %d (training iter %d): "
-                "%d tags × %d steps → %s",
+                "Eval trajectory round %d (training iter %d): %d tags × %d steps → %s",
                 _eval_round[0], training_iter, len(averaged), num_steps, run_dir,
             )
 

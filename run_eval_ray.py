@@ -95,6 +95,11 @@ def parse_args() -> argparse.Namespace:
         "--plot-all", action="store_true", default=False,
         help="Plot all episodes' trajectories after evaluation (implies --log-trajectories)",
     )
+    parser.add_argument(
+        "--stochastic", action="store_true", default=False,
+        help="Sample actions from the squashed-Gaussian policy instead of "
+            "taking tanh(mean). Per-episode torch RNG is seeded from --seed.",
+    )
     args = parser.parse_args()
 
     logger.info("CMD: %s", " ".join(sys.argv))
@@ -109,6 +114,9 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     """Parse arguments and run evaluation."""
     args = parse_args()
+    
+    # Initialize centralized RNG service for all components
+    RngService.initialize(args.seed)
 
     # Load env config strictly from the YAML path provided via --load-config.
     logger.info("Loading env config from: %s", args.load_config)
@@ -121,18 +129,12 @@ def main() -> None:
     )
     reward_manager = RewardScheduleManager.from_yaml(reward_schedule_path)
     active_config.reward_config.rewards = reward_manager.create_active_rewards()
-    logger.info(
-        "Eval rewards loaded from schedule: %s",
-        reward_manager.get_active_reward_names(),
-    )
+    logger.info("Eval rewards loaded from schedule: %s", reward_manager.get_active_reward_names())
 
     # Initialise singleton component instances (infras, statesources) in the
     # main process.  Rewards are already set above, so init_singletons() will
     # keep them as-is.
     active_config.init_singletons()
-
-    # Initialize centralized RNG service for all components
-    RngService.initialize(args.seed)
 
     config_name = active_config.env_config_name
 
@@ -170,6 +172,7 @@ def main() -> None:
             algorithm_hint=args.algorithm,
             timeout_seconds=300,
             data_combinator=data_combinator,
+            stochastic=args.stochastic,
         )
         logger.info("Evaluation completed successfully!")
 
