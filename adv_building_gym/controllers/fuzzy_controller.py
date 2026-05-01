@@ -1,6 +1,14 @@
 # File: adv_building_gym/controllers/fuzzy_controller.py
 import numpy as np
 
+# TODO VP 2026.04.30. : Generalise controllers to handle observation generally. 
+# Idea would be to have a controller for each manageable state variable (e.g. temperature, battery_SOC, EV_SOC, etc...) 
+# and each controller would emit an action based on the state. Each controller would get 2 or 3 state variables to compare, 
+# e.g. for temperature controller: T_in and T_set, for battery_SOC controller: SOC and SOC_setpoint or SOC, SOC_min, SOC_max, etc...
+# and they would get the action name and space, so they return action in { key, value } form, so they could be executed on the Infrastructure elements
+# -- each infra element can select its own action.
+# Every Infrasttructure element would get its own controller.
+
 
 # FuzzyController
 class FuzzyController:
@@ -103,9 +111,9 @@ class FuzzyController:
 
         Returns:
             (action, None): The first element is the control action in [-1, 1],
-                            consistent with the environment’s action space.
+                            consistent with the environment's action space.
                             Here, a negative sign is applied to invert fuzzy
-                            sign => environment’s sign convention.
+                            sign => environment's sign convention.
         """
         error = obs[0]
         # Clip extreme errors to avoid undefined membership computations

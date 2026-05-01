@@ -178,12 +178,10 @@ def make_episode_metrics_cb_class(
                 for info in infos:
                     if isinstance(info, dict):
                         max_achievable_reward += info.get("max_reward_step", 0.0)
-                        breakdown = info.get("reward_breakdown")
-                        if breakdown:
-                            for comp_name, comp_val in breakdown.items():
-                                reward_component_totals[comp_name] = (
-                                    reward_component_totals.get(comp_name, 0.0) + comp_val
-                                )
+                        reward_breakdown = info.get("reward_breakdown")
+                        if reward_breakdown:
+                            for reward_key, reward_value in reward_breakdown.items():
+                                reward_component_totals[reward_key] = reward_component_totals.get(reward_key, 0.0) + reward_value
                 if infos and len(infos) > 0 and isinstance(infos[-1], dict):
                     cum_E_kWh = infos[-1].get("cum_E_kWh")
 
@@ -195,12 +193,13 @@ def make_episode_metrics_cb_class(
             # Register custom metrics with RLlib's metrics system
             # These appear in results under "env_runners/achieved_reward_mean" etc.
             metrics_logger.log_value("achieved_reward", ep_achieved_reward, reduce="mean")
-            metrics_logger.log_value("reward_rate", reward_rate, reduce="mean")
-            # Also log min/max for analysis
             metrics_logger.log_value("achieved_reward_min", ep_achieved_reward, reduce="min")
             metrics_logger.log_value("achieved_reward_max", ep_achieved_reward, reduce="max")
+
+            metrics_logger.log_value("reward_rate", reward_rate, reduce="mean")
             metrics_logger.log_value("reward_rate_min", reward_rate, reduce="min")
             metrics_logger.log_value("reward_rate_max", reward_rate, reduce="max")
+
             # Log cumulative energy consumption
             if cum_E_kWh is not None:
                 metrics_logger.log_value("cum_E_kWh", cum_E_kWh, reduce="mean")
@@ -210,15 +209,15 @@ def make_episode_metrics_cb_class(
             # Log per-component reward breakdown for TensorBoard.
             # Appears under env_runners/reward/<name> (training) and
             # evaluation/env_runners/reward/<name> (eval).
-            for comp_name, comp_total in reward_component_totals.items():
-                metrics_logger.log_value(f"reward/{comp_name}", comp_total, reduce="mean")
+            for reward_key, comp_total in reward_component_totals.items():
+                metrics_logger.log_value(f"reward/{reward_key}", comp_total, reduce="mean")
 
             episode_id: str = episode.id_[:6]
             logger.info(
                 "Episode %s ended. Length: %s, Achieved Reward: %.2f, Reward Rate: %.4f",
                 episode_id, ep_length, ep_achieved_reward, reward_rate,
             )
-            
+
             if dump_metrics_json:
                 # Save per-episode metrics JSON
                 ep_metrics_dir = f"{_metrics_base_dir}/{_exec_date.strftime('%Y%m%d_%H%M%S')}"

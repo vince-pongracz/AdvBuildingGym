@@ -96,6 +96,11 @@ def parse_args() -> argparse.Namespace:
         "--plot-all", action="store_true", default=False,
         help="Plot all episodes' trajectories after evaluation (implies --log-trajectories)",
     )
+    parser.add_argument(
+        "--stochastic", action="store_true", default=False,
+        help="Sample actions from the squashed-Gaussian policy instead of "
+            "taking tanh(mean). Per-episode torch RNG is seeded from --seed.",
+    )
     args = parser.parse_args()
 
     logger.info("CMD: %s", " ".join(sys.argv))
@@ -110,6 +115,9 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     """Parse arguments and run evaluation."""
     args = parse_args()
+    
+    # Initialize centralized RNG service for all components
+    RngService.initialize(args.seed)
 
     # Load env config strictly from the YAML path provided via --load-config.
     logger.info("Loading env config from: %s", args.load_config)
@@ -128,9 +136,6 @@ def main() -> None:
     # main process.  Rewards are already set above, so init_singletons() will
     # keep them as-is.
     active_config.init_singletons()
-
-    # Initialize centralized RNG service for all components
-    RngService.initialize(args.seed)
 
     # Build DataCombinator from YAML if specified
     data_combinator = None
@@ -166,6 +171,7 @@ def main() -> None:
             algorithm_hint=args.algorithm,
             timeout_seconds=300,
             data_combinator=data_combinator,
+            stochastic=args.stochastic,
         )
         logger.info("Evaluation completed successfully!")
 

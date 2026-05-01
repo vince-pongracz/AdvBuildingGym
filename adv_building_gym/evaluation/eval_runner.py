@@ -13,6 +13,7 @@ from pathlib import Path
 
 import numpy as np
 import ray
+import torch
 from ray.rllib.core.columns import Columns
 from ray.rllib.env.single_agent_episode import SingleAgentEpisode
 
@@ -51,6 +52,7 @@ def evaluate_model(
     timeout_seconds: int = 300,
     data_combinator: DataCombinator | None = None,
     training_config: TrainingParamConfig | None = None,
+    stochastic: bool = False,
 ) -> EvalResults:
     """Evaluate a Ray/RLlib trained model on AdvBuildingGym.
 
@@ -69,6 +71,9 @@ def evaluate_model(
         algorithm_hint: Algorithm name for metadata (informational only).
         timeout_seconds: Maximum wall-clock seconds before aborting.
         data_combinator: Optional DataCombinator for variant scheduling.
+        stochastic: If True, sample actions from the squashed-Gaussian policy
+            instead of taking ``tanh(mean)``. A ``torch.Generator`` is seeded
+            per episode from ``seed + ep`` so runs stay reproducible.
 
     Returns:
         ``EvalResults`` with per-episode stats and summary.
@@ -90,6 +95,12 @@ def evaluate_model(
     logger.info("  Episodes: %d", num_episodes)
     logger.info("  Seed: %d", seed)
     logger.info("  Output: %s", output_dir)
+    logger.info(
+        "  Action mode: %s",
+        "stochastic (squashed-Gaussian sample)"
+        if stochastic
+        else "deterministic (tanh(mean))",
+    )
     logger.info("=" * 70)
 
     # Initialize Ray with minimal resources for CPU-only inference.
@@ -173,6 +184,14 @@ def evaluate_model(
             episode_seed = seed + ep
             logger.info("Episode %d/%d (seed: %d)", episode_num, num_episodes, episode_seed)
 
+            # Per-episode torch RNG so stochastic action sampling is
+            # reproducible across runs with the same --seed.
+            action_generator: torch.Generator | None
+            if stochastic:
+                action_generator = torch.Generator().manual_seed(episode_seed)
+            else:
+                action_generator = None
+
             obs, reset_info = env.reset(seed=episode_seed)
             ep_data_variant = reset_info.get("data_variant")
             ep_episode_date = reset_info.get("episode_date")
@@ -206,13 +225,18 @@ def evaluate_model(
                         rl_module=None,
                         batch=batch,
                         episodes=[sa_episode],
-                        explore=False,
+                        explore=False, # This has nothing to do with action stochasticity.
                         shared_data={},
                     )
                 # ``add_batch_item`` stores: {Columns.OBS: {ep_id: [flat_obs]}}.
                 obs_column = batch[Columns.OBS]
                 flat_obs = next(iter(obs_column.values()))[-1]
-                raw_action = infer_action(rl_module, flat_obs)
+                raw_action = infer_action(
+                    rl_module,
+                    flat_obs,
+                    stochastic=stochastic,
+                    generator=action_generator,
+                )
 
                 next_obs, reward, terminated, truncated, step_info = env.step(raw_action)
 

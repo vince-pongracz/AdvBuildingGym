@@ -194,7 +194,7 @@ def _load_configs(args: argparse.Namespace) -> LoadedConfigs:
     active_config = EnvConfigManager.load(args.load_config)
 
     data_combinator = load_data_combinator_config(
-        yaml_path=args.data_config,
+        cfg_yaml_path=args.data_config,
         seed_override=args.seed,
     )
 

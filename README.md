@@ -47,6 +47,16 @@ Paper link: https://www.nature.com/articles/s41597-022-01156-1
 
 Data link: https://zenodo.org/records/5642902
 
+TODO VP:
+
+About reward shaping: https://link.springer.com/rwe/10.1007/978-0-387-30164-8_731
+
+- Potential based shaping --> add per state key potential rewards -- good for target following rewards, not so good for range controller states.
+- Realisation idea: automatic wrapper on the reward functions, which has the same api as reward functors, but store the previous value and acts as a proxy on reward functors -- substracts potential based reward based on prev state and adds potential based reward for the current state. (TODO VP: potential based reward shaping). Uses a standalone config yaml.
+
+An old paper about reward shaping and construction: https://link.springer.com/article/10.1023/A:1018068507504
+
+
 <!-- TODO VP: add it to the repo setup description... -->
 
 TODO VP: Show expert trajectories to the policies, which work fine -- Programming using expert knowledge

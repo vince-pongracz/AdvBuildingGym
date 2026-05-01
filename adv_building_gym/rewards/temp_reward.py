@@ -32,6 +32,7 @@ class TempReward(RewardFunction):
         self,
         weight: float,
         name: str = "temp_reward",
+        # TODO VP 2026.04.30. : Remove defaults, always take values from the reward config.
         zero_reward_diff_celsius: float = 2.0,
         wrong_direction_penalty: float = -1.0,
     ) -> None:

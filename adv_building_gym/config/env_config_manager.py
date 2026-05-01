@@ -98,7 +98,7 @@ class EnvConfigManager:
         infras_doc = EnvConfigManager._load_yaml(Path(wrapper["infras"]))
         statesources_doc = EnvConfigManager._load_yaml(Path(wrapper["statesources"]))
         env_meta_doc = EnvConfigManager._load_yaml(Path(wrapper["env_meta"]))
-
+        
         config = EnvConfigManager.from_dict(wrapper, infras_doc, statesources_doc, env_meta_doc)
         config.log_values()
 
