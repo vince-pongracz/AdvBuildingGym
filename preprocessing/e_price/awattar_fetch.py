@@ -86,9 +86,9 @@ def fetch_market_data(start_date: str, end_date: str, api_url: str = API_URL) ->
     df["start_timestamp"] = pd.to_datetime(df["start_timestamp"], unit="ms", utc=True)
     df["end_timestamp"] = pd.to_datetime(df["end_timestamp"], unit="ms", utc=True)
 
-    # Convert Eur/MWh to Eur/kWh
+    # Convert Eur/MWh to ct/kWh (1 Eur/MWh = 0.1 ct/kWh)
     # Link: https://www.awattar.at/services/api
-    df["marketprice_eur_per_kwh"] = df["marketprice"] / 1000.0
+    df["marketprice_ct_per_kwh"] = df["marketprice"] / 10.0
 
     df = df.sort_values("start_timestamp").reset_index(drop=True)
     return df

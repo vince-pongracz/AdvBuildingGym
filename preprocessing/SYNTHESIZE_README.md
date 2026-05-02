@@ -10,10 +10,13 @@ preprocessing/
 ├── synthesize.py             # transform engine + CLI + pipeline entry point
 ├── synthesize_config.yaml    # top-level: which syn_cfgs to apply
 └── syn_cfgs/
-    ├── syn_cfg_1.yaml        # weak  (small negative shifts)
-    ├── syn_cfg_2.yaml        # medium (moderate positive shifts)
-    ├── syn_cfg_3.yaml        # strong (large positive shifts)
-    └── syn_cfg_*.yaml        # ...
+    ├── syn_cfg_0.yaml            # noise-only baseline (no constant shift)
+    ├── syn_cfg_1_neg.yaml        # weak negative shifts (cooler / cheaper)
+    ├── syn_cfg_1_pos.yaml        # weak positive shifts (warmer / pricier)
+    ├── syn_cfg_2_neg.yaml        # medium negative shifts
+    ├── syn_cfg_2_pos.yaml        # medium positive shifts
+    ├── syn_cfg_3_neg.yaml        # strong negative shifts
+    └── syn_cfg_3_pos.yaml        # strong positive shifts
 ```
 
 ## How it works
@@ -35,7 +38,7 @@ preprocessing/
 ```yaml
 seed: 42                             # base seed; per-(cfg, file) seeds are derived
 syn_cfg_dir: preprocessing/syn_cfgs  # where syn_cfg_*.yaml-s live
-active_configs: [syn_cfg_1, syn_cfg_2, syn_cfg_3]
+active_configs: [syn_cfg_1_neg, syn_cfg_1_pos, syn_cfg_2_neg, syn_cfg_2_pos, syn_cfg_3_neg, syn_cfg_3_pos]
 ```
 
 ## Per-level config (`syn_cfg_*.yaml`)
@@ -44,7 +47,7 @@ Each level defines, under `price` and `weather`, a per-column transform
 pipeline + optional clip bounds:
 
 ```yaml
-name: syn_cfg_2
+name: syn_cfg_2_pos
 
 price:
   baseprice:
@@ -62,9 +65,11 @@ weather:
 
 Transforms apply in order. Clipping is always the final step.
 
-The three preset configs intentionally share noise levels and only differ in
-their `constant_shift` values, so the synthesised datasets cover three
-"climate / market" offsets at the same noise budget.
+The preset configs intentionally share noise levels and only differ in
+their `constant_shift` values. They come in `_pos` / `_neg` pairs (same
+magnitude, opposite sign) at three intensities (weak / medium / strong) plus
+a noise-only baseline (`syn_cfg_0`), so the synthesised datasets cover a
+symmetric grid of "climate / market" offsets at the same noise budget.
 
 ## Available transforms
 
@@ -117,7 +122,7 @@ python preprocessing/synthesize.py --domain weather \
 
 python preprocessing/synthesize.py --domain price \
     --input data/e_price/awattar/price_data_2023.csv \
-    --only syn_cfg_2
+    --only syn_cfg_2_pos
 ```
 
 `--only` restricts the run to a subset of `active_configs` from the top
@@ -132,19 +137,53 @@ config. `--config` overrides the path to the top-level config.
 For example:
 ```
 data/weather/dwd/preprocessed/2023_merged_04177.csv
-  → 2023_merged_04177_syn_cfg_1.csv
-  → 2023_merged_04177_syn_cfg_2.csv
-  → 2023_merged_04177_syn_cfg_3.csv
+  → 2023_merged_04177_syn_cfg_1_neg.csv
+  → 2023_merged_04177_syn_cfg_1_pos.csv
+  → 2023_merged_04177_syn_cfg_2_neg.csv
+  → 2023_merged_04177_syn_cfg_2_pos.csv
+  → 2023_merged_04177_syn_cfg_3_neg.csv
+  → 2023_merged_04177_syn_cfg_3_pos.csv
 ```
 
-## Open TODOs
+## Noise std targets
 
-- **Tune weather noise std (TODO VP 2026-03-10)** — the per-column `gaussian_noise.std`
-  values in the three syn_cfgs are rough initial guesses scaled to each
-  variable's typical magnitude. They should be tuned against DWD sensor
-  measurement uncertainty and the desired augmentation strength
-  (`temp_amb` 0.5 °C, `avg_wind_speed` 0.3 m/s, `sun_shine` 5.0 J/cm²,
-  `direct_sun_shine` 3.0 J/cm², `diff_sun_shine` 2.0 J/cm²).
+The per-column `gaussian_noise.std` values are sized at the *raw* scale of each
+input — roughly the measurement uncertainty of the underlying sensor / market
+tick — and held constant across all `syn_cfg_*.yaml` presets so that the only
+difference between presets is the `constant_shift` offsets:
+
+| column              | std    | rationale                                                |
+|---------------------|--------|----------------------------------------------------------|
+| `baseprice`         | 0.3    | ct/kWh — tick-size jitter on hourly day-ahead prices     |
+| `temp_amb`          | 0.5    | °C — DWD air-temperature sensor accuracy                 |
+| `avg_wind_speed`    | 0.3    | m/s — DWD anemometer accuracy                            |
+| `direct_sun_shine`  | 3.0    | J/cm² — pyranometer direct-component noise floor         |
+| `diff_sun_shine`    | 2.0    | J/cm² — diffuse-component noise floor                    |
+| `hh_consumption_kW` | 0.05   | kW — baseload jitter for a single SFH (typical 0.1-3 kW) |
+
+`sun_shine` is *not* noised directly: `synthesize.py` reconstructs it after the
+column-wise transforms so the additive identity stays true in the output CSV
+(DWD: `sun_shine = direct_sun_shine + diff_sun_shine`; Zenodo: alias of
+`direct_sun_shine`).
+
+## Constant shift ladder
+
+Each `syn_cfg_*_{neg,pos}.yaml` preset applies a `constant_shift` per column on
+top of the shared noise budget. Magnitudes follow a weak / medium / strong
+ladder (roughly ½× / 1× / 3× the medium tier) and are mirror-symmetric across
+`_neg` / `_pos` twins:
+
+| column                       | syn_cfg_1 (weak) | syn_cfg_2 (medium) | syn_cfg_3 (strong) |
+|------------------------------|------------------|--------------------|--------------------|
+| `baseprice` (ct/kWh)         | ±1.0             | ±2.0               | ±3.0               |
+| `temp_amb` (°C)              | ±0.5             | ±1.0               | ±1.5               |
+| `avg_wind_speed` (m/s)       | ±0.5             | ±1.0               | ±1.5               |
+| `direct_sun_shine` (J/cm²)   | ±0.5             | ±1.0               | ±3.0               |
+| `diff_sun_shine` (J/cm²)     | ±0.3             | ±0.5               | ±1.0               |
+| `hh_consumption_kW` (kW)     | ±0.075           | ±0.125             | ±0.25              |
+
+`syn_cfg_0` carries no shifts — it is the noise-only baseline and always uses
+the std targets above with `constant_shift` omitted.
 
 ## Reproducibility
 

@@ -100,7 +100,7 @@ python preprocessing/e_price/awattar_fetch.py
 ```
 
 Output: `data/e_price/awattar/<YEAR>_prices.csv`
-Columns: `start_timestamp, end_timestamp, marketprice, unit, marketprice_eur_per_kwh`
+Columns: `start_timestamp, end_timestamp, marketprice, unit, marketprice_ct_per_kwh`
 
 #### Step 2: Preprocess
 

@@ -161,9 +161,8 @@ def write_output(
         for fmt in static_formats:
             for i, fig in enumerate(figures):
                 title_obj = fig.layout.title
-                title = (
-                    getattr(title_obj, "text", None) or str(title_obj) or f"fig{i}"
-                )
+                title = getattr(title_obj, "text", None) or str(title_obj) or f"fig{i}"
+
                 tag = title.lower().replace(" ", "_").replace("(", "").replace(")", "")
                 img_path = out_dir / f"{base_name}_{tag}.{fmt}"
                 fig.write_image(str(img_path))

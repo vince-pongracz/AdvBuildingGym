@@ -108,7 +108,7 @@ def fetch_market_data(
 
     Returns:
         DataFrame with columns matching aWATTar fetch output:
-        start_timestamp, end_timestamp, marketprice, unit, marketprice_eur_per_kwh.
+        start_timestamp, end_timestamp, marketprice, unit, marketprice_ct_per_kwh.
     """
     start = date.fromisoformat(start_date)
     end = date.fromisoformat(end_date)
@@ -149,12 +149,12 @@ def fetch_market_data(
         interval = pd.Timedelta(hours=1)
     df["end_timestamp"] = df["start_timestamp"] + interval
 
-    # Convert Eur/MWh to Eur/kWh (1 Eur/MWh = 0.001 Eur/kWh)
-    df["marketprice_eur_per_kwh"] = df["marketprice"] / 1000.0
+    # Convert Eur/MWh to ct/kWh (1 Eur/MWh = 0.1 ct/kWh)
+    df["marketprice_ct_per_kwh"] = df["marketprice"] / 10.0
 
     # Match aWATTar fetch output column order:
-    # start_timestamp, end_timestamp, marketprice, unit, marketprice_eur_per_kwh
-    df = df[["start_timestamp", "end_timestamp", "marketprice", "unit", "marketprice_eur_per_kwh"]]
+    # start_timestamp, end_timestamp, marketprice, unit, marketprice_ct_per_kwh
+    df = df[["start_timestamp", "end_timestamp", "marketprice", "unit", "marketprice_ct_per_kwh"]]
 
     logger.info(
         "Fetched %d records total (%s to %s, interval=%s)",

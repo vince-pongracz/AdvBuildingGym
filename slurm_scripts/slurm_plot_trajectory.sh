@@ -3,6 +3,8 @@
 # Created: 2026-03-13 | Version: 1.0
 # Description: Submit a SLURM job that generates trajectory plots from HDF5 evaluation files
 
+# TODO VP: Simplify plotting scripts.
+
 # -----------------------------------------------------------------------------
 # Usage:
 #   sbatch slurm_scripts/slurm_plot_trajectory.sh [OPTIONS]
@@ -57,12 +59,18 @@ echo "Node                : $(hostname)"
 
 export PYTHONUNBUFFERED=1
 
+# Define SLURM log file paths for redirection
+SLURM_OUTPUT="slurm_logs/plotting/slurm-plot-trajectory-${SLURM_JOB_ID}.out"
+SLURM_ERROR="slurm_logs/plotting/slurm-plot-trajectory-${SLURM_JOB_ID}.err"
+
 # Forward all arguments directly to the plotting module
 CMD=(python -u -m plotting.traj_plotting.trajectory_plot "$@")
 
 echo "======"
 echo "Running: ${CMD[*]}"
-"${CMD[@]}"
+
+# Redirect stdout and stderr to SLURM log files
+"${CMD[@]}" 1> "$SLURM_OUTPUT" 2> "$SLURM_ERROR"
 
 echo "Trajectory plotting completed successfully."
 

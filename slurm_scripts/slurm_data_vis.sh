@@ -36,8 +36,18 @@ declare -A PLOTS=(
   [monthly]="plotting.data_plotting.plot_monthly_overview"
 )
 
+# TODO VP: In case of monthly and yearly normalisation, 
+# the plotting range on the y axis should go from the overall min to the overall max values.
+
 # --- Parse argument (optional -- prefix, empty = run all) --------------------
-TARGET="${1:-}"; TARGET="${TARGET#--}"
+TARGET="${1:-}"
+if [[ "${TARGET}" == --* ]]; then
+  TARGET=""
+  EXTRA_ARGS=("$@")
+else
+  EXTRA_ARGS=("${@:2}")
+  TARGET="${TARGET#--}"
+fi
 case "${TARGET}" in
   "")                 TAGS=("${!PLOTS[@]}") ;;
   cross_year|monthly) TAGS=("${TARGET}") ;;
@@ -62,7 +72,7 @@ echo "=== Launching ${#TAGS[@]} plot(s) in parallel:"
 declare -A PIDS=()
 for tag in "${TAGS[@]}"; do
   echo "  - ${PLOTS[${tag}]}  (stderr -> ${LOG_PREFIX}_${tag}.err)"
-  python -u -m "${PLOTS[${tag}]}" 2>"${LOG_PREFIX}_${tag}.err" &
+  python -u -m "${PLOTS[${tag}]}" "${EXTRA_ARGS[@]}" 2>"${LOG_PREFIX}_${tag}.err" &
   PIDS[${tag}]=$!
 done
 

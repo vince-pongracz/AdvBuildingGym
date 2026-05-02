@@ -57,21 +57,22 @@ full reference.
 - Top level: `preprocessing/synthesize_config.yaml` — base seed and the list of
   active per-level configs.
 - Per level: `preprocessing/syn_cfgs/syn_cfg_*.yaml` — for each domain (`price`,
-  `weather`) and each column, a transform pipeline (Gaussian noise with optional
-  smoothing, constant shifts, linear scaling) plus optional clip bounds. The three
-  shipped presets share noise levels and only differ in their `constant_shift`
-  values, covering three "climate / market" offsets at the same noise budget.
+  `weather`, `hh_consumption`) and each column, a transform pipeline (Gaussian noise
+  with optional smoothing, constant shifts, linear scaling) plus optional clip
+  bounds. The shipped presets share noise levels and only differ in their
+  `constant_shift` values, covering symmetric `_pos` / `_neg` pairs at three
+  intensities plus a noise-only baseline (`syn_cfg_0`).
 
 ```yaml
 # preprocessing/synthesize_config.yaml
 seed: 42
 syn_cfg_dir: preprocessing/syn_cfgs
-active_configs: [syn_cfg_1, syn_cfg_2, syn_cfg_3]
+active_configs: [syn_cfg_1_neg, syn_cfg_1_pos, syn_cfg_2_neg, syn_cfg_2_pos, syn_cfg_3_neg, syn_cfg_3_pos]
 ```
 
 ```yaml
-# preprocessing/syn_cfgs/syn_cfg_2.yaml (excerpt)
-name: syn_cfg_2
+# preprocessing/syn_cfgs/syn_cfg_2_pos.yaml (excerpt)
+name: syn_cfg_2_pos
 
 price:
   baseprice:

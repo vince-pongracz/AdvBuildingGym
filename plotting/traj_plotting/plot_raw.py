@@ -2,7 +2,7 @@
 
 These values are NOT part of the RL observation space.  They exist only
 for human-readable visualisation of the actual physical quantities
-(temperatures in °C, prices in €/kWh, etc.) that the normalised state
+(temperatures in °C, prices in ct/kWh, etc.) that the normalised state
 variables represent.
 """
 
@@ -22,8 +22,8 @@ _UNIT_LABELS: dict[str, str] = {
     "raw_temp_out": "Temperature (°C)",
     "raw_temp_in": "Temperature (°C)",
     "raw_desired_temp_in": "Temperature (°C)",
-    "raw_E_price": "Price (€/kWh)",
-    "raw_E_price_max": "Price (€/kWh)",
+    "raw_E_price": "Price (ct/kWh)",
+    "raw_E_price_max": "Price (ct/kWh)",
     "raw_wind_speed": "Wind speed (m/s)",
     "raw_solar_irradiance": "Solar irradiance (J/cm²)",
 }
@@ -31,7 +31,7 @@ _UNIT_LABELS: dict[str, str] = {
 # Suffix-based fallback for keys not in _UNIT_LABELS (auto-discovered _raw attrs).
 _SUFFIX_UNITS: list[tuple[str, str]] = [
     ("_temp_", "Temperature (°C)"),
-    ("_price_", "Price (€/kWh)"),
+    ("_price_", "Price (ct/kWh)"),
     ("_kW_", "Power (kW)"),
     ("_kWh_", "Energy (kWh)"),
 ]

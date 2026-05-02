@@ -189,6 +189,30 @@ def synthesize_file(
             after.min(), after.mean(), after.max(),
         )
 
+    # Reconstruct `sun_shine` from its noised components so the additive
+    # identity holds in the output CSV (no independent `sun_shine` noise draw).
+    #   - DWD     : `sun_shine = direct_sun_shine + diff_sun_shine`
+    #               (mirrors NaN handling from dwd_preprocess.py — partial sum
+    #               kept; NaN only if both components are NaN).
+    #   - Zenodo  : `sun_shine = direct_sun_shine` (alias preserved; no diffuse
+    #               channel in the source).
+    if "sun_shine" in df.columns and "direct_sun_shine" in df.columns:
+        direct = df["direct_sun_shine"]
+        if "diff_sun_shine" in df.columns:
+            diff = df["diff_sun_shine"]
+            summed = direct.fillna(0) + diff.fillna(0)
+            summed[direct.isna() & diff.isna()] = np.nan
+            df["sun_shine"] = summed
+            source = "direct_sun_shine + diff_sun_shine"
+        else:
+            df["sun_shine"] = direct
+            source = "direct_sun_shine (Zenodo alias)"
+        logger.info(
+            "  sun_shine: recomputed as %s (min=%.4f, mean=%.4f, max=%.4f)",
+            source,
+            df["sun_shine"].min(), df["sun_shine"].mean(), df["sun_shine"].max(),
+        )
+
     df.to_csv(output_path, index=False)
     logger.info("Saved %d synthesised records to %s", len(df), output_path)
     return df
@@ -198,11 +222,13 @@ def synthesize_file(
 # Config loading
 # ---------------------------------------------------------------------------
 
+SYN_DOMAINS: tuple[str, ...] = ("price", "weather", "hh_consumption")
+
+
 @dataclass
 class SynCfg:
     name: str
-    price: dict[str, dict[str, Any]]
-    weather: dict[str, dict[str, Any]]
+    domains: dict[str, dict[str, dict[str, Any]]]
 
 
 def load_syn_cfg(name: str, syn_cfg_dir: Path = DEFAULT_SYN_CFG_DIR) -> SynCfg:
@@ -213,8 +239,7 @@ def load_syn_cfg(name: str, syn_cfg_dir: Path = DEFAULT_SYN_CFG_DIR) -> SynCfg:
         cfg = yaml.safe_load(f) or {}
     return SynCfg(
         name=cfg.get("name", name),
-        price=cfg.get("price", {}) or {},
-        weather=cfg.get("weather", {}) or {},
+        domains={d: cfg.get(d, {}) or {} for d in SYN_DOMAINS},
     )
 
 
@@ -233,9 +258,19 @@ def _output_path(input_path: Path, syn_cfg_name: str) -> Path:
 # Pipeline entry point
 # ---------------------------------------------------------------------------
 
+# Per-domain seed offsets keep RNG streams independent across domains.
+_DOMAIN_SEED_OFFSET: dict[str, int] = {
+    "price": 0,
+    "weather": 5000,
+    "hh_consumption": 10000,
+}
+
+
 def run_synthesis(
     price_files: list[Path],
     weather_files: list[Path],
+    # TODO VP 2026.05.01. : Is it possible that hh_consumption files are None? Check and forbid it.
+    hh_consumption_files: list[Path] | None = None,
     top_cfg_path: Path | str = DEFAULT_TOP_CONFIG,
     only: list[str] | None = None,
 ) -> dict[str, int]:
@@ -244,6 +279,7 @@ def run_synthesis(
     Args:
         price_files: Preprocessed yearly price CSVs.
         weather_files: Preprocessed yearly weather CSVs.
+        hh_consumption_files: Per-building hh_consumption CSVs.
         top_cfg_path: Top-level synthesise config selecting active syn_cfgs.
         only: Optional restriction of active syn_cfgs (overrides top config).
 
@@ -258,34 +294,37 @@ def run_synthesis(
         syn_cfg_dir = (_PREPROC_DIR.parent / syn_cfg_dir).resolve()
 
     active_cfgs = only if only is not None else list(top.get("active_configs", []))
+    stats = {d: 0 for d in SYN_DOMAINS}
     if not active_cfgs:
         logger.warning("No active syn_cfgs — nothing to do")
-        return {"price": 0, "weather": 0}
+        return stats
 
-    stats = {"price": 0, "weather": 0}
+    domain_files: dict[str, list[Path]] = {
+        "price": price_files,
+        "weather": weather_files,
+        "hh_consumption": list(hh_consumption_files or []),
+    }
 
     for cfg_idx, cfg_name in enumerate(active_cfgs):
         syn_cfg = load_syn_cfg(cfg_name, syn_cfg_dir=syn_cfg_dir)
         logger.info("=== Synthesising with %s ===", syn_cfg.name)
 
-        for csv_path in price_files:
-            if not syn_cfg.price:
+        for domain in SYN_DOMAINS:
+            columns_spec = syn_cfg.domains.get(domain) or {}
+            if not columns_spec:
                 continue
-            rng = np.random.default_rng(base_seed + cfg_idx * 1000 + stats["price"])
-            out = _output_path(csv_path, syn_cfg.name)
-            synthesize_file(csv_path, out, syn_cfg.price, rng)
-            stats["price"] += 1
+            for csv_path in domain_files[domain]:
+                rng = np.random.default_rng(
+                    base_seed + cfg_idx * 10_000 + _DOMAIN_SEED_OFFSET[domain] + stats[domain]
+                )
+                out = _output_path(csv_path, syn_cfg.name)
+                synthesize_file(csv_path, out, columns_spec, rng)
+                stats[domain] += 1
 
-        for csv_path in weather_files:
-            if not syn_cfg.weather:
-                continue
-            rng = np.random.default_rng(base_seed + cfg_idx * 1000 + 500 + stats["weather"])
-            out = _output_path(csv_path, syn_cfg.name)
-            synthesize_file(csv_path, out, syn_cfg.weather, rng)
-            stats["weather"] += 1
-
-    logger.info("Synthesis complete: %d price, %d weather file(s).",
-                stats["price"], stats["weather"])
+    logger.info(
+        "Synthesis complete: %d price, %d weather, %d hh_consumption file(s).",
+        stats["price"], stats["weather"], stats["hh_consumption"],
+    )
     return stats
 
 
@@ -297,16 +336,18 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
     parser = argparse.ArgumentParser(description="Generate synthetic CSV via configured transforms")
-    parser.add_argument("--domain", choices=["price", "weather"], required=True)
+    parser.add_argument("--domain", choices=list(SYN_DOMAINS), required=True)
     parser.add_argument("--input", required=True, help="Path to input CSV")
     parser.add_argument("--config", default=str(DEFAULT_TOP_CONFIG), help="Top-level synthesise config")
     parser.add_argument("--only", nargs="+", default=None, help="Restrict to these syn_cfg names (e.g. syn_cfg_2)")
     args = parser.parse_args()
 
     input_path = Path(args.input)
-    if args.domain == "price":
-        run_synthesis(price_files=[input_path], weather_files=[],
-                    top_cfg_path=args.config, only=args.only)
-    else:
-        run_synthesis(price_files=[], weather_files=[input_path],
-                    top_cfg_path=args.config, only=args.only)
+    ds_files_kwargs: dict[str, list[Path]] = {
+        "price_files": [], 
+        "weather_files": [], 
+        "hh_consumption_files": []
+    }
+    ds_files_kwargs[f"{args.domain}_files"] = [input_path]
+
+    run_synthesis(**ds_files_kwargs, top_cfg_path=args.config, only=args.only)

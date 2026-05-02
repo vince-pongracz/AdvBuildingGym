@@ -5,7 +5,7 @@ data (ct/kWh, naive timestamps) matching the price_data format used by
 the environment's EnergyPrice statesource.
 
 Input format (aWATTar fetch output):
-    start_timestamp, end_timestamp, marketprice, unit, marketprice_eur_per_kwh
+    start_timestamp, end_timestamp, marketprice, unit, marketprice_ct_per_kwh
 
 Output format (environment-compatible):
     start, baseprice, unit, hour

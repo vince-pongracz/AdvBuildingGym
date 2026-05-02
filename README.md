@@ -11,6 +11,56 @@
 
 ### Goals
 
+Main objectives: Energy efficiency (kWh), costs (EUR)
+Subobjectives: temp, battery SOC, EV SOC, grid limits
+
+Outline:
+- base: deterministic controllers, no optimisation for cost, for energy efficiency, no joint optimisation -- optimising only a single var, check on Energy efficiency and costs
+ - a couple plots about control results, how well are trajectory or range tracking
+- case1: deterministic controllers on the different actuators, working together, no joint optimisation
+- case1.1: how to jointly optimise with deterministic controllers?
+- case2: RL-based controllers for the standalone actuators -- compare performance with deterministic controllers
+- case3: RL-based controllers, SA, joint optimisation --> not optimal at all
+- case4: Directions of improvement -- SA / MA:
+ - SA:
+  - non stationary reward weighting, weights change per episode -- reward weights are part of the observation space
+   - sample weights based on some distribution
+   - try pre-defined weight combinations
+  - curriculum learning:
+   - TL: gradual -- 1st temp control, then temp and battery control -- using reward schedules
+   - TL: 5 rewards alltogether, always select 2 or 3 and change 1 between iterations -- using reward scheduling
+ - MA:
+  - vector rewards, standalone Q network for each reward, Pareto front search
+  - each actuator is an agent: scalar rewards, curriculum learning: actuator items are selected or deselected per episode -- rewards always there, but action from infrastructure is not always present -- each actuator has its own policy NN.
+- What about generalisation? How will any of these methods work on an unseen infrastructure?
+
+- Real time eval, Monte Carlo simulations of ANY above mentioned solution -- eval scripts
+- Question of reward formulation: everything depends on that...
+
+TODO VP: Terminate an episode earlier than the max episode length if violations are too big. Well, punish such scenarios with a negative reward and terminate episode after that -- so it's still saved as an example of wrongdoing.
+TODO VP: is there such a scenario, where during training env is allowed not to terminate, but in the eval env it must terminate?
+TODO VP: reward idea -- when the EV disconnects and the SOC is in a good range, add a large positive reward. If it disconnects and SOC criteria is not met, add a large negative reward and terminate the env.
+TODO VP: Try to eliminate most of the bad states... -- we want to optimise
+TODO VP: the sparse economic reward must give it's reward when the env terminated -- not at the last timestep...
+TODO VP: setting the gamma (discount factor) to 1.0 -- all reward from all future timesteps would have the same effect as only the next timestep... -- does this help?
+TODO VP: Multi phase rewards -- reward can't decrease between phases... how to ensure this one?
+Agents can't learn the phase change only on their own -- reward signal must be maintained, so if a goal is reached and the objective is shifting, the reward must keep up so the agent can still believe that it's on a good track and concentrate on the next goal, on the next objective... -- this one is important for curriculum learning and switching rewards on the fly
+In the case of multi phase RL (non stationary rewards): encode the phase into the observation space -- so agent can observe it
+Terminate in case of goal reached -- for single objective tasks that works, but how can I apply this to my task?
+
+Difficulty: how to avoid reward tuning/reward engineering but make it work?
+
+CES/CEM -- TODO VP read about them, how to apply them in training?
+CEM for reward weight sampling distributions? -- but eval of the params/reward weights should happen on the same s,a pairs... -- a lot of computational effort.
+
+Idea: 2 stage learning -- CEM: 
+- 1st: Base Trajectories using human expert trajectories -- joint human optimisation --> learns reward function, but needs trajectory "drawer" for easy catch of expert trajectories
+- 2nd: Run the RL with this reward functions -- try to find even more optimal solutions? If better trajectories found, add them to the expert trajectories
+- iteration: find new reward functions based on the new expert trajectories
+
+
+My problem -- energy management: Control problem, almost infinite horizon
+
 - Framework for Residual building energy management, flexible environment: flexibility about rewards, infrastructure elements (actuators -- their physics) and state sources.
 
 - Generalisation: train a single PPO/SAC on a set of slightly different building configs, evaluate how it performs generally on unseen, but similar buildings.
@@ -301,6 +351,8 @@ Conclusion:
 
 Link: https://www.sciencedirect.com/science/article/pii/S2352467720303441
 
+Source code: https://zenodo.org/records/3598386
+
 Summary:
 - Energy management of a microgrid -- wind turbine, ESS, HVAC, grid
 - flexible resources, schedule them (e.g.: directly controllable loads, thermostatically controlled loads, price responsive loads, EVs)
@@ -321,10 +373,12 @@ Summary:
 - Rewards only the energy aspects, uses hard constraints -- backup manual control if e.g. it would underheat the building, etc.. 
 --> comfort aspects are not enforced by rewards.
 - They use DQN, SARSA, Double DQN, PPO, SAC, A3C, DDPG
-- 
+
+- TODO VP: pre heating reward/behaviour when energy is cheap -- how to motivate this with reward? PreTempMaintain
 
 
 - TODO VP: Add FutureObservationCollectorConnector -- to see static future states, like weather, prices, etc... -- add it as optional connector...
+- TODO VP: Prediction model about the future state -- model based RL
 
 - TODO VP: What is MLFlow? -- maybe integrate it?
 - TODO VP: how is the battery handled by energy consumption reward and pricing? Is it free energy or does it count for the rewards?
@@ -333,11 +387,67 @@ Conclusion:
 - Idea: use trajectory tracking for the hard constraints -- for temperature, EV charging, etc.., and use RL based controllers for th ESS -- which can react to the changes, it can plan and follow strategy.
 - Idea: create a plan for EV charge, then track the planned trajectory -- planning can be RL based, trajectory tracking can be rule based.
 - Idea: buying and selling energy prices can differ -- data difference causes then different strategies -- one could show this as well
-- 
+- Important finding: semi deterministic training of A3C -- Eps greedy action selection: for X % select action based on policy, for the remaining select action completely random -- keeps up the exploration in later phases as well.
+- Important finding: experience replay -- replay buffer, off policy algorithms, prioritise newer trajectories from the replay buffer.
 
-TODO VP: Fingrid datasets, maybe something useful, but it rather seems like they rather have energy time series than weather and price time series -- https://data.fingrid.fi/en -- but they gather a lots of data with any kind, so can be useful.
+TODO VP: parallelise the sampling and policy updates
 
 TODO VP: https://www.clear.kit.edu/sparkassenpreis.php -- Thesis einreichen.
+
+#### SACn: Soft Actor-Critic with n-step Returns
+
+Link: https://www.researchgate.net/publication/398720775_SACn_Soft_Actor-Critic_with_n-step_Returns
+
+N step returns: convergence speedup
+Some improvements with the basic n step returns... -- because the original N step return with SAC introduces a bias, because of the changes in action distribution...
+
+Not an important paper !!!
+
+#### Continual Multi-Objective Reinforcement Learning via Reward Model Rehearsal
+
+Link ACM: https://dl.acm.org/doi/10.24963/ijcai.2024/490
+Link paper: https://www.ijcai.org/proceedings/2024/0490.pdf
+
+About MORL
+user weights the preferences -- which reward signal will be stronger, which objective is prioritised
+"evolution of objectives throughout the learning process" -- multi phase, multi objective RL setup
+
+TODO VP: How to mitigate the issue, that the EV controller does not always need a control signal -- but if actions are supressed, the exploration in that dimension dies, so when an EV is connected, the SA policy does not do anything because it has not discovered anything yet -- it was supressed.
+--> this one yields for a standalone policy NN and standalone action selection for the EV controller as it's a shorter term problem...
+
+"agent encounters a sequence of MORL tasks with objectives altering continually" -- it's like my constrained random reward selection idea/solution
+
+some technique to update the policy with outdated rewards to not forget the older learnt behaviour... -- prevent catastrophic forgetting
+
+TODO VP: continue a bit before the "4 Method" section
+
+
+
+
+TODO VP: Hypervolume metric -- famous MORL metric
+
+
+#### A practical guide to multi-objective reinforcement learning and planning
+
+Link: https://link.springer.com/article/10.1007/s10458-022-09552-y
+
+TODO VP: read this
+
+#### Meta-Learning for Multi-objective Reinforcement Learning
+
+Link: https://kth.diva-portal.org/smash/record.jsf?pid=diva2%3A1445556&dswid=-9547 / https://arxiv.org/abs/1811.03376
+
+#### Dynamic weights in multi-objective deep reinforcement learning
+
+Link: https://biblio.vub.ac.be/vubirfiles/76358018/abels19a.pdf
+
+#### Prediction-Guided Multi-Objective Reinforcement Learning for Continuous Robot Control
+
+Link: https://people.csail.mit.edu/jiex/papers/PGMORL/paper.pdf
+
+"updates a policy population using an evolutionary algorithm to approximate the Pareto front"
+
+
 
 #### Deep Reinforcement Learning for Real-Time Energy Management in Smart Home
 

@@ -28,7 +28,7 @@ sac:
   #                            / replay_batch_size
   # If training_intensity is omitted, RLlib uses natural = 1 train batch per inserted batch.
   # Link: https://docs.ray.io/en/latest/_modules/ray/rllib/algorithms/sac/sac.html
-  episodes_to_keep_in_replay_buffer: 1200
+  episodes_to_keep_in_replay_buffer: 365 # 1200
   n_step_return: 6
   learning_starts_after_n_episodes: 50 # Warm up replay buffer with 50 episodes before learning starts.
 
@@ -44,6 +44,7 @@ sac:
 # plain obs keys and stack via the same uniform code path.
 # Link: docs/hst_mgmt.md
 hst:
+  offsets: [-1, -2, -3, -4, -6, -12, -18, -24, -36, -48, -60, -72, -84, -96, -108, -120, -132, -144]
   # Time-varying observations worth stacking. Mirrors the ``s_*`` keys published
   # by statesources/infrastructure plus the ``a_*_prev`` keys from
   # building_adv.py. Static-per-episode targets (s_*_target_*) and quasi-static
@@ -72,4 +73,3 @@ hst:
   #   - a_hp_prev
   #   - a_battery_prev
   #   - a_lin_ev_charger_prev
-  offsets: [-1, -2, -3, -4, -6, -12, -18, -24, -36, -48, -60, -72, -84, -96, -108, -120, -132, -144]

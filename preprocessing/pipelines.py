@@ -346,16 +346,18 @@ def run_dwd_pipeline(args: argparse.Namespace) -> dict[str, int]:
     return stats
 
 
-def _discover_synthesis_inputs(args: argparse.Namespace) -> tuple[list[Path], list[Path]]:
+def _discover_synthesis_inputs(args: argparse.Namespace) -> tuple[list[Path], list[Path], list[Path]]:
     """Discover yearly preprocessed CSVs eligible for synthesis.
 
-    Globs the price (awattar/e_charts) and weather (DWD/Zenodo) output
-    directories for per-year CSVs, excluding any pre-existing synthesised
-    siblings (``*_syn_cfg_*.csv``).
+    Globs the price (awattar/e_charts), weather (DWD/Zenodo), and
+    hh_consumption output directories for per-year CSVs, excluding any
+    pre-existing synthesised siblings (``*_syn_cfg_*.csv``) and aggregated
+    consumption files.
     """
     price_dir = resolve_setup_path(args.price_output_dir)
     dwd_dir = resolve_setup_path(args.dwd_output_dir) / "preprocessed"
     zenodo_csv_dir = resolve_setup_path(args.weather_csv_dir)
+    hh_dir_path = resolve_setup_path(args.hh_consumption_output_dir)
 
     def _no_syn(paths) -> list[Path]:
         return sorted(p for p in paths if "_syn_cfg_" not in p.name)
@@ -373,7 +375,12 @@ def _discover_synthesis_inputs(args: argparse.Namespace) -> tuple[list[Path], li
     if zenodo_csv_dir.is_dir():
         weather_files.extend(_no_syn(zenodo_csv_dir.glob("*_weather.csv")))
 
-    return price_files, weather_files
+    hh_files: list[Path] = []
+    if hh_dir_path.is_dir():
+        # Per-building only; aggregated CSV is a sum and doesn't need its own noise stream.
+        hh_files.extend(_no_syn(p for p in hh_dir_path.glob("*_SFH*.csv")))
+
+    return price_files, weather_files, hh_files
 
 
 def run_synthesize(args: argparse.Namespace) -> dict[str, int]:
@@ -390,12 +397,12 @@ def run_synthesize(args: argparse.Namespace) -> dict[str, int]:
     """
     if not getattr(args, "synthesize", False):
         logger.info("No synthesis")
-        return {"price": 0, "weather": 0}
+        return {"price": 0, "weather": 0, "hh_consumption": 0}
 
-    price_files, weather_files = _discover_synthesis_inputs(args)
+    price_files, weather_files, hh_files = _discover_synthesis_inputs(args)
     logger.info(
-        "Discovered %d price + %d weather CSVs for synthesis",
-        len(price_files), len(weather_files),
+        "Discovered %d price + %d weather + %d hh_consumption CSVs for synthesis",
+        len(price_files), len(weather_files), len(hh_files),
     )
 
     cfg_path = resolve_setup_path(getattr(args, "synthesize_config", "preprocessing/synthesize_config.yaml"))
@@ -403,6 +410,7 @@ def run_synthesize(args: argparse.Namespace) -> dict[str, int]:
     return run_synthesis(
         price_files=price_files,
         weather_files=weather_files,
+        hh_consumption_files=hh_files,
         top_cfg_path=cfg_path,
     )
 

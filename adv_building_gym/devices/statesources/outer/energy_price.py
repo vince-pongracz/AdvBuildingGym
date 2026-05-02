@@ -24,7 +24,7 @@ class EnergyPriceDataSource(StateSource):
         self.normalise = Normalisation.init(normalise)
 
         self.price_max: float = 1.0
-        # Raw baseprice (€/kWh) for the current step — updated by update_state.
+        # Raw baseprice (ct/kWh) for the current step — updated by update_state.
         self.baseprice_raw: float = 0.0
         if self.ts is not None:
             logger.info("Use data file: %s", ds_path)
@@ -46,7 +46,7 @@ class EnergyPriceDataSource(StateSource):
 
         if "s_E_price" not in state_spaces.keys():
             state_spaces["s_E_price"] = Box(low=-1, high=1, shape=(1,), dtype=np.float32)
-        # Raw maximum energy price (€/kWh) — changes only when a new data
+        # Raw maximum energy price (ct/kWh) — changes only when a new data
         # variant is loaded.  Allows the policy to reconstruct physical
         # price from the normalised E_price observation.
         if "ctxt_E_price_max" not in state_spaces.keys():
@@ -56,6 +56,9 @@ class EnergyPriceDataSource(StateSource):
             state_spaces["raw_sim_hour"] = Box(low=np.full((1,), 0, dtype=np.float32),
                                             high=np.full((1,), np.inf, dtype=np.float32),
                                             shape=(1,), dtype=np.float32)
+            
+        # TODO VP 2026.05.02. : Idea -- within a day, store the normalised daily min and max prices.
+        # so it's within the state space how high is the current price -- compared to the known min and max.
 
         return state_spaces, action_spaces
 
@@ -70,7 +73,7 @@ class EnergyPriceDataSource(StateSource):
         self.baseprice_raw = float(row["baseprice"])
 
         states["s_E_price"][0] = np.float32(energy_price)
-        # Raw maximum price (€/kWh) — constant within an episode, changes
+        # Raw maximum price (ct/kWh) — constant within an episode, changes
         # only when a new data variant is loaded.
         states["ctxt_E_price_max"][0] = np.float32(self.price_max)
 
