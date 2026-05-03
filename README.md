@@ -37,11 +37,9 @@ Outline:
 - Real time eval, Monte Carlo simulations of ANY above mentioned solution -- eval scripts
 - Question of reward formulation: everything depends on that...
 
-TODO VP: Terminate an episode earlier than the max episode length if violations are too big. Well, punish such scenarios with a negative reward and terminate episode after that -- so it's still saved as an example of wrongdoing.
 TODO VP: is there such a scenario, where during training env is allowed not to terminate, but in the eval env it must terminate?
-TODO VP: reward idea -- when the EV disconnects and the SOC is in a good range, add a large positive reward. If it disconnects and SOC criteria is not met, add a large negative reward and terminate the env.
-TODO VP: Try to eliminate most of the bad states... -- we want to optimise
-TODO VP: the sparse economic reward must give it's reward when the env terminated -- not at the last timestep...
+
+- Try to eliminate most of the bad states... -- we want to optimise
 TODO VP: setting the gamma (discount factor) to 1.0 -- all reward from all future timesteps would have the same effect as only the next timestep... -- does this help?
 TODO VP: Multi phase rewards -- reward can't decrease between phases... how to ensure this one?
 Agents can't learn the phase change only on their own -- reward signal must be maintained, so if a goal is reached and the objective is shifting, the reward must keep up so the agent can still believe that it's on a good track and concentrate on the next goal, on the next objective... -- this one is important for curriculum learning and switching rewards on the fly

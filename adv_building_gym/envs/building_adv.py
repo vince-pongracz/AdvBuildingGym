@@ -429,6 +429,10 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         self._component_info["action_history"] = self._action_history.history
         self._component_info["episode_length"] = self.max_iteration
         self._component_info["iteration"] = self.iteration
+        # Published before rewards so episode-aggregated rewards (e.g.
+        # LongTermEconomicReward) can flush their window on early termination,
+        # not only at max_iteration.
+        self._component_info["terminated"] = self.is_done()
 
     def _compute_rewards(self, action) -> tuple[float, dict[str, float], float]:
         return self._reward_aggregator.aggregate(

@@ -23,12 +23,17 @@ class LongTermEconomicReward(RewardFunction):
         raw_step = -net_power_kW * E_price / reference_power_kW
                    * (export_bonus if net_power_kW < 0 else 1)
 
-    On the final step the emitted reward is
-    ``weight * clip(sum(raw_step), -episode_length, episode_length)``
-    with ``max_reward_step = weight * episode_length``. On all other
-    steps the emitted pair is ``(0.0, 0.0)`` so the dense rewards still
-    define ``reward_rate`` — at the window boundary both numerator and
-    denominator jump together.
+    The window is flushed either at the natural ``episode_length``
+    boundary or whenever the env signals termination early via
+    ``info["terminated"]`` (published before rewards in
+    ``building_adv.py``). The emitted reward is
+    ``weight * clip(sum(raw_step), -steps, steps)`` with
+    ``max_reward_step = weight * steps``, where ``steps`` is the number
+    of steps actually accumulated. Scaling to ``steps`` (not
+    ``episode_length``) keeps ``reward_rate`` consistent under early
+    termination — a full-window denominator with a partially filled
+    accumulator would silently dilute the signal. On all other steps the
+    emitted pair is ``(0.0, 0.0)``.
 
     The window length is read from ``info["episode_length"]`` (published
     each step by the env from ``EnvConfig.EPISODE_LENGTH``) so there is
@@ -113,13 +118,16 @@ class LongTermEconomicReward(RewardFunction):
         self._accum += float(raw_step)
         self._step_in_window += 1
 
-        if self._step_in_window < episode_length:
+        # Flush at the natural window boundary OR on any early termination
+        # signalled by the env. Without the terminated check the accumulated
+        # signal would be silently discarded when an episode ends short.
+        terminated = bool(info.get("terminated", False))
+        if self._step_in_window < episode_length and not terminated:
             return 0.0, 0.0
 
-        max_step = self.weight * float(episode_length)
-        window_reward = float(np.clip(self._accum,
-                                    -float(episode_length),
-                                    float(episode_length)))
+        steps = max(self._step_in_window, 1)
+        max_step = self.weight * float(steps)
+        window_reward = float(np.clip(self._accum, -float(steps), float(steps)))
         self._reset_window()
         return float(self.weight * window_reward), max_step
 

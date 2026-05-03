@@ -68,8 +68,7 @@ def select_model(
             num_epochs=training_config.ppo_num_epochs,  # RLlib default: 30
             use_critic=True,  # RLlib default
             use_gae=True,  # RLlib default
-            # TODO VP 2026.05.02. : What's the rllib default here?
-            lambda_=0.95, # GAE lambda, 0 means 1 step return, 1.0 means infinite step return, limited by the rollout length. 
+            lambda_=0.95, # GAE lambda, 0 means 1 step return, 1.0 means infinite step return, limited by the rollout length. # RLlib default: 1
             use_kl_loss=True,  # RLlib default
             # NOTE VP 2026.01.12. : tune these and other hyperparameters later -- using tune
         )

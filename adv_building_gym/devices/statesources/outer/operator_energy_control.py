@@ -7,8 +7,11 @@ from gymnasium.spaces import Box
 
 from ..base import StateSource
 from adv_building_gym.utils.serializable import ComponentRegistry
+from adv_building_gym.utils.normalisation import Normalisation, normalise_with_scale_factor
 
 logger = logging.getLogger(__name__)
+
+NORM_COLUMN: str = "operator_energy_max_norm"
 
 
 class OperatorEnergyControl(StateSource):
@@ -20,43 +23,45 @@ class OperatorEnergyControl(StateSource):
     (e.g., peak demand management, grid stability requirements).
     """
 
+    # max_power_kW is derived from data, don't serialize
+    _exclude_params: ClassVar[Set[str]] = {'iteration', 'ts', 'max_power_kW'}
+
     def __init__(self,
                 name: str,
-                max_power_kW: float,
-                ds_path: str) -> None:
+                ds_path: str,
+                normalise: Normalisation | str | None = Normalisation.MAX_ABS_SCALING) -> None:
         """
         Initialize OperatorEnergyControl datasource.
 
         Args:
             name: Datasource identifier
-            max_power_kW: Maximum power limit in kW for normalization
             ds_path: CSV file path with operator energy limit time series (required)
+            normalise: Normalisation method applied to the operator power limit
+                column. Defaults to MAX_ABS_SCALING (raw / max), preserving the
+                non-negative [0, 1] range of the original implementation.
         """
         super().__init__(name, ds_path)
-        self.max_power_kW = max_power_kW
+        self.normalise = Normalisation.init(normalise)
+        self.max_power_kW: float = 1.0
 
         if self.ts is None:
-            raise ValueError(
-                f"OperatorEnergyControl '{name}' requires a CSV at ds_path; got '{ds_path}'."
-            )
+            raise ValueError(f"OperatorEnergyControl '{name}' requires a CSV at ds_path; got '{ds_path}'.")
 
         logger.info("Use data file: %s", ds_path)
+        self._run_post_load()
+
+    def _post_load_data_processing(self) -> None:
+        """Normalise the operator power limit column and cache the scale factor."""
         if "operator_energy_max [kW]" in self.ts.columns:
             column_name = "operator_energy_max [kW]"
         elif "operator_energy_max" in self.ts.columns:
             column_name = "operator_energy_max"
         else:
             raise ValueError(
-                f"OperatorEnergyControl '{name}': CSV '{ds_path}' has no "
+                f"OperatorEnergyControl '{self.name}': CSV '{self.ds_path}' has no "
                 "'operator_energy_max [kW]' or 'operator_energy_max' column."
             )
-
-        # TODO VP 2026.04.28. : Refactor normalisation to use normalisation utils and 
-        # support different normalisation methods (min-max, z-score, etc.) 
-        # instead of hardcoding max-based normalization here.
-        self.max_power_kW = float(self.ts[column_name].max())
-        # Normalize to [0, 1] based on max_power_kW; clip in case CSV exceeds it.
-        self.ts["operator_energy_max_norm"] = (self.ts[column_name] / self.max_power_kW).clip(0.0, 1.0)
+        self.ts[NORM_COLUMN], self.max_power_kW = normalise_with_scale_factor(self.ts[column_name], self.normalise)
 
     def setup_spaces(self,
                     state_spaces: OrderedDict,
