@@ -12,6 +12,8 @@ import gymnasium
 
 from gymnasium.wrappers import RescaleAction
 
+from adv_building_gym.rewards import SumRewardAggregator
+
 from .building_adv import AdvBuildingGym
 from .wrappers import FlattenAction
 
@@ -97,6 +99,7 @@ def adv_building_env_creator(config: dict) -> gymnasium.Env:
         rewards=rewards,
         env_config=env_config,
         data_combinator=config.get("data_combinator"),
+        reward_aggregator=SumRewardAggregator(),
         instance_id=instance_id,
     )
     

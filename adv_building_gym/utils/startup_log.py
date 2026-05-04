@@ -176,40 +176,51 @@ def _section_training_setup(
     slurm_resources: Any,
     run_name: str,
     experiment_path: str,
+    exec_date: datetime.datetime | None = None,
 ) -> list[Section]:
     algo = args.algorithm.upper()
     tpc = training_param_config
     if args.algorithm == "ppo":
-        hp = (
+        hyperparams = (
             f"lr={tpc.learning_rate}  "
             f"episodes_per_iter={tpc.ppo_episodes_per_iteration}  "
             f"minibatch={tpc.ppo_minibatch_size}  "
             f"epochs={tpc.ppo_num_epochs}"
         )
     elif args.algorithm == "sac":
-        hp = (
+        hyperparams = (
             f"lr={tpc.learning_rate}  "
             f"replay_batch={tpc.sac_replay_batch_size}  "
             f"days_in_buffer={tpc.sac_episodes_to_keep_in_replay_buffer}  "
             f"train_intensity={tpc.sac_training_intensity}  "
         )
-    else:
-        hp = f"lr={tpc.learning_rate}"
 
-    return [(
-        "TRAINING SETUP",
-        [
-            f"  Algorithm       : {algo}  (new API stack)",
-            f"  Hyperparams     : {hp}",
-            f"  Episodes        : {args.episodes}",
-            f"  Ray resources   : cpus={slurm_resources.num_cpus}  gpus={slurm_resources.num_gpus}",
-            f"  Metric          : {args.metric}  (mode=max)",
-            f"  Checkpoint freq : every {args.checkpoint_frequency_episodes} episodes",
-            f"  Trajectories    : {'enabled' if args.log_trajectories else 'disabled'}",
-            f"  Run name        : {run_name}",
-            f"  Run dir         : {experiment_path}",
-        ],
-    )]
+    else:
+        hyperparams = f"lr={tpc.learning_rate}"
+
+    body = [
+        f"  Algorithm       : {algo}  (new API stack)",
+        f"  Hyperparams     : {hyperparams}",
+        f"  Episodes        : {args.episodes}",
+        f"  Ray resources   : cpus={slurm_resources.num_cpus}  gpus={slurm_resources.num_gpus}",
+        f"  Metric          : {args.metric}  (mode=max)",
+        f"  Checkpoint freq : every {args.checkpoint_frequency_episodes} episodes",
+        f"  Trajectories    : {'enabled' if args.log_trajectories else 'disabled'}",
+    ]
+
+    if args.log_trajectories:
+        # Mirrors common_model_setup default: metrics_base_dir/trajectories/<exec_date>
+        # consumed by make_trajectory_logging_cb_class.
+        stamp = (exec_date or datetime.datetime.now()).strftime("%Y%m%d_%H%M%S")
+        traj_dir = (Path.cwd() / "ep_metrics" / "trajectories" / stamp).as_posix()
+        body.append(f"  Trajectory dir  : {traj_dir}")
+
+    body.extend([
+        f"  Run name        : {run_name}",
+        f"  Run dir         : {experiment_path}",
+    ])
+
+    return [("TRAINING SETUP", body)]
 
 
 def _section_components(env_config: Any) -> list[Section]:
@@ -308,7 +319,7 @@ def log_startup_banner(
         *_section_eval(args, env_config, experiment_path, seed),
         *_section_env_config(env_config),
         *_section_training_setup(
-            args, training_param_config, slurm_resources, run_name, experiment_path
+            args, training_param_config, slurm_resources, run_name, experiment_path, exec_date=exec_date,
         ),
         *_section_components(env_config),
         *_section_rewards(reward_manager),

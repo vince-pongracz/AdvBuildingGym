@@ -59,18 +59,11 @@ echo "Node                : $(hostname)"
 
 export PYTHONUNBUFFERED=1
 
-# Define SLURM log file paths for redirection
-SLURM_OUTPUT="slurm_logs/plotting/slurm-plot-trajectory-${SLURM_JOB_ID}.out"
-SLURM_ERROR="slurm_logs/plotting/slurm-plot-trajectory-${SLURM_JOB_ID}.err"
-
-# Forward all arguments directly to the plotting module
-CMD=(python -u -m plotting.traj_plotting.trajectory_plot "$@")
-
+# Forward all arguments directly to the plotting module.
+# stdout/stderr are captured by SLURM via the #SBATCH --output / --error directives.
 echo "======"
-echo "Running: ${CMD[*]}"
-
-# Redirect stdout and stderr to SLURM log files
-"${CMD[@]}" 1> "$SLURM_OUTPUT" 2> "$SLURM_ERROR"
+echo "Running: python -u -m plotting.traj_plotting.trajectory_plot $*"
+python -u -m plotting.traj_plotting.trajectory_plot "$@"
 
 echo "Trajectory plotting completed successfully."
 

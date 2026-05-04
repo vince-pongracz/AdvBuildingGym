@@ -58,26 +58,26 @@ class DataVariantManager:
         options: Optional[dict] = None,
     ) -> int:
         """Compute starting row offset and update episode_date / day_mode."""
-        steps_per_day = self.episode_length
-        max_days = 1
+        steps_per_episode = self.episode_length
+        max_episodes = 1
         data_start_year = None
         for src in statesources:
-            if src.ts is not None and len(src.ts) >= steps_per_day:
-                max_days = len(src.ts) // steps_per_day
+            if src.ts is not None and len(src.ts) >= steps_per_episode:
+                max_episodes = len(src.ts) // steps_per_episode
                 for col in ("start", "start_timestamp", "date", "datetime"):
                     if col in src.ts.columns:
                         data_start_year = pd.Timestamp(src.ts[col].iloc[0]).year
                         break
                 break
 
-        row_offset, self.episode_day_mode = self.data_combinator.get_day_offset(
-            self.episode_count, max_days, steps_per_day, data_start_year, rng,
+        start_row_offset, self.episode_day_mode = self.data_combinator.get_episode_start_offset(
+            self.episode_count, max_episodes, steps_per_episode, data_start_year, rng,
         )
-        self.episode_date = resolve_episode_date(statesources, row_offset, control_step)
+        self.episode_date = resolve_episode_date(statesources, start_row_offset, control_step)
 
         if options and "row_offset" in options:
-            row_offset = int(options["row_offset"])
-            self.episode_date = resolve_episode_date(statesources, row_offset, control_step)
+            start_row_offset = int(options["row_offset"])
+            self.episode_date = resolve_episode_date(statesources, start_row_offset, control_step)
             self.episode_day_mode = "manual"
 
-        return row_offset
+        return start_row_offset

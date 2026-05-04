@@ -48,7 +48,7 @@ class EVChargingOnTimeReward(RewardFunction):
         super().__init__(weight, name)
         self.harsh_penalty = harsh_penalty
         
-    # TODO VP 2026.03.25. : Check whether pydispatcher could be used instead of info objects...
+    # TODO noprio VP 2026.03.25. : Check whether pydispatcher could be used instead of info objects...
 
     def get_reward(self, actions: Dict, states: Dict, info: dict | None = None) -> tuple[float, float]:
         """Calculate EV charging progress reward.

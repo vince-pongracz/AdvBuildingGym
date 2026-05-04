@@ -37,6 +37,22 @@ class RewardFunction(Serializable):
         """
         raise NotImplementedError()
 
+    def should_terminate(self, actions, states, info: dict | None = None) -> bool:
+        """Return True if this reward judges the episode should end this step.
+
+        Called by the env in a dedicated termination pre-pass *before*
+        ``get_reward``, so the resulting ``info["terminated"]`` flag is
+        already correct when rewards run. Replaces the earlier pattern
+        where rewards mutated ``info["request_terminate"]`` mid-aggregation
+        — that coupled rewards by ordering and hid side effects inside
+        ``get_reward``. Must be pure (no info mutation, no internal state
+        change); ``get_reward`` is responsible for the actual penalty.
+
+        Default: False. Override in rewards that represent hard bands
+        (operator over-limit, comfort breach, EV session failure, ...).
+        """
+        return False
+
     @classmethod
     def from_dict(
         cls: Type[T],

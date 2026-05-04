@@ -36,9 +36,6 @@ declare -A PLOTS=(
   [monthly]="plotting.data_plotting.plot_monthly_overview"
 )
 
-# TODO VP: In case of monthly and yearly normalisation, 
-# the plotting range on the y axis should go from the overall min (all month min or all year min) to the overall max (all month max or all year max) values.
-
 # --- Parse argument (optional -- prefix, empty = run all) --------------------
 TARGET="${1:-}"
 if [[ "${TARGET}" == --* ]]; then

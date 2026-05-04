@@ -22,6 +22,7 @@ from adv_building_gym.config.training_param_config import TrainingParamConfig
 from adv_building_gym.data_combinator import DataCombinator
 from adv_building_gym.envs import AdvBuildingGym
 from adv_building_gym.envs.env_creator import wrap_action_space
+from adv_building_gym.rewards import SumRewardAggregator
 from adv_building_gym.ray_training.history_connector import build_env_to_module_connectors
 from adv_building_gym.ray_training.rl_module_inference import (
     infer_action,
@@ -136,6 +137,7 @@ def evaluate_model(
         statesources=active_config.statesources,
         rewards=active_config.reward_config.rewards,
         data_combinator=data_combinator,
+        reward_aggregator=SumRewardAggregator(),
         env_config=active_config,
     )
 

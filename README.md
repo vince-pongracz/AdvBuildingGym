@@ -15,10 +15,13 @@ Main objectives: Energy efficiency (kWh), costs (EUR)
 Subobjectives: temp, battery SOC, EV SOC, grid limits
 
 Outline:
-- base: deterministic controllers, no optimisation for cost, for energy efficiency, no joint optimisation -- optimising only a single var, check on Energy efficiency and costs
+- base: deterministic controllers, no optimisation for cost, for energy efficiency, no joint optimisation -- optimising only a single var, check on Energy efficiency and costs.
+ - Energy efficiency and cost optimisation is not feasible, as we do not know which cost trajectory to follow (okay, system could be forced towards zero, however it's not optimal for sure and it's not feasible) can't really feasible as these controllers are for trajectory tracking, not really for optimisation.
  - a couple plots about control results, how well are trajectory or range tracking
 - case1: deterministic controllers on the different actuators, working together, no joint optimisation
 - case1.1: how to jointly optimise with deterministic controllers?
+  - cascade controllers ???
+  - 
 - case2: RL-based controllers for the standalone actuators -- compare performance with deterministic controllers
 - case3: RL-based controllers, SA, joint optimisation --> not optimal at all
 - case4: Directions of improvement -- SA / MA:
@@ -38,9 +41,15 @@ Outline:
 - Question of reward formulation: everything depends on that...
 
 TODO VP: is there such a scenario, where during training env is allowed not to terminate, but in the eval env it must terminate?
+--> yes, during eval termination is not allowed at all, so it's maybe worth switching off the termination during eval.
+
+TODO VP: How is that possible that during eval the env has not terminated because of the too low raw_temp_in value?
+
 
 - Try to eliminate most of the bad states... -- we want to optimise
+
 TODO VP: setting the gamma (discount factor) to 1.0 -- all reward from all future timesteps would have the same effect as only the next timestep... -- does this help?
+
 TODO VP: Multi phase rewards -- reward can't decrease between phases... how to ensure this one?
 Agents can't learn the phase change only on their own -- reward signal must be maintained, so if a goal is reached and the objective is shifting, the reward must keep up so the agent can still believe that it's on a good track and concentrate on the next goal, on the next objective... -- this one is important for curriculum learning and switching rewards on the fly
 In the case of multi phase RL (non stationary rewards): encode the phase into the observation space -- so agent can observe it
@@ -84,6 +93,12 @@ My problem -- energy management: Control problem, almost infinite horizon
 - Extension idea: use expert action trajectories to train policies -- at the SAC it's straightforward (push episodes into the replay buffer, they will be sampled), but at the PPO it shouldn't be too complicated as well
 
 - MORL, achieve Pareto front: reward functions have dynamic weighthing, which is always sampled and added to the state space. During training, the rewards are weighted with these weights. During eval, they are random from the same distribution. During user eval, user gives these weights and eval is based on this -- policy weighting is part of the state space.
+
+### Issues
+
+- Dynamic env assumed -- during development the env changes, the rewards change, their weights change
+- TODO VP: check the raw data plotting
+- TODO VP: the plots about the syn_cfg time series csv-s should be plotted to the same plot, but they should have different traces, with different colors.
 
 ## References, data sources
 
@@ -259,6 +274,11 @@ Paper:
 
 New idea for my thesis:
 - predict actions and states for N steps (model based RL) -- MPC and Monte Carlo sims would be something like this
+See into the future for statesources where it's possible.
+TODO VP 2026.01.20. : Add forecasting window (and thus MPC) for the states and the
+actions as well in the config, generally window size is 0.
+Allow it only for the forecasted desired states -- not for the actual system states
+Handle if no more forecasting is available (csv ended and similar scenarios)
 
 #### State of the Art of Machine Learning Models in Energy Systems, a Systematic Review
 
@@ -297,7 +317,6 @@ Conclusion:
 
 
 TODO VP: look up KIT EnergyLab 2.0 data sources for weather data -- is it existing, can I use it?
-TODO VP: check actual data and simulated control -- how are the differences? If only linear transformation is the difference --> it's okay, it's mimicing the actual item
 
 #### Reinforcement Learning-based Home Energy Management with Heterogeneous Batteries and Stochastic EV Behaviour
 
@@ -378,8 +397,31 @@ Summary:
 - TODO VP: Add FutureObservationCollectorConnector -- to see static future states, like weather, prices, etc... -- add it as optional connector...
 - TODO VP: Prediction model about the future state -- model based RL
 
-- TODO VP: What is MLFlow? -- maybe integrate it?
-- TODO VP: how is the battery handled by energy consumption reward and pricing? Is it free energy or does it count for the rewards?
+##### MLFlow and Tensorboard
+
+TODO VP: maybe integrate it -- for model, experiment and state-observation space management
+
+MLFlow:
+- Lifecycle management
+- Tracking: log parameter, code versions, metrics, and output files, hyperparameters
+- Model Registry: model versioning, version mangement and collaboration tool
+- Deployment: model packaging -- how to deploy model to real application
+- Agnostic: works with many language and frameworks
+--> it's for reproducibility -- that's needed for me, to have a registry about models and their env -- as during the development both can change (mostly state and action spaces change of course -- the env, not really the model)
+- MLflowLoggerCallback in ray tune, can store the final model checkpoint -- however this one is solved by the current setup as well.
+--> MLFlow does not seem to good to track Env changes, behavioural changes...
+
+
+Tensorboard:
+- For metrics -- during training and across training runs, track achieved_reward, reward_rate and episode_reward_mean
+- track policy_entropy, episode_reward_mean
+
+
+TODO VP: continue here with this IDEA -- no need for real reward scheduling, because it's enough to have a fix set of rewards and it's enough to schedule the weighting of the rewards -- switched off rewards get 0.0 as weight.
+Overhaul the whole reward ocosystem. A group of yaml files are responsible for the reward function parametrisation.
+Another group of yamls are responsible for the weight allocation to each of the reward functions.
+The open question is the scheduling -- how are then the reward weights scheduled among all the rewards?
+
 
 Conclusion:
 - Idea: use trajectory tracking for the hard constraints -- for temperature, EV charging, etc.., and use RL based controllers for th ESS -- which can react to the changes, it can plan and follow strategy.

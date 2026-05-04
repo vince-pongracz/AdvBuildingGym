@@ -38,16 +38,20 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+import numpy as np
+import pandas as pd
+
 from .common import (
     DEFAULT_CONFIG,
     PRICE_DATASETS,
     REPO_ROOT,
     WEATHER_DATASETS,
+    add_shared_cli_args,
+    apply_shared_cli_args,
     days_in_month,
     load_config,
     write_output,
 )
-from .loaders import set_warn_future_data
 from .plot_day_data import _build_figures, _load_all_sources
 
 logger = logging.getLogger(__name__)
@@ -77,18 +81,64 @@ def _make_config_variant(
     return cfg
 
 
+_DATE_KEYED_SOURCES = ("weather", "price")
+
+
+def _slice_sources(
+    sources: dict[str, dict],
+    date_labels: set[str],
+) -> dict[str, dict]:
+    """Filter year-partitioned sources to a subset of date labels.
+
+    Profile sources (desired_temp_in, ev_schedule, user_energy_need) are
+    date-independent and passed through unchanged.
+    """
+    sliced: dict[str, dict] = {}
+    for name, frames in sources.items():
+        if name in _DATE_KEYED_SOURCES:
+            sliced[name] = {k: v for k, v in frames.items() if k in date_labels}
+        else:
+            sliced[name] = frames
+    return sliced
+
+
+def _compute_y_ranges(
+    sources: dict[str, dict],
+) -> dict[str, tuple[float, float]]:
+    """Compute global (min, max) per numeric column across all weather/price data.
+
+    The result is fed to ``_build_figures`` so that the y-axis on every
+    per-month and cross-year figure spans the same overall range — making
+    figures from different months/years visually comparable.
+    """
+    per_col: dict[str, list[np.ndarray]] = {}
+    for name in _DATE_KEYED_SOURCES:
+        for df in (sources.get(name) or {}).values():
+            for col in df.columns:
+                if col == "minutes" or not pd.api.types.is_numeric_dtype(df[col]):
+                    continue
+                arr = df[col].to_numpy(dtype=float)
+                arr = arr[np.isfinite(arr)]
+                if arr.size:
+                    per_col.setdefault(col, []).append(arr)
+
+    ranges: dict[str, tuple[float, float]] = {}
+    for col, arrs in per_col.items():
+        all_vals = np.concatenate(arrs)
+        ranges[col] = (float(all_vals.min()), float(all_vals.max()))
+    return ranges
+
+
 def _run_monthly(
     cfg: dict,
-    dates: list[datetime],
+    sources: dict[str, dict],
     out_dir: Path,
     base_name: str,
     output_formats: list[str],
+    y_ranges: dict[str, tuple[float, float]] | None = None,
     stat_only: bool = True,
 ) -> None:
-    """Load data, build figures, and write output for a list of dates."""
-    sources = _load_all_sources(cfg, dates)
-
-    # Check if any year-partitioned source returned data
+    """Build figures and write output for a pre-sliced source bundle."""
     has_data = any(
         bool(v) for k, v in sources.items()
         if k not in ("desired_temp_in", "ev_schedule")
@@ -97,7 +147,7 @@ def _run_monthly(
         logger.info("No data for %s — skipping.", base_name)
         return
 
-    figures = _build_figures(cfg, sources, stat_only)
+    figures = _build_figures(cfg, sources, stat_only, y_ranges=y_ranges)
     if not figures:
         logger.info("No figures for %s — skipping.", base_name)
         return
@@ -132,6 +182,13 @@ def run_overview(
         weather_keys, price_keys, total_combos,
     )
 
+    # Full date sweep (all months × all years) — used both for global
+    # y-range computation and as the data pool that gets sliced per figure.
+    full_dates: list[datetime] = []
+    for year in range(start_year, end_year + 1):
+        for month in range(1, 13):
+            full_dates.extend(days_in_month(year, month))
+
     for w_key in weather_keys:
         for p_key in price_keys:
             combo_tag = f"{w_key}_{p_key}"
@@ -142,31 +199,40 @@ def run_overview(
             combo_dir = out_root / combo_tag
             logger.info("=== Dataset combo: %s ===", combo_tag)
 
+            all_sources = _load_all_sources(cfg, full_dates)
+            y_ranges = _compute_y_ranges(all_sources)
+
             # --- Part 1: per year-month plots ---
             for year in range(start_year, end_year + 1):
                 for month in range(1, 13):
                     dates = days_in_month(year, month)
+                    labels = {str(d.date()) for d in dates}
+                    sources = _slice_sources(all_sources, labels)
                     base_name = f"{year}-{month:02d}"
                     _run_monthly(
-                        cfg, dates,
+                        cfg, sources,
                         combo_dir / "per_month",
                         base_name,
                         output_formats,
+                        y_ranges=y_ranges,
                     )
 
             # --- Part 2: cross-year per calendar month ---
             for month in range(1, 13):
-                all_dates: list[datetime] = []
+                month_dates: list[datetime] = []
                 for year in range(start_year, end_year + 1):
-                    all_dates.extend(days_in_month(year, month))
+                    month_dates.extend(days_in_month(year, month))
+                labels = {str(d.date()) for d in month_dates}
+                sources = _slice_sources(all_sources, labels)
 
                 month_name = calendar.month_abbr[month]
                 base_name = f"all_years_{month:02d}_{month_name}"
                 _run_monthly(
-                    cfg, all_dates,
+                    cfg, sources,
                     combo_dir / "cross_year",
                     base_name,
                     output_formats,
+                    y_ranges=y_ranges,
                 )
 
     logger.info("Done.")
@@ -189,40 +255,10 @@ def main() -> None:
         default=2026,
         help="Last year to include (default: 2026).",
     )
-    parser.add_argument(
-        "--config",
-        type=str,
-        default=str(DEFAULT_CONFIG),
-        help="Path to data_plot_config.yaml (default: %(default)s).",
-    )
-    parser.add_argument(
-        "--format",
-        nargs="+",
-        default=["html"],
-        choices=["html", "png", "svg", "pdf"],
-        help="Output format(s). Default: html.",
-    )
-    parser.add_argument(
-        "--warn-future-data",
-        action="store_true",
-        default=False,
-        help="Emit 'No data for <date>' warnings for dates that have not yet "
-             "occurred. Off by default — future dates are silently skipped.",
-    )
+    add_shared_cli_args(parser)
     args = parser.parse_args()
 
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
-    logger.info(
-        "plot_monthly_overview started at %s",
-        datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-    )
-
-    set_warn_future_data(args.warn_future_data)
-    if not args.warn_future_data:
-        logger.info(
-            "Future-date warnings are OFF: 'No data for <date>' messages "
-            "will be suppressed for dates after today. Pass --warn-future-data to enable."
-        )
+    apply_shared_cli_args(args, "plot_monthly_overview")
 
     run_overview(
         config_path=Path(args.config),

@@ -7,7 +7,7 @@ from adv_building_gym.utils.serializable import ComponentRegistry
 
 logger = logging.getLogger(__name__)
 
-# TODO VP 2026.01.14. : Add battery life saving reward
+# NOTE VP 2026.01.14. : Add battery life saving reward
 
 class MinimiseEnergyConsumptionReward(RewardFunction):
     """Energy consumption-based reward function.

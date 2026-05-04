@@ -7,13 +7,13 @@ import numpy as np
 import pandas as pd
 from gymnasium.spaces import Box
 
+from adv_building_gym.utils.constants import SECONDS_PER_HOUR
+
 from ..base import StateSource
 from adv_building_gym.utils.serializable import ComponentRegistry
 from ...infrastructure.ev_charger.ev_spec import EvSpec
 
 logger = logging.getLogger(__name__)
-
-# TODO VP 2026.02.12. : Check this, as this one is still provisional
 
 
 class EVState(StateSource):
@@ -54,6 +54,11 @@ class EVState(StateSource):
     KEY_V2G = "ctxt_ev_schedule_v2g"
     KEY_START_SOC = "ctxt_ev_schedule_start_soc"
     KEY_TARGET_SOC = "ctxt_ev_schedule_target_soc"
+    # Hours from connect within which the session must hit target_soc.  This
+    # is the user-observable charging contract and the deadline driving the
+    # corridor (s_ev_soc_min lazy-back-from-target, s_ev_soc_max forward-from-
+    # start) in LinearEVCharger.  Not the actual disconnect time, which is
+    # not assumed observable.
     KEY_CHARGE_TO_TARGET_HRS = "ev_schedule_charge_to_target_hrs"
 
     def __init__(
@@ -89,7 +94,7 @@ class EVState(StateSource):
 
         for _, row in self.ts.iterrows():
             ts = row["start"]
-            seconds_from_midnight = ts.hour * 3600 + ts.minute * 60 + ts.second
+            seconds_from_midnight = ts.hour * SECONDS_PER_HOUR + ts.minute * 60 + ts.second
             iteration_index = int(seconds_from_midnight // self.control_step)
 
             if pd.notna(row.get("max_cap_kWh")):

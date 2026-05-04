@@ -28,6 +28,7 @@ from datetime import datetime
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 import plotly.graph_objects as go
 
 from plotting.utils import apply_day_xaxis
@@ -38,6 +39,8 @@ from .common import (
     PRICE_DATASETS,
     REPO_ROOT,
     WEATHER_DATASETS,
+    add_shared_cli_args,
+    apply_shared_cli_args,
     days_in_month,
     load_config,
     load_profiles_from_cfg,
@@ -51,7 +54,7 @@ from .figure_builders import (
     build_user_energy_need_figure,
     finalize_figure,
 )
-from .loaders import load_days, set_warn_future_data
+from .loaders import load_days
 from .stats import ColumnStats, compute_column_stats
 
 logger = logging.getLogger(__name__)
@@ -137,6 +140,7 @@ def _add_dataset_stat_traces(
 def _build_combined_weather_figures(
     datasets: dict[str, dict[str, object]],
     month_label: str,
+    y_ranges: dict[str, tuple[float, float]] | None = None,
 ) -> list[go.Figure]:
     """Build one figure per weather variable with stat bands from each dataset.
 
@@ -181,7 +185,18 @@ def _build_combined_weather_figures(
             continue
 
         apply_day_xaxis(fig)
-        fig.update_yaxes(title_text=label)
+        # Pick a y-range matching any column that resolves to this label.
+        rng = None
+        if y_ranges:
+            for cols in ds_cols.values():
+                col = next((c for c, lbl in cols if lbl == label), None)
+                if col and col in y_ranges:
+                    rng = y_ranges[col]
+                    break
+        if rng is not None:
+            fig.update_yaxes(title_text=label, range=list(rng))
+        else:
+            fig.update_yaxes(title_text=label)
         title = f"{label} \u2014 {month_label} (all datasets)"
         finalize_figure(fig, title)
         figures.append(fig)
@@ -192,6 +207,7 @@ def _build_combined_weather_figures(
 def _build_combined_price_figure(
     datasets: dict[str, dict[str, object]],
     month_label: str,
+    y_range: tuple[float, float] | None = None,
 ) -> go.Figure | None:
     """Build one price figure with stat bands from each price dataset."""
     fig = go.Figure()
@@ -208,7 +224,10 @@ def _build_combined_price_figure(
         return None
 
     apply_day_xaxis(fig)
-    fig.update_yaxes(title_text="Energy price (ct/kWh)")
+    if y_range is not None:
+        fig.update_yaxes(title_text="Energy price (ct/kWh)", range=list(y_range))
+    else:
+        fig.update_yaxes(title_text="Energy price (ct/kWh)")
     title = f"Energy price \u2014 {month_label} (all datasets)"
     finalize_figure(fig, title)
     return fig
@@ -245,6 +264,26 @@ def _load_multi_datasets(
 # Main orchestration
 # ---------------------------------------------------------------------------
 
+def _aggregate_y_ranges(datasets: dict[str, dict[str, object]]) -> dict[str, tuple[float, float]]:
+    """Compute global (min, max) per numeric column across all loaded datasets."""
+    per_col: dict[str, list[np.ndarray]] = {}
+    for frames in datasets.values():
+        for df in frames.values():
+            for col in df.columns:
+                if col == "minutes" or not pd.api.types.is_numeric_dtype(df[col]):
+                    continue
+
+                arr = df[col].to_numpy(dtype=float)
+                arr = arr[np.isfinite(arr)] # Removes nan and similars
+                if arr.size:
+                    per_col.setdefault(col, []).append(arr)
+    # TODO VP 2026.05.03. : This could be performance critical...
+    return {
+        col: (float(np.concatenate(arrs).min()), float(np.concatenate(arrs).max()))
+        for col, arrs in per_col.items()
+    }
+
+
 def run_combined(
     config_path: Path = DEFAULT_CONFIG,
     output_formats: list[str] | None = None,
@@ -256,6 +295,30 @@ def run_combined(
     cfg = load_config(config_path)
     out_dir = REPO_ROOT / cfg["output"]["dir"] / "cross_year_combined"
 
+    # Pre-pass: compute global y-ranges across every month so each figure
+    # uses a consistent y-axis (overall min..max) regardless of which
+    # calendar month it covers.
+    full_dates: list[datetime] = []
+    for m in range(1, 13):
+        for y in range(start_year, end_year + 1):
+            full_dates.extend(days_in_month(y, m))
+    full_weather = _load_multi_datasets(cfg["weather"], "weather", WEATHER_DATASETS, full_dates)
+    full_price = _load_multi_datasets(cfg["price"], "price", PRICE_DATASETS, full_dates)
+    weather_y_ranges = _aggregate_y_ranges(full_weather)
+    price_y_ranges = _aggregate_y_ranges(full_price)
+    price_range = price_y_ranges.get("baseprice")
+
+    def _slice_by_month(
+        data: dict[str, dict[str, object]], labels: set[str],
+    ) -> dict[str, dict[str, object]]:
+        return {
+            ds: {
+                k: v 
+                for k, v in frames.items() if k in labels
+            }
+            for ds, frames in data.items()
+        }
+
     for month in range(1, 13):
         month_name = calendar.month_name[month]
         month_abbr = calendar.month_abbr[month]
@@ -265,10 +328,11 @@ def run_combined(
         all_dates: list[datetime] = []
         for year in range(start_year, end_year + 1):
             all_dates.extend(days_in_month(year, month))
+        labels = {str(date.date()) for date in all_dates}
 
-        # Load all datasets
-        weather_data = _load_multi_datasets(cfg["weather"], "weather", WEATHER_DATASETS, all_dates)
-        price_data = _load_multi_datasets(cfg["price"], "price", PRICE_DATASETS, all_dates)
+        # Slice pre-loaded weather/price data; reload date-independent profiles.
+        weather_data = {ds: f for ds, f in _slice_by_month(full_weather, labels).items() if f}
+        price_data = {ds: f for ds, f in _slice_by_month(full_price, labels).items() if f}
         profile_data = load_profiles_from_cfg(cfg, all_dates)
 
         if not weather_data and not price_data:
@@ -280,10 +344,10 @@ def run_combined(
         month_label = f"{month_name} ({start_year}\u2013{end_year})"
 
         if weather_data:
-            figures.extend(_build_combined_weather_figures(weather_data, month_label))
+            figures.extend(_build_combined_weather_figures(weather_data, month_label, y_ranges=weather_y_ranges))
 
         if price_data:
-            price_fig = _build_combined_price_figure(price_data, month_label)
+            price_fig = _build_combined_price_figure(price_data, month_label, y_range=price_range)
             if price_fig is not None:
                 figures.append(price_fig)
 
@@ -332,40 +396,10 @@ def main() -> None:
         default=2026,
         help="Last year to include (default: 2026).",
     )
-    parser.add_argument(
-        "--config",
-        type=str,
-        default=str(DEFAULT_CONFIG),
-        help="Path to data_plot_config.yaml (default: %(default)s).",
-    )
-    parser.add_argument(
-        "--format",
-        nargs="+",
-        default=["html"],
-        choices=["html", "png", "svg", "pdf"],
-        help="Output format(s). Default: html.",
-    )
-    parser.add_argument(
-        "--warn-future-data",
-        action="store_true",
-        default=False,
-        help="Emit 'No data for <date>' warnings for dates that have not yet "
-             "occurred. Off by default — future dates are silently skipped.",
-    )
+    add_shared_cli_args(parser)
     args = parser.parse_args()
 
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
-    logger.info(
-        "plot_cross_year_combined started at %s",
-        datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-    )
-
-    set_warn_future_data(args.warn_future_data)
-    if not args.warn_future_data:
-        logger.info(
-            "Future-date warnings are OFF: 'No data for <date>' messages "
-            "will be suppressed for dates after today. Pass --warn-future-data to enable."
-        )
+    apply_shared_cli_args(args, "plot_cross_year_combined")
 
     run_combined(
         config_path=Path(args.config),

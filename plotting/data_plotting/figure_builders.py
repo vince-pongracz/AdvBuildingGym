@@ -100,11 +100,14 @@ def build_overlay_figure(
     hover_label: str,
     hover_fmt: str = ".1f",
     stat_only: bool = False,
+    y_range: tuple[float, float] | None = None,
 ) -> go.Figure:
     """Build a single figure with one line trace per entry, plus stat bands.
 
     This is the common pattern used by weather sub-plots, desired-temperature,
-    and household-consumption figures.
+    and household-consumption figures. *y_range* fixes the y-axis to a
+    shared (min, max) — used by monthly/cross-year sweeps so figures from
+    different month or year subsets are visually comparable.
     """
     fig = go.Figure()
     is_multi = len(day_frames) > 1
@@ -118,7 +121,10 @@ def build_overlay_figure(
             add_stat_traces(fig, stats, value_label=hover_label, value_fmt=hover_fmt)
 
     apply_day_xaxis(fig)
-    fig.update_yaxes(title_text=y_label)
+    if y_range is not None:
+        fig.update_yaxes(title_text=y_label, range=list(y_range))
+    else:
+        fig.update_yaxes(title_text=y_label)
 
     if is_multi and stat_only:
         title += _days_subtitle(list(day_frames.keys()))
@@ -134,8 +140,13 @@ def build_overlay_figure(
 def build_weather_figures(
     day_frames: dict[str, pd.DataFrame],
     stat_only: bool = False,
+    y_ranges: dict[str, tuple[float, float]] | None = None,
 ) -> list[go.Figure]:
-    """Create one standalone figure per weather variable, each with all days overlaid."""
+    """Create one standalone figure per weather variable, each with all days overlaid.
+
+    *y_ranges* maps column names to (min, max) bounds; when supplied, the
+    matching figure's y-axis is fixed to that range.
+    """
     sample_df = next(iter(day_frames.values()))
     available = resolve_weather_cols(sample_df)
     if not available:
@@ -150,6 +161,7 @@ def build_weather_figures(
             title=label,
             hover_label=col,
             stat_only=stat_only,
+            y_range=(y_ranges or {}).get(col),
         )
         for col, label in available
     ]
@@ -158,6 +170,7 @@ def build_weather_figures(
 def build_price_figure(
     day_frames: dict[str, pd.DataFrame],
     stat_only: bool = False,
+    y_range: tuple[float, float] | None = None,
 ) -> go.Figure:
     """Create a single-panel figure with one price trace per day.
 
@@ -198,7 +211,10 @@ def build_price_figure(
             add_stat_traces(fig, stats, value_label="price", value_fmt=".2f")
 
     apply_day_xaxis(fig)
-    fig.update_yaxes(title_text="Energy price (ct/kWh)")
+    if y_range is not None:
+        fig.update_yaxes(title_text="Energy price (ct/kWh)", range=list(y_range))
+    else:
+        fig.update_yaxes(title_text="Energy price (ct/kWh)")
     title = (
         f"Energy price \u2014 {day_labels[0]}"
         if not is_multi

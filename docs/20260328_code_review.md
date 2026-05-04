@@ -39,8 +39,6 @@ The codebase implements a well-structured plugin architecture for RL-based build
 
 `env_config.py:165` creates `config = EnvConfig()` at module scope and exports it in `__all__`. While factory methods exist (`create_infras()`, `create_statesources()`), the singleton is still importable and used directly. In Ray, each worker gets its own copy via `fork()`, but any code that mutates this shared instance before forking would propagate that state to all workers.
 
-TODO VP: I think this one is not relevant anymore, that config is never used -- verify this and remove if not needed anymore.
-
 ---
 
 ## 3. SOLID Principle Violations
@@ -50,9 +48,8 @@ TODO VP: I think this one is not relevant anymore, that config is never used -- 
 **`envs/building_adv.py` -- AdvBuildingGym class** handles too many concerns:
 - Environment dynamics (step/reset lifecycle)
 - Data variant management (`apply_data_variant`, `_resolve_episode_date`)
-- Raw state collection (`_get_raw_state_values`) -- TODO VP: not anymore, but verify
+- ~~Raw state collection (`_get_raw_state_values`)~~ -- extracted into `RawStateCollector` (`envs/_raw_state_collector.py`)
 - Component orchestration (infras + statesources + rewards)
-- Action history tracking -- TODO VP: not anymore
 - Energy accounting
 
 The `step()` method (lines 473-587, ~115 lines) performs action execution, time advancement, state updates, energy tracking, reward computation, action history management, NaN/Inf guards, and info dict assembly. The `reset()` method (lines 361-455, ~95 lines) performs seed management, data variant selection (3 different code paths), day offset computation, state initialization, and component synchronization.

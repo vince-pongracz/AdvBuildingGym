@@ -4,6 +4,7 @@ from typing import ClassVar, Dict, Set
 import numpy as np
 from gymnasium.spaces import Box
 
+from adv_building_gym.utils.constants import SECONDS_PER_HOUR
 from ..base import Infrastructure
 from adv_building_gym.utils.serializable import ComponentRegistry
 
@@ -116,7 +117,7 @@ class BatteryLinear(Infrastructure):
 
         # Calculate energy change in this timestep
         # E (kWh) = P (kW) * t (h)
-        time_hours = self.control_step / 3600.0
+        time_hours = self.control_step / SECONDS_PER_HOUR
         delta_energy_kWh = requested_power_kW * time_hours
 
         # Convert energy to SoC change

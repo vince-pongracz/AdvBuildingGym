@@ -118,9 +118,10 @@ class LongTermEconomicReward(RewardFunction):
         self._accum += float(raw_step)
         self._step_in_window += 1
 
-        # Flush at the natural window boundary OR on any early termination
-        # signalled by the env. Without the terminated check the accumulated
-        # signal would be silently discarded when an episode ends short.
+        # Flush at the natural window boundary OR on early termination.
+        # `info["terminated"]` is now set in the env's Phase-1 termination
+        # pre-pass *before* any get_reward runs, so it's the single
+        # authoritative signal regardless of YAML reward ordering.
         terminated = bool(info.get("terminated", False))
         if self._step_in_window < episode_length and not terminated:
             return 0.0, 0.0

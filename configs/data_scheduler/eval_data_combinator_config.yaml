@@ -41,19 +41,17 @@ synthesized_paths:
     e_charts: data/e_price/e_charts
 
 # Independent variable sources
-# TODO VP 2026.03.24. : Use different profiles for eval...
 variable:
   ev_schedule:
-    - data/ev_usage_profiles/ev_0.csv
-    - data/ev_usage_profiles/ev_1.csv
-    - data/ev_usage_profiles/ev_2.csv
-    - data/ev_usage_profiles/ev_3.csv
-    - data/ev_usage_profiles/ev_4.csv
-    - data/ev_usage_profiles/ev_5.csv
+    - data/ev_usage_profiles/ev_eval_0.csv
+    - data/ev_usage_profiles/ev_eval_1.csv
+    - data/ev_usage_profiles/ev_eval_2.csv
+    - data/ev_usage_profiles/ev_eval_3.csv
   desired_temp_in:
-    - data/inside_temp/inside_temp_0.csv
-    - data/inside_temp/inside_temp_1.csv
-    - data/inside_temp/inside_temp_2.csv
+    - data/inside_temp/inside_temp_eval_0.csv
+    - data/inside_temp/inside_temp_eval_1.csv
+    - data/inside_temp/inside_temp_eval_2.csv
+    - data/inside_temp/inside_temp_eval_3.csv
   user_energy_need:
     - data/hh_consumption/wpuq/2018_SFH10.csv
     - data/hh_consumption/wpuq/2018_SFH30.csv

@@ -162,7 +162,7 @@ HTML files are placed directly under the episode directory. Static image
 formats (`svg`, `png`, `pdf`) go into a subdirectory named after the format
 (e.g. `svgs/`, `pngs/`).
 
-TODO VP: seaborn plots needed as well
+TODO noprio VP: seaborn plots needed as well
 
 ## Dependencies
 

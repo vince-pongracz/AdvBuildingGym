@@ -7,6 +7,7 @@ Centralises code that was duplicated across ``plot_day_data``,
 
 from __future__ import annotations
 
+import argparse
 import calendar
 import logging
 from datetime import datetime
@@ -16,6 +17,8 @@ import plotly.graph_objects as go
 import yaml
 
 from plotting.utils import ensure_chrome_for_kaleido, write_figure_list_html
+
+from .loaders import set_warn_future_data
 
 logger = logging.getLogger(__name__)
 
@@ -167,3 +170,47 @@ def write_output(
                 img_path = out_dir / f"{base_name}_{tag}.{fmt}"
                 fig.write_image(str(img_path))
                 logger.info("Wrote %s", img_path)
+
+
+# ---------------------------------------------------------------------------
+# Shared CLI plumbing
+# ---------------------------------------------------------------------------
+
+def add_shared_cli_args(parser: argparse.ArgumentParser) -> None:
+    """Attach --config, --format, --warn-future-data to a data-plotting parser."""
+    parser.add_argument(
+        "--config",
+        type=str,
+        default=str(DEFAULT_CONFIG),
+        help="Path to data_plot_config.yaml (default: %(default)s).",
+    )
+    parser.add_argument(
+        "--format",
+        nargs="+",
+        default=["html"],
+        choices=["html", "png", "svg", "pdf"],
+        help="Output format(s). Default: html.",
+    )
+    parser.add_argument(
+        "--warn-future-data",
+        action="store_true",
+        default=False,
+        help="Emit 'No data for <date>' warnings for dates that have not yet "
+             "occurred. Off by default — future dates are silently skipped.",
+    )
+
+
+def apply_shared_cli_args(args: argparse.Namespace, script_name: str) -> None:
+    """Configure logging and apply the --warn-future-data toggle."""
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+    logger.info(
+        "%s started at %s",
+        script_name, datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+    )
+
+    set_warn_future_data(args.warn_future_data)
+    if not args.warn_future_data:
+        logger.info(
+            "Future-date warnings are OFF: 'No data for <date>' messages "
+            "will be suppressed for dates after today. Pass --warn-future-data to enable."
+        )

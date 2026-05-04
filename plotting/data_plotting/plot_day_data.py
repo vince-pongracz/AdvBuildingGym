@@ -38,6 +38,8 @@ import plotly.graph_objects as go
 from .common import (
     DEFAULT_CONFIG,
     REPO_ROOT,
+    add_shared_cli_args,
+    apply_shared_cli_args,
     load_config,
     load_profiles_from_cfg,
     resolve_source,
@@ -50,7 +52,7 @@ from .figure_builders import (
     build_user_energy_need_figure,
     build_weather_figures,
 )
-from .loaders import load_days, set_warn_future_data
+from .loaders import load_days
 
 logger = logging.getLogger(__name__)
 
@@ -143,15 +145,23 @@ def _build_figures(
     cfg: dict,
     sources: dict[str, dict],
     stat_only: bool,
+    y_ranges: dict[str, tuple[float, float]] | None = None,
 ) -> list[go.Figure]:
-    """Build all figures from loaded source data."""
+    """Build all figures from loaded source data.
+
+    *y_ranges* maps column names (e.g. ``temp_amb``, ``baseprice``) to a
+    shared (min, max). When supplied, weather and price figures are drawn
+    with that fixed y-axis so figures from different month/year subsets
+    are directly comparable.
+    """
     figures: list[go.Figure] = []
+    y_ranges = y_ranges or {}
 
     if sources.get("weather"):
-        figures.extend(build_weather_figures(sources["weather"], stat_only=stat_only))
+        figures.extend(build_weather_figures(sources["weather"], stat_only=stat_only, y_ranges=y_ranges))
 
     if sources.get("price"):
-        figures.append(build_price_figure(sources["price"], stat_only=stat_only))
+        figures.append(build_price_figure(sources["price"], stat_only=stat_only, y_range=y_ranges.get("baseprice")))
 
     if sources.get("desired_temp_in"):
         figures.append(build_desired_temp_figure(
@@ -230,37 +240,10 @@ def main() -> None:
         help="Show only the mean curve and +/- 1 std band (hide individual day traces). "
              "Only effective for multi-day plots.",
     )
-    parser.add_argument(
-        "--config",
-        type=str,
-        default=str(DEFAULT_CONFIG),
-        help="Path to data_plot_config.yaml (default: %(default)s).",
-    )
-    parser.add_argument(
-        "--format",
-        nargs="+",
-        default=["html"],
-        choices=["html", "png", "svg", "pdf"],
-        help="Output format(s). Default: html.",
-    )
-    parser.add_argument(
-        "--warn-future-data",
-        action="store_true",
-        default=False,
-        help="Emit 'No data for <date>' warnings for dates that have not yet "
-             "occurred. Off by default — future dates are silently skipped.",
-    )
+    add_shared_cli_args(parser)
     args = parser.parse_args()
 
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s: [%(name)s] %(message)s")
-    logger.info("plot_day_data started at %s", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-
-    set_warn_future_data(args.warn_future_data)
-    if not args.warn_future_data:
-        logger.info(
-            "Future-date warnings are OFF: 'No data for <date>' messages "
-            "will be suppressed for dates after today. Pass --warn-future-data to enable."
-        )
+    apply_shared_cli_args(args, "plot_day_data")
 
     dates = _resolve_dates(args.dates, args.days)
     if not dates:

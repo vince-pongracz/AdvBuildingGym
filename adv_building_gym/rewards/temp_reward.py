@@ -1,8 +1,12 @@
+import logging
+
 import numpy as np
 from scipy.optimize import brentq
 
 from .base import RewardFunction
 from adv_building_gym.utils.serializable import ComponentRegistry
+
+logger = logging.getLogger(__name__)
 
 
 # Solve e^(-x) = x² once at import time.
@@ -31,10 +35,11 @@ class TempReward(RewardFunction):
     def __init__(
         self,
         weight: float,
+        zero_reward_diff_celsius: float,
+        wrong_direction_penalty: float,
+        terminate_diff_celsius: float,
+        terminate_penalty: float,
         name: str = "temp_reward",
-        # TODO VP 2026.04.30. : Remove defaults, always take values from the reward config.
-        zero_reward_diff_celsius: float = 2.0,
-        wrong_direction_penalty: float = -1.0,
     ) -> None:
         """
         Args:
@@ -49,10 +54,31 @@ class TempReward(RewardFunction):
         super().__init__(weight, name)
         self.zero_reward_diff_celsius = zero_reward_diff_celsius
         self.wrong_direction_penalty = wrong_direction_penalty
+        self.terminate_diff_celsius = terminate_diff_celsius
+        self.terminate_penalty = terminate_penalty
 
     # ------------------------------------------------------------------
-    # Reward computation
+    # Termination + reward computation
     # ------------------------------------------------------------------
+    @staticmethod
+    def _diff_celsius(states) -> float:
+        actual_temp = float(states["s_temp_in_norm"][0])
+        desired_temp = float(states["s_desired_temp_in_norm"][0])
+        diff_norm = abs(actual_temp - desired_temp)
+        temp_abs_max = float(states["ctxt_temp_abs_max"][0]) if "ctxt_temp_abs_max" in states else 60.0
+        return diff_norm * temp_abs_max
+
+    def should_terminate(self, actions, states, info: dict | None = None) -> bool:
+        diff_celsius = self._diff_celsius(states)
+        if diff_celsius > self.terminate_diff_celsius:
+            logger.info(
+                "[%s] terminal step: |T_in - T_set| = %.2f °C > %.2f °C (step %s)",
+                self.name, diff_celsius, self.terminate_diff_celsius,
+                info.get("iteration") if info else "?",
+            )
+            return True
+        return False
+
     def get_reward(self, actions, states, info: dict | None = None) -> tuple[float, float]:
         actual_temp = float(states["s_temp_in_norm"][0])
         desired_temp = float(states["s_desired_temp_in_norm"][0])
@@ -61,6 +87,13 @@ class TempReward(RewardFunction):
         # Convert zero-crossing threshold from °C to normalised space.
         # temp_abs_max is published into the state dict by WeatherDataSource.
         temp_abs_max: float = float(states["ctxt_temp_abs_max"][0]) if "ctxt_temp_abs_max" in states else 60.0
+
+        # Hard band: should_terminate already voted to end the episode in
+        # Phase 1; emit the configured terminal penalty here.
+        diff_celsius = diff_norm * temp_abs_max
+        if diff_celsius > self.terminate_diff_celsius:
+            return self.weight * self.terminate_penalty, self.weight * self.max_reward
+
         zero_norm = self.zero_reward_diff_celsius / temp_abs_max if temp_abs_max != 0 else 0.0
 
         # Scale so that the curve crosses zero at exactly zero_norm.

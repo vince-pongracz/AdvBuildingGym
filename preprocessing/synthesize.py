@@ -189,6 +189,24 @@ def synthesize_file(
             after.min(), after.mean(), after.max(),
         )
 
+    # Solar irradiance is physically zero outside daylight; Gaussian noise
+    # plus shifts can leak positive values into the night band. Force any
+    # sun_shine component to 0.0 between 22:00 and 05:00 (timestamp hour)
+    # before the additive `sun_shine` reconstruction below.
+    # TODO noprio VP 2026.05.03. : Add smarter filtering for sun_shine zero radiance
+    sun_cols_present = [c for c in ("direct_sun_shine", "diff_sun_shine", "sun_shine") if c in df.columns]
+    if sun_cols_present and "timestamp" in df.columns:
+        hour = pd.to_datetime(df["timestamp"], utc=True, errors="coerce").dt.hour
+        night_mask = ((hour >= 22) | (hour < 5)).fillna(False)
+        if night_mask.any():
+            for col in sun_cols_present:
+                valid = night_mask & df[col].notna()
+                df.loc[valid, col] = 0.0
+            logger.info(
+                "  sun night-mask: zeroed %d rows (22:00–05:00) across %s",
+                int(night_mask.sum()), sun_cols_present,
+            )
+
     # Reconstruct `sun_shine` from its noised components so the additive
     # identity holds in the output CSV (no independent `sun_shine` noise draw).
     #   - DWD     : `sun_shine = direct_sun_shine + diff_sun_shine`
@@ -269,8 +287,7 @@ _DOMAIN_SEED_OFFSET: dict[str, int] = {
 def run_synthesis(
     price_files: list[Path],
     weather_files: list[Path],
-    # TODO VP 2026.05.01. : Is it possible that hh_consumption files are None? Check and forbid it.
-    hh_consumption_files: list[Path] | None = None,
+    hh_consumption_files: list[Path],
     top_cfg_path: Path | str = DEFAULT_TOP_CONFIG,
     only: list[str] | None = None,
 ) -> dict[str, int]:
@@ -302,7 +319,7 @@ def run_synthesis(
     domain_files: dict[str, list[Path]] = {
         "price": price_files,
         "weather": weather_files,
-        "hh_consumption": list(hh_consumption_files or []),
+        "hh_consumption": hh_consumption_files,
     }
 
     for cfg_idx, cfg_name in enumerate(active_cfgs):

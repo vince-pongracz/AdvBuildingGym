@@ -360,8 +360,8 @@ https://documenter.getpostman.com/view/7009892/2s93JtP3F6#3b383df0-ada2-49fe-9a5
 Publication similar to my thesis:
 https://research.wu.ac.at/de/publications/deep-learning-in-energy-modeling-application-in-smart-buildings-w/
 
-TODO VP: Maybe integrate FAIR-RS: https://www.rdm.kit.edu/english/servicetools_tools_fair-rs.php
+TODO noprio VP: Maybe integrate FAIR-RS: https://www.rdm.kit.edu/english/servicetools_tools_fair-rs.php
 
 TODO VP look up radar: https://www.radar-service.eu/radar/en/home
 
-TODO VP: maybe fetch additional weather data from non-EU hourly datasources -- EnergyPlus, link: https://energyplus.net/weather/sources
+TODO noprio VP: maybe fetch additional weather data from non-EU hourly datasources -- EnergyPlus, link: https://energyplus.net/weather/sources

@@ -455,7 +455,7 @@ def build_env_to_module_connectors(
     ConnectorV2 base-class compatibility only.
     """
     
-    # TODO VP 2026.04.23. : Maybe switch out the default connectors and set them up by hand (so set it up, not just use them implicitly via the default pipeline).
+    # TODO noprio VP 2026.04.23. : Maybe switch out the default connectors and set them up by hand (so set it up, not just use them implicitly via the default pipeline).
     
     tracked_keys = list(getattr(training_config, "hst_tracked_keys", []) or [])
     offsets = list(getattr(training_config, "hst_offsets", []) or [])

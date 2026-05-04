@@ -7,9 +7,10 @@ so they overlay in a single chart:
 - y-axis = value (raw physical, normalised state, action, power)
 - one coloured line per eval round
 
-Each eval round averages its N episodes (``evaluation_duration``) into a
-single trajectory before writing.  Sub-runs are named by training
-iteration for easy identification.
+Each eval round summarises its N episodes (``evaluation_duration``)
+across episodes into per-step mean/min/max trajectories
+(``<tag>/mean``, ``<tag>/min``, ``<tag>/max``) before writing.
+Sub-runs are named by training iteration for easy identification.
 
 Point TensorBoard at ``<metrics_base_dir>/eval_trajectories/<exec_date>/``
 to visualise:
@@ -29,6 +30,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 from ray.rllib.callbacks.callbacks import RLlibCallback
 from ray.rllib.env.single_agent_episode import SingleAgentEpisode
+from ray.rllib.algorithms.algorithm_config import AlgorithmConfig
 
 logger = logging.getLogger(__name__)
 
@@ -76,9 +78,8 @@ def make_eval_state_action_cb_class(
             env,
             **kwargs,
         ):
-            # TODO VP 2026.04.30. : Check all getattr() calls, and consider making these explicit callback args if they are always expected to be present. 
-            # This would make the code clearer and more robust to future changes in the env_runner config structure.
-            if not getattr(env_runner.config, "in_evaluation", False):
+            algo_config: AlgorithmConfig = env_runner.config
+            if not algo_config.in_evaluation:
                 return
 
             infos = episode.get_infos() if hasattr(episode, "get_infos") else []
@@ -119,51 +120,46 @@ def make_eval_state_action_cb_class(
             _episode_buffer.append(dict(ep_data))
 
             # Wait until all episodes in this eval round are collected
-            eval_duration = getattr(env_runner.config, "evaluation_duration", 2)
-            if len(_episode_buffer) < eval_duration:
+            if len(_episode_buffer) < algo_config.evaluation_duration:
                 return
 
             # --- Eval round complete: average and write ---
             _eval_round[0] += 1
-            eval_interval = getattr(env_runner.config, "evaluation_interval", 5)
-            training_iter = _eval_round[0] * eval_interval
+            training_iter = _eval_round[0] * algo_config.evaluation_interval
 
             # Collect all keys across episodes
             all_keys: set[str] = set()
             for ep in _episode_buffer:
                 all_keys.update(ep.keys())
 
-            # Average trajectories per step across episodes
-            # TODO VP 2026.04.30. : Why do we avg the different eval trajectories? Maybe we should keep them separate to see the variance across episodes?
-            # Or if we do want to average, maybe we should also log the variance and min/max across episodes to get a sense of the variability in the trajectories.
-            averaged: dict[str, list[float]] = {}
+            # Per-step mean/min/max across episodes — emitted as
+            # <key>/mean, <key>/min, <key>/max so the spread is visible
+            # alongside the central trajectory in TensorBoard.
+            summarised: dict[str, list[float]] = {}
             for key in sorted(all_keys):
                 arrays = [ep[key] for ep in _episode_buffer if key in ep]
                 if not arrays:
                     continue
                 min_len = min(len(a) for a in arrays)
                 stacked = np.array([a[:min_len] for a in arrays])
-                averaged[key] = np.mean(stacked, axis=0).tolist()
+                summarised[f"{key}/mean"] = np.mean(stacked, axis=0).tolist()
+                summarised[f"{key}/min"] = np.min(stacked, axis=0).tolist()
+                summarised[f"{key}/max"] = np.max(stacked, axis=0).tolist()
 
             # Write to a TensorBoard sub-run named by training iteration.
             # TensorBoard overlays sub-runs with the same tag in one chart.
             run_name = f"iter_{training_iter:06d}"
             run_dir = os.path.join(tb_log_dir, run_name)
-            # TODO VP 2026.04.30. : SummaryWriter use it with with statement to ensure proper resource cleanup, 
-            # and consider whether we need to call flush() after writing scalars to ensure data is written to disk in a timely manner.
-            writer = SummaryWriter(log_dir=run_dir)
+            with SummaryWriter(log_dir=run_dir) as writer:
+                for key, vals in summarised.items():
+                    for step_idx, val in enumerate(vals):
+                        writer.add_scalar(key, val, global_step=step_idx)
 
-            for key, vals in averaged.items():
-                for step_idx, val in enumerate(vals):
-                    writer.add_scalar(key, val, global_step=step_idx)
-
-            writer.close()
-
-            # TODO VP 2026.04.30. : This logging is a bit weird...
-            num_steps = max((len(values) for values in averaged.values()), default=0)
+            num_steps = max((len(values) for values in summarised.values()), default=0)
+            num_tags = len(summarised) // 3  # mean/min/max per logical tag
             logger.info(
-                "Eval trajectory round %d (training iter %d): %d tags × %d steps → %s",
-                _eval_round[0], training_iter, len(averaged), num_steps, run_dir,
+                "Eval trajectory round %d (training iter %d): %d tags x %d steps -> %s",
+                _eval_round[0], training_iter, num_tags, num_steps, run_dir,
             )
 
             _episode_buffer.clear()

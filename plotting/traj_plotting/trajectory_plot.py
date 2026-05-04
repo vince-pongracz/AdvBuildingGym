@@ -10,7 +10,6 @@ When ``--hdf5`` is omitted the script auto-discovers the latest
 ``trajectories.hdf5`` under ``ep_metrics/trajectories/``.
 """
 
-# TODO VP 2026.03.16. : Just as an idea -- Reward the reward smoothness?
 # That would prevent immediate full charging actions, as if the EV is connected, it's a huge jump in rewards if charge is possible as well.
 
 from __future__ import annotations
@@ -209,7 +208,7 @@ def main() -> None:
         print(f"Saved: {p}")
 
 
-# TODO VP 2026.03.12. : Use float64 everywhere -- for training, for actions, etc... -- more precision is key
+# TODO noprio VP 2026.03.12. : Use float64 everywhere -- for training, for actions, etc... -- more precision is key
 
 if __name__ == "__main__":
     main()

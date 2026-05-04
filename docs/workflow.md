@@ -132,24 +132,49 @@ auto-discovers `*_syn_cfg_*.csv` files and adds them to the scenario pool
 
 ## 2. Training
 
-### 2.1 Environment config — `configs/env/env_test1_{s/m/l}.yaml`
+### 2.1 Environment config — `configs/env/env_test1_{small,mid,large}.yaml`
 
-TODO VP: rewrite this part, it's outdated
+The env config defines the **environment topology**: which infrastructures and
+statesources are instantiated and their parameters, plus episode timing. It is the
+single entry point passed to both training and evaluation via `--load-config`.
 
-Defines the **environment topology**: which infrastructure, statesources, and reward
-functions are instantiated, along with their parameters. This config is shared with
-evaluation — pass the same YAML to `run_eval_ray.py` via `--load-config`.
+The file at `configs/env/<name>.yaml` is a thin **wrapper** that references three
+sibling YAMLs — concerns are split so an infra topology, statesource bundle, or
+timing constants can be reused independently:
 
-| Section | What it controls | Examples |
-|---------|------------------|----------|
-| `EPISODE_LENGTH` | Steps per episode | `288` (24 h at 5-min steps) |
-| `control_step` | Seconds per step | `300` (5 min) |
-| `building_props` | 1R1C thermal model | `mC: 300`, `K: 20` |
-| `infras` | Controllable devices | HP, Battery, EV Charger, Solar, Household |
-| `statesources` | Observation providers | Weather, EnergyPrice, InsideTemp, EVState, ... |
-| `rewards` | Objective functions | TempReward, EconomicReward, ... (each with `weight`) |
+```yaml
+# configs/env/env_test1_small.yaml  (the wrapper)
+env_config_name: env_test1_small               # used as the checkpoint dir name
+infras: configs/infras/test1_small.yaml        # controllable devices
+statesources: configs/statesources/default.yaml # observation providers
+env_meta: configs/env_meta/default.yaml        # EPISODE_LENGTH, control_step
+```
 
-Load with `--load-config configs/env/env_test1_{s/m/l}.yaml` on training or eval scripts.
+| Referenced file | Top-level keys | What it controls |
+|---|---|---|
+| `configs/env_meta/*.yaml` | `EPISODE_LENGTH`, `control_step` | Steps per episode (`288` = 24 h) and seconds per step (`300`) |
+| `configs/infras/*.yaml` | `infras: [...]` | Controllable devices: HP, BatteryTremblay/Linear, LinearEVCharger, SolarPanel, WindTurbine, HouseholdEnergyConsumers — each entry is `{class, name, ...params}` |
+| `configs/statesources/*.yaml` | `statesources: [...]` | Observation providers: WeatherDataSource, EnergyPriceDataSource, InsideTemperature, DesiredUserEnergyNeed, BuildingHeatLoss (carries the 1R1C envelope params `K`, `mC`), EVState, OperatorEnergyControl |
+
+**What is NOT in the env config:**
+- **Rewards** — composed separately via `configs/reward_cfg/reward_schedule_*.yaml`
+  (passed with `--reward-schedule`); see section 2.5. There is no `rewards:` key
+  in the env wrapper.
+- **Data scenarios** — driven by `configs/data_scheduler/*.yaml` (`--data-config`).
+- **Building envelope (`K`, `mC`)** — these are parameters of the `BuildingHeatLoss`
+  statesource, not a top-level `building_props` block. Edit them in the
+  statesources YAML.
+
+`EnvConfigManager.load(wrapper_path)` resolves the three referenced paths
+relative to the project root (so they can be repo-relative like
+`configs/infras/...`), parses each, and returns a populated `EnvConfig` whose
+`create_infras()` / `create_statesources()` factories produce fresh per-worker
+instances. Round-trip is symmetric: `EnvConfigManager.save(...)` writes all four
+files back out.
+
+Load with `--load-config configs/env/env_test1_{small,mid,large}.yaml` on either
+`run_train_ray.py` or `run_eval_ray.py`. Use the same wrapper for eval as for
+training so the topology matches the checkpoint.
 
 ### 2.2 Training hyperparameters — `configs/training_param_config.yaml`
 

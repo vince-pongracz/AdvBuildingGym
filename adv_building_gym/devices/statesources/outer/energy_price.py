@@ -46,6 +46,12 @@ class EnergyPriceDataSource(StateSource):
 
         if "s_E_price" not in state_spaces.keys():
             state_spaces["s_E_price"] = Box(low=-1, high=1, shape=(1,), dtype=np.float32)
+        # Running normalised min/max of s_E_price seen so far this episode.
+        # Seeded at reset to the first step's price; expanded by update_state.
+        if "s_E_price_min_norm" not in state_spaces.keys():
+            state_spaces["s_E_price_min_norm"] = Box(low=-1, high=1, shape=(1,), dtype=np.float32)
+        if "s_E_price_max_norm" not in state_spaces.keys():
+            state_spaces["s_E_price_max_norm"] = Box(low=-1, high=1, shape=(1,), dtype=np.float32)
         # Raw maximum energy price (ct/kWh) — changes only when a new data
         # variant is loaded.  Allows the policy to reconstruct physical
         # price from the normalised E_price observation.
@@ -56,9 +62,6 @@ class EnergyPriceDataSource(StateSource):
             state_spaces["raw_sim_hour"] = Box(low=np.full((1,), 0, dtype=np.float32),
                                             high=np.full((1,), np.inf, dtype=np.float32),
                                             shape=(1,), dtype=np.float32)
-            
-        # TODO VP 2026.05.02. : Idea -- within a day, store the normalised daily min and max prices.
-        # so it's within the state space how high is the current price -- compared to the known min and max.
 
         return state_spaces, action_spaces
 
@@ -77,13 +80,31 @@ class EnergyPriceDataSource(StateSource):
         # only when a new data variant is loaded.
         states["ctxt_E_price_max"][0] = np.float32(self.price_max)
 
+        prev_min = float(states["s_E_price_min_norm"][0])
+        prev_max = float(states["s_E_price_max_norm"][0])
+        states["s_E_price_min_norm"][0] = np.float32(min(prev_min, energy_price))
+        states["s_E_price_max_norm"][0] = np.float32(max(prev_max, energy_price))
+
+    def reset(self, states, info=None) -> None:
+        # Seed running min/max to the first step's normalised price so that
+        # update_state's min/max accumulation starts from a real value rather
+        # than the zero-initialised state buffer.
+        if self.ts is not None:
+            row = self.ts.iloc[min(self.effective_index, len(self.ts) - 1)]
+            first = np.float32(row["E_price_norm"])
+            states["s_E_price_min_norm"][0] = first
+            states["s_E_price_max_norm"][0] = first
+        self.update_state(states, info)
+
     @property
     def E_price_max_raw(self) -> float:
         """Raw (unnormalised) maximum energy price."""
         return float(self.price_max)
 
     def get_raw_values(self) -> dict[str, float]:
-        return {"raw_E_price": self.baseprice_raw}
+        return {
+            "raw_E_price": self.baseprice_raw
+        }
 
     def _get_serialize_value(self, param_name: str, value):
         """Handle enum serialization for normalise parameter."""

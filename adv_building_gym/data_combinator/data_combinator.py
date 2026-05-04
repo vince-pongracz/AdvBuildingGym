@@ -48,7 +48,7 @@ class DataCombinator:
     def __post_init__(self) -> None:
         self._variants = self._build_variants()
 
-    # TODO VP 2026.03.18. : Solve data combinator with a generator function?
+    # TODO noprio VP 2026.03.18. : Solve data combinator with a generator function?
 
     @property
     def variants(self) -> list[dict[str, str]]:
@@ -119,7 +119,7 @@ class DataCombinator:
             return int(rng.integers(0, len(pool)))
         return (episode_count // self.swap_every_n_episodes) % len(pool)
 
-    def get_day_offset(
+    def get_episode_start_offset(
         self,
         episode_count: int,
         max_days: int,

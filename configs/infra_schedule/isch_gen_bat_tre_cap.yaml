@@ -2,7 +2,6 @@
 # Cycles through infra YAMLs (configs/infras/*.yaml) during training.
 # Each entry must declare only `infras` and `building_props`.
 mode: cycle                    # "cycle" = round-robin through configs, "off" = disabled
-# TODO VP 2026.04.27. : Iteration and episode mean the same here..?
 swap_every_n_iterations: 300   # hold each config for N training iterations
 
 configs:

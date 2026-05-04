@@ -102,8 +102,7 @@ def _parse_cli_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--episodes", type=int, default=None,
-        help="Total training episodes. Primary stopping criterion. "
-             "Defaults to TrainingParamConfig.max_episodes_to_run.",
+        help="Total training episodes. Primary stopping criterion. Defaults to TrainingParamConfig.max_episodes_to_run.",
     )
     parser.add_argument(
         "--num-envs", type=int, default=1, help="Number of parallel environments",
@@ -149,18 +148,15 @@ def _parse_cli_args() -> argparse.Namespace:
         "--grad-train",
         action=argparse.BooleanOptionalAction,
         default=False,
-        help="Enable gradual reward training (curriculum). When inactive, all rewards "
-             "are active from start.",
+        help="Enable gradual reward training (curriculum). When inactive, all rewards are active from start.",
     )
     parser.add_argument(
         "--reward-schedule", type=str, default=None,
-        help="Path to reward schedule YAML config "
-             "(default: configs/reward_cfg/reward_schedule_train.yaml)",
+        help="Path to reward schedule YAML config (default: configs/reward_cfg/reward_schedule_train.yaml)",
     )
     parser.add_argument(
         "--infra-schedule", type=str, default=None,
-        help="Path to infra schedule YAML config "
-             "(e.g. 'configs/infra_schedule/infra_schedule_train.yaml').",
+        help="Path to infra schedule YAML config (e.g. 'configs/infra_schedule/infra_schedule_train.yaml').",
     )
     return parser.parse_args()
 
@@ -514,9 +510,7 @@ def main():
     exec_date_dt = datetime.datetime.now()
     exec_date = exec_date_dt.strftime("%Y%m%d_%H%M%S")
     run_name = f"{args.algorithm}_seed{args.seed}_{exec_date}"
-    storage_path = os.path.abspath(
-        f"models/{configs.active_config.env_config_name}/ray/{args.algorithm}"
-    )
+    storage_path = os.path.abspath(f"models/{configs.active_config.env_config_name}/ray/{args.algorithm}")
     os.makedirs(storage_path, exist_ok=True)
 
     env_creator_config = {
@@ -524,16 +518,11 @@ def main():
         "data_combinator": configs.data_combinator,
         "reward_schedule_manager": configs.reward_manager,
     }
-    register_env(
-        "AdvBuilding",
-        lambda cfg: adv_building_env_creator({**env_creator_config, **cfg}),
-    )
+    register_env("AdvBuilding", lambda cfg: adv_building_env_creator({**env_creator_config, **cfg}))
 
     _, param_space = _build_algo_config(args, configs, slurm_resources, exec_date_dt)
     checkpoint_freq_iterations = _checkpoint_iterations(args, configs)
-    tuner = _build_tuner(
-        args, param_space, run_name, storage_path, checkpoint_freq_iterations,
-    )
+    tuner = _build_tuner(args, param_space, run_name, storage_path, checkpoint_freq_iterations)
 
     experiment_path = os.path.join(storage_path, run_name)
     log_startup_banner(

@@ -105,16 +105,11 @@ class HP(Infrastructure):
             self.actual_power_kW = 0.0
             return
 
-        # TODO VP 2026.03.16. : Refinement idea for slow cooling/ slow heating. Add venting system / window open controller (as infrastructure),
+        # TODO noprio VP 2026.03.16. : Refinement idea for slow cooling/ slow heating. Add venting system / window open controller (as infrastructure),
         # which can cool the house faster if the temperature diff is too big and cooling is not fast enough.
         # Possible to schedule it, if once fired, then it can't be fire again in an hour -- physics of venting/ventillating a house?
         # action, but with minimal energy (as window open and close is there).
         # Refinement idea: If the wind is too strong or wind is higher than a threshold and it's raining, do not allow this action
-
-        # TODO VP 2026.01.20. : Add forecasting window (and thus MPC) for the states and the
-        # actions as well in the config, generally window size is 0.
-        # Allow it only for the forecasted desired states -- not for the actual system states
-        # Handle if no more forecasting is available (csv ended and similar scenarios)
 
         # NOTE VP 2026.01.20. : Heat loss Q_transfer is now handled by BuildingHeatLoss datasource.
         # It is a continous efferct

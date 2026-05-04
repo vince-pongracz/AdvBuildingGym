@@ -4,6 +4,8 @@ from typing import ClassVar, Dict, Optional, Set
 import numpy as np
 from gymnasium.spaces import Box
 
+from adv_building_gym.utils.constants import SECONDS_PER_HOUR
+
 from ..base import Infrastructure
 from adv_building_gym.utils.serializable import ComponentRegistry
 
@@ -39,7 +41,7 @@ logger = logging.getLogger(__name__)
 # NOTE VP 2026.01.20. : It is optional to add this in a .py class
 # - PyBaMM (more complex, maybe keep it as an option later, but do not implement that)
 
-# TODO VP / IDEA 2026.01.15. : Implement a reward function, which rewards shorter fully charged and fully drained times of the battery.
+# TODO noprio VP / IDEA 2026.01.15. : Implement a reward function, which rewards shorter fully charged and fully drained times of the battery.
 
 
 class BatteryTremblay(Infrastructure):
@@ -302,7 +304,7 @@ class BatteryTremblay(Infrastructure):
 
         # Calculate energy transferred in this control step
         # Energy (Ah) = Current (A) * Time (h)
-        time_hours = self.control_step / 3600.0
+        time_hours = self.control_step / SECONDS_PER_HOUR
         delta_Ah = actual_current * time_hours
 
         # Apply efficiency losses

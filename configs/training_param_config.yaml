@@ -30,7 +30,7 @@ sac:
   # Link: https://docs.ray.io/en/latest/_modules/ray/rllib/algorithms/sac/sac.html
   episodes_to_keep_in_replay_buffer: 365 # 1200
   n_step_return: 6
-  learning_starts_after_n_episodes: 50 # Warm up replay buffer with 50 episodes before learning starts.
+  learning_starts_after_n_episodes: 1 # Warm up replay buffer with 50 episodes before learning starts.
 
 # Per-key strided history via StridedHistoryConnector.
 # tracked_keys: observation-space keys (obs only). The Dict obs entry
@@ -69,7 +69,6 @@ hst:
   #   - s_E_price
   #   - s_hh_consumption_norm
   #   - s_desired_energy_need
-  #   - s_operator_energy_max
   #   - a_hp_prev
   #   - a_battery_prev
   #   - a_lin_ev_charger_prev
