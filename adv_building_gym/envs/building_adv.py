@@ -441,6 +441,10 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         self._component_info["action_history"] = self._action_history.history
         self._component_info["episode_length"] = self.env_config.EPISODE_LENGTH
         self._component_info["iteration"] = self.iteration
+        self._component_info["control_step_s"] = self.env_config.CONTROL_STEP
+        # Surface the env-level termination toggle so reward functors can gate
+        # their terminal-only branches (huge penalties / success bonuses).
+        self._component_info["allow_early_termination"] = self.env_config.allow_early_termination
         # info["terminated"] is set by _compute_termination() in Phase 1 of
         # step(), after _publish_step_info populates the rest of info.
 
@@ -452,6 +456,8 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         """
         if self.iteration >= self.env_config.EPISODE_LENGTH:
             return True
+        if not self.env_config.allow_early_termination:
+            return False
         for rf in self.reward_functors:
             if rf.should_terminate(action, self.state, self._component_info):
                 return True

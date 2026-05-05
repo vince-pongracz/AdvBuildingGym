@@ -137,9 +137,12 @@ class OperatorEnergyControlReward(RewardFunction):
                 return float(self.weight * self.harsh_penalty), max_step
             return float(self.weight * 1.0), max_step
 
-        if ratio > self.terminate_threshold_pct:
+        allow_term = info.get("allow_early_termination", True)
+        if allow_term and ratio > self.terminate_threshold_pct:
             # should_terminate already voted to end the episode in Phase 1;
-            # emit the configured terminal penalty here.
+            # emit the configured terminal penalty here.  When early
+            # termination is disabled, we fall through to the regular
+            # over-limit branch (harsh_penalty + recovery) below.
             return float(self.weight * self.terminate_penalty), max_step
 
         if ratio <= self.soft_threshold_pct:

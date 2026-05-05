@@ -36,6 +36,11 @@ class EnvConfig(LoggableConfig):
     EPISODE_LENGTH: int = 288 # a day
     CONTROL_STEP: int = 300  # seconds (5 minutes)
     ACTION_HISTORY_LENGTH: int = 15  # rolling window of past actions kept in env for reward functions (not in obs)
+    # When False, reward should_terminate hooks are bypassed and rewards skip
+    # their terminal-only branches (huge penalties / success bonuses), keeping
+    # only the regular reward/penalty curves. Lets a single env config family
+    # toggle between "terminate on hard breach" and "soft, non-terminating".
+    allow_early_termination: bool = True
 
     # Raw component specs as parsed from YAML.  Source of truth for the
     # factory methods below; never reach into hardcoded defaults.
@@ -128,6 +133,7 @@ class EnvConfig(LoggableConfig):
             f"  EPISODE_LENGTH = {self.EPISODE_LENGTH}",
             f"  CONTROL_STEP = {self.CONTROL_STEP}",
             f"  ACTION_HISTORY_LENGTH = {self.ACTION_HISTORY_LENGTH}",
+            f"  allow_early_termination = {self.allow_early_termination}",
         ]
         logger.info("%s:\n%s", self._log_label(), "\n".join(lines))
 

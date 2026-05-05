@@ -89,9 +89,12 @@ class TempReward(RewardFunction):
         temp_abs_max: float = float(states["ctxt_temp_abs_max"][0]) if "ctxt_temp_abs_max" in states else 60.0
 
         # Hard band: should_terminate already voted to end the episode in
-        # Phase 1; emit the configured terminal penalty here.
+        # Phase 1; emit the configured terminal penalty here. Skipped when
+        # the env disables early termination — the smooth curve below still
+        # provides a strong negative signal at large diffs.
         diff_celsius = diff_norm * temp_abs_max
-        if diff_celsius > self.terminate_diff_celsius:
+        allow_term = info.get("allow_early_termination", True) if info is not None else True
+        if allow_term and diff_celsius > self.terminate_diff_celsius:
             return self.weight * self.terminate_penalty, self.weight * self.max_reward
 
         zero_norm = self.zero_reward_diff_celsius / temp_abs_max if temp_abs_max != 0 else 0.0

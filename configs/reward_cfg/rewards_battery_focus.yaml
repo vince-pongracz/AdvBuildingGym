@@ -24,7 +24,8 @@ rewards:
 
   # - class_name: MinimiseEnergyConsumptionReward
   #   weight: 0.2
-  #   params: {}
+  #   params:
+  #     threshold_kWh: 0.5
 
   # - class_name: OperatorEnergyControlReward
   #   weight: 1.0
@@ -35,27 +36,27 @@ rewards:
   #     terminate_threshold_pct: 1.1
   #     terminate_penalty: -100.0
 
-  # - class_name: BatteryTargetReward
-  #   weight: 1.0
-  #   params:
-  #     min_pct: 0.15
-  #     max_pct: 0.85
-  #     in_band_reward: 1.0
-  #     max_penalty: -3.0
-
-  - class_name: EVChargingReward
+  - class_name: BatteryTargetReward
     weight: 1.0
     params:
-      diff_threshold: 0.02
-      soc_diff_multiplier: 5.0
-      disconnect_soc_tolerance: 0.05
-      success_reward: 10.0
-      failure_penalty: -100.0
-      min_curve_violation_penalty: -100.0
+      min_pct: 0.15
+      max_pct: 0.85
+      in_band_reward: 1.0
+      max_penalty: -3.0
 
-  - class_name: EVChargingOnTimeReward
-    weight: 1.0
-    params: {}
+  # - class_name: EVChargingReward
+  #   weight: 1.0
+  #   params:
+  #     diff_threshold: 0.02
+  #     soc_diff_multiplier: 5.0
+  #     disconnect_soc_tolerance: 0.05
+  #     success_reward: 10.0
+  #     failure_penalty: -100.0
+  #     min_curve_violation_penalty: -100.0
+
+  # - class_name: EVChargingOnTimeReward
+  #   weight: 1.0
+  #   params: {}
 
   - class_name: ActionSmoothnessReward
     weight: 0.5

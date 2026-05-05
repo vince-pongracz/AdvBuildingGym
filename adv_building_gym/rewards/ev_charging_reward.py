@@ -102,10 +102,16 @@ class EVChargingReward(RewardFunction):
     def get_reward(self, actions, states, info: dict | None = None) -> tuple[float, float]:
         max_step = self.weight * self.max_reward
 
+        allow_term = info.get("allow_early_termination", True) if info is not None else True
+
         # Disconnect judgement runs first so the terminal verdict fires on
         # the same step the EV detaches, regardless of s_ev_connected which
-        # has already flipped to 0.
-        if info is not None and info.get("ev_just_disconnected", False):
+        # has already flipped to 0.  Skipped entirely when the env disables
+        # early termination — both success_reward and failure_penalty are
+        # exceptional values that don't belong in a soft, non-terminating
+        # reward stream.  In that mode the disconnect step falls through to
+        # the ev_connected < 0.5 fallthrough below (no signal).
+        if allow_term and info is not None and info.get("ev_just_disconnected", False):
             current_soc = float(states["s_ev_soc"][0])
             target_soc = float(info.get("ev_session_target_soc", 0.0))
             success = abs(current_soc - target_soc) <= self.disconnect_soc_tolerance
@@ -122,8 +128,10 @@ class EVChargingReward(RewardFunction):
 
         # Min-curve violation: only enforced when the session is active
         # (reachable target).  The corridor obs key is published by the
-        # charger; reading it here keeps the reward purely a judge.
-        if info is not None and info.get("ev_session_active", False):
+        # charger; reading it here keeps the reward purely a judge.  When
+        # early termination is disabled, the huge penalty is skipped and
+        # the agent receives the regular SoC-band reward below.
+        if allow_term and info is not None and info.get("ev_session_active", False):
             soc_min = float(states["s_ev_soc_min"][0])
             if current_soc < soc_min:
                 return self.weight * self.min_curve_violation_penalty, max_step

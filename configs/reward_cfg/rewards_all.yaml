@@ -10,21 +10,16 @@ rewards:
       terminate_diff_celsius: 3.5
       terminate_penalty: -100.0
 
-  - class_name: EconomicReward
-    weight: 0.1
-    params:
-      reference_power_kW: 15.0
-      export_bonus: 3.0
-
   - class_name: LongTermEconomicReward
-    weight: 0.9
+    weight: 1.0
     params:
-      reference_power_kW: 15.0
+      reference_power_kW: 22.0
       export_bonus: 3.0
 
   - class_name: MinimiseEnergyConsumptionReward
-    weight: 0.2
-    params: {}
+    weight: 1.0
+    params:
+      threshold_kWh: 0.5
 
   # max_power_kW comes from ctxt_operator_max_power_kW (statesource bundle).
   - class_name: OperatorEnergyControlReward
@@ -56,8 +51,4 @@ rewards:
 
   - class_name: EVChargingOnTimeReward
     weight: 1.0
-    params: {}
-
-  - class_name: ActionSmoothnessReward
-    weight: 0.5
     params: {}

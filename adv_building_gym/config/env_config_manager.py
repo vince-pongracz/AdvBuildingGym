@@ -61,6 +61,7 @@ class EnvConfigManager:
 
         control_step = env_meta_doc.get("control_step", 300)
         episode_length = env_meta_doc.get("EPISODE_LENGTH", 288)
+        allow_early_termination = bool(env_meta_doc.get("allow_early_termination", True))
 
         infra_specs = list(infras_doc.get("infras", []))
         statesource_specs = list(statesources_doc.get("statesources", []))
@@ -69,6 +70,7 @@ class EnvConfigManager:
             env_config_name=wrapper.get("env_config_name", "loaded_config"),
             EPISODE_LENGTH=episode_length,
             CONTROL_STEP=control_step,
+            allow_early_termination=allow_early_termination,
             infra_specs=infra_specs,
             statesource_specs=statesource_specs,
             infras=None,
@@ -141,6 +143,7 @@ class EnvConfigManager:
         env_meta_doc = {
             "EPISODE_LENGTH": config.EPISODE_LENGTH,
             "control_step": config.CONTROL_STEP,
+            "allow_early_termination": config.allow_early_termination,
         }
         wrapper_doc = {
             "env_config_name": config.env_config_name,

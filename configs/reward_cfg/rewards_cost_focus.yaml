@@ -27,13 +27,14 @@ rewards:
       terminate_penalty: -100.0
 
   - class_name: LongTermEconomicReward
-    weight: 0.9
+    weight: 1.0
     params:
       export_bonus: 3.0
 
   # - class_name: MinimiseEnergyConsumptionReward
   #   weight: 0.2
-  #   params: {}
+  #   params:
+  #     threshold_kWh: 0.5
 
   - class_name: BatteryTargetReward
     weight: 1.0

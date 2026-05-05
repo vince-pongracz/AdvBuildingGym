@@ -242,6 +242,35 @@ Defines Pareto front, Hypervolume indicator
 
 TODO VP: "To the best of our knowledge" -- important phrase to use in thesis work
 
+#### Comprehensive Overview of Reward Engineering and Shaping in Advancing Reinforcement Learning Applications
+
+Link: https://ieeexplore.ieee.org/abstract/document/10763475
+
+Reward engineering:
+- R(s, a, s')
+- guidance towards desired states and actions
+- informative for learning, sparse to prevent trivial solutions
+- How to design such rewards, which find the desired behaviour and not the unintended shortcuts.
+
+Reward shaping:
+- about fine-tuning the reward function
+- improve to learning process without altering the policy -- only about faster learning
+- Potential-based reward shaping -- reward based only on s, s' -- R'(s,a,s') = R(s,a,s') + γ R_p(s') − R_p(s)
+
+2 approaches:
+- "Reward is Enough" -- single scalar reward meaning progress, environment complexity not considered -- SO
+- "Reward is Not Enough" -- can't rely on a single scalar value, vector rewards -- MO
+
+Reward design pitfalls:
+- Reward Sparsity
+- Deceptive Rewards
+- Reward Hacking
+- Unintended Consequences
+- Misaligned Reward with True Objective
+- Reward Function Complexity
+- Difficulty in Evaluating Reward Design
+
+
 
 #### Reinforcement Learning-Based Energy Management of Smart Home with Rooftop Solar Photovoltaic System, Energy Storage System, and Home Appliances. 
 Link: https://www.mdpi.com/1424-8220/19/18/3937

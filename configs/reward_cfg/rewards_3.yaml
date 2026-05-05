@@ -24,7 +24,8 @@ rewards:
 
   - class_name: MinimiseEnergyConsumptionReward
     weight: 0.2
-    params: {}
+    params:
+      threshold_kWh: 0.5
 
   # max_power_kW comes from ctxt_operator_max_power_kW (statesource bundle).
   - class_name: OperatorEnergyControlReward
