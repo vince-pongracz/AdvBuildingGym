@@ -7,8 +7,6 @@
 #   gradual_add  - Start with the first reward, add the next one every
 #                  swap_every_n_episodes episodes. Once all are added they
 #                  stay active for the rest of training.
-#   iterate      - Only one reward is active at a time; rotate to the next
-#                  every swap_every_n_episodes episodes (round-robin).
 #   random       - Each swap randomly selects a subset of rewards
 #                  (at least 1, up to all).
 

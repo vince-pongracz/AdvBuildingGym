@@ -7,8 +7,6 @@ Modes:
     off          — All rewards active from the start, no swapping.
     gradual_add  — Start with the first reward, add the next one every
                    swap cycle.  Once all are added they stay active.
-    iterate      — Only one reward is active at a time; rotate to the
-                   next every swap cycle (round-robin).
     random       — Maintain a stable active set of ``random_active_count``
                    rewards.  Each swap, ``random_swap_count`` currently
                    active rewards are swapped out for the same number of
@@ -26,6 +24,7 @@ Usage::
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from typing import Any
@@ -43,8 +42,53 @@ class RewardScheduleMode(Enum):
 
     OFF = "off"
     GRADUAL_ADD = "gradual_add"
-    ITERATE = "iterate"
     RANDOM = "random"
+
+
+@dataclass
+class ExplorationBumpConfig:
+    """Exploration kick on reward swap (event-driven dynamic callback).
+
+    On every reward set change, push exploration up so the policy re-tests
+    the action space under the new objective, then linearly decay back to
+    baseline over ``decay_iterations`` iterations.
+
+    PPO   → bump ``entropy_coeff`` (read fresh each loss step).
+    SAC   → force ``log_alpha`` to ``log(sac_alpha)``; ``alpha_lr`` will
+            pull it back down toward target entropy on its own, but the
+            decay still applies as an upper envelope.
+    Both  → multiply optimiser LRs by ``lr_multiplier`` so the critic /
+            value head can recalibrate to the shifted reward landscape.
+    """
+
+    enabled: bool = False
+    ppo_entropy_coeff: float = 0.05
+    ppo_entropy_baseline: float = 0.0
+    sac_alpha: float = 0.5
+    decay_iterations: int = 25
+    lr_multiplier: float = 1.0
+
+    @staticmethod
+    def from_dict(cfg_raw: dict | None) -> "ExplorationBumpConfig":
+        if not cfg_raw:
+            # Return the default config
+            return ExplorationBumpConfig()
+        cfg = ExplorationBumpConfig(
+            enabled=bool(cfg_raw.get("enabled", False)),
+            ppo_entropy_coeff=float(cfg_raw.get("ppo_entropy_coeff", 0.05)),
+            ppo_entropy_baseline=float(cfg_raw.get("ppo_entropy_baseline", 0.0)),
+            sac_alpha=float(cfg_raw.get("sac_alpha", 0.5)),
+            decay_iterations=int(cfg_raw.get("decay_iterations", 25)),
+            lr_multiplier=float(cfg_raw.get("lr_multiplier", 1.0)),
+        )
+
+        if cfg.decay_iterations < 1:
+            raise ValueError(f"exploration_bump.decay_iterations must be >= 1, got {cfg.decay_iterations}")
+        if cfg.sac_alpha <= 0:
+            raise ValueError(f"exploration_bump.sac_alpha must be > 0, got {cfg.sac_alpha}")
+        if cfg.lr_multiplier <= 0:
+            raise ValueError(f"exploration_bump.lr_multiplier must be > 0, got {cfg.lr_multiplier}")
+        return cfg
 
 
 class RewardScheduleManager:
@@ -72,6 +116,7 @@ class RewardScheduleManager:
         reward_specs: list[dict[str, Any]],
         random_active_count: int | None = None,
         random_swap_count: int = 1,
+        exploration_bump: ExplorationBumpConfig | None = None,
     ) -> None:
         if not reward_specs:
             raise ValueError("reward_specs must contain at least one entry")
@@ -109,6 +154,8 @@ class RewardScheduleManager:
         # a consistent selection between get_active_reward_names() and
         # create_active_rewards() within the same swap step.
         self._active_specs_cache: list[dict[str, Any]] | None = None
+
+        self.exploration_bump = exploration_bump or ExplorationBumpConfig()
 
     # ------------------------------------------------------------------
     # Factory
@@ -162,6 +209,7 @@ class RewardScheduleManager:
             reward_specs=reward_specs,
             random_active_count=cfg.get("random_active_count"),
             random_swap_count=cfg.get("random_swap_count", 1),
+            exploration_bump=ExplorationBumpConfig.from_dict(cfg.get("exploration_bump")),
         )
         reward_lines = [
             f"  {s['class_name']}: weight={s['weight']}"
@@ -229,10 +277,6 @@ class RewardScheduleManager:
             # Start with 1 reward, add one more per swap (cap at total)
             count = min(self._swap_index + 1, n)
             return list(self._reward_specs[:count])
-
-        if self.mode is RewardScheduleMode.ITERATE:
-            idx = self._swap_index % n
-            return [self._reward_specs[idx]]
 
         if self.mode is RewardScheduleMode.RANDOM:
             # Lazy-init the stable active set on first compute. The set is

@@ -28,8 +28,8 @@ class BatteryTargetReward(RewardFunction):
                                                  + (max_penalty - in_band_reward)
                                                  · ((SoC - max_pct) / (1 - max_pct))²
 
-    With the defaults (in_band_reward=0.3, max_penalty=-3.0), the reward
-    lives in [-3.0, 0.3].  ``self.max_reward`` is set to ``in_band_reward``
+    With the defaults (in_band_reward=1.0, max_penalty=-3.0), the reward
+    lives in [-3.0, 1.0].  ``self.max_reward`` is set to ``in_band_reward``
     so ``reward_rate`` logging reflects the true best-case contribution.
     """
 
@@ -38,7 +38,7 @@ class BatteryTargetReward(RewardFunction):
                 name: str = "battery_target_reward",
                 min_pct: float = 0.15,
                 max_pct: float = 0.85,
-                in_band_reward: float = 0.3,
+                in_band_reward: float = 1.0,
                 max_penalty: float = -3.0) -> None:
         """
         Args:

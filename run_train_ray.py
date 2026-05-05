@@ -195,7 +195,7 @@ def _load_configs(args: argparse.Namespace) -> LoadedConfigs:
     )
 
     # Reward schedule. With --grad-train the manager uses its YAML mode
-    # (gradual_add / iterate / random). Without it, mode is forced to OFF
+    # (gradual_add / random). Without it, mode is forced to OFF
     # so all configured rewards are active from the start.
     reward_schedule_path = args.reward_schedule or str(
         Path(__file__).resolve().parent / "configs" / "reward_cfg" / "reward_schedule_train.yaml"

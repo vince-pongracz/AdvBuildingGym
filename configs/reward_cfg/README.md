@@ -18,6 +18,22 @@ the training (gradual TL learning).
 - `random_swap_count` — (random mode only) number of currently active
   rewards swapped out per cycle for the same number of inactive ones.
   Default `1`; clamped to `min(active, total - active)`.
+- `exploration_bump` — (optional) event-driven exploration kick applied
+  each time the active reward set changes. Linearly decays back to
+  baseline. Useful so the policy re-tests the action space under the
+  shifted objective instead of staying stuck in the previous optimum.
+  Fields:
+    - `enabled` (default `false`)
+    - `ppo_entropy_coeff` — boosted PPO entropy coefficient (default `0.05`)
+    - `ppo_entropy_baseline` — value to decay back to (default `0.0`)
+    - `sac_alpha` — value forced onto SAC `log_alpha` as `log(sac_alpha)`
+      (default `0.5`); SAC's own `alpha_lr` will continue to retune it.
+    - `decay_iterations` — iterations to linearly ramp boost → baseline
+      (default `25`).
+    - `lr_multiplier` — optional optimiser LR multiplier at the bump peak,
+      interpolated back to `1.0` over `decay_iterations` (default `1.0`,
+      i.e. off). Helps the critic / value head recalibrate to the shifted
+      reward landscape.
 
 ## Modes
 
@@ -26,7 +42,6 @@ the training (gradual TL learning).
 - `gradual_add` — Start with the first reward, add the next one every
   `swap_every_n_iterations` episodes. Once all are added they stay active
   for the rest.
-- `iterate` — One reward is active at a time; rotate to the next at evary swap (round-robin).
 - `random` — Maintain a stable active set of `random_active_count` rewards.
   Each swap, `random_swap_count` currently active rewards are swapped out
   for the same number of currently inactive ones, so the active-set size

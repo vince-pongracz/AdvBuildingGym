@@ -225,6 +225,24 @@ This framework leverages the **[Gymnasium](https://github.com/Farama-Foundation/
 
 ### Papers -- literature research
 
+#### Learning to Optimize Multi-Objective Alignment Through Dynamic Reward Weighting
+
+Link: https://arxiv.org/abs/2509.11452v1
+
+About LLMs and multi objective RL setup, how to align LLMs to multiple goals -- topic: dynamic reward weighting
+
+TODO VP: add a dynamic reward weight generator -- based on Dirichlet distribution
+lists rewards --> knows how many weights and for which rewards should it schedule. There is already a markdown about this.
+
+Hypervolume guided weight adaptation: by default fix weights, but somehow if hypervolume could be enlarged then the weighting is updated. The original, user-set weights are not overwritten, the original reward is multiplied with a meta-reward.
+
+Gradient-based weight optimization: no pre-defined reward weights, but compute learning of how each objective contributes to the overall performance -- based on gradients and reallocates weights based on this. 
+
+Defines Pareto front, Hypervolume indicator
+
+TODO VP: "To the best of our knowledge" -- important phrase to use in thesis work
+
+
 #### Reinforcement Learning-Based Energy Management of Smart Home with Rooftop Solar Photovoltaic System, Energy Storage System, and Home Appliances. 
 Link: https://www.mdpi.com/1424-8220/19/18/3937
 Uses RL, tabular Q learning (tables, discrete state-action pairs), PV, ESS, AC and washing machine.
