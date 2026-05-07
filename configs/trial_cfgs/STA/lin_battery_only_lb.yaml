@@ -1,0 +1,36 @@
+# Example trial config — single source of truth for one training/eval run.
+# Pass to run_train_ray.py / run_eval_ray.py via:
+#     python run_train_ray.py --trial configs/trial_cfgs/trial_cfg_1.yaml
+
+trial_name: trial_1_sac_battery_only
+
+# --- algorithm & run control ---
+algorithm: sac                 # ppo | sac
+episodes: 3500                 # overrides training_params.max_episodes_to_run
+seed: 42                       # overrides training_params.seed
+metric: episode_return_mean    # reward_rate | achieved_reward | episode_return_mean
+checkpoint_frequency_episodes: 20
+log_trajectories: false
+num_envs: 1
+grad_train: false              # if true, the reward schedule mode is honoured;
+                               # otherwise mode is forced to OFF (all rewards live)
+
+# --- env topology (replaces the old configs/env/*.yaml wrapper) ---
+env_meta:      configs/env_meta/default.yaml
+infras:        configs/infra_cfgs/STA/lin_battery_only.yaml
+statesources:  configs/statesource_cfgs/default.yaml
+rewards:       configs/reward_cfgs/STA/rewards_battery_focus.yaml
+
+# --- training params + schedules ---
+training_params: configs/training_param_cfgs/lb_variant.yaml
+data_schedule:   configs/schedules/data/train.yaml
+# TODO VP 2026.05.07.: Maybe wort breaking down the data_schedule into train and eval 
+# here in the config, so the script can pick up the eval setup already
+reward_schedule: null
+infra_schedule:  null            # or configs/schedules/infra/train.yaml
+
+# --- optional inline overrides (deep-merged onto referenced YAMLs) ---
+# overrides:
+#   training_params:
+#     common: { learning_rate: 1.0e-4 }
+#     ppo:    { minibatch_size: 128 }

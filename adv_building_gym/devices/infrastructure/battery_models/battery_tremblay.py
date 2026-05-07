@@ -369,17 +369,14 @@ class BatteryTremblay(Infrastructure):
         self.actual_power_kW = 0.0
         super().reset(states, info)
 
-    def get_electric_consumption(self, actions: Dict) -> float:
-        """Get current electric energy consumption from battery in kW.
-
-        Returns the actual power calculated from the Tremblay model,
-        accounting for voltage variations and efficiency losses.
-
-        Returns:
-            Positive value when charging (consuming from grid),
-            negative value when discharging (providing to grid).
-        """
-        return self.actual_power_kW
+    def get_E(self, actions: Dict) -> tuple[float, float]:
+        # self.actual_power_kW is positive when the battery charges -- consumes energy
+        if self.actual_power_kW > 0.0:
+            # production, consumption
+            return 0.0, self.actual_power_kW
+        else:
+            # self.actual_power_kW is negative when the battery discharges -- produces energy to the others
+            return -1.0 * self.actual_power_kW, 0.0
 
     def _get_actual_battery_charge_kW(self) -> float:
         """Calculate actual charge in kW based on current battery percentage and max capacity."""

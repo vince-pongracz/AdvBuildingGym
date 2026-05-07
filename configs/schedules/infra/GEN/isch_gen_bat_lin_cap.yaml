@@ -1,0 +1,13 @@
+# Infrastructure schedule configuration
+# Cycles through infra YAMLs (configs/infra_cfgs/**/*.yaml) during training.
+# Each entry must declare only `infras` and `building_props`.
+#
+mode: cycle                    # "cycle" = round-robin through configs, "off" = disabled
+swap_every_n_iterations: 300   # hold each config for N training iterations
+
+configs:
+  - configs/infra_cfgs/GEN/battery_lin_capacity/battery_lin_cap_1.yaml
+  - configs/infra_cfgs/GEN/battery_lin_capacity/battery_lin_cap_2.yaml
+  - configs/infra_cfgs/GEN/battery_lin_capacity/battery_lin_cap_3.yaml
+  - configs/infra_cfgs/GEN/battery_lin_capacity/battery_lin_cap_4.yaml
+  - configs/infra_cfgs/GEN/battery_lin_capacity/battery_lin_cap_5.yaml

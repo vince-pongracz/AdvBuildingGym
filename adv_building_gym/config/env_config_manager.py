@@ -1,18 +1,11 @@
 """Config serialization and management utilities.
 
-Configuration is split across three concerns, glued by a wrapper YAML:
+Environment topology is split across three concerns, all referenced by
+the trial config (``configs/trial_cfgs/<name>.yaml``):
 
-    configs/env/<name>.yaml         # wrapper — references the three files below
-    configs/infras/<name>.yaml      # infras list (building envelope params live on BuildingHeatLoss)
-    configs/statesources/<name>.yaml # statesources list
-    configs/env_meta/<name>.yaml    # EPISODE_LENGTH, control_step
-
-The wrapper format is::
-
-    env_config_name: env_name
-    infras: configs/infras/test1_small.yaml
-    statesources: configs/statesources/default.yaml
-    env_meta: configs/env_meta/default.yaml
+    configs/infra_cfgs/<name>.yaml        # infras list (building envelope on BuildingHeatLoss)
+    configs/statesource_cfgs/<name>.yaml  # statesources list
+    configs/env_meta/<name>.yaml          # EPISODE_LENGTH, control_step
 """
 
 from __future__ import annotations
@@ -45,12 +38,11 @@ class EnvConfigManager:
 
     @staticmethod
     def from_dict(
-        wrapper: Dict[str, Any],
         infras_doc: Dict[str, Any],
         statesources_doc: Dict[str, Any],
         env_meta_doc: Dict[str, Any],
     ) -> EnvConfig:
-        """Reconstruct an EnvConfig from the four parsed YAML documents.
+        """Reconstruct an EnvConfig from the three parsed YAML documents.
 
         Stores the raw component specs on the config; the env's factory
         methods (``create_infras`` / ``create_statesources``) are the
@@ -67,7 +59,6 @@ class EnvConfigManager:
         statesource_specs = list(statesources_doc.get("statesources", []))
 
         config = EnvConfig(
-            env_config_name=wrapper.get("env_config_name", "loaded_config"),
             EPISODE_LENGTH=episode_length,
             CONTROL_STEP=control_step,
             allow_early_termination=allow_early_termination,
@@ -80,83 +71,62 @@ class EnvConfigManager:
         return config
 
     @staticmethod
-    def load(path: str | Path) -> EnvConfig:
-        """Load an env config from a wrapper YAML.
+    def load(
+        infras_path: str | Path,
+        statesources_path: str | Path,
+        env_meta_path: str | Path,
+    ) -> EnvConfig:
+        """Load an env config from its three split YAML files.
 
-        Resolves the three referenced files (infras, statesources, env_meta)
-        relative to the project root (current working directory) so wrapper
-        files can use repo-relative paths like ``configs/infras/...``.
+        Args:
+            infras_path: configs/infra_cfgs/...yaml (declares ``infras`` list).
+            statesources_path: configs/statesource_cfgs/...yaml (declares ``statesources``).
+            env_meta_path: configs/env_meta/...yaml (EPISODE_LENGTH, control_step, ...).
         """
-        wrapper_path = Path(path)
-        wrapper = EnvConfigManager._load_yaml(wrapper_path)
+        infras_doc = EnvConfigManager._load_yaml(Path(infras_path))
+        statesources_doc = EnvConfigManager._load_yaml(Path(statesources_path))
+        env_meta_doc = EnvConfigManager._load_yaml(Path(env_meta_path))
 
-        for key in ("infras", "statesources", "env_meta"):
-            if key not in wrapper:
-                raise ValueError(
-                    f"Wrapper config {wrapper_path} is missing required key '{key}'. "
-                    f"Expected: env_config_name, infras, statesources, env_meta."
-                )
-
-        infras_doc = EnvConfigManager._load_yaml(Path(wrapper["infras"]))
-        statesources_doc = EnvConfigManager._load_yaml(Path(wrapper["statesources"]))
-        env_meta_doc = EnvConfigManager._load_yaml(Path(wrapper["env_meta"]))
-        
-        config = EnvConfigManager.from_dict(wrapper, infras_doc, statesources_doc, env_meta_doc)
+        config = EnvConfigManager.from_dict(infras_doc, statesources_doc, env_meta_doc)
         config.log_values()
 
-        logger.info("Config loaded successfully: %s", config.env_config_name)
+        logger.info(
+            "Env config loaded from %s + %s + %s",
+            Path(infras_path).name, Path(statesources_path).name, Path(env_meta_path).name,
+        )
         return config
 
     @staticmethod
     def save(
         config,
-        wrapper_path: str | Path,
         infras_path: str | Path,
         statesources_path: str | Path,
         env_meta_path: str | Path,
     ) -> None:
-        """Save an EnvConfig as the four-file split layout.
-
-        All four paths must be supplied; the wrapper is written with
-        repo-relative references to the other three (as given).
-        """
-        wrapper_path = Path(wrapper_path)
+        """Save an EnvConfig as the three-file split layout."""
         infras_path = Path(infras_path)
         statesources_path = Path(statesources_path)
         env_meta_path = Path(env_meta_path)
 
-        for p in (wrapper_path, infras_path, statesources_path, env_meta_path):
+        for p in (infras_path, statesources_path, env_meta_path):
             p.parent.mkdir(parents=True, exist_ok=True)
 
-        # Prefer the raw specs (round-trip from load) over re-serialising live
-        # instances; if specs are absent, fall back to the live components.
         infra_specs = list(config.infra_specs) if config.infra_specs \
             else [i.to_dict() for i in (config.infras or [])]
         statesource_specs = list(config.statesource_specs) if config.statesource_specs \
             else [s.to_dict() for s in (config.statesources or [])]
-        infras_doc = {
-            "infras": infra_specs,
-        }
-        statesources_doc = {
-            "statesources": statesource_specs,
-        }
+        infras_doc = {"infras": infra_specs}
+        statesources_doc = {"statesources": statesource_specs}
         env_meta_doc = {
             "EPISODE_LENGTH": config.EPISODE_LENGTH,
             "control_step": config.CONTROL_STEP,
             "allow_early_termination": config.allow_early_termination,
-        }
-        wrapper_doc = {
-            "env_config_name": config.env_config_name,
-            "infras": str(infras_path),
-            "statesources": str(statesources_path),
-            "env_meta": str(env_meta_path),
         }
 
         for path, doc in (
             (infras_path, infras_doc),
             (statesources_path, statesources_doc),
             (env_meta_path, env_meta_doc),
-            (wrapper_path, wrapper_doc),
         ):
             with path.open("w") as f:
                 yaml.dump(doc, f, default_flow_style=False, sort_keys=False)

@@ -1,6 +1,6 @@
 """Schedule infrastructure config YAML files for curriculum training.
 
-Cycles through infra YAMLs (``configs/infras/*.yaml``) during training so
+Cycles through infra YAMLs (``configs/infra_cfgs/**/*.yaml``) during training so
 the agent generalises across many building configurations.
 
 The swap is synchronised across all Ray workers via the companion
@@ -33,7 +33,7 @@ class _ParsedConfig:
 class InfraCombinator:
     """Schedule infra YAML files for infrastructure curriculum training.
 
-    Loads a sequence of infra YAMLs (``configs/infras/*.yaml``) and cycles
+    Loads a sequence of infra YAMLs (``configs/infra_cfgs/**/*.yaml``) and cycles
     through them during training.  Each file declares only the ``infras``
     list -- statesources, timing, building envelope, and rewards are
     managed separately.
@@ -85,7 +85,7 @@ class InfraCombinator:
             raise ValueError(
                 f"InfraCombinator: {path} is not a pure infra YAML. "
                 f"Infra schedule entries must point at infra-only YAMLs "
-                f"(configs/infras/*.yaml) containing only 'infras'."
+                f"(configs/infra_cfgs/**/*.yaml) containing only 'infras'."
             )
 
         return _ParsedConfig(
@@ -136,8 +136,8 @@ class InfraCombinator:
             mode: cycle
             swap_every_n_iterations: 300
             configs:
-            - configs/infras/test1_small.yaml
-            - configs/infras/test1_mid.yaml
+            - configs/infra_cfgs/test1_small.yaml
+            - configs/infra_cfgs/test1_mid.yaml
         """
         path = Path(path)
         if not path.exists():

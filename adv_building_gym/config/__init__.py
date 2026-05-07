@@ -11,6 +11,7 @@ from .reward_schedule_manager import RewardScheduleManager
 from .reward_config_serializer import RewardConfigSerializer
 from .training_param_config import TrainingParamConfig
 from .data_config import load_data_combinator_config
+from .trial_config import TrialConfig
 
 __all__ = [
     "EnvConfig",
@@ -19,5 +20,6 @@ __all__ = [
     "RewardScheduleManager",
     "RewardConfigSerializer",
     "TrainingParamConfig",
+    "TrialConfig",
     "load_data_combinator_config",
 ]

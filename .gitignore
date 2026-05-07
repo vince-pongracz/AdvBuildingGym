@@ -71,3 +71,6 @@ eval_results/**
 
 # Preprocessing, data quality summary -- only the figure needed
 data/quality_reports/data_quality_summary.csv
+
+**/meeting_notes.md
+**/models/**

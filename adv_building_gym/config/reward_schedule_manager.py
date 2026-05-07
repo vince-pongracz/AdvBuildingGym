@@ -15,7 +15,10 @@ Modes:
 
 Usage::
 
-    manager = RewardScheduleManager.from_yaml("configs/reward_cfg/reward_schedule_train.yaml")
+    manager = RewardScheduleManager.load(
+        "configs/reward_cfgs/rewards.yaml",
+        "configs/schedules/reward/train.yaml",
+    )
     rewards = manager.create_active_rewards()   # initial set
     manager.advance()                           # next swap
     rewards = manager.create_active_rewards()   # updated set
@@ -162,50 +165,77 @@ class RewardScheduleManager:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def from_yaml(path: str | Path) -> RewardScheduleManager:
-        """Build a RewardScheduleManager from a YAML config file.
+    def load(
+        rewards_path: str | Path,
+        schedule_path: str | Path | None = None,
+        default_seed: int | None = None,
+    ) -> RewardScheduleManager:
+        """Build a RewardScheduleManager from a rewards YAML and an optional schedule YAML.
+
+        The two concerns are split:
+
+        * ``rewards_path`` (required) — *which* rewards exist
+          (``configs/reward_cfgs/<name>.yaml``).
+        * ``schedule_path`` (optional) — *how* those rewards are scheduled
+          across training (``configs/schedules/reward/<name>.yaml``).
+          When omitted, mode is ``OFF`` (all rewards live from the start).
+
+        Seed resolution: if the schedule YAML defines ``seed`` it wins; else
+        ``default_seed`` is used.  Without a schedule, ``default_seed`` is
+        used directly (RANDOM mode is not reachable in this case so this
+        seed is essentially unused).
 
         Args:
-            path: Path to the reward schedule YAML
-                  (e.g. ``configs/reward_cfg/reward_schedule_train.yaml``).
-
-        The schedule YAML must reference an external rewards file via
-        ``rewards_file:`` (resolved relative to the schedule YAML).
+            rewards_path: Repo-relative path to the rewards definition YAML.
+            schedule_path: Repo-relative path to the scheduling YAML.
+            default_seed: Fallback seed when the schedule omits ``seed``.
         """
-        path = Path(path)
-        if not path.exists():
-            raise FileNotFoundError(f"Reward schedule YAML not found: {path}")
-
-        with open(path, "r") as reward_cfg_file:
-            cfg = yaml.safe_load(reward_cfg_file)
-
-        if "rewards_file" not in cfg:
-            raise ValueError(
-                f"Reward schedule YAML {path.name} must contain a "
-                f"'rewards_file' key pointing to the rewards definition file"
-            )
-
-        rewards_path = path.parent / cfg["rewards_file"]
+        rewards_path = Path(rewards_path)
         if not rewards_path.exists():
-            raise FileNotFoundError(
-                f"Rewards YAML referenced by {path.name} not found: {rewards_path}"
-            )
-        with open(rewards_path, "r") as reward_cfg_file:
-            rewards_cfg = yaml.safe_load(reward_cfg_file)
-        reward_entries = rewards_cfg["rewards"]
+            raise FileNotFoundError(f"Rewards YAML not found: {rewards_path}")
 
-        reward_specs: list[dict[str, Any]] = []
-        for entry in reward_entries:
-            reward_specs.append({
+        with open(rewards_path, "r") as reward_cfg_file:
+            rewards_cfg = yaml.safe_load(reward_cfg_file) or {}
+        if "rewards" not in rewards_cfg:
+            raise ValueError(
+                f"Rewards YAML {rewards_path.name} must contain a top-level "
+                f"'rewards:' list of {{class_name, weight, params}} entries"
+            )
+        reward_specs: list[dict[str, Any]] = [
+            {
                 "class_name": entry["class_name"],
                 "weight": entry["weight"],
                 "params": entry.get("params", {}),
-            })
+            }
+            for entry in rewards_cfg["rewards"]
+        ]
+
+        if schedule_path is not None:
+            schedule_path = Path(schedule_path)
+            if not schedule_path.exists():
+                raise FileNotFoundError(
+                    f"Reward schedule YAML not found: {schedule_path}"
+                )
+            with open(schedule_path, "r") as f:
+                cfg = yaml.safe_load(f) or {}
+            if "mode" not in cfg:
+                raise ValueError(
+                    f"Reward schedule YAML {schedule_path.name} must declare 'mode'"
+                )
+        else:
+            cfg = {"mode": "off"}
+
+        if "seed" in cfg:
+            seed = cfg["seed"]
+        elif default_seed is not None:
+            seed = default_seed
+        else:
+            raise ValueError(f"Reward schedule omits 'seed' and no default_seed was supplied")
 
         manager = RewardScheduleManager(
             mode=RewardScheduleMode(cfg["mode"]),
             swap_every_n_iterations=cfg.get("swap_every_n_iterations", 50),
-            seed=cfg.get("seed", 42),
+            seed=seed,
             reward_specs=reward_specs,
             random_active_count=cfg.get("random_active_count"),
             random_swap_count=cfg.get("random_swap_count", 1),
@@ -216,11 +246,12 @@ class RewardScheduleManager:
             + (f", params={s['params']}" if s["params"] else "")
             for s in reward_specs
         ]
+        schedule_label = schedule_path.name if schedule_path is not None else "(none — mode=off)"
         logger.info(
-            "Loaded reward schedule from %s: mode=%s, "
+            "Loaded rewards from %s, schedule %s: mode=%s, "
             "swap every %d iterations\n"
-            "RewardSchedule (%d rewards):\n%s",
-            path.name, manager.mode,
+            "Rewards (%d):\n%s",
+            rewards_path.name, schedule_label, manager.mode,
             manager.swap_every_n_iterations,
             len(reward_specs), "\n".join(reward_lines),
         )

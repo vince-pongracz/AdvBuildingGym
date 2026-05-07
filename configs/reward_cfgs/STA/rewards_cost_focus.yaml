@@ -1,0 +1,39 @@
+# Reward function definitions shared across training and evaluation.
+# Each entry must match a registered RewardFunction class name.
+
+rewards:
+  # max_power_kW is read from ctxt_operator_max_power_kW (published by the
+  # OperatorEnergyControl statesource in configs/statesource_cfgs/default.yaml).
+  - class_name: OperatorEnergyControlReward
+    weight: 0.1
+    params:
+      harsh_penalty: -2.0
+      soft_threshold_pct: 0.9
+      recovery_steps: 3
+      terminate_threshold_pct: 1.1
+      terminate_penalty: -100.0
+
+  - class_name: LongTermEconomicReward
+    weight: 1.0
+    params: {}      
+
+  - class_name: BatteryTargetReward
+    weight: 1.0
+    params:
+      min_pct: 0.15
+      max_pct: 0.85
+      in_band_reward: 1.0
+
+  - class_name: EVChargingReward
+    weight: 1.0
+    params:
+      diff_threshold: 0.02
+      soc_diff_multiplier: 5.0
+      disconnect_soc_tolerance: 0.05
+      success_reward: 10.0
+      failure_penalty: -10.0
+      min_curve_violation_penalty: -10.0
+
+  - class_name: EVChargingOnTimeReward
+    weight: 1.0
+    params: {}

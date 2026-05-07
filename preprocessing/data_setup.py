@@ -37,7 +37,7 @@ from preprocessing.pipelines import (
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_YEARS: list[int] = list(range(2017, 2027))
+DEFAULT_YEARS: list[int] = list(range(2016, 2027))
 
 ALL_PRICE_STEPS: set[str] = {"price-fetch", "price-preproc"}
 ALL_WEATHER_STEPS: set[str] = {"zenodo-download", "zenodo-extract", "weather-csv", "sfh-csv", "hh-consumption"}

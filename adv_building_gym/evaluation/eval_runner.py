@@ -23,14 +23,13 @@ from adv_building_gym.data_combinator import DataCombinator
 from adv_building_gym.envs import AdvBuildingGym
 from adv_building_gym.envs.env_creator import wrap_action_space
 from adv_building_gym.rewards import SumRewardAggregator
-from adv_building_gym.ray_training.history_connector import build_env_to_module_connectors
+from ray.rllib.connectors.common import AddObservationsFromEpisodesToBatch
+from ray.rllib.connectors.env_to_module import FlattenObservations
 from adv_building_gym.ray_training.rl_module_inference import (
     infer_action,
     load_rl_module,
 )
 from adv_building_gym.utils import TrajectoryCollector, check_space_compatibility
-
-_DEFAULT_TRAINING_CONFIG = Path(__file__).resolve().parents[2] / "configs" / "training_param_config.yaml"
 
 from .results import EpisodeStats, EvalResults
 
@@ -44,15 +43,15 @@ def _timeout_handler(signum, frame):
 def evaluate_model(
     checkpoint_path: str,
     active_config: EnvConfig,
+    trial_name: str,
+    seed: int,
     num_episodes: int = 1,
-    seed: int = 42,
     save_results: bool = True,
     output_dir: str = "eval_results",
     log_trajectories: bool = True,
     algorithm_hint: str | None = None,
     timeout_seconds: int = 300,
     data_combinator: DataCombinator | None = None,
-    training_config: TrainingParamConfig | None = None,
     stochastic: bool = False,
 ) -> EvalResults:
     """Evaluate a Ray/RLlib trained model on AdvBuildingGym.
@@ -64,6 +63,7 @@ def evaluate_model(
     Args:
         checkpoint_path: Absolute path to the Ray checkpoint directory.
         active_config: Config object with infras, statesources, rewards.
+        trial_name: Trial identifier (used for result metadata + log lines).
         num_episodes: Number of evaluation episodes.
         seed: Random seed for reproducibility.
         save_results: Whether to persist results to disk.
@@ -81,8 +81,6 @@ def evaluate_model(
     """
     # Load the default YAML training config if the caller didn't pass one —
     # eval MUST use the same hst settings as training or obs dimensions diverge.
-    if training_config is None:
-        training_config = TrainingParamConfig.from_yaml(_DEFAULT_TRAINING_CONFIG)
 
     # Create a timestamped subdirectory so successive eval runs never collide
     run_stamp = datetime.datetime.now().strftime("%Y%m%d_%H%M") + "_eval"
@@ -92,7 +90,7 @@ def evaluate_model(
     logger.info("=" * 70)
     logger.info("Starting Ray model evaluation")
     logger.info("  Checkpoint: %s", checkpoint_path)
-    logger.info("  Config: %s", active_config.env_config_name)
+    logger.info("  Trial: %s", trial_name)
     logger.info("  Episodes: %d", num_episodes)
     logger.info("  Seed: %d", seed)
     logger.info("  Output: %s", output_dir)
@@ -149,20 +147,22 @@ def evaluate_model(
 
     env = wrap_action_space(base_env)
 
-    # Use the same env-to-module connector pipeline as training, built from
-    # the *same* training_config so the flat obs dim matches the checkpoint.
-    # ``hst_tracked_keys`` set  →  [StridedHistoryConnector] (stack + flatten)
-    # otherwise                 →  [FlattenObservations]
-    # Offset 0 is always prepended automatically. The connector tracks obs
-    # keys only; to stack previous actions, list the "<action_key>_prev"
-    # obs entries that the env publishes each step.
-    # Link: docs/hst_mgmt.md
-    pipeline = build_env_to_module_connectors(
-        training_config,
-        base_env.observation_space,
-        base_env.action_space,
-        as_learner_connector=False,
-    )
+    # Mirrors the training-side connector pipeline so the flat obs dim
+    # matches the checkpoint. StridedHistoryConnector is currently disabled
+    # (see common_model_config.py); re-wire build_env_to_module_connectors
+    # from history_connector.py here if HST is reinstated.
+    # FlattenObservations needs the input spaces set at construction —
+    # recompute_output_observation_space reads them from self, not its args.
+    # FlattenObservations rewrites the episode's last obs to a flat tensor;
+    # AddObservationsFromEpisodesToBatch then copies it into batch[OBS] for
+    # the RLModule. Without the latter, batch[OBS] never gets populated.
+    pipeline = [
+        FlattenObservations(
+            input_observation_space=base_env.observation_space,
+            input_action_space=env.action_space,
+        ),
+        AddObservationsFromEpisodesToBatch(),
+    ]
 
     # Run the space compatibility check *after* the pipeline is built so the
     # model's input dim is compared against the post-connector flat size (e.g.
@@ -301,7 +301,7 @@ def evaluate_model(
                     episode_id=episode_num,
                     seed=episode_seed,
                     metadata={
-                        "env_config_name": active_config.env_config_name,
+                        "trial_name": trial_name,
                         "checkpoint_path": checkpoint_path,
                         "algorithm": algorithm_hint,
                     },
@@ -337,7 +337,7 @@ def evaluate_model(
     results = EvalResults.from_episodes(
         episodes=episode_stats,
         checkpoint_path=checkpoint_path,
-        env_config_name=active_config.env_config_name,
+        trial_name=trial_name,
         algorithm=algorithm_hint,
         seed=seed,
         eval_time_seconds=eval_time,

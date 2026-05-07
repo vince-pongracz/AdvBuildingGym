@@ -129,7 +129,7 @@ def extract_trajectory_from_infos(
             initial_row["reward_breakdown"] = {name: 0.0 for name in reward_names}
         # Zero power breakdown
         if power_names:
-            initial_row["power_breakdown"] = {name: 0.0 for name in power_names}
+            initial_row["power_breakdown"] = {name: (0.0, 0.0) for name in power_names}
         # Raw values from reset info, or zeros
         if raw_names:
             if "raw" in initial_info:
@@ -221,7 +221,12 @@ def extract_trajectory_from_infos(
             power_bd[name] = []
             for row in all_rows:
                 bd = row.get("power_breakdown", {})
-                power_bd[name].append(float(bd.get(name, 0.0)))
+                val = bd.get(name, (0.0, 0.0))
+                if isinstance(val, tuple):
+                    net_power = val[0] - val[1]
+                else:
+                    net_power = float(val)
+                power_bd[name].append(net_power)
         trajectory["power_breakdown"] = power_bd
 
     # Raw (unnormalised) physical values (nested under "raw" dict)

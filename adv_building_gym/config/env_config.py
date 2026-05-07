@@ -16,8 +16,8 @@ from adv_building_gym.config.reward_config import RewardConfig
 class EnvConfig(LoggableConfig):
     """Environment topology configuration — state sources, infrastructure, and physics.
 
-    Components are always declared in YAML (``configs/infras/*.yaml`` and
-    ``configs/statesources/*.yaml``) and reach this dataclass via
+    Components are always declared in YAML (``configs/infra_cfgs/**/*.yaml`` and
+    ``configs/statesource_cfgs/*.yaml``) and reach this dataclass via
     ``EnvConfigManager.load(...)``, which populates ``infra_specs`` and
     ``statesource_specs`` (the raw component dicts).  The factory methods
     ``create_infras`` / ``create_statesources`` deserialise those specs into
@@ -31,8 +31,6 @@ class EnvConfig(LoggableConfig):
 
     Reward composition is managed by ``reward_config`` (``RewardConfig``).
     """
-    env_config_name: str = "env_test1_small"
-
     EPISODE_LENGTH: int = 288 # a day
     CONTROL_STEP: int = 300  # seconds (5 minutes)
     ACTION_HISTORY_LENGTH: int = 15  # rolling window of past actions kept in env for reward functions (not in obs)
@@ -74,7 +72,7 @@ class EnvConfig(LoggableConfig):
             raise RuntimeError(
                 "EnvConfig.create_statesources: no statesource_specs loaded. "
                 "Statesources must be declared in a YAML file referenced by "
-                "the env wrapper (configs/env/<name>.yaml → statesources)."
+                "the trial config (configs/trial_cfgs/<name>.yaml → statesources)."
             )
         ctx = self._statesource_context()
         return [StateSource.from_dict(spec, ctx) for spec in self.statesource_specs]
@@ -90,7 +88,7 @@ class EnvConfig(LoggableConfig):
             raise RuntimeError(
                 "EnvConfig.create_infras: no infra_specs loaded. "
                 "Infras must be declared in a YAML file referenced by "
-                "the env wrapper (configs/env/<name>.yaml → infras)."
+                "the trial config (configs/trial_cfgs/<name>.yaml → infras)."
             )
         ctx = self._infra_context()
         return [Infrastructure.from_dict(spec, ctx) for spec in self.infra_specs]
@@ -129,7 +127,6 @@ class EnvConfig(LoggableConfig):
         """Log config values, showing component names instead of object repr."""
 
         lines = [
-            f"  env_config_name = {self.env_config_name}",
             f"  EPISODE_LENGTH = {self.EPISODE_LENGTH}",
             f"  CONTROL_STEP = {self.CONTROL_STEP}",
             f"  ACTION_HISTORY_LENGTH = {self.ACTION_HISTORY_LENGTH}",

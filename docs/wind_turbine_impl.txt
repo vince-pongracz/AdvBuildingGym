@@ -135,7 +135,7 @@ values or the implementation is coming from, etc..
        - Defaults: rated_power_kW=5.0, cut_in_speed=3.0, rated_speed=12.0,
      cut_out_speed=25.0, wind_speed_max=25.0
      - max_consumption_kW → 0.0 (generation only)
-     - max_export_kW → max_power_kW
+     - max_production_kW → max_power_kW
      - setup_spaces: adds wind_curtailment action in Box([0, 1], shape=(1,))
      - exec_action: reads avg_wind_speed_norm from states, denormalises, applies
       power curve, multiplies by curtailment action, writes wind_action into

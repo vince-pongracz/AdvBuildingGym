@@ -172,13 +172,13 @@ class HP(Infrastructure):
         self.actual_power_kW = 0.0
         super().reset(states, info)
 
-    def get_electric_consumption(self, actions) -> float:
+    def get_E(self, actions) -> tuple[float, float]:
         """Get current electric energy consumption from heat pump in kW.
 
         Always positive — HP only consumes energy regardless of heating/cooling mode.
         Uses the actual power computed during exec_action (accounts for clipping).
         """
-        return self.actual_power_kW
+        return 0.0, self.actual_power_kW
 
 
 # Register HP with the component registry

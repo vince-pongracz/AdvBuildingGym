@@ -179,13 +179,13 @@ class WindTurbine(Infrastructure):
         self.current_production_kW = 0.0
         super().reset(states, info)
 
-    def get_electric_consumption(self, actions: Dict) -> float:
+    def get_E(self, actions: Dict) -> tuple[float, tuple]:
         """Get current electric energy consumption (production) from wind turbine.
 
         Sign convention: positive = consumption, negative = production.
         Wind turbines produce energy, so this returns a negative value.
         """
-        return -self.current_production_kW
+        return self.current_production_kW, 0.0
 
     def get_penalisable_consumption(self, actions: Dict, states: Dict) -> float:
         """Generation source — always exempt from energy penalty."""

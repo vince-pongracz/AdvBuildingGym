@@ -37,6 +37,13 @@ class RewardFunction(Serializable):
         """
         raise NotImplementedError()
 
+    def on_reset(self, states, info: dict | None = None) -> None:
+        """Called once per episode after the env has populated initial
+        observations. Use to capture per-episode baselines (e.g. starting
+        SoC) that ``get_reward`` will later compare against. Default: no-op.
+        """
+        return None
+
     def should_terminate(self, actions, states, info: dict | None = None) -> bool:
         """Return True if this reward judges the episode should end this step.
 

@@ -43,8 +43,6 @@ Outline:
 TODO VP: is there such a scenario, where during training env is allowed not to terminate, but in the eval env it must terminate?
 --> yes, during eval termination is not allowed at all, so it's maybe worth switching off the termination during eval.
 
-TODO VP: How is that possible that during eval the env has not terminated because of the too low raw_temp_in value?
-
 
 - Try to eliminate most of the bad states... -- we want to optimise
 
@@ -97,7 +95,7 @@ My problem -- energy management: Control problem, almost infinite horizon
 ### Issues
 
 - Dynamic env assumed -- during development the env changes, the rewards change, their weights change
-- TODO VP: check the raw data plotting
+- TODO VP: check the raw data plotting and energy chart plotting -- it probably does not show the energy used for EV charge and discharge...
 - TODO VP: the plots about the syn_cfg time series csv-s should be plotted to the same plot, but they should have different traces, with different colors.
 
 ## References, data sources
@@ -110,7 +108,7 @@ Paper link: https://www.nature.com/articles/s41597-022-01156-1
 
 Data link: https://zenodo.org/records/5642902
 
-TODO VP:
+
 
 About reward shaping: https://link.springer.com/rwe/10.1007/978-0-387-30164-8_731
 
@@ -122,7 +120,7 @@ An old paper about reward shaping and construction: https://link.springer.com/ar
 
 <!-- TODO VP: add it to the repo setup description... -->
 
-TODO VP: Show expert trajectories to the policies, which work fine -- Programming using expert knowledge
+TODO VP: Show expert trajectories to the policies, which work fine -- Programming using expert knowledge -- difficulty -- multi dim trajectories, hard to really give expert trajectories.
 
 TODO VP: Idea 2. The "Mixture of Experts" or Hierarchical Approach
 You can have a single agent that switches between different policies based on the state.
@@ -322,10 +320,25 @@ Paper:
 New idea for my thesis:
 - predict actions and states for N steps (model based RL) -- MPC and Monte Carlo sims would be something like this
 See into the future for statesources where it's possible.
+
 TODO VP 2026.01.20. : Add forecasting window (and thus MPC) for the states and the
 actions as well in the config, generally window size is 0.
 Allow it only for the forecasted desired states -- not for the actual system states
 Handle if no more forecasting is available (csv ended and similar scenarios)
+Add this as a Wrapper on the env...
+So the wrapper extends the observations with the forecasting data
+
+#### Real building implementation of a deep reinforcement learning controller to enhance energy efficiency and indoor temperature control
+
+Link: https://www.sciencedirect.com/science/article/pii/S0306261924008304?via%3Dihub
+
+SAC on building, thermal and economic goals
+Goal was: beat the RBCs -- rule based controllers
+2 objectives: maintain temperature and optimise energy consumption
+"Resistance-Capacitance (RC) model calibrated with real building data" -- exactly what Gökhan's paper was about.
+In the papaer: comparison of RBCs, PI, MPC and DRL controllers
+
+
 
 #### State of the Art of Machine Learning Models in Energy Systems, a Systematic Review
 
@@ -409,6 +422,12 @@ Summary:
 - 
 
 Conclusion:
+
+#### A multi-objective optimisation approach applied to offshore wind farm location selection
+
+Link: https://link.springer.com/article/10.1007/s40722-017-0092-8
+
+
 
 
 #### Deep reinforcement learning for energy management in a microgrid with flexible demand
@@ -508,10 +527,12 @@ some technique to update the policy with outdated rewards to not forget the olde
 
 TODO VP: continue a bit before the "4 Method" section
 
-
-
-
 TODO VP: Hypervolume metric -- famous MORL metric
+
+#### A fast and elitist multiobjective genetic algorithm: NSGA-II
+
+Link: https://ieeexplore.ieee.org/document/996017
+
 
 
 #### A practical guide to multi-objective reinforcement learning and planning

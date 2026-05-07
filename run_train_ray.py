@@ -1,8 +1,10 @@
 """Ray RLlib training script for AdvBuildingGym environment.
 
-Configures RL algorithms (PPO, SAC), manages distributed training with
-automatic SLURM resource detection, handles checkpointing, and tracks multi-objective
-reward metrics during training.
+Single CLI entry point: ``--trial <trial_cfg.yaml>``. The trial config
+bundles algorithm + run control + env topology + training hyperparameters
++ data/reward/infra schedules. ``adv_building_gym.config.TrialConfig.load``
+reads it once and resolves every sub-config so downstream modules receive
+already-loaded objects.
 """
 
 import os
@@ -10,9 +12,8 @@ import sys
 import time
 import datetime
 import logging
-from dataclasses import dataclass
+from argparse import Namespace
 from pathlib import Path
-from typing import Optional
 
 import json
 import argparse
@@ -24,21 +25,10 @@ from ray import tune
 from ray.tune import CLIReporter
 from ray.tune.registry import register_env
 
-# Import warning filter setup from utils
-# The function is centrally defined in adv_building_gym/utils/warning_filters.py
-# and is called in two places:
-#   1. Here in the main process (before Ray starts)
-#   2. In AdvBuildingGym.__init__() (runs in each Ray worker when env is created)
 from adv_building_gym.utils import setup_warning_filters
-
-# Trigger registration of the custom Gym IDs
-from adv_building_gym import DataCombinator, EnvConfigManager
-from adv_building_gym.config import EnvConfig, load_data_combinator_config
-from adv_building_gym.config.reward_schedule_manager import RewardScheduleManager, RewardScheduleMode
+from adv_building_gym import TrialConfig
 from adv_building_gym.envs import adv_building_env_creator
-from adv_building_gym.infra_combinator import InfraCombinator
 from adv_building_gym.ray_training import common_model_setup, select_model
-from adv_building_gym.config.training_param_config import TrainingParamConfig
 from adv_building_gym.utils import (
     CustomJSONEncoder,
     RngService,
@@ -47,22 +37,17 @@ from adv_building_gym.utils import (
 )
 from adv_building_gym.utils.startup_log import log_startup_banner
 
-# Logging configuration
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
-    force=True  # Override any existing logging configuration (e.g., from Ray/RLlib)
+    force=True,
 )
 logger = logging.getLogger("main")
 
 # Environment variables to control Ray/RLlib behavior (must be set before ray.init).
-# Set in the local process and propagated to Ray workers via runtime_env.
-# Note: PYTHONWARNINGS is comma-separated, not colon-separated.
-# RAY_AIR_NEW_OUTPUT=0 keeps tune.RunConfig(progress_reporter=CLIReporter(...)) honoured;
-#   the new AIR output (default in Ray >=2.7) ignores `metric_columns`.
-#   Link: https://docs.ray.io/en/latest/tune/api/doc/ray.tune.ProgressReporter.html
+# RAY_AIR_NEW_OUTPUT=0 keeps tune.RunConfig(progress_reporter=CLIReporter(...)) honoured.
 # TUNE_DISABLE_STRICT_METRIC_CHECKING allows evaluation_interval > 1 without crashing on
-#   iterations that skip eval (the eval metric key is absent from non-eval results).
+# iterations that skip eval.
 RUNTIME_ENV_VARS = {
     "PYTHONWARNINGS": "ignore::DeprecationWarning,ignore::UserWarning",
     "TF_CPP_MIN_LOG_LEVEL": "3",
@@ -89,158 +74,38 @@ logger.info("Runtime environment variables for Ray workers: %s", RUNTIME_ENV_VAR
 # ---------------------------------------------------------------------------
 
 def _parse_cli_args() -> argparse.Namespace:
-    """Build and parse the command-line interface."""
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--algorithm", default="ppo", choices=["ppo", "sac"],
-        help="RL algorithm to train (default: ppo)",
+    """The trial config is the only input — every run parameter lives in it."""
+    parser = argparse.ArgumentParser(
+        description=(
+            "Train an RL agent on AdvBuildingGym. The trial YAML "
+            "bundles algorithm, env topology, hyperparameters, and schedules."
+        ),
     )
     parser.add_argument(
-        "--load-config", type=str, required=True,
-        help="Path to env wrapper YAML to load (required, e.g., 'configs/env/env_test1_small.yaml'). "
-             "The wrapper references separate infras / statesources / env_meta YAMLs.",
-    )
-    parser.add_argument(
-        "--episodes", type=int, default=None,
-        help="Total training episodes. Primary stopping criterion. Defaults to TrainingParamConfig.max_episodes_to_run.",
-    )
-    parser.add_argument(
-        "--num-envs", type=int, default=1, help="Number of parallel environments",
-    )
-    parser.add_argument("--seed", type=int, default=None)
-    parser.add_argument(
-        "--metric",
-        type=str,
-        default="reward_rate",
-        choices=[
-            # NOTE VP 2026.01.12: Diff between episode_return_mean and achieved_reward:
-            # - achieved_reward: Custom metric from episode_callbacks.py
-            #   sum(rewards) per episode, averaged across episodes in the CURRENT iteration only (~14 episodes)
-            #   More responsive to recent performance changes
-            # - episode_return_mean: RLlib built-in metric
-            #   Same base calculation, but EMA-smoothed over last 25 episodes
-            #   More stable, less sensitive to noise, better for long-term trends
-            # - reward_rate: Custom metric = achieved_reward / max_possible_reward
-            #   Normalized performance score in [0, 1]
-            "episode_return_mean",
-            "achieved_reward",
-            "reward_rate",
-        ],
-        help="Metric to optimize during training (auto-prefixed with 'env_runners/')",
-    )
-    parser.add_argument(
-        "--checkpoint-frequency-episodes",
-        type=int,
-        default=20,
-        help="Checkpoint frequency in number of episodes (will be converted to training iterations)",
-    )
-    parser.add_argument(
-        "--log-trajectories",
-        action=argparse.BooleanOptionalAction,
-        default=False,
-        help="Save per-step trajectory JSON per episode (default: False)",
-    )
-    parser.add_argument(
-        "--data-config", type=str, default=None,
-        help="Path to data combinator YAML config (default: configs/data_scheduler/train_data_combinator_config.yaml)",
-    )
-    parser.add_argument(
-        "--grad-train",
-        action=argparse.BooleanOptionalAction,
-        default=False,
-        help="Enable gradual reward training (curriculum). When inactive, all rewards are active from start.",
-    )
-    parser.add_argument(
-        "--reward-schedule", type=str, default=None,
-        help="Path to reward schedule YAML config (default: configs/reward_cfg/reward_schedule_train.yaml)",
-    )
-    parser.add_argument(
-        "--infra-schedule", type=str, default=None,
-        help="Path to infra schedule YAML config (e.g. 'configs/infra_schedule/infra_schedule_train.yaml').",
+        "--trial", type=str, required=True,
+        help="Path to trial config YAML (e.g. configs/trial_cfgs/trial_cfg_1.yaml)",
     )
     return parser.parse_args()
 
 
-# ---------------------------------------------------------------------------
-# Config loading
-# ---------------------------------------------------------------------------
+def _trial_to_args_namespace(trial: TrialConfig) -> Namespace:
+    """Build a Namespace mirroring the legacy CLI args.
 
-@dataclass
-class LoadedConfigs:
-    """Bundle of configuration objects produced by ``_load_configs``."""
-    training_param_config: TrainingParamConfig
-    active_config: EnvConfig
-    data_combinator: DataCombinator
-    reward_manager: RewardScheduleManager
-    infra_combinator: Optional[InfraCombinator]
-
-
-def _load_configs(args: argparse.Namespace) -> LoadedConfigs:
-    """Load env / data / reward / infra schedule configs and resolve seed + episodes."""
-    training_param_config = TrainingParamConfig.from_yaml(
-        Path(__file__).resolve().parent / "configs" / "training_param_config.yaml"
-    )
-
-    if args.seed is not None:
-        training_param_config.seed = args.seed
-    else:
-        args.seed = training_param_config.seed
-
-    logger.info("Loading env config from: %s", args.load_config)
-    active_config = EnvConfigManager.load(args.load_config)
-
-    data_combinator = load_data_combinator_config(
-        cfg_yaml_path=args.data_config,
-        seed_override=args.seed,
-    )
-
-    # Reward schedule. With --grad-train the manager uses its YAML mode
-    # (gradual_add / random). Without it, mode is forced to OFF
-    # so all configured rewards are active from the start.
-    reward_schedule_path = args.reward_schedule or str(
-        Path(__file__).resolve().parent / "configs" / "reward_cfg" / "reward_schedule_train.yaml"
-    )
-    reward_manager = RewardScheduleManager.from_yaml(reward_schedule_path)
-    if not args.grad_train:
-        reward_manager.mode = RewardScheduleMode.OFF
-        logger.info("Gradual training disabled — all specified rewards active from start")
-    else:
-        logger.info(
-            "Gradual training enabled: mode=%s, swap every %d iterations",
-            reward_manager.mode, reward_manager.swap_every_n_iterations,
-        )
-
-    infra_combinator = None
-    if args.infra_schedule:
-        infra_combinator = InfraCombinator.from_yaml(
-            args.infra_schedule, control_step=active_config.CONTROL_STEP,
-        )
-        logger.info(
-            "Infrastructure schedule enabled: mode=%s, %d configs, "
-            "swap every %d iterations",
-            infra_combinator.mode, len(infra_combinator.config_paths),
-            infra_combinator.swap_every_n_iterations,
-        )
-
-    if args.episodes is None:
-        args.episodes = training_param_config.max_episodes_to_run
-        logger.info("Using default: %d episodes", args.episodes)
-    else:
-        logger.info("Stopping after %d episodes", args.episodes)
-
-    # Initialise singleton component instances exactly once (driver only).
-    # Triggers CSV parsing here; Ray workers go through factory methods.
-    active_config.init_singletons()
-
-    if not args.metric.startswith("evaluation/"):
-        args.metric = f"evaluation/env_runners/{args.metric}"
-
-    return LoadedConfigs(
-        training_param_config=training_param_config,
-        active_config=active_config,
-        data_combinator=data_combinator,
-        reward_manager=reward_manager,
-        infra_combinator=infra_combinator,
+    The startup banner and helpers were authored against an argparse
+    Namespace; this preserves that interface without re-plumbing every
+    helper.
+    """
+    return Namespace(
+        algorithm=trial.algorithm,
+        episodes=trial.episodes,
+        seed=trial.seed,
+        metric=trial.metric,
+        checkpoint_frequency_episodes=trial.checkpoint_frequency_episodes,
+        log_trajectories=trial.log_trajectories,
+        num_envs=trial.num_envs,
+        grad_train=trial.grad_train,
+        trial_name=trial.trial_name,
+        trial_path=str(trial.source_path) if trial.source_path else None,
     )
 
 
@@ -296,59 +161,58 @@ def _init_ray(seed: int) -> SlurmResources:
 # Algorithm config + checkpoint cadence
 # ---------------------------------------------------------------------------
 
-def _build_algo_config(args, configs: LoadedConfigs, slurm_resources, exec_date_dt):
+def _build_algo_config(args, trial: TrialConfig, slurm_resources, exec_date_dt):
     """Assemble the RLlib algorithm config and return ``(algo_config, param_space)``."""
     algo_config = select_model(
-        algorithm=args.algorithm,
-        episode_length=configs.active_config.EPISODE_LENGTH,
-        training_config=configs.training_param_config,
+        algorithm=trial.algorithm,
+        episode_length=trial.env_config.EPISODE_LENGTH,
+        training_config=trial.training_param_config,
     )
     algo_config = common_model_setup(
         config=algo_config,
-        training_config=configs.training_param_config,
+        training_config=trial.training_param_config,
         slurm_resources=slurm_resources,
-        env_config=configs.active_config,
+        env_config=trial.env_config,
         metrics_base_dir="ep_metrics",
-        data_combinator=configs.data_combinator,
-        log_trajectories=args.log_trajectories,
-        reward_schedule_manager=configs.reward_manager,
-        infra_combinator=configs.infra_combinator,
+        data_combinator=trial.data_combinator,
+        log_trajectories=trial.log_trajectories,
+        reward_schedule_manager=trial.reward_manager,
+        infra_combinator=trial.infra_combinator,
         exec_date=exec_date_dt,
     )
     param_space = algo_config.to_dict()
 
-    # Save parameter space for inspection.
-    # NOTE: param_space stores both new and old API entries for backward compat —
-    # the model dict has defaults; _model_config has the actual spec.
     with open("param_space.json", "w", encoding="utf-8") as f:
         json.dump(param_space, f, cls=CustomJSONEncoder, indent=4)
 
     return algo_config, param_space
 
 
-def _checkpoint_iterations(args, configs: LoadedConfigs) -> int:
-    """Translate ``--checkpoint-frequency-episodes`` into RLlib training iterations.
+def _checkpoint_iterations(trial: TrialConfig) -> int:
+    """Translate ``checkpoint_frequency_episodes`` into RLlib training iterations.
 
     train_batch_size_per_learner drives the timesteps RLlib processes per
     iteration but means different things per algorithm:
       PPO — ppo_episodes_per_iteration × EPISODE_LENGTH (on-policy batch)
       SAC — sac_replay_batch_size (off-policy replay sample)
     """
-    timesteps_per_episode = configs.active_config.EPISODE_LENGTH
-    if args.algorithm == "ppo":
+    timesteps_per_episode = trial.env_config.EPISODE_LENGTH
+    if trial.algorithm == "ppo":
         timesteps_per_iteration = (
-            configs.training_param_config.ppo_episodes_per_iteration
-            * configs.active_config.EPISODE_LENGTH
+            trial.training_param_config.ppo_episodes_per_iteration
+            * trial.env_config.EPISODE_LENGTH
         )
+    if trial.algorithm == "sac":
+        timesteps_per_iteration = trial.training_param_config.sac_replay_batch_size
     else:
-        timesteps_per_iteration = configs.training_param_config.sac_replay_batch_size
+        timesteps_per_iteration = 64 # TODO VP 2026.05.07.: Handle this.. hardcoded value is not good, but something is needed for non ppo and non sac scenarios
 
     iters = max(1, int(
-        (args.checkpoint_frequency_episodes * timesteps_per_episode) / timesteps_per_iteration
+        (trial.checkpoint_frequency_episodes * timesteps_per_episode) / timesteps_per_iteration
     ))
     logger.info(
         "Checkpoint configuration: every %d iterations (~%d episodes), metric=%s",
-        iters, args.checkpoint_frequency_episodes, args.metric,
+        iters, trial.checkpoint_frequency_episodes, trial.metric,
     )
     return iters
 
@@ -395,25 +259,25 @@ def _build_progress_reporter(algorithm: str) -> CLIReporter:
     )
 
 
-def _build_tuner(args, param_space, run_name, storage_path, checkpoint_freq_iterations):
+def _build_tuner(trial: TrialConfig, metric: str, param_space, run_name, storage_path, checkpoint_freq_iterations):
     """Build the ``tune.Tuner`` for the chosen algorithm."""
     stop_criteria = {
         # New API stack: lifetime episodes (1 episode = 1 day at 5-min control step).
-        "env_runners/num_episodes_lifetime": args.episodes,
+        "env_runners/num_episodes_lifetime": trial.episodes,
     }
-    progress_reporter = _build_progress_reporter(args.algorithm)
+    progress_reporter = _build_progress_reporter(trial.algorithm)
 
     return tune.Tuner(
-        args.algorithm.upper(),
+        trial.algorithm.upper(),
         param_space=param_space,
         tune_config=tune.TuneConfig(
             reuse_actors=True,
             max_concurrent_trials=1,
-            # Metric set via --metric CLI argument (auto-prefixed with env_runners/):
+            # Metrics (auto-prefixed with env_runners/):
             #   - "episode_return_mean"  (default RLlib metric)
             #   - "achieved_reward" (custom: sum of rewards per episode)
             #   - "reward_rate"     (custom: achieved/max possible reward)
-            metric=args.metric,
+            metric=metric,
             mode="max",
             trial_dirname_creator=trial_dirname_creator,
         ),
@@ -425,7 +289,7 @@ def _build_tuner(args, param_space, run_name, storage_path, checkpoint_freq_iter
                 checkpoint_at_end=True,
                 checkpoint_frequency=checkpoint_freq_iterations,
                 num_to_keep=3,
-                checkpoint_score_attribute=args.metric,
+                checkpoint_score_attribute=metric,
                 checkpoint_score_order="max",
             ),
             progress_reporter=progress_reporter,
@@ -500,46 +364,65 @@ def _dump_all_results(results) -> None:
 # ---------------------------------------------------------------------------
 
 def main():
-    """Parse CLI arguments and run training for the selected algorithm."""
-    args = _parse_cli_args()
-    configs = _load_configs(args)
-    logger.info("Parsed arguments: %s", vars(args))
+    """Parse the trial path, load all configs upfront, and run training."""
+    cli_args = _parse_cli_args()
+    trial = TrialConfig.load(cli_args.trial)
+    logger.info(
+        "Trial '%s' loaded from %s", trial.trial_name, trial.source_path,
+    )
 
-    slurm_resources = _init_ray(args.seed)
+    # Initialise singleton component instances exactly once (driver only).
+    # Triggers CSV parsing here; Ray workers go through factory methods.
+    trial.env_config.init_singletons()
+
+    # Auto-prefix metric so it points at the eval env_runners by default.
+    metric = trial.metric
+    if not metric.startswith("evaluation/"):
+        metric = f"evaluation/env_runners/{metric}"
+
+    args = _trial_to_args_namespace(trial)
+    args.metric = metric  # banner uses the resolved metric
+
+    slurm_resources = _init_ray(trial.seed)
 
     exec_date_dt = datetime.datetime.now()
     exec_date = exec_date_dt.strftime("%Y%m%d_%H%M%S")
-    run_name = f"{args.algorithm}_seed{args.seed}_{exec_date}"
-    storage_path = os.path.abspath(f"models/{configs.active_config.env_config_name}/ray/{args.algorithm}")
+    run_name = f"{trial.algorithm}_seed{trial.seed}_{exec_date}"
+    storage_path = os.path.abspath(f"models/{trial.trial_name}/ray/{trial.algorithm}")
     os.makedirs(storage_path, exist_ok=True)
 
     env_creator_config = {
-        "env_config": configs.active_config,
-        "data_combinator": configs.data_combinator,
-        "reward_schedule_manager": configs.reward_manager,
+        "env_config": trial.env_config,
+        "data_combinator": trial.data_combinator,
+        "reward_schedule_manager": trial.reward_manager,
     }
-    register_env("AdvBuilding", lambda cfg: adv_building_env_creator({**env_creator_config, **cfg}))
+    register_env(
+        "AdvBuilding",
+        lambda cfg: adv_building_env_creator({**env_creator_config, **cfg}),
+    )
 
-    _, param_space = _build_algo_config(args, configs, slurm_resources, exec_date_dt)
-    checkpoint_freq_iterations = _checkpoint_iterations(args, configs)
-    tuner = _build_tuner(args, param_space, run_name, storage_path, checkpoint_freq_iterations)
+    _, algo_cfg_param_space = _build_algo_config(args, trial, slurm_resources, exec_date_dt)
+    checkpoint_freq_iterations = _checkpoint_iterations(trial)
+    tuner = _build_tuner(
+        trial, metric, algo_cfg_param_space, run_name, storage_path, checkpoint_freq_iterations,
+    )
 
     experiment_path = os.path.join(storage_path, run_name)
     log_startup_banner(
         args=args,
-        env_config=configs.active_config,
-        training_param_config=configs.training_param_config,
-        reward_manager=configs.reward_manager,
-        data_combinator=configs.data_combinator,
-        infra_combinator=configs.infra_combinator,
+        env_config=trial.env_config,
+        training_param_config=trial.training_param_config,
+        reward_manager=trial.reward_manager,
+        data_combinator=trial.data_combinator,
+        infra_combinator=trial.infra_combinator,
         slurm_resources=slurm_resources,
         run_name=run_name,
         experiment_path=experiment_path,
         storage_path=storage_path,
-        seed=args.seed,
+        seed=trial.seed,
         exec_date=exec_date_dt,
     )
-    
+
     logger.info("Starting tuner.fit() for: %s", run_name)
     logger.info("Training progress will be displayed below:")
     logger.info("=" * 70)
@@ -551,7 +434,7 @@ def main():
     logger.info("Tuner/training finished in %.2f min", elapsed_time)
     logger.info("=" * 70)
 
-    _log_best_result(results, args.metric, storage_path)
+    _log_best_result(results, metric, storage_path)
     _dump_all_results(results)
 
     ray.shutdown()
@@ -562,9 +445,6 @@ if __name__ == "__main__":
     main()
 
 # Usage examples:
-# On slurm: sbatch slurm_scripts/slurm_train_ray.sh
+# On slurm: sbatch slurm_scripts/slurm_train_ray.sh --trial configs/trial_cfgs/trial_cfg_1.yaml
 #
-# --load-config is REQUIRED — there is no default env config.
-# python run_train_ray.py --algorithm ppo --load-config configs/env/env_test1_small.yaml --seed 42 --episodes 3500
-# python run_train_ray.py --algorithm ppo --load-config configs/env/env_test1_mid.yaml --seed 42 --episodes 5000 --checkpoint-frequency-episodes 50 --metric achieved_reward
-# python run_train_ray.py --algorithm sac --load-config configs/env/env_test1_large.yaml --seed 18 --episodes 3500 --metric reward_rate
+# python run_train_ray.py --trial configs/trial_cfgs/trial_cfg_1.yaml

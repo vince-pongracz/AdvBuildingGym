@@ -1,7 +1,7 @@
 
 from .envs import AdvBuildingGym
 from .controllers import FuzzyController, MPCController, PIController, PIDController
-from .config import EnvConfig, EnvConfigManager
+from .config import EnvConfig, EnvConfigManager, TrialConfig
 from .data_combinator import DataCombinator
 from .callbacks import (
     make_episode_metrics_cb_class,
@@ -14,6 +14,7 @@ __all__ = [
     "AdvBuildingGym",
     "EnvConfig",
     "EnvConfigManager",
+    "TrialConfig",
     "FuzzyController",
     "MPCController",
     "PIController",

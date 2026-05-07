@@ -21,6 +21,7 @@
 #
 # Examples:
 #   sbatch slurm_scripts/slurm_data_setup.sh
+#   sbatch slurm_scripts/slurm_data_setup.sh --synthesize
 #   sbatch slurm_scripts/slurm_data_setup.sh --skip-weather
 #   sbatch slurm_scripts/slurm_data_setup.sh --skip-weather --skip-price-fetch --years 2023 --raw-price-files data/e_price/2023_prices.csv --synthesize
 #

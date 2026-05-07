@@ -1,6 +1,0 @@
-env_config_name: env_test1_small
-infras: configs/infras/test1_small.yaml
-statesources: configs/statesources/default.yaml
-env_meta: configs/env_meta/default.yaml
-
-# TODO VP 2026.04.28. : Idea -- smoothed battery/EV actions after at least 1 non zero action.

@@ -50,7 +50,7 @@ class Infrastructure(EnvSyncInterface, Serializable):
         return self.max_power_kW if self.POWER_FLOW in ("consumer", "bidirectional") else 0.0
 
     @property
-    def max_export_kW(self) -> float:
+    def max_production_kW(self) -> float:
         """Maximum power possibly EXPORTED to the grid (kW).
 
         Derived from POWER_FLOW. Override only when the bound depends on
@@ -113,7 +113,7 @@ class Infrastructure(EnvSyncInterface, Serializable):
         if info is None:
             info = {}
         info["max_consumption_kW"] = info.get("max_consumption_kW", 0.0) + self.max_consumption_kW
-        info["max_export_kW"] = info.get("max_export_kW", 0.0) + self.max_export_kW
+        info["max_production_kW"] = info.get("max_production_kW", 0.0) + self.max_production_kW
         return info
 
     def get_raw_values(self) -> dict[str, float]:
@@ -130,9 +130,11 @@ class Infrastructure(EnvSyncInterface, Serializable):
         Override to exempt necessary consumption (e.g. charging below target
         SoC) or non-controllable load.  Default: all consumption is penalisable.
         """
-        return self.get_electric_consumption(actions)
+        E_production, E_consumption = self.get_E(actions)
+        return E_consumption
 
-    def get_electric_consumption(self, actions: Dict) -> float:
+
+    def get_E(self, actions: Dict) -> tuple[float, float]:
         """Get current electric energy consumption in kW.
 
         Default implementation: extracts action for this component and scales by max_power_kW.
@@ -142,10 +144,12 @@ class Infrastructure(EnvSyncInterface, Serializable):
             actions: Dictionary containing all actions
 
         Returns:
-            Electric energy consumption in kW
+            float1 -- production
+            
+            float2 -- consumption
         """
         # Default: return 0 if no action found
-        return 0.0
+        return 0.0, 0.0
 
     @classmethod
     def from_dict(

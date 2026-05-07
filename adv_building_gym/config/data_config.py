@@ -14,25 +14,27 @@ from adv_building_gym.data_combinator import DataCombinator
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_YAML_PATH = Path(__file__).resolve().parents[2] / "configs" / "data_scheduler" / "train_data_combinator_config.yaml"
-
-
 def load_data_combinator_config(
-    cfg_yaml_path: str | Path | None = _DEFAULT_YAML_PATH,
-    seed_override: int | None = None,
+    cfg_yaml_path: str | Path,
+    default_seed: int | None = None,
 ) -> DataCombinator:
     """Build a DataCombinator from a YAML config file.
 
+    Seed resolution: if the YAML defines ``seed`` it wins; otherwise
+    ``default_seed`` is used. The trial config is the typical source of
+    ``default_seed``, so a data-schedule YAML only needs its own ``seed:``
+    when it deliberately diverges from the trial seed.
+
     Args:
-        yaml_path: Path to the YAML config. Defaults to
-            ``configs/data_scheduler/train_data_combinator_config.yaml`` in the project root.
-        seed_override: If provided, overrides the seed coming from the YAML file.
+        cfg_yaml_path: Path to the data schedule YAML
+            (e.g. ``configs/schedules/data/train.yaml``).
+        default_seed: Fallback seed when the YAML omits ``seed``.
 
     Returns:
         A fully constructed DataCombinator with scenarios expanded from
         the year/source templates defined in the YAML.
     """
-    cfg_yaml_path = Path(cfg_yaml_path) if cfg_yaml_path is not None else _DEFAULT_YAML_PATH
+    cfg_yaml_path = Path(cfg_yaml_path)
 
     if not cfg_yaml_path.exists():
         logger.error("Data combinator YAML config not found: %s", cfg_yaml_path)
@@ -41,7 +43,16 @@ def load_data_combinator_config(
     with open(cfg_yaml_path, "r") as data_combinator_cfg_file:
         cfg = yaml.safe_load(data_combinator_cfg_file)
 
-    seed = seed_override if seed_override is not None else cfg["seed"]
+    if "seed" in cfg:
+        seed = cfg["seed"]
+    elif default_seed is not None:
+        seed = default_seed
+    else:
+        raise ValueError(
+            f"Data combinator YAML {cfg_yaml_path.name} omits 'seed' and "
+            f"no default_seed was supplied"
+        )
+
     shuffle = cfg["shuffle"]
     years = cfg["years"]
     include_synthesized = cfg["include_synthesized"]

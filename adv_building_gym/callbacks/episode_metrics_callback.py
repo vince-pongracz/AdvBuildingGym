@@ -96,7 +96,6 @@ def _save_episode_metrics_json(
     dump = {
         "id": episode.id_[:6],
         "length": ep_length,
-        # NOTE VP 2026.01.12. : episode_return_mean is not available here, only in result dict.
         "achieved_reward": float(ep_achieved_reward),
         "total_reward": float(max_achievable_reward),
         "reward_rate": float(reward_rate),
@@ -163,7 +162,7 @@ def make_episode_metrics_cb_class(
         ):
             # Calculate episode metrics
             ep_length = len(episode)
-            ep_achieved_reward = np.sum(episode.get_rewards())
+            episode_return = np.sum(episode.get_rewards())
 
             # Sum step-wise max achievable rewards from info dicts.
             # Each step's info contains "max_reward_step" — the sum of
@@ -172,6 +171,7 @@ def make_episode_metrics_cb_class(
             # are 0 when the EV is disconnected).
             max_achievable_reward = 0.0
             cum_E_kWh = None
+            episode_count: int | None = None
             reward_component_totals: dict[str, float] = {}
             if hasattr(episode, "get_infos"):
                 infos = episode.get_infos()
@@ -184,17 +184,20 @@ def make_episode_metrics_cb_class(
                                 reward_component_totals[reward_key] = reward_component_totals.get(reward_key, 0.0) + reward_value
                 if infos and len(infos) > 0 and isinstance(infos[-1], dict):
                     cum_E_kWh = infos[-1].get("cum_E_kWh")
+                # episode_count is published by AdvBuildingGym in the reset info (infos[0]).
+                if infos and isinstance(infos[0], dict):
+                    episode_count = infos[0].get("episode_count")
 
             reward_rate = (
-                ep_achieved_reward / max_achievable_reward
+                episode_return / max_achievable_reward
                 if max_achievable_reward > 0 else 0.0
             )
 
             # Register custom metrics with RLlib's metrics system
             # These appear in results under "env_runners/achieved_reward_mean" etc.
-            metrics_logger.log_value("achieved_reward", ep_achieved_reward, reduce="mean")
-            metrics_logger.log_value("achieved_reward_min", ep_achieved_reward, reduce="min")
-            metrics_logger.log_value("achieved_reward_max", ep_achieved_reward, reduce="max")
+            metrics_logger.log_value("achieved_reward", episode_return, reduce="mean")
+            metrics_logger.log_value("achieved_reward_min", episode_return, reduce="min")
+            metrics_logger.log_value("achieved_reward_max", episode_return, reduce="max")
 
             metrics_logger.log_value("reward_rate", reward_rate, reduce="mean")
             metrics_logger.log_value("reward_rate_min", reward_rate, reduce="min")
@@ -213,9 +216,10 @@ def make_episode_metrics_cb_class(
                 metrics_logger.log_value(f"reward/{reward_key}", comp_total, reduce="mean")
 
             episode_id: str = episode.id_[:6]
+            episode_num_str = str(episode_count) if episode_count is not None else "?"
             logger.info(
-                "Episode %s ended. Length: %s, Achieved Reward: %.2f, Reward Rate: %.4f",
-                episode_id, ep_length, ep_achieved_reward, reward_rate,
+                "Episode %s (ID: %s) ended. Length: %s, Episode return: %.2f, Reward Rate: %.4f",
+                episode_num_str, episode_id, ep_length, episode_return, reward_rate,
             )
 
             if dump_metrics_json:
@@ -228,7 +232,7 @@ def make_episode_metrics_cb_class(
                     episode=episode,
                     ep_metrics_file=ep_metrics_file,
                     ep_length=ep_length,
-                    ep_achieved_reward=float(ep_achieved_reward),
+                    ep_achieved_reward=float(episode_return),
                     max_achievable_reward=float(max_achievable_reward),
                     reward_rate=float(reward_rate),
                     cum_E_kWh=cum_E_kWh,

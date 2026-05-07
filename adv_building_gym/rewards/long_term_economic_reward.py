@@ -91,6 +91,7 @@ class LongTermEconomicReward(RewardFunction):
             logger.warning("LongTermEconomicReward: info dict is None, returning 0")
             return 0.0, 0.0
 
+        # TODO VP 2026.05.07.: Rather use the on_reset of the RewardFunction
         # Env clears _component_info on reset; missing sentinel ⇒ new episode.
         if self._sentinel_key not in info:
             self._reset_window()
@@ -112,8 +113,6 @@ class LongTermEconomicReward(RewardFunction):
         reference_power_kW = self._resolve_reference_power_kW(states)
         # Same sign convention as EconomicReward.
         raw_step = -net_power_kW * current_energy_price / reference_power_kW
-        if net_power_kW < 0:  # export
-            raw_step *= self.export_bonus
 
         self._accum += float(raw_step)
         self._step_in_window += 1

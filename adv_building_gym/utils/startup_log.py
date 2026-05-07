@@ -61,7 +61,7 @@ def _fmt_statesource(src: Any) -> str:
     return f"  - {name:<20} [{cls}]{tail}"
 
 
-def _section_invocation(seed: int, config_path: str | None = None) -> list[Section]:
+def _section_invocation(seed: int, trial_path: str | None = None) -> list[Section]:
     job_id = os.environ.get("SLURM_JOB_ID", "n/a")
     host = socket.gethostname()
     cmd = " ".join(sys.argv)
@@ -71,7 +71,7 @@ def _section_invocation(seed: int, config_path: str | None = None) -> list[Secti
             f"  CMD       : {cmd}",
             f"  HOST/JOB  : {host} / SLURM {job_id}",
             f"  SEED      : {seed}",
-            f"  ENV CFG   : {config_path or '(not set)'}",
+            f"  TRIAL CFG : {trial_path or '(not set)'}",
             f"  PYTHON    : {sys.version.split()[0]}",
         ],
     )]
@@ -114,37 +114,19 @@ def _section_tensorboard(
 def _section_eval(
     args: Namespace, env_config: Any, experiment_path: str, seed: int
 ) -> list[Section]:
-    algo = args.algorithm
-    load_config = getattr(args, "load_config", None) or "<env_config.yaml>"
-
-    # Forward the reward schedule training used so the printed eval command
-    # reproduces training's reward definition. run_eval_ray.py defaults
-    # --data-config to the eval YAML, so we don't need to forward it here.
-    # Infra schedules are training-only.
-    reward_schedule = getattr(args, "reward_schedule", None)
-    reward_flag = f"--reward-schedule {reward_schedule}" if reward_schedule else None
+    trial_path = getattr(args, "trial_path", None) or "<trial.yaml>"
 
     explicit_lines = [
         "  Explicit checkpoint path (this run):",
         "    sbatch slurm_scripts/slurm_eval_ray.sh \\",
-        f"        --algorithm {algo} --seed {seed} \\",
-        f"        --load-config {load_config} \\",
+        f"        --trial {trial_path} \\",
+        f"        --checkpoint {experiment_path}/best_model_ep{{checkpoint_serial}}",
     ]
-    if reward_flag:
-        explicit_lines.append(f"        {reward_flag} \\")
-
-    explicit_lines.append(
-        f"        --checkpoint {experiment_path}/best_model_ep{{checkpoint_serial}}"
-    )
 
     auto_lines = [
         "  Auto-resolve best checkpoint for this env config:",
-        "    sbatch slurm_scripts/slurm_eval_ray.sh \\",
-        f"        --algorithm {algo} --seed {seed} --load-config {load_config}"
-        + (" \\" if reward_flag else ""),
+        f"    sbatch slurm_scripts/slurm_eval_ray.sh --trial {trial_path}",
     ]
-    if reward_flag:
-        auto_lines.append(f"        {reward_flag}")
 
     return [(
         "EVAL",
@@ -159,9 +141,10 @@ def _section_eval(
     )]
 
 
-def _section_env_config(env_config: Any) -> list[Section]:
+def _section_env_config(env_config: Any, trial_name: str | None = None) -> list[Section]:
+    label = f"ENV CONFIG  ({trial_name})" if trial_name else "ENV CONFIG"
     return [(
-        f"ENV CONFIG  ({env_config.env_config_name})",
+        label,
         [
             f"  EPISODE_LENGTH   = {env_config.EPISODE_LENGTH} steps",
             f"  CONTROL_STEP     = {env_config.CONTROL_STEP} s",
@@ -317,7 +300,7 @@ def log_startup_banner(
         *_section_invocation(seed, getattr(args, "load_config", None)),
         *_section_tensorboard(experiment_path, storage_path, exec_date),
         *_section_eval(args, env_config, experiment_path, seed),
-        *_section_env_config(env_config),
+        *_section_env_config(env_config, getattr(args, "trial_name", None)),
         *_section_training_setup(
             args, training_param_config, slurm_resources, run_name, experiment_path, exec_date=exec_date,
         ),

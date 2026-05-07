@@ -8,21 +8,14 @@
 # Usage:
 #   sbatch slurm_scripts/slurm_train_ray.sh [OPTIONS]
 #
-# All arguments are forwarded directly to run_train_ray.py. Available options:
-#   --algorithm ALGO          Algorithm to use (ppo, sac) [default: ppo]
-#   --load-config PATH        Path to YAML env config file to load (REQUIRED)
-#   --episodes N              Total training episodes [default: 3500]
-#   --seed N                  Random seed
-#   --eval-freq N             Evaluation frequency [default: 20000]
-#   --metric METRIC           Metric to optimize (episode_return_mean, achieved_reward, reward_rate) [default: reward_rate]
-#   --checkpoint-frequency-episodes N   Checkpoint frequency in episodes [default: 20]
-#   --log-trajectories              Save per-step trajectory JSON during eval episodes [default: off]
-#   --no-log-trajectories           Disable trajectory logging (default)
+# Forwarded directly to run_train_ray.py. Single required option:
+#   --trial PATH              Path to trial config YAML (REQUIRED)
 #
-# Examples (--load-config is REQUIRED):
-#   sbatch slurm_scripts/slurm_train_ray.sh --algorithm ppo --load-config configs/env/env_test1_small.yaml --episodes 3500 --seed 42
-#   sbatch slurm_scripts/slurm_train_ray.sh --algorithm sac --load-config configs/env/env_test1_mid.yaml
-#   sbatch slurm_scripts/slurm_train_ray.sh --algorithm ppo --load-config configs/env/env_test1_large.yaml --episodes 5000 --checkpoint-frequency-episodes 50
+# All run parameters (algorithm, seed, episodes, metric, checkpoint cadence,
+# schedules) live inside the trial YAML — see configs/trial_cfgs/*.yaml.
+#
+# Examples:
+#   sbatch slurm_scripts/slurm_train_ray.sh --trial configs/trial_cfgs/trial_cfg_1.yaml
 #
 # The script activates the project's Python virtualenv and runs the training
 # script while logging SLURM and GPU info.
@@ -33,9 +26,10 @@
 #SBATCH --partition=normal
 #SBATCH --nodes=1
 #SBATCH --tasks-per-node=1
-#SBATCH --cpus-per-task=4
-#SBATCH --gres=gpu:full:1
-#SBATCH --time=00:10:00
+# TODO VP: set to 32, 38, 16 later -- but adapt Ray to use all possible cpu cores available
+#SBATCH --cpus-per-task=3
+#SBATCH --gres=gpu:4g.20gb:1
+#SBATCH --time=72:00:00
 # Exclude nodes with known GPU issues (add problematic nodes here)
 #SBATCH --exclude=haicn1704,haicn1711
 #SBATCH --output=slurm_logs/train/slurm-train-ray-%j.out
@@ -120,9 +114,7 @@ echo "Training completed successfully."
 # Notes:
 # - Make the script executable:
 #     chmod +x slurm_scripts/slurm_train_ray.sh
-# - Submit with named arguments:
-#     sbatch slurm_scripts/slurm_train_ray.sh --algorithm ppo --episodes 3500 --seed 42
-# - All arguments from run_train_ray.py are supported with their default values
-# - Available metrics: episode_return_mean, achieved_reward, reward_rate
+# - Submit:
+#     sbatch slurm_scripts/slurm_train_ray.sh --trial configs/trial_cfgs/trial_cfg_1.yaml
 # - Output and error logs will be written to `slurm_logs/train/`.
 # -------------------------------------------------------------------------------

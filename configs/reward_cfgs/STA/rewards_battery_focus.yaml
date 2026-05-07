@@ -1,0 +1,16 @@
+# Reward function definitions shared across training and evaluation.
+# Each entry must match a registered RewardFunction class name.
+
+rewards:
+  - class_name: BatteryTargetReward
+    weight: 1.0
+    params:
+      min_pct: 0.15
+      max_pct: 0.85
+  - class_name: BatteryMgmtReward
+    weight: 1.0
+    params:
+      scale: 0.5
+  - class_name: LongTermEconomicReward
+    weight: 1.0
+    params: {}

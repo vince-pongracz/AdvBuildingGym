@@ -1,0 +1,71 @@
+# Data combinator configuration
+# Defines which data sources are used for training scenario scheduling.
+# This is separate from the environment config (env_config.py) which defines
+# the environment topology (infras, rewards, statesources).
+
+shuffle: true
+
+# Variant cycling settings
+swap_every_n_episodes: 120
+mode: cycle      # "cycle" (round-robin each variant) or "random" (pick variants randomly)
+day: random      # "random", "each", or a date string like "2025-03-15"
+
+# Years to include in scenario generation
+years: [2018, 2019, 2020, 2021, 2022, 2023, 2024]
+
+# Whether to auto-discover and include augmented data files
+include_synthesized: true
+
+# Scenario source definitions
+# Each entry under "sources" defines a correlated group of data files.
+# The Cartesian product of all sources across all years forms the scenario pool.
+# Each source maps a statesource name to a directory + filename pattern.
+# The pattern must contain {year} which is replaced with each year.
+scenario_sources:
+  # DWD weather (all years in the 'years' list)
+  - weather: data/weather/dwd/preprocessed/{year}_merged_04177.csv
+    E_price: data/e_price/awattar/price_data_{year}.csv
+  - weather: data/weather/dwd/preprocessed/{year}_merged_04177.csv
+    E_price: data/e_price/e_charts/price_data_{year}.csv
+  # WPuQ/Zenodo weather (only 2018–2020 available; missing years are
+  # filtered out at load time by data_config.py)
+  - weather: data/weather/zenodo/csvs_weather/{year}_weather.csv
+    E_price: data/e_price/awattar/price_data_{year}.csv
+  - weather: data/weather/zenodo/csvs_weather/{year}_weather.csv
+    E_price: data/e_price/e_charts/price_data_{year}.csv
+
+# Synthesised data discovery paths (used when include_synthesized is true)
+synthesized_paths:
+  weather_dir: data/weather/dwd/preprocessed
+  price_dirs:
+    awattar: data/e_price/awattar
+    e_charts: data/e_price/e_charts
+
+# Independent variable sources (Cartesian product applied across these)
+variable:
+  ev_schedule:
+    - data/ev_usage_profiles/ev_0.csv
+    - data/ev_usage_profiles/ev_1.csv
+    - data/ev_usage_profiles/ev_2.csv
+    - data/ev_usage_profiles/ev_3.csv
+    - data/ev_usage_profiles/ev_4.csv
+    - data/ev_usage_profiles/ev_5.csv
+  desired_temp_in:
+    - data/inside_temp/inside_temp_0.csv
+    - data/inside_temp/inside_temp_1.csv
+    - data/inside_temp/inside_temp_2.csv
+  user_energy_need:
+    - data/hh_consumption/wpuq/2020_SFH10.csv
+    - data/hh_consumption/wpuq/2020_SFH30.csv
+    - data/hh_consumption/wpuq/2020_SFH10_syn_cfg_1_neg.csv
+    - data/hh_consumption/wpuq/2020_SFH10_syn_cfg_1_pos.csv
+    - data/hh_consumption/wpuq/2020_SFH10_syn_cfg_2_neg.csv
+    - data/hh_consumption/wpuq/2020_SFH10_syn_cfg_2_pos.csv
+    - data/hh_consumption/wpuq/2020_SFH10_syn_cfg_3_neg.csv
+    - data/hh_consumption/wpuq/2020_SFH10_syn_cfg_3_pos.csv
+    - data/hh_consumption/wpuq/2020_SFH30_syn_cfg_1_neg.csv
+    - data/hh_consumption/wpuq/2020_SFH30_syn_cfg_1_pos.csv
+    - data/hh_consumption/wpuq/2020_SFH30_syn_cfg_2_neg.csv
+    - data/hh_consumption/wpuq/2020_SFH30_syn_cfg_2_pos.csv
+    - data/hh_consumption/wpuq/2020_SFH30_syn_cfg_3_neg.csv
+    - data/hh_consumption/wpuq/2020_SFH30_syn_cfg_3_pos.csv

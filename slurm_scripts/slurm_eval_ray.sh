@@ -7,21 +7,18 @@
 # Usage:
 #   sbatch slurm_scripts/slurm_eval_ray.sh [OPTIONS]
 #
-# All arguments are forwarded directly to run_eval_ray.py. Available options:
-#   --algorithm, -a ALGO    Algorithm to evaluate (ppo, sac) [default: ppo]
-#   --load-config PATH      Path to YAML env config file to load (REQUIRED)
+# Forwarded directly to run_eval_ray.py.  Required:
+#   --trial PATH            Path to trial config YAML
+# Optional:
 #   --checkpoint PATH       Path to Ray checkpoint directory (auto-detects best if omitted)
 #   --episodes N            Number of evaluation episodes [default: 10]
-#   --seed N                Random seed [default: 42]
 #   --output-dir PATH       Directory to save evaluation results [default: eval_results]
 #   --no-save               Do not save results to file
-#   --log-trajectories      Save per-step trajectory JSON per episode [default: on]
-#   --no-log-trajectories   Disable trajectory logging
+#   --plot / --plot-all     Plot trajectory after evaluation
 #
-# Examples (--load-config is REQUIRED):
-#   sbatch slurm_scripts/slurm_eval_ray.sh --algorithm ppo --load-config configs/env/env_test1_small.yaml --episodes 10 --seed 42
-#   sbatch slurm_scripts/slurm_eval_ray.sh --algorithm sac --load-config configs/env/env_test1_mid.yaml --episodes 20
-#   sbatch slurm_scripts/slurm_eval_ray.sh --algorithm ppo --load-config configs/env/env_test1_small.yaml \
+# Examples:
+#   sbatch slurm_scripts/slurm_eval_ray.sh --trial configs/trial_cfgs/trial_cfg_1.yaml --episodes 10
+#   sbatch slurm_scripts/slurm_eval_ray.sh --trial configs/trial_cfgs/trial_cfg_1.yaml \
 #         --checkpoint models/env_test1_small/ray/ppo/best_model_ep100
 #
 # Note: Inference runs on CPU (sufficient for the small [32,32,32] network).
@@ -79,7 +76,7 @@ echo "Evaluation completed successfully."
 # Notes:
 # - Make the script executable:
 #     chmod +x slurm_scripts/slurm_eval_ray.sh
-# - Submit with named arguments:
-#     sbatch slurm_scripts/slurm_eval_ray.sh --algorithm ppo --episodes 10 --seed 42
+# - Submit:
+#     sbatch slurm_scripts/slurm_eval_ray.sh --trial configs/trial_cfgs/trial_cfg_1.yaml
 # - Output and error logs will be written to `slurm_logs/eval/`.
 # -------------------------------------------------------------------------------

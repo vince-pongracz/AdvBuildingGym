@@ -59,7 +59,7 @@ class TrainingParamConfig(LoggableConfig):
     
     sac_replay_batch_size: int = 256
     sac_episodes_to_keep_in_replay_buffer: int = 100
-    sac_training_intensity: float = 1.0
+    sac_training_intensity: float | None = None
     sac_n_step_return: int = 1
     sac_learning_starts_after_n_episodes: int = 50 # Warm up replay buffer with 50 episodes before learning starts.
 
@@ -77,7 +77,7 @@ class TrainingParamConfig(LoggableConfig):
     _source_file: str | None = field(default=None, repr=False)
 
     @staticmethod
-    def from_yaml(path: str | Path) -> "TrainingParamConfig":
+    def from_yaml(path: str | Path, default_seed: int | None = None) -> "TrainingParamConfig":
         """Load training config from a YAML file.
 
         The YAML is organised into ``common``, ``ppo``, and ``sac`` sections.
@@ -85,8 +85,14 @@ class TrainingParamConfig(LoggableConfig):
         (e.g. ``ppo.episodes_per_iteration`` → ``ppo_episodes_per_iteration``)
         before being passed to the dataclass constructor.
 
+        Seed resolution: if ``common.seed`` is present in the YAML it wins;
+        otherwise ``default_seed`` is used (typically the trial seed). This
+        makes the trial config the single source of truth while still
+        letting a training-params YAML opt out with its own seed.
+
         Args:
             path: Path to the YAML config file.
+            default_seed: Fallback seed when the YAML omits ``common.seed``.
 
         Returns:
             TrainingParamConfig populated from the file.
@@ -100,6 +106,14 @@ class TrainingParamConfig(LoggableConfig):
             section_prefix = "" if cfg_section == "common" else f"{cfg_section}_"
             for key, value in section_data.items():
                 flat[f"{section_prefix}{key}"] = value
+
+        if "seed" not in flat:
+            if default_seed is None:
+                raise ValueError(
+                    f"TrainingParamConfig {Path(path).name} omits 'common.seed' "
+                    f"and no default_seed was supplied"
+                )
+            flat["seed"] = default_seed
 
         config = TrainingParamConfig(**flat)
         config._source_file = Path(path).name

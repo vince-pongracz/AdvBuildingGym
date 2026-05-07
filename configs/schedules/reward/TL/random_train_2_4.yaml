@@ -1,0 +1,7 @@
+# See README.md in this directory for field documentation.
+
+mode: random
+swap_every_n_iterations: 100
+
+random_swap_count: 2
+random_active_count: 4

@@ -83,6 +83,9 @@ class HouseholdEnergyConsumers(Infrastructure):
         self.current_consumption_kW = self.consumption_norm * self.peak_consumption_kW
 
         # Write normalized consumption as read-only output (positive = consumption)
+        # NOTE VP 2026.05.07.: It's not really needed to be an action...
+        # it could be a state as well... -- but later if user sets it dynamically?
+        # then it's maybe still a state...
         if "a_hh_consumption" not in actions:
             actions["a_hh_consumption"] = np.array([self.consumption_norm], dtype=np.float32)
         else:
@@ -127,7 +130,7 @@ class HouseholdEnergyConsumers(Infrastructure):
         """Non-controllable load — always exempt from energy penalty."""
         return 0.0
 
-    def get_electric_consumption(self, actions: Dict) -> float:
+    def get_E(self, actions: Dict) -> tuple[float, float]:
         """Get current electric energy consumption from household consumers.
 
         Sign convention: positive = consumption from grid.
@@ -135,7 +138,7 @@ class HouseholdEnergyConsumers(Infrastructure):
         Returns:
             Positive value representing energy consumed from the grid (kW).
         """
-        return self.current_consumption_kW
+        return 0.0, self.current_consumption_kW
 
 
 # Register HouseholdEnergyConsumers with the component registry

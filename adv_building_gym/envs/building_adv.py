@@ -264,6 +264,8 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         self._reset_internal_state()
         self._sync_components(row_offset)
         self._populate_initial_observations()
+        for rf in self.reward_functors:
+            rf.on_reset(self.state, info=self._component_info)
 
         info = self._build_reset_info(seed, variant)
         return {k: np.array(v, copy=True) for k, v in self.state.items()}, info
@@ -318,6 +320,7 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
     def _build_reset_info(self, seed: int | None, variant: dict | None) -> dict:
         info = {
             "seed": seed,
+            "episode_count": self.episode_count,
             "episode_date": self._variant_manager.episode_date,
             "episode_day_mode": self._variant_manager.episode_day_mode,
             "data_variant": variant if variant else None,
@@ -410,15 +413,15 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
     def _update_state(self) -> None:
         # Reset directional power bound accumulators before infras publish.
         self._component_info["max_consumption_kW"] = 0.0
-        self._component_info["max_export_kW"] = 0.0
+        self._component_info["max_production_kW"] = 0.0
         for infr in self.infras:
             infr.update_state(self.state, info=self._component_info)
         for ds in self.statesources:
             ds.update_state(states=self.state, info=self._component_info)
 
-    def _compute_power_breakdown(self, action) -> tuple[float, dict[str, float]]:
+    def _compute_power_breakdown(self, action) -> tuple[float, dict[str, tuple[float, float]]]:
         power_breakdown = {
-            infra.name: infra.get_electric_consumption(action)
+            infra.name: (infra.get_E(action))
             for infra in self.infras
         }
         total_power_kW, _energy_kWh = self._energy_tracker.advance(power_breakdown)

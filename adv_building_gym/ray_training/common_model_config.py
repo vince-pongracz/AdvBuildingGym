@@ -11,11 +11,15 @@ import logging
 from ray.rllib.algorithms.algorithm_config import AlgorithmConfig
 
 from adv_building_gym.config.env_config import EnvConfig
-from adv_building_gym.ray_training.history_connector import build_env_to_module_connectors
+# StridedHistoryConnector is currently disabled — see history_connector.py for the
+# implementation, which can be re-wired below if per-key strided observation
+# history is needed again. We use stock FlattenObservations in the meantime.
+from ray.rllib.connectors.env_to_module import FlattenObservations
 
 from adv_building_gym.callbacks import (
     create_data_schedule_on_train_result_cb,
     create_infra_schedule_on_train_result_cb,
+    create_iter_timing_on_train_result_cb,
     create_reward_switch_on_train_result_cb,
     make_episode_metrics_cb_class,
     make_eval_state_action_cb_class,
@@ -100,6 +104,7 @@ def register_callbacks(
     # switching run at iteration boundaries.  RLlib accepts a single
     # on_train_result callable, so compose them when both are active.
     on_train_result_fns = [
+        create_iter_timing_on_train_result_cb(),
         create_data_schedule_on_train_result_cb(
             data_combinator, data_combinator.swap_every_n_episodes,
         ),
@@ -241,7 +246,7 @@ def common_model_setup(
         tf_session_args={},
         local_tf_session_args={},
     )
-    config.log_gradients = True
+    config.log_gradients = False # TODO VP 2026.05.06.: What is the default?
     # NOTE VP 2026.01.08. : about ray and rllib concept https://docs.ray.io/en/latest/rllib/key-concepts.html
     # Learning the NN, policy (gradient updates) -- needs GPU
     config.learners(
@@ -250,60 +255,40 @@ def common_model_setup(
         num_cpus_per_learner=num_cpus_per_learner,
     )
     # Sampling actions (querying the env, using the policy, sample trajectories) -- no GPU needed
-    # Episode lookback horizon controls how far back the env-to-module connector
-    # can index into the current episode; must cover the largest |offset| used
-    # by StridedHistoryConnector, else mid-episode lookups silently fall back
-    # to padding.
-    # Link: https://docs.ray.io/en/latest/rllib/env-to-module-connector.html
-    max_abs_offset = max((abs(offset) for offset in training_config.hst_offsets), default=0)
-    effective_lookback = max(training_config.episode_lookback_horizon_steps, max_abs_offset)
-    if effective_lookback > training_config.episode_lookback_horizon_steps:
-        logger.warning(
-            "episode_lookback_horizon_steps=%d is smaller than max(|hst.offsets|)=%d; "
-            "raising episode_lookback_horizon to %d for StridedHistoryConnector.",
-            training_config.episode_lookback_horizon_steps, max_abs_offset,
-            effective_lookback
-        )
-
+    # StridedHistoryConnector is disabled; the stock FlattenObservations pipeline
+    # only needs the default single-step lookback. To re-enable history stacking,
+    # wire build_env_to_module_connectors back in from history_connector.py and
+    # raise episode_lookback_horizon to cover max(|hst_offsets|).
+    # PPO validates total_train_batch_size ≈ num_env_runners * rollout_fragment_length
+    # (within 10%).  With rollout_fragment_length=EPISODE_LENGTH, we need
+    # num_env_runners ≈ ppo_episodes_per_iteration * num_learners.  When the
+    # SLURM-derived num_env_runners exceeds that, drop it down so episodes are
+    # not over-collected on each iteration (the surplus CPUs go unused).
+    is_ppo = type(config).__name__ == "PPOConfig"
+    train_batch = getattr(config, "train_batch_size_per_learner", None)
+    if is_ppo and train_batch:
+        total_batch = train_batch * num_learners
+        target_env_runners = max(1, total_batch // env_config.EPISODE_LENGTH)
+        if num_env_runners > target_env_runners:
+            logger.warning(
+                "Reducing num_env_runners %d -> %d to match PPO total_train_batch_size=%d "
+                "(per_learner=%d x num_learners=%d) at rollout_fragment_length=%d. "
+                "Surplus CPUs will be left idle.",
+                num_env_runners, target_env_runners, total_batch,
+                train_batch, num_learners, env_config.EPISODE_LENGTH,
+            )
+            num_env_runners = target_env_runners
     config.env_runners(
         rollout_fragment_length=env_config.EPISODE_LENGTH, # Collect complete episodes before returning to learner.
         num_env_runners=num_env_runners,
         num_cpus_per_env_runner=num_cpus_per_env_runner,
-        episode_lookback_horizon=effective_lookback,  # RLlib default: 1
-        # Dict obs is transformed by the shared connector factory:
-        #   hst_tracked_keys set  →  [StridedHistoryConnector] (stack + flatten)
-        #   otherwise             →  [FlattenObservations]
-        # The two branches are mutually exclusive — StridedHistoryConnector
-        # handles its own flattening. Action space flattening + rescaling
-        # is handled by env wrappers (FlattenAction + RescaleAction) applied
-        # in env_creator; the connector never reads the action space
-        # (action history reaches the policy via <action_key>_prev obs keys
-        # published by the env each step).
-        # RLlib invokes this factory on every env runner. On remote workers
-        # `env` is the wrapped env instance; on the driver-side local runner
-        # `env` is None (no env is built there when num_env_runners >= 1 — see
-        # env_runner_group.py:319 "local worker has no env"). The authoritative
-        # spaces always live in the `spaces` dict under '__env_single__', so
-        # prefer that and fall back to `env` only as a convenience.
-        # Link: https://docs.ray.io/en/latest/rllib/connector.html
-        env_to_module_connector=lambda env, spaces, device: build_env_to_module_connectors(
-            training_config,
-            env.observation_space if env is not None else spaces["__env_single__"][0],
-            env.action_space if env is not None else spaces["__env_single__"][1],
-            as_learner_connector=False,
-        ),  # type: ignore
+        episode_lookback_horizon=training_config.episode_lookback_horizon_steps,  # RLlib default: 1
+        env_to_module_connector=lambda env, spaces, device: [FlattenObservations()],  # type: ignore
     )
-    # The learner pipeline must mirror the env-to-module pipeline so that
-    # replayed (SAC) or on-policy (PPO) episodes produce the same flat obs
-    # dim the RLModule was built from.
-    # Link: https://docs.ray.io/en/latest/rllib/learner-connector.html
+    # Mirror the env-to-module pipeline on the learner side so replayed (SAC)
+    # or on-policy (PPO) batches flatten to the same obs dim.
     config.training(
-        learner_connector=lambda obs_sp, act_sp: build_env_to_module_connectors(
-            training_config,
-            obs_sp,
-            act_sp,
-            as_learner_connector=True,
-        ),  # type: ignore
+        learner_connector=lambda obs_sp, act_sp: [FlattenObservations()],  # type: ignore
     )
     # Evaluation runs the current policy without exploration noise to provide
     # an unbiased performance signal for model selection (analogous to a

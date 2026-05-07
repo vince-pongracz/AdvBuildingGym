@@ -1,7 +1,0 @@
-# See README.md in this directory for field documentation.
-
-rewards_file: rewards.yaml
-
-mode: "random"
-swap_every_n_iterations: 100
-seed: 42

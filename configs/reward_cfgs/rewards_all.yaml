@@ -1,0 +1,57 @@
+# Reward function definitions shared across training and evaluation.
+# Each entry must match a registered RewardFunction class name.
+
+rewards:
+  - class_name: TempReward
+    weight: 1.0
+    params:
+      zero_reward_diff_celsius: 1.0
+      wrong_direction_penalty: -1.0
+      terminate_diff_celsius: 3.5
+      terminate_penalty: -100.0
+
+  - class_name: LongTermEconomicReward
+    weight: 1.0
+    params:
+      reference_power_kW: 22.0
+      export_bonus: 3.0
+
+  - class_name: MinimiseEnergyConsumptionReward
+    weight: 1.0
+    params:
+      threshold_kWh: 0.5
+
+  # max_power_kW comes from ctxt_operator_max_power_kW (statesource bundle).
+  - class_name: OperatorEnergyControlReward
+    weight: 1.0
+    params:
+      harsh_penalty: -4.0
+      soft_threshold_pct: 0.9
+      recovery_steps: 3
+      terminate_threshold_pct: 1.1
+      terminate_penalty: -10
+
+  - class_name: BatteryTargetReward
+    weight: 1.0
+    params:
+      min_pct: 0.15
+      max_pct: 0.95
+  
+  - class_name: BatteryMgmtReward
+    weight: 1.0
+    params:
+      scale: 0.5
+
+  - class_name: EVChargingReward
+    weight: 1.0
+    params:
+      diff_threshold: 0.02
+      soc_diff_multiplier: 5.0
+      disconnect_soc_tolerance: 0.05
+      success_reward: 1.0
+      failure_penalty: -10.0
+      min_curve_violation_penalty: -10.0
+
+  - class_name: EVChargingOnTimeReward
+    weight: 1.0
+    params: {}

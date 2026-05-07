@@ -89,9 +89,6 @@ class BatteryLinear(Infrastructure):
 
         if "s_battery_pct" not in state_spaces.keys():
             state_spaces["s_battery_pct"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
-        # Policy-side history of s_battery_pct is assembled by
-        # StridedHistoryConnector on the rollout/learner side; the env no
-        # longer stores it in the observation dict.
 
         # Raw battery capacity (kWh) — constant hardware parameter.
         if "ctxt_battery_capacity_kWh" not in state_spaces.keys():
@@ -117,8 +114,8 @@ class BatteryLinear(Infrastructure):
 
         # Calculate energy change in this timestep
         # E (kWh) = P (kW) * t (h)
-        time_hours = self.control_step / SECONDS_PER_HOUR
-        delta_energy_kWh = requested_power_kW * time_hours
+        time_duration_in_hours = self.control_step / SECONDS_PER_HOUR
+        delta_energy_kWh = requested_power_kW * time_duration_in_hours
 
         # Convert energy to SoC change
         delta_soc = delta_energy_kWh / self.max_cap_kWh if self.max_cap_kWh > 0 else 0.0
@@ -133,7 +130,7 @@ class BatteryLinear(Infrastructure):
         actual_energy_kWh = actual_delta_soc * self.max_cap_kWh
 
         # Calculate actual power for consumption reporting
-        self.actual_power_kW = actual_energy_kWh / time_hours if time_hours > 0 else 0.0
+        self.actual_power_kW = actual_energy_kWh / time_duration_in_hours if time_duration_in_hours > 0 else 0.0
 
         # Update the action dict to reflect actual (clipped) action
         actual_action = self.actual_power_kW / self.max_power_kW if self.max_power_kW > 0 else 0.0
@@ -154,14 +151,14 @@ class BatteryLinear(Infrastructure):
         self.actual_power_kW = 0.0
         super().reset(states, info)
 
-    def get_electric_consumption(self, actions: Dict) -> float:
-        """Get current electric energy consumption from battery in kW.
-
-        Returns:
-            Positive value when charging (consuming from grid),
-            negative value when discharging (providing to grid).
-        """
-        return self.actual_power_kW
+    def get_E(self, actions: Dict) -> tuple[float, float]:
+        # self.actual_power_kW is positive when the battery charges -- consumes energy
+        if self.actual_power_kW > 0.0:
+            # production, consumption
+            return 0.0, self.actual_power_kW
+        else:
+            # self.actual_power_kW is negative when the battery discharges -- produces energy to the others
+            return -1.0 * self.actual_power_kW, 0.0
 
 
 ComponentRegistry.register('infrastructure', BatteryLinear)

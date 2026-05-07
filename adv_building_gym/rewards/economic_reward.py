@@ -35,8 +35,7 @@ class EconomicReward(RewardFunction):
     """
 
     def __init__(self, weight: float, reference_power_kW: float = 15.0,
-                name: str = "economic_reward",
-                export_bonus: float = 1.0) -> None:
+                name: str = "economic_reward") -> None:
         """Initialize EconomicReward.
 
         Args:
@@ -57,7 +56,6 @@ class EconomicReward(RewardFunction):
             raise ValueError("reference_power_kW must be positive.")
 
         self.reference_power_kW = float(reference_power_kW)
-        self.export_bonus = export_bonus
 
     def _resolve_reference_power_kW(self, states) -> float:
         ctxt = states.get("ctxt_operator_max_power_kW")
@@ -68,30 +66,27 @@ class EconomicReward(RewardFunction):
         return self.reference_power_kW
 
     def get_reward(self, actions, states, info: dict | None = None) -> tuple[float, float]:
-        max_step = self.weight * self.max_reward
+        max_reward_per_step = self.weight * self.max_reward
 
         current_energy_price = float(states["s_E_price"][0])
 
         if info is None:
             logger.warning("EconomicReward: info dict is None, returning 0")
-            return 0.0, max_step
+            return 0.0, max_reward_per_step
 
         net_power_kW = info.get("net_power_kW")
         if net_power_kW is None:
             logger.warning("EconomicReward: missing net_power_kW in info, returning 0")
-            return 0.0, max_step
+            return 0.0, max_reward_per_step
 
         reference_power_kW = self._resolve_reference_power_kW(states)
         # Negative sign: consumption → negative reward (cost); production → positive reward (income)
+        # net_power_kW -- total consumption
+        # TODO VP 2026.05.05.: Check again
         raw = -net_power_kW * current_energy_price / reference_power_kW
 
-        # Export side boost — keyed on the physical direction of power flow,
-        # not on the reward sign, so negative prices don't flip the meaning.
-        if net_power_kW < 0 and self.export_bonus != 1.0:
-            raw *= self.export_bonus
-
         reward_economic = float(np.clip(raw, -1.0, 1.0))
-        return float(self.weight * reward_economic), max_step
+        return float(self.weight * reward_economic), max_reward_per_step
 
 
 # Register EconomicReward with the component registry

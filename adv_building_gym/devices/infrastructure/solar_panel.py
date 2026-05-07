@@ -13,6 +13,8 @@ logger = logging.getLogger(__name__)
 # TODO VP 2026.02.17. : Add parameters for solar panel modeling.
 # E.g. temperature effects, panel orientation, inverter efficiency, etc.
 # For now it's kept simple with a direct mapping from irradiance to production.
+# solar_irradiance_norm is in J/cm^2 --> transform that into energy (into kW-s) per time step
+# The panel has a max power and max energy output, that should be matched with this...
 
 class SolarPanel(Infrastructure):
     """Solar Panel (PV) infrastructure component.
@@ -93,18 +95,12 @@ class SolarPanel(Infrastructure):
         if "s_solar_irradiance_norm" in states:
             self.irradiance_norm = float(states["s_solar_irradiance_norm"][0])
 
-        # Use synthetic irradiance ONLY when no weather data source is active.
-        # When a weather source exists, irradiance=0.0 means "no sunshine"
-        # (e.g. nighttime, overcast), not "data unavailable".
-        # The weather source publishes ctxt_temp_abs_max into the state dict when active.
-        weather_active = "ctxt_temp_abs_max" in states
-        if not weather_active and self.irradiance_norm == 0.0 and "raw_sim_hour" in states:
-            self.irradiance_norm = self._synthetic_irradiance(states)
-
         # Production = irradiance * peak_power
         self.current_production_kW = self.irradiance_norm * self.max_power_kW
 
         # Write normalized production as read-only output (negative = production)
+        # TODO VP 2026.05.06.: no meaning behind positive and negative action signs, 
+        # as power generation and consumption do not depend on the action sign, because it's per Infra computed
         solar_action = -self.irradiance_norm
         if "a_solar" not in actions:
             actions["a_solar"] = np.array([solar_action], dtype=np.float32)
@@ -122,41 +118,17 @@ class SolarPanel(Infrastructure):
         self.current_production_kW = 0.0
         super().reset(states, info)
 
-    def _synthetic_irradiance(self, states: Dict) -> float:
-        """Generate synthetic irradiance based on time of day.
-
-        Simple bell curve approximation of solar irradiance with Gaussian noise.
-        Peak at solar noon (12:00), zero at night.
-        """
-        sim_hour = float(states.get("raw_sim_hour", np.array([12.0]))[0])
-
-        # Sunrise ~6:00, sunset ~18:00, peak at 12:00
-        if sim_hour < 6 or sim_hour > 18:
-            return 0.0
-
-        # Cosine-based profile centered at noon
-        # Maps 6-18 hours to 0-pi, with peak at pi/2 (noon)
-        hour_fraction = (sim_hour - 6) / 12.0  # [0, 1] over daylight hours
-        base_irradiance = np.sin(hour_fraction * np.pi)
-
-        # Add Gaussian noise for realistic cloud cover variations
-        seed = RngService.get().get_random(self.name)
-        noise = np.random.default_rng(seed).normal(loc=0.0, scale=0.05)
-        irradiance = base_irradiance + noise
-
-        return float(np.clip(irradiance, 0.0, 1.0))
-
-    def get_electric_consumption(self, actions: Dict) -> float:
+    def get_E(self, actions: Dict) -> tuple[float, float]:
         """Get current electric energy consumption (production) from solar panel.
 
-        Sign convention: positive = consumption from grid, negative = production to grid.
         Solar panels produce energy, so this returns a negative value.
 
         Returns:
-            Negative value representing energy provided to the building/grid (kW).
+            float1 -- production
+            float2 -- consumption
         """
         # Negative consumption = production to grid
-        return -self.current_production_kW
+        return self.current_production_kW, 0.0
 
 
 # Register SolarPanel with the component registry

@@ -48,28 +48,52 @@ def discover_synthetic_scenarios(
 
     scenarios: list[dict[str, str]] = []
 
+    def _syn_cfg_token(path: Path) -> str | None:
+        # Extract the cfg id from a filename stem ending in `..._syn_cfg_<token>`.
+        stem = path.stem
+        marker = "_syn_cfg_"
+        idx = stem.rfind(marker)
+        if idx == -1:
+            return None
+        return stem[idx + len(marker):]
+
     for year in years:
-        # Collect synthesised weather files for this year across all sources
-        syn_weather_paths: list[Path] = []
+        # Group synthesised weather files for this year by their syn_cfg token
+        syn_weather_by_cfg: dict[str, list[Path]] = {}
         for w_dir, w_pattern in weather_sources:
-            syn_weather_paths.extend(
-                sorted(Path(w_dir).glob(w_pattern.format(year=year)))
-            )
-        if not syn_weather_paths:
+            for path in sorted(Path(w_dir).glob(w_pattern.format(year=year))):
+                token = _syn_cfg_token(path)
+                if token is None:
+                    continue
+                syn_weather_by_cfg.setdefault(token, []).append(path)
+        if not syn_weather_by_cfg:
             continue
 
         for _, source_dir in price_dirs.items():
-            syn_price_paths = sorted(Path(source_dir).glob(f"price_data_{year}_syn_cfg_*.csv"))
-            if not syn_price_paths:
+            syn_price_by_cfg: dict[str, list[Path]] = {}
+            for path in sorted(Path(source_dir).glob(f"price_data_{year}_syn_cfg_*.csv")):
+                token = _syn_cfg_token(path)
+                if token is None:
+                    continue
+                syn_price_by_cfg.setdefault(token, []).append(path)
+            if not syn_price_by_cfg:
                 continue
 
-            # Pair each synthesised weather file with each synthesised price file
-            for weather_path in syn_weather_paths:
-                for price_path in syn_price_paths:
-                    scenarios.append({
-                        "weather": str(weather_path),
-                        "E_price": str(price_path),
-                    })
+            # Pair only weather + price files that share the same syn_cfg token
+            shared_tokens = set(syn_weather_by_cfg) & set(syn_price_by_cfg)
+            unmatched = (set(syn_weather_by_cfg) | set(syn_price_by_cfg)) - shared_tokens
+            if unmatched:
+                logger.warning(
+                    "Year %d: skipping unmatched syn_cfg tokens %s (no weather/price counterpart)",
+                    year, sorted(unmatched),
+                )
+            for token in sorted(shared_tokens):
+                for weather_path in syn_weather_by_cfg[token]:
+                    for price_path in syn_price_by_cfg[token]:
+                        scenarios.append({
+                            "weather": str(weather_path),
+                            "E_price": str(price_path),
+                        })
 
     if scenarios:
         logger.info("Discovered %d synthesised scenario(s)", len(scenarios))

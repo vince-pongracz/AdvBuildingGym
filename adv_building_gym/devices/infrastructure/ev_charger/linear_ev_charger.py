@@ -27,7 +27,7 @@ class LinearEVCharger(Infrastructure):
     The EV availability can be controlled via CSV or synthetic schedule.
     """
 
-    # Runtime v2g_enabled flag still gates export; see max_export_kW override.
+    # Runtime v2g_enabled flag still gates export; see max_production_kW override.
     POWER_FLOW = "bidirectional"
 
     # control_step comes from config context
@@ -121,7 +121,7 @@ class LinearEVCharger(Infrastructure):
             raise ValueError("discharge_efficiency must be in (0, 1].")
 
     @property
-    def max_export_kW(self) -> float:
+    def max_production_kW(self) -> float:
         # Override needed because v2g_enabled is a runtime (per-instance) gate,
         # which POWER_FLOW (class-level) cannot express.
         return self.max_power_kW if self.v2g_enabled else 0.0
@@ -442,22 +442,19 @@ class LinearEVCharger(Infrastructure):
 
     def get_penalisable_consumption(self, actions: Dict, states: Dict) -> float:
         """Exempt charging when EV is connected and below target SoC."""
-        power = self.get_electric_consumption(actions)
-        if power > 0 and self.ev_connected and self.soc < self.target_soc:
+        _, consumed_power = self.get_E(actions)
+        if consumed_power > 0 and self.ev_connected and self.soc < self.target_soc:
             return 0.0
-        return power
+        return consumed_power
 
-    def get_electric_consumption(self, actions: Dict) -> float:
-        """Get current electric energy consumption from EV charger in kW.
-
-        Uses the actual power computed during exec_action (accounts for
-        SoC clipping and V2G restrictions).
-
-        Returns:
-            Positive value when charging EV (consuming from grid).
-            Negative value when V2G discharging (providing to grid).
-        """
-        return self.actual_power_kW
+    def get_E(self, actions: Dict) -> tuple[float, float]:
+        # self.actual_power_kW is positive when the EV charges -- consumes energy
+        if self.actual_power_kW > 0.0:
+            # production, consumption
+            return 0.0, self.actual_power_kW
+        else:
+            # self.actual_power_kW is negative when the EV discharges -- produces energy to the others
+            return -1.0 * self.actual_power_kW, 0.0
 
 
 # Register EvCharger with the component registry
