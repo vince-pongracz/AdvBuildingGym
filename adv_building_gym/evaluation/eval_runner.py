@@ -120,6 +120,7 @@ def evaluate_model(
     
     # TODO VP 2026.03.16. : Train long term -- for 7 days, for 30 days, for 365 days -- episodes
     # --> Eval long term as well. Not only single day optimisation, long term optimisation learnt
+    # On trial level it's already realised, but still have to try and test it
 
     # Create evaluation environment with action-space wrappers
     # (FlattenAction + RescaleAction) so the policy's flat [-1, 1] output

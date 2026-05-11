@@ -57,7 +57,7 @@ class TrainingParamConfig(LoggableConfig):
     ppo_minibatch_size: int = 64
     ppo_num_epochs: int = 20
     
-    sac_replay_batch_size: int = 256
+    sac_replay_batch_size: int = 256 # NOTE VP 2026.05.08.: Rllib default
     sac_episodes_to_keep_in_replay_buffer: int = 100
     sac_training_intensity: float | None = None
     sac_n_step_return: int = 1
@@ -75,6 +75,28 @@ class TrainingParamConfig(LoggableConfig):
     hst_offsets: list[int] = field(default_factory=list)
 
     _source_file: str | None = field(default=None, repr=False)
+
+    @staticmethod
+    def from_dict(doc: dict, default_seed: int | None = None, *, source_label: str = "<inline>") -> "TrainingParamConfig":
+        """Build from an already-parsed dict (mirrors from_yaml's prefix flattening)."""
+        tparam_cfg = dict(doc) if doc else {}
+        flat: dict = {}
+        for cfg_section in ("common", "ppo", "sac", "hst"):
+            section_data = tparam_cfg.pop(cfg_section, {}) or {}
+            section_prefix = "" if cfg_section == "common" else f"{cfg_section}_"
+            for key, value in section_data.items():
+                flat[f"{section_prefix}{key}"] = value
+        if "seed" not in flat:
+            if default_seed is None:
+                raise ValueError(
+                    f"TrainingParamConfig {source_label} omits 'common.seed' "
+                    f"and no default_seed was supplied"
+                )
+            flat["seed"] = default_seed
+        config = TrainingParamConfig(**flat)
+        config._source_file = source_label
+        config.log_values()
+        return config
 
     @staticmethod
     def from_yaml(path: str | Path, default_seed: int | None = None) -> "TrainingParamConfig":
@@ -99,26 +121,9 @@ class TrainingParamConfig(LoggableConfig):
         """
         with open(path, "r") as cfg_file:
             tparam_cfg = yaml.safe_load(cfg_file)
-
-        flat: dict = {}
-        for cfg_section in ("common", "ppo", "sac", "hst"):
-            section_data = tparam_cfg.pop(cfg_section, {}) or {}
-            section_prefix = "" if cfg_section == "common" else f"{cfg_section}_"
-            for key, value in section_data.items():
-                flat[f"{section_prefix}{key}"] = value
-
-        if "seed" not in flat:
-            if default_seed is None:
-                raise ValueError(
-                    f"TrainingParamConfig {Path(path).name} omits 'common.seed' "
-                    f"and no default_seed was supplied"
-                )
-            flat["seed"] = default_seed
-
-        config = TrainingParamConfig(**flat)
-        config._source_file = Path(path).name
-        config.log_values()
-        return config
+        return TrainingParamConfig.from_dict(
+            tparam_cfg, default_seed=default_seed, source_label=Path(path).name
+        )
 
     def _log_label(self) -> str:
         if self._source_file:

@@ -14,7 +14,7 @@ class RewardFunction(Serializable):
 
     # Maximum raw (unweighted) reward this function can return per step.
     # Subclasses whose raw output exceeds 1.0 must override this.
-    max_reward: float = 1.0
+    max_reward_in_step: float = 1.0
 
     def __init__(self, weight: float, name: str = "default") -> None:
         self.weight = weight

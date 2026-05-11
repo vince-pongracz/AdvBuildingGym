@@ -38,9 +38,9 @@ class WindTurbine(Infrastructure):
                 name: str,
                 max_power_kW: float,
                 rated_power_kW: float = 5.0,
-                cut_in_speed: float = 3.0,
-                rated_speed: float = 12.0,
-                cut_out_speed: float = 25.0,
+                cut_in_speed_ms: float = 3.0,
+                rated_speed_ms: float = 10.0,
+                cut_out_speed_ms: float = 25.0,
                 ) -> None:
         """Initialize wind turbine infrastructure.
 
@@ -59,15 +59,15 @@ class WindTurbine(Infrastructure):
         """
         super().__init__(name, max_power_kW)
 
-        if cut_in_speed >= rated_speed:
+        if cut_in_speed_ms >= rated_speed_ms:
             raise ValueError("cut_in_speed must be less than rated_speed.")
-        if rated_speed >= cut_out_speed:
+        if rated_speed_ms >= cut_out_speed_ms:
             raise ValueError("rated_speed must be less than cut_out_speed.")
 
         self.rated_power_kW = rated_power_kW
-        self.cut_in_speed = cut_in_speed
-        self.rated_speed = rated_speed
-        self.cut_out_speed = cut_out_speed
+        self.cut_in_speed = cut_in_speed_ms
+        self.rated_speed = rated_speed_ms
+        self.cut_out_speed = cut_out_speed_ms
 
         # Scale factor for denormalising avg_wind_speed_norm back to m/s.
         # Read at runtime from states["ctxt_wind_speed_abs_max"] (published by WeatherDataSource).
@@ -120,8 +120,7 @@ class WindTurbine(Infrastructure):
         self.available_power_kW = self._power_curve(self.wind_speed_raw)
 
         # Apply curtailment action
-        curtailment = float(np.atleast_1d(actions.get(
-            "a_wind_curtailment", np.array([1.0])))[0])
+        curtailment = float(np.atleast_1d(actions.get("a_wind_curtailment", np.array([1.0])))[0])
         curtailment = float(np.clip(curtailment, 0.0, 1.0))
 
         self.current_production_kW = self.available_power_kW * curtailment
@@ -140,7 +139,7 @@ class WindTurbine(Infrastructure):
 
         Three operating regimes:
         - Below cut-in: no generation
-        - Cut-in to rated: cubic ramp  P = P_rated × ((v - v_ci) / (v_r - v_ci))³
+        - Cut-in to rated: cubic ramp  P = P_rated * ((v - v_ci) / (v_r - v_ci))³
         - Rated to cut-out: full rated power
         - Above cut-out: shutdown (0 power)
 
@@ -179,17 +178,11 @@ class WindTurbine(Infrastructure):
         self.current_production_kW = 0.0
         super().reset(states, info)
 
-    def get_E(self, actions: Dict) -> tuple[float, tuple]:
-        """Get current electric energy consumption (production) from wind turbine.
-
-        Sign convention: positive = consumption, negative = production.
-        Wind turbines produce energy, so this returns a negative value.
+    
+    def get_E(self, actions: Dict) -> tuple[float, float]:
+        """Get current electric energy production, consumption from wind turbine.
         """
         return self.current_production_kW, 0.0
-
-    def get_penalisable_consumption(self, actions: Dict, states: Dict) -> float:
-        """Generation source — always exempt from energy penalty."""
-        return 0.0
 
     def get_raw_values(self) -> dict[str, float]:
         return {

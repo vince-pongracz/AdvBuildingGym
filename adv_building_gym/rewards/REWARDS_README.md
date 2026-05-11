@@ -68,8 +68,7 @@ periods do not inflate the `reward_rate` denominator.
 
 ### EconomicReward
 - **Goal**: Minimise energy cost; reward grid export (income).
-- **Formula**: `-net_power_kW * E_price / reference_power_kW`, multiplied
-  by `export_bonus` when `net_power_kW < 0` (physical export).
+- **Formula**: `-net_power_kW * E_price / reference_power_kW`.
   `reference_power_kW` resolves from `ctxt_operator_max_power_kW` when
   present, else the constructor fallback.
 - **Cap**: `np.clip(raw, -1.0, 1.0)`.

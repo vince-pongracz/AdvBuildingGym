@@ -46,7 +46,7 @@ class UserEnergyNeedReward(RewardFunction):
             shortfall = desired_energy - actual_energy
             reward = np.exp(-shortfall)
 
-        return float(self.weight * reward), self.weight * self.max_reward
+        return float(self.weight * reward), self.weight * self.max_reward_in_step
 
 
 # Register UserEnergyNeedReward with the component registry

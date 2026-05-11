@@ -27,9 +27,9 @@
 #SBATCH --nodes=1
 #SBATCH --tasks-per-node=1
 # TODO VP: set to 32, 38, 16 later -- but adapt Ray to use all possible cpu cores available
-#SBATCH --cpus-per-task=3
-#SBATCH --gres=gpu:4g.20gb:1
-#SBATCH --time=72:00:00
+#SBATCH --cpus-per-task=16
+#SBATCH --gres=gpu:2g.10gb:1 # --gres=gpu:4g.20gb:1
+#SBATCH --time=00:30:00
 # Exclude nodes with known GPU issues (add problematic nodes here)
 #SBATCH --exclude=haicn1704,haicn1711
 #SBATCH --output=slurm_logs/train/slurm-train-ray-%j.out

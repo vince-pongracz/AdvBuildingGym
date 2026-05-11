@@ -40,13 +40,14 @@ Outline:
 - Real time eval, Monte Carlo simulations of ANY above mentioned solution -- eval scripts
 - Question of reward formulation: everything depends on that...
 
-TODO VP: is there such a scenario, where during training env is allowed not to terminate, but in the eval env it must terminate?
---> yes, during eval termination is not allowed at all, so it's maybe worth switching off the termination during eval.
+NOTE VP: is there such a scenario, where during training env is allowed not to terminate, but in the eval env it must terminate?
+--> yes, during eval termination is not allowed at all, so it's maybe worth switching off the termination during eval. 
+Maybe termination is not a good idea at all... -- however it reduces wrong states in the trajectory buffer.
 
 
 - Try to eliminate most of the bad states... -- we want to optimise
 
-TODO VP: setting the gamma (discount factor) to 1.0 -- all reward from all future timesteps would have the same effect as only the next timestep... -- does this help?
+TODO VP: setting the gamma (discount factor) to 1.0 -- all reward from all future timesteps would have the same effect as only the next timestep... So it would not matter when the reward is received -- does this help?
 
 TODO VP: Multi phase rewards -- reward can't decrease between phases... how to ensure this one?
 Agents can't learn the phase change only on their own -- reward signal must be maintained, so if a goal is reached and the objective is shifting, the reward must keep up so the agent can still believe that it's on a good track and concentrate on the next goal, on the next objective... -- this one is important for curriculum learning and switching rewards on the fly
@@ -229,8 +230,8 @@ Link: https://arxiv.org/abs/2509.11452v1
 
 About LLMs and multi objective RL setup, how to align LLMs to multiple goals -- topic: dynamic reward weighting
 
-TODO VP: add a dynamic reward weight generator -- based on Dirichlet distribution
-lists rewards --> knows how many weights and for which rewards should it schedule. There is already a markdown about this.
+Dynamic reward weight generator -- based on Dirichlet distribution
+lists rewards --> knows how many weights and for which rewards should it schedule. There is already a markdown about this. It's already implemented as a reward schdedule mode.
 
 Hypervolume guided weight adaptation: by default fix weights, but somehow if hypervolume could be enlarged then the weighting is updated. The original, user-set weights are not overwritten, the original reward is multiplied with a meta-reward.
 
@@ -300,9 +301,9 @@ TODO VP: How to solve that the same model used for different infra/state configs
 --> if it's multi agent, then it's easy -- each agent outputs an action, number of agents change, but not really their state
 - What if the state sources config changes as well? -- I guess no need to overcome this
 
-TODO VP: tune discount factor of the Q values -- long term or short term optimisation
+TODO noprio VP: tune discount factor of the Q values -- long term or short term optimisation
 
-TODO VP: take out big oscillations from the battery charge discharge actions -- or at least inspect whether it happens or not
+TODO VP: take out big oscillations from the battery charge discharge actions -- or at least inspect whether it happens or not -- refactor the ActionSmoothReward that it catches automatically the last 10 actions and computes the FT and detects high frequency oscillations -- if detected, punishes, if not detected, zero reward.
 TODO VP: at ESS -- add lifetime decay/degradation in capacity or in discharge rate
 TODO VP: use the WPuQ PV production data (actions..?) along with its weather data?
 
@@ -457,10 +458,10 @@ Summary:
 --> comfort aspects are not enforced by rewards.
 - They use DQN, SARSA, Double DQN, PPO, SAC, A3C, DDPG
 
-- TODO VP: pre heating reward/behaviour when energy is cheap -- how to motivate this with reward? PreTempMaintain
+- TODO VP: pre heating/pre-cooling reward/behaviour when energy is cheap -- how to motivate this with reward? PreTempMaintain. 
 
 
-- TODO VP: Add FutureObservationCollectorConnector -- to see static future states, like weather, prices, etc... -- add it as optional connector...
+- TODO VP: Add FutureObservationCollectorConnector -- to see static future states, like weather, prices, etc... -- add it as optional connector or EnvWrapper.
 - TODO VP: Prediction model about the future state -- model based RL
 
 ##### MLFlow and Tensorboard
@@ -477,7 +478,6 @@ MLFlow:
 - MLflowLoggerCallback in ray tune, can store the final model checkpoint -- however this one is solved by the current setup as well.
 --> MLFlow does not seem to good to track Env changes, behavioural changes...
 
-
 Tensorboard:
 - For metrics -- during training and across training runs, track achieved_reward, reward_rate and episode_reward_mean
 - track policy_entropy, episode_reward_mean
@@ -488,15 +488,12 @@ Overhaul the whole reward ocosystem. A group of yaml files are responsible for t
 Another group of yamls are responsible for the weight allocation to each of the reward functions.
 The open question is the scheduling -- how are then the reward weights scheduled among all the rewards?
 
-
 Conclusion:
 - Idea: use trajectory tracking for the hard constraints -- for temperature, EV charging, etc.., and use RL based controllers for th ESS -- which can react to the changes, it can plan and follow strategy.
 - Idea: create a plan for EV charge, then track the planned trajectory -- planning can be RL based, trajectory tracking can be rule based.
 - Idea: buying and selling energy prices can differ -- data difference causes then different strategies -- one could show this as well
 - Important finding: semi deterministic training of A3C -- Eps greedy action selection: for X % select action based on policy, for the remaining select action completely random -- keeps up the exploration in later phases as well.
 - Important finding: experience replay -- replay buffer, off policy algorithms, prioritise newer trajectories from the replay buffer.
-
-TODO VP: parallelise the sampling and policy updates
 
 TODO VP: https://www.clear.kit.edu/sparkassenpreis.php -- Thesis einreichen.
 
@@ -566,8 +563,13 @@ Link: https://ieeexplore.ieee.org/document/10066193
 
 - TODO VP: Idea: potential based reward shaping -- to the actual reward: add estimation about next state, substract estimation about the actual state.
 - TODO VP: How to use expert trajectories for reward shaping -- distill reward function from expert trajectories -- inverse reinforcement learning, etc...
-- TODO VP: 4. Preference-Based Construction: Sometimes you don't have full trajectories, or the trajectories are "noisy." You can construct a reward function by having a human (expert) compare two trajectory segments and say which is better.Collect pairs of short clips of the agent's behavior.Expert Labels: The expert identifies which clip is "better."Reward Modeling: A neural network $r_\psi(s, a)$ is trained via cross-entropy loss to predict the expert's preference.RL Training: Use the learned $r_\psi$ as the reward signal for standard RL.
+- TODO VP: 4. Preference-Based Construction: Sometimes you don't have full trajectories, or the trajectories are "noisy." You can construct a reward function by having a human (expert) compare two trajectory segments and say which is better. Collect pairs of short clips of the agent's behavior.Expert Labels: The expert identifies which clip is "better."Reward Modeling: A neural network $r_\psi(s, a)$ is trained via cross-entropy loss to predict the expert's preference.RL Training: Use the learned $r_\psi$ as the reward signal for standard RL.
 
+#### Sample-Efficient Multi-Objective Learning via Generalized Policy Improvement Prioritization
+
+Link: https://arxiv.org/pdf/2301.07784
+
+MORL: set of policies with different preferences over the reward functions
 
 
 

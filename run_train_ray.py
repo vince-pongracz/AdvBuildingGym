@@ -97,7 +97,7 @@ def _trial_to_args_namespace(trial: TrialConfig) -> Namespace:
     """
     return Namespace(
         algorithm=trial.algorithm,
-        episodes=trial.episodes,
+        episodes=trial.training_param_config.max_episodes_to_run,
         seed=trial.seed,
         metric=trial.metric,
         checkpoint_frequency_episodes=trial.checkpoint_frequency_episodes,
@@ -178,6 +178,8 @@ def _build_algo_config(args, trial: TrialConfig, slurm_resources, exec_date_dt):
         log_trajectories=trial.log_trajectories,
         reward_schedule_manager=trial.reward_manager,
         infra_combinator=trial.infra_combinator,
+        statesource_combinator=trial.statesource_combinator,
+        exploration_reset=trial.exploration_reset,
         exec_date=exec_date_dt,
     )
     param_space = algo_config.to_dict()
@@ -193,27 +195,29 @@ def _checkpoint_iterations(trial: TrialConfig) -> int:
 
     train_batch_size_per_learner drives the timesteps RLlib processes per
     iteration but means different things per algorithm:
-      PPO — ppo_episodes_per_iteration × EPISODE_LENGTH (on-policy batch)
+      PPO — ppo_episodes_per_iteration * EPISODE_LENGTH (on-policy batch)
       SAC — sac_replay_batch_size (off-policy replay sample)
     """
     timesteps_per_episode = trial.env_config.EPISODE_LENGTH
+    timesteps_per_iteration = 0.0
+
     if trial.algorithm == "ppo":
-        timesteps_per_iteration = (
-            trial.training_param_config.ppo_episodes_per_iteration
-            * trial.env_config.EPISODE_LENGTH
-        )
+        timesteps_per_iteration = trial.training_param_config.ppo_episodes_per_iteration * trial.env_config.EPISODE_LENGTH
     if trial.algorithm == "sac":
         timesteps_per_iteration = trial.training_param_config.sac_replay_batch_size
-    else:
-        timesteps_per_iteration = 64 # TODO VP 2026.05.07.: Handle this.. hardcoded value is not good, but something is needed for non ppo and non sac scenarios
 
-    iters = max(1, int(
-        (trial.checkpoint_frequency_episodes * timesteps_per_episode) / timesteps_per_iteration
-    ))
+    if timesteps_per_iteration != 0.0:
+        iters = max(1, int(
+            (trial.checkpoint_frequency_episodes * timesteps_per_episode) / timesteps_per_iteration
+        ))
+    else:
+        iters = 10
+    
     logger.info(
         "Checkpoint configuration: every %d iterations (~%d episodes), metric=%s",
         iters, trial.checkpoint_frequency_episodes, trial.metric,
     )
+
     return iters
 
 
@@ -263,7 +267,7 @@ def _build_tuner(trial: TrialConfig, metric: str, param_space, run_name, storage
     """Build the ``tune.Tuner`` for the chosen algorithm."""
     stop_criteria = {
         # New API stack: lifetime episodes (1 episode = 1 day at 5-min control step).
-        "env_runners/num_episodes_lifetime": trial.episodes,
+        "env_runners/num_episodes_lifetime": trial.training_param_config.max_episodes_to_run,
     }
     progress_reporter = _build_progress_reporter(trial.algorithm)
 

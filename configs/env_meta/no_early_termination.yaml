@@ -1,6 +1,0 @@
-# Soft variant of default.yaml: episodes run to the natural horizon and
-# rewards skip their terminal-only branches (huge penalties, success
-# bonuses), keeping only the regular reward/penalty curves.
-EPISODE_LENGTH: 288       # 288 = one day at 5-min steps
-control_step: 300         # seconds
-allow_early_termination: false

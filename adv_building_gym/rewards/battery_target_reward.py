@@ -74,7 +74,7 @@ class BatteryTargetReward(RewardFunction):
             # reward = self.max_penalty * (breach ** 2)
             reward = -1.0
 
-        return self.weight * reward, self.weight * self.max_reward
+        return self.weight * reward, self.weight * self.max_reward_in_step
 
 
 ComponentRegistry.register('reward', BatteryTargetReward)

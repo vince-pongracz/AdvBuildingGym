@@ -18,7 +18,7 @@ class EnvConfig(LoggableConfig):
 
     Components are always declared in YAML (``configs/infra_cfgs/**/*.yaml`` and
     ``configs/statesource_cfgs/*.yaml``) and reach this dataclass via
-    ``EnvConfigManager.load(...)``, which populates ``infra_specs`` and
+    ``EnvConfigManager.from_dict(...)``, which populates ``infra_specs`` and
     ``statesource_specs`` (the raw component dicts).  The factory methods
     ``create_infras`` / ``create_statesources`` deserialise those specs into
     fresh component instances per call.

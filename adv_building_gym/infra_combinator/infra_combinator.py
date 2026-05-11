@@ -128,27 +128,32 @@ class InfraCombinator:
     # ------------------------------------------------------------------
 
     @classmethod
-    def from_yaml(cls, path: str | Path, control_step: int) -> "InfraCombinator":
-        """Load an infra schedule from a YAML config file.
+    def from_dict(cls, raw: dict, control_step: int) -> "InfraCombinator":
+        """Build a combinator from an inlined schedule dict.
 
-        Expected format::
+        Expected layout::
 
             mode: cycle
             swap_every_n_iterations: 300
             configs:
-            - configs/infra_cfgs/test1_small.yaml
-            - configs/infra_cfgs/test1_mid.yaml
+              - configs/infra_cfgs/test1_small.yaml
+              - configs/infra_cfgs/test1_mid.yaml
         """
-        path = Path(path)
-        if not path.exists():
-            raise FileNotFoundError(f"InfraCombinator schedule file not found: {path}")
-
-        with open(path) as f:
-            raw = yaml.safe_load(f) or {}
-
+        if not raw:
+            raise ValueError("InfraCombinator: empty schedule dict")
         return cls(
-            config_paths=raw.get("configs", []),
+            config_paths=list(raw.get("configs", [])),
             control_step=control_step,
             swap_every_n_iterations=raw.get("swap_every_n_iterations", 300),
             mode=raw.get("mode", "cycle"),
         )
+
+    @classmethod
+    def from_yaml(cls, path: str | Path, control_step: int) -> "InfraCombinator":
+        """Load an infra schedule from a YAML config file (thin wrapper)."""
+        path = Path(path)
+        if not path.exists():
+            raise FileNotFoundError(f"InfraCombinator schedule file not found: {path}")
+        with open(path) as f:
+            raw = yaml.safe_load(f) or {}
+        return cls.from_dict(raw, control_step)

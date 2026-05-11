@@ -95,7 +95,7 @@ class TempReward(RewardFunction):
         diff_celsius = diff_norm * temp_abs_max
         allow_term = info.get("allow_early_termination", True) if info is not None else True
         if allow_term and diff_celsius > self.terminate_diff_celsius:
-            return self.weight * self.terminate_penalty, self.weight * self.max_reward
+            return self.weight * self.terminate_penalty, self.weight * self.max_reward_in_step
 
         zero_norm = self.zero_reward_diff_celsius / temp_abs_max if temp_abs_max != 0 else 0.0
 
@@ -122,7 +122,7 @@ class TempReward(RewardFunction):
             if wrong:
                 reward += self.wrong_direction_penalty * energy * abs(temp_error)
 
-        return self.weight * min(reward, 1.0), self.weight * self.max_reward
+        return self.weight * min(reward, 1.0), self.weight * self.max_reward_in_step
 
 
 # Register TempReward with the component registry

@@ -4,4 +4,4 @@
 
 ## Use multiple env_configs with a changing set of reward config
 
-TODO VP: how to reset exploration if new reward set learnt? -- how to shift reward set gradually? --> Maintain 3 active rewards always, change at each reward swap only a single one.
+Exploration reset is resolved in exploration_reset.py

@@ -22,9 +22,12 @@ class RawStateCollector:
         infras: Iterable[Infrastructure],
         state: Dict[str, np.ndarray],
     ) -> Dict[str, float]:
+        
         raw: Dict[str, float] = {}
-        for src in list(statesources) + list(infras):
+        for src in statesources:
             raw.update(src.get_raw_values())
+        for ifs in infras:
+            raw.update(ifs.get_raw_values())
 
         # ctxt_temp_abs_max is published into ``state`` by WeatherDataSource each
         # step — read from state rather than caching so the scale factor stays

@@ -26,6 +26,8 @@ infras:
 - class: SolarPanel
   name: solar
   max_power_kW: 15.0
+  pv_efficiency: 0.22
+  panel_area_m2: 170
 - class: HouseholdEnergyConsumers
   name: hh_consumers
   peak_consumption_kW: 8.0

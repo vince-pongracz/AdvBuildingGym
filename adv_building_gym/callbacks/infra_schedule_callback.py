@@ -13,29 +13,31 @@ to ``config.callbacks(ExistingClass, on_train_result=func)``.
 
 import logging
 
+from adv_building_gym.callbacks._exploration_reset_util import make_decay_loop
+from adv_building_gym.config.exploration_reset import ExplorationResetConfig
 from adv_building_gym.infra_combinator import InfraCombinator
 
 logger = logging.getLogger(__name__)
 
 
-def create_infra_schedule_on_train_result_cb(infra_combinator: InfraCombinator):
-    """Factory that returns an ``on_train_result`` callable.
-
-    Args:
-        infra_combinator: InfraCombinator instance that defines the
-            config pool and swap schedule.
-    """
+def create_infra_schedule_on_train_result_cb(
+    infra_combinator: InfraCombinator,
+    exploration_reset: ExplorationResetConfig | None = None,
+):
+    """Factory that returns an ``on_train_result`` callable."""
+    expl_cfg = exploration_reset or ExplorationResetConfig()
+    _state, maybe_decay, fire_bump = make_decay_loop(expl_cfg, "on_infra_swap")
 
     def on_train_result(*, algorithm, result: dict, **kwargs) -> None:
         iteration: int = result.get("training_iteration", 0)
+        maybe_decay(algorithm, iteration)
         if iteration % infra_combinator.swap_every_n_iterations != 0:
             return
-
         changed = infra_combinator.advance()
         if not changed:
             return
-
         _push_infras_to_runners(algorithm, infra_combinator)
+        fire_bump(algorithm, iteration)
 
     return on_train_result
 
@@ -64,13 +66,9 @@ def _push_infras_to_runners(
                 new_infras = infra_combinator.create_infras(swap_index)
                 unwrapped.set_infras(new_infras)
 
-    algorithm.env_runner_group.foreach_env_runner(
-        apply, local_env_runner=True, timeout_seconds=None,
-    )
+    algorithm.env_runner_group.foreach_env_runner(apply, local_env_runner=True, timeout_seconds=None)
     if algorithm.eval_env_runner_group is not None:
-        algorithm.eval_env_runner_group.foreach_env_runner(
-            apply, local_env_runner=True, timeout_seconds=None,
-        )
+        algorithm.eval_env_runner_group.foreach_env_runner(apply, local_env_runner=True, timeout_seconds=None)
 
     logger.info(
         "Iteration %d: all env_runners switched to infra config '%s' "

@@ -25,10 +25,15 @@ from adv_building_gym.callbacks import (
     make_eval_state_action_cb_class,
     make_trajectory_logging_cb_class,
 )
+from adv_building_gym.callbacks.statesource_schedule_callback import (
+    create_statesource_schedule_on_train_result_cb,
+)
+from adv_building_gym.config.exploration_reset import ExplorationResetConfig
 from adv_building_gym.config.reward_schedule_manager import RewardScheduleManager, RewardScheduleMode
 from adv_building_gym.config.training_param_config import TrainingParamConfig
 from adv_building_gym.data_combinator import DataCombinator
 from adv_building_gym.infra_combinator import InfraCombinator
+from adv_building_gym.statesource_combinator import StatesourceCombinator
 from adv_building_gym.utils import ResourceAllocation, SlurmResources, validate_resource_allocation
 
 logger = logging.getLogger(__name__)
@@ -54,6 +59,8 @@ def register_callbacks(
     log_trajectories: bool = False,
     reward_schedule_manager: RewardScheduleManager | None = None,
     infra_combinator: InfraCombinator | None = None,
+    statesource_combinator: StatesourceCombinator | None = None,
+    exploration_reset: ExplorationResetConfig | None = None,
     exec_date: datetime.datetime | None = None,
 ) -> None:
     """Register episode-metric, trajectory, and scheduling callbacks on *config*.
@@ -117,26 +124,41 @@ def register_callbacks(
     if (reward_schedule_manager is not None
             and reward_schedule_manager.mode is not RewardScheduleMode.OFF):
         on_train_result_fns.append(
-            create_reward_switch_on_train_result_cb(reward_schedule_manager),
+            create_reward_switch_on_train_result_cb(
+                reward_schedule_manager, exploration_reset=exploration_reset,
+            ),
         )
         logger.info(
-            "RewardSwitchCallback: mode=%s, swap every %d iterations, "
-            "active rewards: %s",
+            "RewardSwitchCallback: mode=%s, swap every %d episodes, active rewards: %s",
             reward_schedule_manager.mode,
-            reward_schedule_manager.swap_every_n_iterations,
+            reward_schedule_manager.swap_every_n_episodes,
             reward_schedule_manager.get_active_reward_names(),
         )
 
     if infra_combinator is not None and infra_combinator.is_enabled():
         on_train_result_fns.append(
-            create_infra_schedule_on_train_result_cb(infra_combinator),
+            create_infra_schedule_on_train_result_cb(
+                infra_combinator, exploration_reset=exploration_reset,
+            ),
         )
         logger.info(
-            "InfraScheduleCallback: mode=%s, swap every %d iterations, "
-            "%d configs in pool",
+            "InfraScheduleCallback: mode=%s, swap every %d iterations, %d configs in pool",
             infra_combinator.mode,
             infra_combinator.swap_every_n_iterations,
             len(infra_combinator.config_paths),
+        )
+
+    if statesource_combinator is not None and statesource_combinator.is_enabled():
+        on_train_result_fns.append(
+            create_statesource_schedule_on_train_result_cb(
+                statesource_combinator, exploration_reset=exploration_reset,
+            ),
+        )
+        logger.info(
+            "StatesourceScheduleCallback: mode=%s, swap every %d iterations, %d configs in pool",
+            statesource_combinator.mode,
+            statesource_combinator.swap_every_n_iterations,
+            len(statesource_combinator.config_paths),
         )
 
     callback_kwargs = {
@@ -158,6 +180,8 @@ def common_model_setup(
     log_trajectories: bool = False,
     reward_schedule_manager: RewardScheduleManager | None = None,
     infra_combinator: InfraCombinator | None = None,
+    statesource_combinator: StatesourceCombinator | None = None,
+    exploration_reset: ExplorationResetConfig | None = None,
     exec_date: datetime.datetime | None = None,
 ):
     """
@@ -246,11 +270,11 @@ def common_model_setup(
         tf_session_args={},
         local_tf_session_args={},
     )
-    config.log_gradients = False # TODO VP 2026.05.06.: What is the default?
+    config.log_gradients = False # RLlib default: False
     # NOTE VP 2026.01.08. : about ray and rllib concept https://docs.ray.io/en/latest/rllib/key-concepts.html
     # Learning the NN, policy (gradient updates) -- needs GPU
     config.learners(
-        num_learners=num_learners,
+        num_learners=0,
         num_gpus_per_learner=num_gpus_per_learner,
         num_cpus_per_learner=num_cpus_per_learner,
     )
@@ -327,6 +351,8 @@ def common_model_setup(
         log_trajectories=log_trajectories,
         reward_schedule_manager=reward_schedule_manager,
         infra_combinator=infra_combinator,
+        statesource_combinator=statesource_combinator,
+        exploration_reset=exploration_reset,
         exec_date=exec_date,
     )
 

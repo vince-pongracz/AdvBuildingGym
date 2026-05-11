@@ -92,8 +92,8 @@ class OperatorEnergyControlReward(RewardFunction):
         operator_limit_kW = float(ctxt[0])
         if operator_limit_kW <= 0:
             return None
-        grid_power_kW = float(info.get("net_power_kW", 0.0))
-        return grid_power_kW / operator_limit_kW
+        net_power_kW = float(info.get("net_power_kW", 0.0))
+        return net_power_kW / operator_limit_kW
 
     def should_terminate(self, actions, states, info: dict | None = None) -> bool:
         if info is None:
@@ -115,11 +115,9 @@ class OperatorEnergyControlReward(RewardFunction):
 
     def get_reward(self, actions, states, info: dict | None = None) -> tuple[float, float]:
         """Calculate reward based on grid power consumption vs operator limit."""
-        max_step = self.weight * self.max_reward
-
         if info is None:
             logger.warning("OperatorEnergyControlReward: info dict is None, returning 0")
-            return 0.0, max_step
+            return 0.0, (self.weight * self.max_reward_in_step)
 
         # Read and advance per-episode step counter from info dict.
         # Resets to 0 at episode start because _component_info is cleared.
@@ -129,47 +127,38 @@ class OperatorEnergyControlReward(RewardFunction):
 
         ratio = self._compute_ratio(states, info)
 
-        # No usable operator limit: degenerate to "any consumption is bad".
+        # No usable operator limit -- skip this reward, don't know what to punish
         if ratio is None:
-            grid_power_kW = float(info.get("net_power_kW", 0.0))
-            if grid_power_kW > 0:
-                info[_LAST_VIOLATION_KEY] = step
-                return float(self.weight * self.harsh_penalty), max_step
-            return float(self.weight * 1.0), max_step
+            logger.error("E usage ratio can't be computed")
+            return 0.0, 0.0
 
-        allow_term = info.get("allow_early_termination", True)
+        allow_term = info.get("allow_early_termination", False)
         if allow_term and ratio > self.terminate_threshold_pct:
             # should_terminate already voted to end the episode in Phase 1;
             # emit the configured terminal penalty here.  When early
             # termination is disabled, we fall through to the regular
             # over-limit branch (harsh_penalty + recovery) below.
-            return float(self.weight * self.terminate_penalty), max_step
+            return float(self.weight * self.terminate_penalty), (self.weight * self.max_reward_in_step)
 
-        if ratio <= self.soft_threshold_pct:
-            # Below soft threshold: full reward
-            reward = 1.0
-        elif ratio <= 1.0:
-            # Transition zone: exponential decay from 1.0 towards 0
-            # At soft_threshold_pct: t=0 -> exp(0) = 1.0
-            # At 1.0:               t=1 -> exp(-5) ~ 0.007
+        if self.soft_threshold_pct < ratio <= 1.0:
+            # Transition zone: exponential decay from 0.0 towards -1.0
             t = (ratio - self.soft_threshold_pct) / (1.0 - self.soft_threshold_pct)
-            reward = float(np.exp(-self._DECAY_SCALE * t))
+            reward = float(np.exp(-self._DECAY_SCALE * t)) - 1.0
         else:
             # Between operator limit and terminate threshold: harsh penalty
             # and mark violation so the recovery zone applies on subsequent
             # steps.
             info[_LAST_VIOLATION_KEY] = step
-            return float(self.weight * self.harsh_penalty), max_step
+            return float(self.weight * self.harsh_penalty), (self.weight * self.max_reward_in_step)
 
         # During recovery: override reward with an exponential curve from
         # harsh_penalty towards 0.  The agent earns a negative (but shrinking)
         # reward for recovery_steps steps, then normal rewarding resumes.
         steps_since_violation = step - last_violation_step
         if steps_since_violation <= self.recovery_steps:
-            reward = float(self.harsh_penalty * np.exp(
-                -self._recovery_rate * steps_since_violation))
+            reward = float(self.harsh_penalty * np.exp(-self._recovery_rate * steps_since_violation))
 
-        return float(self.weight * reward), max_step
+        return float(self.weight * reward), (self.weight * self.max_reward_in_step)
 
 
 # Register OperatorEnergyControlReward with the component registry

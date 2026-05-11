@@ -1,36 +1,134 @@
-# Example trial config — single source of truth for one training/eval run.
-# Pass to run_train_ray.py / run_eval_ray.py via:
-#     python run_train_ray.py --trial configs/trial_cfgs/trial_cfg_1.yaml
-
-trial_name: trial_1_sac_battery_only
-
-# --- algorithm & run control ---
-algorithm: sac                 # ppo | sac
-episodes: 3500                 # overrides training_params.max_episodes_to_run
-seed: 42                       # overrides training_params.seed
-metric: episode_return_mean    # reward_rate | achieved_reward | episode_return_mean
+trial_name: sta_lin_battery_only_eval
+algorithm: sac
+seed: 42
+metric: episode_return_mean
 checkpoint_frequency_episodes: 20
-log_trajectories: false
+log_trajectories: true
 num_envs: 1
-grad_train: false              # if true, the reward schedule mode is honoured;
-                               # otherwise mode is forced to OFF (all rewards live)
+grad_train: false
 
-# --- env topology (replaces the old configs/env/*.yaml wrapper) ---
-env_meta:      configs/env_meta/default.yaml
-infras:        configs/infra_cfgs/STA/lin_battery_only.yaml
-statesources:  configs/statesource_cfgs/default.yaml
-rewards:       configs/reward_cfgs/STA/rewards_battery_focus.yaml
+env_meta:
+  EPISODE_LENGTH: 288
+  control_step: 300
+  allow_early_termination: false
 
-# --- training params + schedules ---
-training_params: configs/training_param_cfgs/default.yaml
-data_schedule:   configs/schedules/data/eval.yaml
-# TODO VP 2026.05.07.: Maybe wort breaking down the data_schedule into train and eval 
-# here in the config, so the script can pick up the eval setup already
+training_params:
+  common:
+    learning_rate: 0.0003
+    episode_lookback_horizon_steps: 120
+    max_episodes_to_run: 50
+    clip_actions_to_env_bounds: true
+  ppo:
+    episodes_per_iteration: 10
+    minibatch_size: 64
+    num_epochs: 20
+  sac:
+    episodes_to_keep_in_replay_buffer: 500
+    n_step_return: 6
+    learning_starts_after_n_episodes: 50
+  hst:
+    offsets:
+    - -1
+    - -2
+    - -3
+    - -4
+    - -6
+    - -12
+    - -18
+    - -24
+    - -36
+    - -48
+    - -60
+    - -72
+    - -84
+    - -96
+    - -108
+    - -120
+    - -132
+    - -144
+    tracked_keys:
+    - s_battery_pct
+    - s_ev_soc
+    - s_temp_in_norm
+    - s_temp_out_norm
+    - s_solar_irradiance_norm
+    - a_hp_prev
+    - a_battery_prev
+statesources:
+- class: EnergyPriceDataSource
+  name: E_price
+  normalise: abs_min_max
+- class: WeatherDataSource
+  name: weather
+  normalise: abs_min_max
+- class: InsideTemperature
+  name: desired_temp_in
+- class: DesiredUserEnergyNeed
+  name: user_energy_need
+- class: BuildingHeatLoss
+  name: building_heat_loss
+  K: 20
+  mC: 300
+- class: EVState
+  name: ev_schedule
+- class: OperatorEnergyControl
+  name: operator_energy_control
+  max_power_kW: 20.0
+
+infras:
+- class: BatteryLinear
+  name: battery
+  max_power_kW: 10.0
+  max_cap_kWh: 15.0
+  start_soc_percentage: 0.3
+  history_length: 4
+  soc_min: 0.1
+  soc_max: 0.95
+- class: SolarPanel
+  name: solar
+  max_power_kW: 5.0
+  pv_efficiency: 0.22
+  panel_area_m2: 50
+- class: WindTurbine
+  name: wind_turbine
+  max_power_kW: 5.0
+  rated_power_kW: 5.0
+  cut_in_speed: 3.0
+  rated_speed: 12.0
+  cut_out_speed: 25.0
+- class: HouseholdEnergyConsumers
+  name: hh_consumers
+  peak_consumption_kW: 8.0
+
+rewards:
+- class_name: BatteryTargetReward
+  weight: 1.0
+  params:
+    min_pct: 0.15
+    max_pct: 0.85
+- class_name: BatteryMgmtReward
+  weight: 1.0
+  params:
+    scale: 0.5
+- class_name: LongTermEconomicReward
+  weight: 1.0
+  params: {}
+
+infra_schedule: null
+
+statesource_schedule: null
+
 reward_schedule: null
-infra_schedule:  null            # or configs/schedules/infra/train.yaml
 
-# --- optional inline overrides (deep-merged onto referenced YAMLs) ---
-# overrides:
-#   training_params:
-#     common: { learning_rate: 1.0e-4 }
-#     ppo:    { minibatch_size: 128 }
+data_schedule:
+  train: configs/schedules/data/eval.yaml
+  eval: configs/schedules/data/eval.yaml
+
+exploration_reset:
+  enabled: false
+  trigger: on_reward_swap
+  ppo_entropy_coeff: 0.05
+  ppo_entropy_baseline: 0.0
+  sac_alpha: 0.5
+  decay_iterations: 50
+  lr_multiplier: 1.5

@@ -74,7 +74,7 @@ class EVChargingOnTimeReward(RewardFunction):
             logger.warning("EVChargingOnTimeReward: info dict is None, returning 0")
             return 0.0, 0.0
 
-        max_step = self.weight * self.max_reward
+        max_step = self.weight * self.max_reward_in_step
         current_soc = states["s_ev_soc"][0]
         target_soc = states["s_ev_target_soc"][0]
 

@@ -103,7 +103,7 @@ def select_model(
             # SAC-specific hyperparameters
             twin_q=True,  # Use twin Q-networks to reduce overestimation bias. RLlib default
             initial_alpha=1.0,  # Initial entropy coefficient (auto-tuned via alpha_lr). RLlib default
-            target_network_update_freq=1,  # Update target networks every step. RLlib default: 0
+            # target_network_update_freq=1,  # Update target networks every step. RLlib default: 0
             n_step=training_config.sac_n_step_return,  # RLlib default: 1
             tau=0.005,  # Soft update coefficient for target networks (at Polyak averaging). RLlib default
             train_batch_size_per_learner=training_config.sac_replay_batch_size,  # RLlib default: 256

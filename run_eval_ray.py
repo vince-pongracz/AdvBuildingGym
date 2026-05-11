@@ -86,7 +86,7 @@ def main() -> None:
 
     # Eval may run with or without a data schedule.  For reward_schedule we
     # require it (the trial must declare which rewards to evaluate against).
-    trial = TrialConfig.load(args.trial, require_data_schedule=False)
+    trial = TrialConfig.load(args.trial, require_data_schedule=False, is_training=False)
 
     seed = trial.seed
     RngService.initialize(seed)

@@ -1,39 +1,31 @@
 """Stateful reward schedule manager.
 
-Loads a reward schedule YAML config, tracks the current position in the
-schedule, and creates reward subsets based on the active mode.
+A trial declares the **reward pool** (``trial.rewards``) and an optional
+inlined **reward schedule** (``trial.reward_schedule``).  The schedule
+selects/orders/weights members of the pool over training episodes.
 
-Modes:
-    off          — All rewards active from the start, no swapping.
-    gradual_add  — Start with the first reward, add the next one every
-                   swap cycle.  Once all are added they stay active.
-    random       — Maintain a stable active set of ``random_active_count``
-                   rewards.  Each swap, ``random_swap_count`` currently
-                   active rewards are swapped out for the same number of
-                   currently inactive rewards.  The active-set size stays
-                   constant (so at least N rewards are always live).
+Modes (see ``configs/schedules/reward/README.md``):
 
-Usage::
-
-    manager = RewardScheduleManager.load(
-        "configs/reward_cfgs/rewards.yaml",
-        "configs/schedules/reward/train.yaml",
-    )
-    rewards = manager.create_active_rewards()   # initial set
-    manager.advance()                           # next swap
-    rewards = manager.create_active_rewards()   # updated set
+* ``off``         — entire pool active, no swapping.
+* ``fix``         — only ``on_rewards`` active for the whole run.
+* ``gradual_add`` — start with the first ``reward_order`` entry, add the
+                    next every swap.  Composite entries add all their
+                    members at once.
+* ``random``      — keep ``random_active_count`` active; each swap exchange
+                    ``random_swap_count`` active for inactive.
+* ``dirichlet``   — fixed active set (``on_rewards``); resample weights
+                    every swap from a Dirichlet distribution with optional
+                    rejection sampling against per-reward ``w_low`` floors.
 """
 
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+import math
 from enum import Enum
-from pathlib import Path
 from typing import Any
 
 import numpy as np
-import yaml
 
 from adv_building_gym.utils.serializable import ComponentRegistry
 
@@ -41,341 +33,362 @@ logger = logging.getLogger(__name__)
 
 
 class RewardScheduleMode(Enum):
-    """Available reward schedule modes."""
-
     OFF = "off"
-    GRADUAL_ADD = "gradual_add"
+    FIX = "fix"
+    GRAD_ADD = "gradual_add"
     RANDOM = "random"
+    DIRICHLET = "dirichlet"
 
 
-@dataclass
-class ExplorationBumpConfig:
-    """Exploration kick on reward swap (event-driven dynamic callback).
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
-    On every reward set change, push exploration up so the policy re-tests
-    the action space under the new objective, then linearly decay back to
-    baseline over ``decay_iterations`` iterations.
 
-    PPO   → bump ``entropy_coeff`` (read fresh each loss step).
-    SAC   → force ``log_alpha`` to ``log(sac_alpha)``; ``alpha_lr`` will
-            pull it back down toward target entropy on its own, but the
-            decay still applies as an upper envelope.
-    Both  → multiply optimiser LRs by ``lr_multiplier`` so the critic /
-            value head can recalibrate to the shifted reward landscape.
+def _entry_name(entry: dict[str, Any]) -> str:
+    """Return the reward class_name an entry refers to."""
+    if "name" in entry:
+        return entry["name"]
+    if "class_name" in entry:
+        return entry["class_name"]
+    raise ValueError(f"Schedule entry missing 'name'/'class_name': {entry}")
+
+
+def _entry_weight_override(entry: dict[str, Any]) -> float | None:
+    """Return ``w_override`` (or legacy ``w``) when present, else None."""
+    if "w_override" in entry and entry["w_override"] is not None:
+        return float(entry["w_override"])
+    if "w" in entry and entry["w"] is not None:
+        return float(entry["w"])
+    return None
+
+
+def _spec_by_name(pool: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    return {s["class_name"]: s for s in pool}
+
+
+def _filter_pool_by_entries(
+    rewards_pool: list[dict[str, Any]],
+    reward_selector_entries: list[dict[str, Any]],
+    *,
+    field_label: str,
+) -> list[dict[str, Any]]:
+    """Project the pool down to *entries*, applying ``w_override`` per entry.
+
+    Keeps the order in which ``entries`` are listed.  Raises if an entry
+    references a name absent from the pool.
     """
+    by_name = _spec_by_name(rewards_pool)
+    filtered: list[dict[str, Any]] = []
+    for entry in reward_selector_entries:
+        reward_name = _entry_name(entry)
+        if reward_name not in by_name:
+            raise ValueError(
+                f"reward_schedule.{field_label} references unknown reward "
+                f"'{reward_name}' (not in trial 'rewards' pool)"
+            )
+        spec = by_name[reward_name]
+        w = _entry_weight_override(entry)
+        filtered.append({**spec, "weight": w if w is not None else spec["weight"]})
+    return filtered
 
-    enabled: bool = False
-    ppo_entropy_coeff: float = 0.05
-    ppo_entropy_baseline: float = 0.0
-    sac_alpha: float = 0.5
-    decay_iterations: int = 25
-    lr_multiplier: float = 1.0
 
-    @staticmethod
-    def from_dict(cfg_raw: dict | None) -> "ExplorationBumpConfig":
-        if not cfg_raw:
-            # Return the default config
-            return ExplorationBumpConfig()
-        cfg = ExplorationBumpConfig(
-            enabled=bool(cfg_raw.get("enabled", False)),
-            ppo_entropy_coeff=float(cfg_raw.get("ppo_entropy_coeff", 0.05)),
-            ppo_entropy_baseline=float(cfg_raw.get("ppo_entropy_baseline", 0.0)),
-            sac_alpha=float(cfg_raw.get("sac_alpha", 0.5)),
-            decay_iterations=int(cfg_raw.get("decay_iterations", 25)),
-            lr_multiplier=float(cfg_raw.get("lr_multiplier", 1.0)),
-        )
-
-        if cfg.decay_iterations < 1:
-            raise ValueError(f"exploration_bump.decay_iterations must be >= 1, got {cfg.decay_iterations}")
-        if cfg.sac_alpha <= 0:
-            raise ValueError(f"exploration_bump.sac_alpha must be > 0, got {cfg.sac_alpha}")
-        if cfg.lr_multiplier <= 0:
-            raise ValueError(f"exploration_bump.lr_multiplier must be > 0, got {cfg.lr_multiplier}")
-        return cfg
+# ---------------------------------------------------------------------------
+# Manager
+# ---------------------------------------------------------------------------
 
 
 class RewardScheduleManager:
     """Stateful reward schedule service.
 
-    Loads a reward schedule YAML, tracks swap position, and creates
-    reward subsets based on mode.
+    Driver-process only — ``advance`` / ``create_active_rewards`` are
+    invoked from the ``on_train_result`` callback so there is no
+    concurrency concern.
 
-    The ``advance()`` / ``create_active_rewards()`` methods are called
-    from the driver process (``on_train_result`` callback) so there is
-    no concurrency concern.
-
-    **SAC replay buffer caveat**: After a reward swap, old transitions in
-    the replay buffer carry rewards computed by the *previous* reward set.
-    This inconsistency is accepted — old rewards wash out as new
-    transitions fill the buffer.  Keep ``swap_every_n_iterations`` large
-    relative to the replay buffer turnover to minimise impact.
+    SAC replay-buffer caveat: after a reward swap, old transitions in the
+    buffer carry rewards from the previous reward set.  Keep
+    ``swap_every_n_episodes`` large relative to buffer turnover.
     """
+    # TODO VP 2026.05.11.: Flush half of the buffer?
 
     def __init__(
         self,
         mode: RewardScheduleMode,
-        swap_every_n_iterations: int,
+        swap_every_n_episodes: int,
         seed: int,
         reward_specs: list[dict[str, Any]],
+        *,
+        # GRAD_ADD
+        grad_add_groups: list[list[dict[str, Any]]] | None = None,
+        # RANDOM
         random_active_count: int | None = None,
         random_swap_count: int = 1,
-        exploration_bump: ExplorationBumpConfig | None = None,
+        # DIRICHLET
+        dirichlet_w_low: dict[str, float] | None = None,
+        dirichlet_rejection_sampling: bool = True,
+        dirichlet_uniform_start: bool = True,
+        first_swap_after_n_episodes: int | None = None,
     ) -> None:
-        if not reward_specs:
+        if not reward_specs and mode is not RewardScheduleMode.GRAD_ADD:
             raise ValueError("reward_specs must contain at least one entry")
+        if mode is RewardScheduleMode.GRAD_ADD and not grad_add_groups:
+            raise ValueError("GRAD_ADD requires non-empty 'reward_order'")
 
-        n = len(reward_specs)
         self.mode = mode
-        self.swap_every_n_iterations = max(1, swap_every_n_iterations)
+        self.swap_every_n_episodes = max(1, int(swap_every_n_episodes))
         self._reward_specs = reward_specs
         self._rng = np.random.default_rng(seed)
         self._swap_index: int = 0
+        self.first_swap_after_n_episodes = first_swap_after_n_episodes
 
-        # RANDOM-mode parameters: keep a stable active set and swap a fraction
-        # of it on each cycle.
-        if random_active_count is None:
-            random_active_count = max(1, (n + 1) // 2)
-        if not 1 <= random_active_count <= n:
-            raise ValueError(
-                f"random_active_count must be in [1, {n}], got {random_active_count}"
-            )
-        max_swap = min(random_active_count, n - random_active_count)
-        if random_swap_count < 0:
-            raise ValueError(
-                f"random_swap_count must be >= 0, got {random_swap_count}"
-            )
-        if random_swap_count > max_swap and mode is RewardScheduleMode.RANDOM:
-            logger.warning(
-                "random_swap_count=%d clamped to %d (active=%d, total=%d)",
-                random_swap_count, max_swap, random_active_count, n,
-            )
-        self.random_active_count = random_active_count
-        self.random_swap_count = max(0, min(random_swap_count, max_swap))
+        # GRAD_ADD bookkeeping
+        self._grad_add_groups = grad_add_groups or []
+
+        # RANDOM bookkeeping
+        n = len(reward_specs)
+        if mode is RewardScheduleMode.RANDOM:
+            if random_active_count is None:
+                random_active_count = max(1, (n + 1) // 2)
+            if not 1 <= random_active_count <= n:
+                raise ValueError(f"random_active_count must be in [1, {n}], got {random_active_count}")
+            max_swap = min(random_active_count, n - random_active_count)
+            if random_swap_count < 0:
+                raise ValueError(f"random_swap_count must be >= 0, got {random_swap_count}")
+            if random_swap_count > max_swap:
+                logger.warning(
+                    "random_swap_count=%d clamped to %d (active=%d, total=%d)",
+                    random_swap_count, max_swap, random_active_count, n,
+                )
+            self.random_active_count = random_active_count
+            self.random_swap_count = max(0, min(random_swap_count, max_swap))
+        else:
+            self.random_active_count = random_active_count or 0
+            self.random_swap_count = random_swap_count
         self._random_active_indices: list[int] | None = None
 
-        # Cached active specs — ensures RNG-dependent modes (RANDOM) produce
-        # a consistent selection between get_active_reward_names() and
-        # create_active_rewards() within the same swap step.
-        self._active_specs_cache: list[dict[str, Any]] | None = None
+        # DIRICHLET bookkeeping
+        self._dir_w_low = dirichlet_w_low or {}
+        self._dir_rejection = bool(dirichlet_rejection_sampling)
+        self._dir_uniform_start = bool(dirichlet_uniform_start)
+        # Per-swap weights override; populated lazily.
+        self._dir_weights: list[float] | None = None
 
-        self.exploration_bump = exploration_bump or ExplorationBumpConfig()
+        # Cached active specs invalidated on advance()
+        self._active_specs_cache: list[dict[str, Any]] | None = None
 
     # ------------------------------------------------------------------
     # Factory
     # ------------------------------------------------------------------
 
     @staticmethod
-    def load(
-        rewards_path: str | Path,
-        schedule_path: str | Path | None = None,
-        default_seed: int | None = None,
-    ) -> RewardScheduleManager:
-        """Build a RewardScheduleManager from a rewards YAML and an optional schedule YAML.
-
-        The two concerns are split:
-
-        * ``rewards_path`` (required) — *which* rewards exist
-          (``configs/reward_cfgs/<name>.yaml``).
-        * ``schedule_path`` (optional) — *how* those rewards are scheduled
-          across training (``configs/schedules/reward/<name>.yaml``).
-          When omitted, mode is ``OFF`` (all rewards live from the start).
-
-        Seed resolution: if the schedule YAML defines ``seed`` it wins; else
-        ``default_seed`` is used.  Without a schedule, ``default_seed`` is
-        used directly (RANDOM mode is not reachable in this case so this
-        seed is essentially unused).
+    def from_dict(
+        rewards: list[dict[str, Any]],
+        reward_sch_cfg: dict[str, Any] | None,
+        default_seed: int | None,
+    ) -> "RewardScheduleManager":
+        """Build a manager from the trial's reward pool + inlined schedule.
 
         Args:
-            rewards_path: Repo-relative path to the rewards definition YAML.
-            schedule_path: Repo-relative path to the scheduling YAML.
-            default_seed: Fallback seed when the schedule omits ``seed``.
+            rewards: trial.rewards — list of {class_name, weight, params}.
+            reward_sch_cfg: trial.reward_schedule (None ⇒ mode=off).
+            default_seed: fallback seed when the schedule omits one.
         """
-        rewards_path = Path(rewards_path)
-        if not rewards_path.exists():
-            raise FileNotFoundError(f"Rewards YAML not found: {rewards_path}")
+        if not rewards:
+            raise ValueError("Trial 'rewards' pool is empty")
 
-        with open(rewards_path, "r") as reward_cfg_file:
-            rewards_cfg = yaml.safe_load(reward_cfg_file) or {}
-        if "rewards" not in rewards_cfg:
-            raise ValueError(
-                f"Rewards YAML {rewards_path.name} must contain a top-level "
-                f"'rewards:' list of {{class_name, weight, params}} entries"
-            )
-        reward_specs: list[dict[str, Any]] = [
-            {
-                "class_name": entry["class_name"],
-                "weight": entry["weight"],
-                "params": entry.get("params", {}),
-            }
-            for entry in rewards_cfg["rewards"]
-        ]
+        cfg = reward_sch_cfg or {"mode": "off"}
+        mode = RewardScheduleMode(cfg.get("mode", "off"))
 
-        if schedule_path is not None:
-            schedule_path = Path(schedule_path)
-            if not schedule_path.exists():
-                raise FileNotFoundError(
-                    f"Reward schedule YAML not found: {schedule_path}"
-                )
-            with open(schedule_path, "r") as f:
-                cfg = yaml.safe_load(f) or {}
-            if "mode" not in cfg:
-                raise ValueError(
-                    f"Reward schedule YAML {schedule_path.name} must declare 'mode'"
-                )
-        else:
-            cfg = {"mode": "off"}
-
-        if "seed" in cfg:
-            seed = cfg["seed"]
+        if "seed" in cfg and cfg["seed"] is not None:
+            seed = int(cfg["seed"])
         elif default_seed is not None:
-            seed = default_seed
+            seed = int(default_seed)
         else:
-            raise ValueError(f"Reward schedule omits 'seed' and no default_seed was supplied")
+            raise ValueError("Reward schedule omits 'seed' and no default_seed was supplied")
 
-        manager = RewardScheduleManager(
-            mode=RewardScheduleMode(cfg["mode"]),
-            swap_every_n_iterations=cfg.get("swap_every_n_iterations", 50),
-            seed=seed,
-            reward_specs=reward_specs,
-            random_active_count=cfg.get("random_active_count"),
-            random_swap_count=cfg.get("random_swap_count", 1),
-            exploration_bump=ExplorationBumpConfig.from_dict(cfg.get("exploration_bump")),
-        )
-        reward_lines = [
-            f"  {s['class_name']}: weight={s['weight']}"
-            + (f", params={s['params']}" if s["params"] else "")
-            for s in reward_specs
-        ]
-        schedule_label = schedule_path.name if schedule_path is not None else "(none — mode=off)"
+        # Accept both swap_every_n_episodes (preferred, README) and
+        # swap_every_n_iterations (legacy).  At least one must be present
+        # for swapping modes.
+        swap_n = cfg.get("swap_every_n_episodes")
+        if swap_n is None:
+            swap_n = cfg.get("swap_every_n_iterations", 1)
+        swap_n = int(swap_n)
+
+        if mode is RewardScheduleMode.OFF:
+            mgr = RewardScheduleManager(mode, swap_n, seed, reward_specs=list(rewards))
+
+        elif mode is RewardScheduleMode.FIX:
+            on_rewards = cfg.get("on_rewards") or []
+            specs = _filter_pool_by_entries(rewards, on_rewards, field_label="on_rewards")
+            mgr = RewardScheduleManager(mode, swap_n, seed, reward_specs=specs)
+
+        elif mode is RewardScheduleMode.RANDOM:
+            on_rewards = cfg.get("on_rewards") or []
+            specs = _filter_pool_by_entries(rewards, on_rewards, field_label="on_rewards") \
+                if on_rewards else list(rewards)
+            mgr = RewardScheduleManager(
+                mode, swap_n, seed, reward_specs=specs,
+                random_active_count=cfg.get("random_active_count"),
+                random_swap_count=int(cfg.get("random_swap_count", 1)),
+            )
+
+        elif mode is RewardScheduleMode.GRAD_ADD:
+            order = cfg.get("reward_order") or []
+            if not order:
+                raise ValueError("gradual_add requires 'reward_order'")
+
+            # Each top-level entry becomes a group of 1+ specs (composite).
+            groups: list[list[dict[str, Any]]] = []
+            seen: list[str] = []
+            by_name = _spec_by_name(rewards)
+            for entry in order:
+                if "composite" in entry:
+                    group_entries = entry["composite"]
+                else:
+                    group_entries = [entry]
+                group_specs: list[dict[str, Any]] = []
+                for sub in group_entries:
+                    name = _entry_name(sub)
+                    if name not in by_name:
+                        raise ValueError(f"reward_order references unknown reward '{name}'")
+                    base = by_name[name]
+                    final_weight = _entry_weight_override(sub)
+                    group_specs.append({**base, "weight": final_weight if final_weight is not None else base["weight"]})
+                    seen.append(name)
+                groups.append(group_specs)
+
+            # Manager spec list is the *flat union of all groups* (in order).
+            flat = [s for g in groups for s in g]
+            mgr = RewardScheduleManager(
+                mode, swap_n, seed, reward_specs=flat,
+                grad_add_groups=groups,
+            )
+
+        elif mode is RewardScheduleMode.DIRICHLET:
+            on_rewards = cfg.get("on_rewards") or []
+            if not on_rewards:
+                raise ValueError("dirichlet requires 'on_rewards'")
+            specs = _filter_pool_by_entries(rewards, on_rewards, field_label="on_rewards")
+            w_low = {
+                _entry_name(e): float(e["w_low"])
+                for e in on_rewards
+                if e.get("w_low") is not None
+            }
+            mgr = RewardScheduleManager(
+                mode, swap_n, seed, reward_specs=specs,
+                dirichlet_w_low=w_low,
+                dirichlet_rejection_sampling=bool(cfg.get("rejection_sampling", True)),
+                dirichlet_uniform_start=(cfg.get("start_weights") == "uniform"),
+                first_swap_after_n_episodes=cfg.get("first_swap_after_n_episodes"),
+            )
+        else:
+            raise ValueError(f"Unsupported reward schedule mode: {mode}")
+
         logger.info(
-            "Loaded rewards from %s, schedule %s: mode=%s, "
-            "swap every %d iterations\n"
-            "Rewards (%d):\n%s",
-            rewards_path.name, schedule_label, manager.mode,
-            manager.swap_every_n_iterations,
-            len(reward_specs), "\n".join(reward_lines),
+            "RewardScheduleManager: mode=%s, pool_size=%d, swap_every=%d episodes",
+            mgr.mode.value, len(mgr._reward_specs), mgr.swap_every_n_episodes,
         )
-        return manager
+        return mgr
 
     # ------------------------------------------------------------------
     # Reward creation
     # ------------------------------------------------------------------
 
     def _create_reward_from_spec(self, spec: dict[str, Any]):
-        """Instantiate a single RewardFunction from a spec dict."""
-        # Trigger reward module imports so the ComponentRegistry is populated
-        import adv_building_gym.rewards  # noqa: F401
-
+        import adv_building_gym.rewards  # noqa: F401  (populate registry)
         cls = ComponentRegistry.get("reward", spec["class_name"])
-        kwargs = {"weight": spec["weight"], **spec["params"]}
+        kwargs = {"weight": spec["weight"], **(spec.get("params") or {})}
         return cls(**kwargs)
 
     def create_all_rewards(self) -> list:
-        """Create fresh instances of ALL configured rewards."""
         return [self._create_reward_from_spec(s) for s in self._reward_specs]
 
     def create_active_rewards(self) -> list:
-        """Create fresh instances of the currently active reward subset.
+        return [self._create_reward_from_spec(s) for s in self._get_active_specs()]
 
-        The active subset depends on ``self.mode`` and ``self._swap_index``.
-        """
-        specs = self._get_active_specs()
-        return [self._create_reward_from_spec(s) for s in specs]
+    def get_active_reward_names(self) -> list[str]:
+        return [s["class_name"] for s in self._get_active_specs()]
+
+    # ------------------------------------------------------------------
+    # Active-spec computation
+    # ------------------------------------------------------------------
 
     def _get_active_specs(self) -> list[dict[str, Any]]:
-        """Return the reward specs that are currently active.
-
-        Results are cached per swap step so that RNG-dependent modes
-        (RANDOM) return the same selection across multiple calls within
-        the same step (e.g. ``get_active_reward_names()`` followed by
-        ``create_active_rewards()``).  The cache is invalidated by
-        ``advance()``.
-        """
         if self._active_specs_cache is not None:
             return self._active_specs_cache
-
         self._active_specs_cache = self._compute_active_specs()
         return self._active_specs_cache
 
     def _compute_active_specs(self) -> list[dict[str, Any]]:
-        """Compute the active specs for the current swap index."""
         n = len(self._reward_specs)
 
-        if self.mode is RewardScheduleMode.OFF:
+        if self.mode in (RewardScheduleMode.OFF, RewardScheduleMode.FIX):
             return list(self._reward_specs)
 
-        if self.mode is RewardScheduleMode.GRADUAL_ADD:
-            # Start with 1 reward, add one more per swap (cap at total)
-            count = min(self._swap_index + 1, n)
-            return list(self._reward_specs[:count])
+        if self.mode is RewardScheduleMode.GRAD_ADD:
+            # Add one group per swap (cap at total groups).
+            count = min(self._swap_index + 1, len(self._grad_add_groups))
+            active: list[dict[str, Any]] = []
+            for g in self._grad_add_groups[:count]:
+                active.extend(g)
+            return active
 
         if self.mode is RewardScheduleMode.RANDOM:
-            # Lazy-init the stable active set on first compute. The set is
-            # mutated by ``advance()`` (swap_count out, swap_count in).
             if self._random_active_indices is None:
-                indices = self._rng.choice(
-                    n, size=self.random_active_count, replace=False,
-                )
-                self._random_active_indices = sorted(int(i) for i in indices)
+                idx = self._rng.choice(n, size=self.random_active_count, replace=False)
+                self._random_active_indices = sorted(int(i) for i in idx)
             return [self._reward_specs[i] for i in self._random_active_indices]
 
-        # Should not reach here due to __init__ validation
+        if self.mode is RewardScheduleMode.DIRICHLET:
+            if self._dir_weights is None:
+                self._dir_weights = self._draw_dirichlet_weights(uniform=self._dir_uniform_start)
+            return [
+                {**spec, "weight": float(w)}
+                for spec, w in zip(self._reward_specs, self._dir_weights)
+            ]
+
         return list(self._reward_specs)
 
     # ------------------------------------------------------------------
-    # Schedule state
+    # advance()
     # ------------------------------------------------------------------
 
     def advance(self) -> bool:
         """Advance the schedule by one swap step.
 
-        For RANDOM mode this swaps ``random_swap_count`` currently active
-        rewards out for the same number of currently inactive ones, keeping
-        the active-set size constant.
-
-        Invalidates the active-specs cache so the next call to
-        ``create_active_rewards()`` / ``get_active_reward_names()``
-        recomputes.
-
-        Returns:
-            True if the active reward set changed (caller should push to
-            env_runners), False otherwise.
+        Returns True iff the active reward set / weights changed.
         """
-        old_names = self.get_active_reward_names()
+        old_signature = self._signature()
         self._swap_index += 1
 
-        if (
-            self.mode is RewardScheduleMode.RANDOM
-            and self._random_active_indices is not None
-            and self.random_swap_count > 0
-        ):
+        if self.mode is RewardScheduleMode.RANDOM and self._random_active_indices is not None:
             self._apply_random_swap()
+        elif self.mode is RewardScheduleMode.DIRICHLET:
+            self._dir_weights = self._draw_dirichlet_weights(uniform=False)
 
-        self._active_specs_cache = None  # invalidate before recompute
-        new_names = self.get_active_reward_names()
-        changed = old_names != new_names
+        self._active_specs_cache = None
+        new_signature = self._signature()
+        changed = old_signature != new_signature
         if changed:
-            active_reward_specs = self._get_active_specs()
-            reward_details = [
-                f"{reward_spec['class_name']} (weight={reward_spec.get('weight', 1.0)})"
-                for reward_spec in active_reward_specs
-            ]
+            specs = self._get_active_specs()
             logger.info(
                 "Reward schedule advanced (swap_index=%d): %s",
-                self._swap_index, reward_details,
+                self._swap_index,
+                [f"{s['class_name']}(w={s['weight']:.3g})" for s in specs],
             )
         return changed
 
-    def get_active_reward_names(self) -> list[str]:
-        """Return class names of currently active rewards (for logging)."""
-        return [s["class_name"] for s in self._get_active_specs()]
+    def _signature(self) -> tuple:
+        """Return a hashable signature of the active reward set + weights."""
+        return tuple((s["class_name"], float(s["weight"])) for s in self._get_active_specs())
+
+    # ------------------------------------------------------------------
+    # RANDOM swap
+    # ------------------------------------------------------------------
 
     def _apply_random_swap(self) -> None:
-        """Swap ``random_swap_count`` active indices for inactive ones.
-
-        Mutates ``self._random_active_indices`` in place. Called from
-        ``advance()``. Caller is responsible for invalidating the spec cache.
-        """
+        if self.random_swap_count <= 0:
+            return
         n = len(self._reward_specs)
         active = set(self._random_active_indices or [])
         inactive = [i for i in range(n) if i not in active]
@@ -387,3 +400,26 @@ class RewardScheduleManager:
         active.difference_update(int(i) for i in out)
         active.update(int(i) for i in in_)
         self._random_active_indices = sorted(active)
+
+    # ------------------------------------------------------------------
+    # DIRICHLET
+    # ------------------------------------------------------------------
+
+    def _draw_dirichlet_weights(self, *, uniform: bool) -> list[float]:
+        n = len(self._reward_specs)
+        if uniform:
+            return [1.0] * n
+        floors = np.array(
+            [self._dir_w_low.get(s["class_name"], 0.0) for s in self._reward_specs],
+            dtype=float,
+        )
+
+        for _ in range(128):
+            sample = self._rng.dirichlet(np.ones(n)) * n
+            if not self._dir_rejection or np.all(sample >= floors):
+                return [float(x) for x in sample]
+
+        # Fall through after retries — emit warning, return last sample.
+        logger.warning("Dirichlet rejection sampling exceeded retry budget; using last draw.")
+
+        return [float(x) for x in sample]

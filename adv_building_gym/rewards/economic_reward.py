@@ -44,12 +44,6 @@ class EconomicReward(RewardFunction):
                 ``ctxt_operator_max_power_kW`` is not present in
                 ``states`` (i.e. envs without ``OperatorEnergyControl``).
             name: Reward function identifier.
-            export_bonus: Multiplier applied when the building is exporting
-                to the grid (``net_power_kW < 0``).  Values > 1 make
-                selling energy more attractive relative to buying it.
-                Applied by the sign of ``net_power_kW``, not the sign of
-                the reward, so it behaves consistently under negative
-                spot prices.
         """
         super().__init__(weight, name)
         if reference_power_kW <= 0:
@@ -66,7 +60,7 @@ class EconomicReward(RewardFunction):
         return self.reference_power_kW
 
     def get_reward(self, actions, states, info: dict | None = None) -> tuple[float, float]:
-        max_reward_per_step = self.weight * self.max_reward
+        max_reward_per_step = self.weight * self.max_reward_in_step
 
         current_energy_price = float(states["s_E_price"][0])
 

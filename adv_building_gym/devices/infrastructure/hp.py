@@ -171,6 +171,11 @@ class HP(Infrastructure):
         self.temp_in_norm_change = 0
         self.actual_power_kW = 0.0
         super().reset(states, info)
+        
+    def get_raw_values(self) -> dict[str, float]:
+        return {
+            "raw_hp_kW": self.actual_power_kW
+        }
 
     def get_E(self, actions) -> tuple[float, float]:
         """Get current electric energy consumption from heat pump in kW.

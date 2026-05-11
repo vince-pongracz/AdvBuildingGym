@@ -1,52 +1,40 @@
 """Trial config loader.
 
 A single trial config (``configs/trial_cfgs/<name>.yaml``) describes a complete
-training or evaluation run: env topology, training hyperparameters, data /
-reward / infra schedules, plus run-control fields (algorithm, episodes, seed,
-metric, etc.).
+training or evaluation run. Every sub-config is **inlined** in the trial YAML
+except ``data_schedule`` (which references descriptor YAMLs).
 
-``TrialConfig.load(path)`` parses the trial YAML and resolves every referenced
-sub-config in one upfront pass, returning a ``TrialConfig`` bundle. Downstream
-modules (env creator, RLlib config builders, callbacks) receive already-loaded
-objects — they never re-parse YAML.
+Schema (top-level keys, ordered):
 
-Trial YAML schema::
+    trial_name: <str>
 
-    trial_name: <str>                       # used for run dir naming
-
-    # algorithm + run control
-    algorithm: ppo                          # ppo | sac
-    episodes: 3500                          # overrides training_params.max_episodes_to_run
-    seed: 42                                # default seed for every sub-config that
-                                            # doesn't pin its own (single source of truth)
-    metric: reward_rate                     # episode_return_mean | achieved_reward | reward_rate
-    checkpoint_frequency_episodes: 250
+    # run control
+    algorithm: ppo|sac
+    seed: 42
+    metric: episode_return_mean | achieved_reward | reward_rate
+    checkpoint_frequency_episodes: 20
     log_trajectories: false
     num_envs: 1
-    grad_train: false                       # honour reward schedule mode (else forced OFF)
+    grad_train: false
 
-    # env topology (replaces the old configs/env/*.yaml wrapper).  The
-    # ``trial_name`` above is what gets used as the run identifier
-    # (checkpoint dir = ``models/<trial_name>/<algo>/...``).
-    infras:        configs/infra_cfgs/test1_small.yaml
-    statesources:  configs/statesource_cfgs/default.yaml
-    env_meta:      configs/env_meta/default.yaml
+    # env topology — inlined
+    env_meta:        {EPISODE_LENGTH: 288, control_step: 300, allow_early_termination: false}
+    training_params: {common: {...}, ppo: {...}, sac: {...}, hst: {...}}
+    statesources:    [<spec>, ...]   # null when statesource_schedule is set
+    infras:          [<spec>, ...]   # null when infra_schedule is set
+    rewards:         [{class_name, weight, params}, ...]
 
-    # rewards: which rewards exist (required)
-    rewards: configs/reward_cfgs/rewards.yaml
+    # schedules — inlined; data_schedule keeps its path-based form
+    infra_schedule:        {mode, swap_every_n_iterations, configs: [...]} | null
+    statesource_schedule:  {mode, swap_every_n_iterations, configs: [...]} | null
+    reward_schedule:       {mode, swap_every_n_episodes, ...} | null
+    data_schedule:         {train: <path>, eval: <path>}
 
-    # training params and schedules
-    training_params: configs/training_param_cfgs/default.yaml
-    data_schedule:   configs/schedules/data/train.yaml
-    # reward_schedule: how the rewards above are scheduled (optional —
-    # omit / null for "all rewards live, no swapping")
-    reward_schedule: configs/schedules/reward/train.yaml
-    infra_schedule:  null                   # or configs/schedules/infra/train.yaml
+    # standalone exploration reset
+    exploration_reset:     {enabled, trigger, ...}
 
-    # optional inline overrides (deep-merged onto the referenced YAMLs)
-    overrides:
-      training_params:
-        common: { learning_rate: 1.0e-4 }
+Mutex rules: exactly one of (``infras``, ``infra_schedule``) is non-null;
+same for (``statesources``, ``statesource_schedule``).
 """
 
 from __future__ import annotations
@@ -61,6 +49,7 @@ import yaml
 from adv_building_gym.config.data_config import load_data_combinator_config
 from adv_building_gym.config.env_config import EnvConfig
 from adv_building_gym.config.env_config_manager import EnvConfigManager
+from adv_building_gym.config.exploration_reset import ExplorationResetConfig
 from adv_building_gym.config.reward_schedule_manager import (
     RewardScheduleManager,
     RewardScheduleMode,
@@ -68,29 +57,24 @@ from adv_building_gym.config.reward_schedule_manager import (
 from adv_building_gym.config.training_param_config import TrainingParamConfig
 from adv_building_gym.data_combinator import DataCombinator
 from adv_building_gym.infra_combinator import InfraCombinator
+from adv_building_gym.statesource_combinator import StatesourceCombinator
 
 logger = logging.getLogger(__name__)
 
 
-# Run-control keys with sane defaults if a trial cfg omits them.
 _RUN_DEFAULTS: dict[str, Any] = {
     "algorithm": "ppo",
-    "episodes": None,
     "metric": "reward_rate",
     "checkpoint_frequency_episodes": 20,
     "log_trajectories": False,
     "num_envs": 1,
     "grad_train": False,
-    "infra_schedule": None,
-    "data_schedule": None,
-    "reward_schedule": None,
     "overrides": None,
 }
 
-# Required top-level keys.
+# Required top-level keys (always present, possibly None for nullable ones).
 _REQUIRED = (
-    "trial_name", "seed", "infras", "statesources", "env_meta",
-    "training_params", "rewards",
+    "trial_name", "seed", "env_meta", "training_params", "rewards",
 )
 
 
@@ -101,7 +85,6 @@ class TrialConfig:
     # run control
     trial_name: str
     algorithm: str
-    episodes: Optional[int]
     seed: Optional[int]
     metric: str
     checkpoint_frequency_episodes: int
@@ -115,119 +98,177 @@ class TrialConfig:
     data_combinator: Optional[DataCombinator]
     reward_manager: RewardScheduleManager
     infra_combinator: Optional[InfraCombinator]
+    statesource_combinator: Optional[StatesourceCombinator]
+    exploration_reset: ExplorationResetConfig
 
-    # raw trial dict (kept for diagnostics)
     raw: dict[str, Any] = field(default_factory=dict)
     source_path: Optional[Path] = None
-
-    # ------------------------------------------------------------------
-    # Loader
-    # ------------------------------------------------------------------
 
     @staticmethod
     def load(
         trial_yaml_path: str | Path,
         *,
         require_data_schedule: bool = True,
+        is_training: bool = True,
     ) -> "TrialConfig":
-        """Parse a trial YAML and resolve every referenced sub-config.
-
-        Args:
-            trial_yaml_path: Path to ``configs/trial_cfgs/<name>.yaml``.
-            require_data_schedule: If True, ``data_schedule`` must be present.
-                Eval contexts may pass False to allow no data combinator.
-        """
+        """Parse a trial YAML and resolve every referenced sub-config."""
         path = Path(trial_yaml_path)
         if not path.exists():
             raise FileNotFoundError(f"Trial config not found: {path}")
-
         with path.open("r") as f:
-            raw = yaml.safe_load(f) or {}
+            trial_dict = yaml.safe_load(f) or {}
+        return TrialConfig._from_dict(
+            trial_dict,
+            source_path=path,
+            require_data_schedule=require_data_schedule,
+            is_training=is_training,
+        )
 
+    @staticmethod
+    def _from_dict(
+        trial_dict: dict[str, Any],
+        *,
+        source_path: Optional[Path] = None,
+        require_data_schedule: bool = True,
+        is_training: bool = True,
+    ) -> "TrialConfig":
+        label = source_path.name if source_path else "<inline>"
         for key in _REQUIRED:
-            if key not in raw:
-                raise ValueError(
-                    f"Trial config {path.name} missing required key '{key}'"
-                )
+            if key not in trial_dict:
+                raise ValueError(f"Trial config {label} missing required key '{key}'")
 
-        # Resolve run-control with defaults
-        run = {**_RUN_DEFAULTS, **{k: v for k, v in raw.items() if k in _RUN_DEFAULTS}}
+        run = {**_RUN_DEFAULTS, **{k: v for k, v in trial_dict.items() if k in _RUN_DEFAULTS}}
         if run["algorithm"] not in ("ppo", "sac"):
-            raise ValueError(
-                f"Trial config {path.name}: algorithm must be 'ppo' or 'sac', got '{run['algorithm']}'"
-            )
+            raise ValueError(f"Trial config {label}: algorithm must be 'ppo' or 'sac', got '{run['algorithm']}'")
 
-        # Trial seed is the single source of truth.  Each sub-loader receives
-        # it as the fallback default; sub-config YAMLs only need to declare
-        # ``seed:`` if they deliberately diverge.
-        trial_seed: int = int(raw["seed"])
+        trial_seed: int = int(trial_dict["seed"])
         overrides = run["overrides"] or {}
 
-        # ---- training params ----
-        training_param_config = TrainingParamConfig.from_yaml(
-            raw["training_params"], default_seed=trial_seed,
+        # ---- training params (inlined) ----
+        tparam_doc = trial_dict["training_params"]
+        if not isinstance(tparam_doc, dict):
+            raise ValueError(
+                f"Trial config {label}: 'training_params' must be inlined (dict), "
+                f"got {type(tparam_doc).__name__}"
+            )
+        training_param_config = TrainingParamConfig.from_dict(
+            tparam_doc, default_seed=trial_seed, source_label=label,
         )
         _apply_overrides_dataclass(training_param_config, overrides.get("training_params"))
 
-        if run["episodes"] is None:
-            run["episodes"] = training_param_config.max_episodes_to_run
+        # ---- env topology mutex validation ----
+        infras_inline = trial_dict.get("infras")
+        infra_sch_inline = trial_dict.get("infra_schedule")
+        ss_inline = trial_dict.get("statesources")
+        ss_sch_inline = trial_dict.get("statesource_schedule")
 
-        # ---- env topology ----
-        env_config = EnvConfigManager.load(
-            infras_path=raw["infras"],
-            statesources_path=raw["statesources"],
-            env_meta_path=raw["env_meta"],
+        _validate_mutex(label, "infras", infras_inline, "infra_schedule", infra_sch_inline)
+        _validate_mutex(label, "statesources", ss_inline, "statesource_schedule", ss_sch_inline)
+
+        env_meta_doc = trial_dict["env_meta"]
+        if not isinstance(env_meta_doc, dict):
+            raise ValueError(f"Trial config {label}: 'env_meta' must be inlined (dict)")
+
+        # When infras / statesources are deferred to a schedule, seed the
+        # env config with empty lists; the swap callback will set_infras /
+        # set_statesources before training begins.
+        env_config = EnvConfigManager.from_dict(
+            infras_doc={"infras": list(infras_inline)} if infras_inline else {"infras": []},
+            statesources_doc={"statesources": list(ss_inline)} if ss_inline else {"statesources": []},
+            env_meta_doc=env_meta_doc,
         )
 
-        # ---- data combinator ----
+        # ---- data combinator (path-based train/eval) ----
         data_combinator: Optional[DataCombinator] = None
-        if run["data_schedule"]:
+        data_schedule = trial_dict.get("data_schedule")
+        if data_schedule:
+            split = "train" if is_training else "eval"
+            data_schedule_path = data_schedule.get(split)
+            if not data_schedule_path:
+                raise ValueError(
+                    f"Trial config {label}: data_schedule.{split} not set"
+                )
             data_combinator = load_data_combinator_config(
-                cfg_yaml_path=run["data_schedule"],
-                default_seed=trial_seed,
+                cfg_yaml_path=data_schedule_path, default_seed=trial_seed,
             )
         elif require_data_schedule:
             raise ValueError(
-                f"Trial config {path.name} missing 'data_schedule' (required for training)"
+                f"Trial config {label} missing 'data_schedule' (required for training)"
             )
 
-        # ---- rewards (required) + optional reward schedule ----
-        # Rewards file (required) declares which rewards exist; the optional
-        # schedule controls how/when they are swapped during training.  When
-        # no schedule is given, mode defaults to OFF (all rewards live).
-        reward_manager = RewardScheduleManager.load(
-            rewards_path=raw["rewards"],
-            schedule_path=run["reward_schedule"],
+        # ---- rewards (required) + optional reward schedule (inlined) ----
+        rewards_pool = trial_dict["rewards"]
+        if not isinstance(rewards_pool, list) or not rewards_pool:
+            raise ValueError(
+                f"Trial config {label}: 'rewards' must be a non-empty list"
+            )
+        reward_sch_cfg = trial_dict.get("reward_schedule")
+        if reward_sch_cfg is not None and not isinstance(reward_sch_cfg, dict):
+            raise ValueError(
+                f"Trial config {label}: 'reward_schedule' must be inlined (dict) or null"
+            )
+        reward_manager = RewardScheduleManager.from_dict(
+            rewards=rewards_pool,
+            reward_sch_cfg=reward_sch_cfg,
             default_seed=trial_seed,
         )
-        if run["reward_schedule"] and not run["grad_train"]:
+        if reward_sch_cfg and not run["grad_train"]:
             reward_manager.mode = RewardScheduleMode.OFF
             logger.info(
                 "grad_train=False — reward schedule mode forced to OFF "
                 "(all configured rewards active from start)",
             )
-        elif run["reward_schedule"]:
+        elif reward_sch_cfg:
             logger.info(
-                "grad_train=True — reward schedule mode=%s, swap every %d iterations",
-                reward_manager.mode, reward_manager.swap_every_n_iterations,
+                "grad_train=True — reward schedule mode=%s, swap every %d episodes",
+                reward_manager.mode, reward_manager.swap_every_n_episodes,
             )
 
-        # ---- infra schedule (optional) ----
+        # ---- infra schedule (inlined) ----
         infra_combinator: Optional[InfraCombinator] = None
-        if run["infra_schedule"]:
-            infra_combinator = InfraCombinator.from_yaml(
-                run["infra_schedule"], control_step=env_config.CONTROL_STEP,
+        if infra_sch_inline:
+            if not isinstance(infra_sch_inline, dict):
+                raise ValueError(
+                    f"Trial config {label}: 'infra_schedule' must be a dict (inlined)"
+                )
+            infra_combinator = InfraCombinator.from_dict(
+                infra_sch_inline, control_step=env_config.CONTROL_STEP,
             )
+            # Seed env_config with the first scheduled variant so env startup works.
+            if infra_combinator._configs:
+                env_config.infra_specs = list(infra_combinator._configs[0].infra_dicts)
             logger.info(
                 "Infra schedule enabled: mode=%s, %d configs, swap every %d iterations",
                 infra_combinator.mode, len(infra_combinator.config_paths),
                 infra_combinator.swap_every_n_iterations,
             )
 
+        # ---- statesource schedule (inlined) ----
+        statesource_combinator: Optional[StatesourceCombinator] = None
+        if ss_sch_inline:
+            if not isinstance(ss_sch_inline, dict):
+                raise ValueError(
+                    f"Trial config {label}: 'statesource_schedule' must be a dict (inlined)"
+                )
+            statesource_combinator = StatesourceCombinator.from_dict(
+                ss_sch_inline, control_step=env_config.CONTROL_STEP,
+            )
+            if statesource_combinator._configs:
+                env_config.statesource_specs = list(
+                    statesource_combinator._configs[0].statesource_dicts
+                )
+            logger.info(
+                "Statesource schedule enabled: mode=%s, %d configs, swap every %d iterations",
+                statesource_combinator.mode, len(statesource_combinator.config_paths),
+                statesource_combinator.swap_every_n_iterations,
+            )
+
+        # ---- exploration reset (standalone) ----
+        exploration_reset = ExplorationResetConfig.from_dict(trial_dict.get("exploration_reset"))
+
         trial = TrialConfig(
-            trial_name=raw["trial_name"],
+            trial_name=trial_dict["trial_name"],
             algorithm=run["algorithm"],
-            episodes=run["episodes"],
             seed=trial_seed,
             metric=run["metric"],
             checkpoint_frequency_episodes=int(run["checkpoint_frequency_episodes"]),
@@ -239,31 +280,41 @@ class TrialConfig:
             data_combinator=data_combinator,
             reward_manager=reward_manager,
             infra_combinator=infra_combinator,
-            raw=raw,
-            source_path=path,
+            statesource_combinator=statesource_combinator,
+            exploration_reset=exploration_reset,
+            raw=trial_dict,
+            source_path=source_path,
         )
-
         logger.info(
-            "Loaded trial '%s' from %s "
-            "[algorithm=%s, seed=%s, episodes=%s, metric=%s]",
-            trial.trial_name, path, trial.algorithm, trial.seed,
-            trial.episodes, trial.metric,
+            "Loaded trial '%s' from %s [algorithm=%s, seed=%s, episodes=%s, metric=%s]",
+            trial.trial_name, source_path or "<inline>", trial.algorithm,
+            trial.seed, training_param_config.max_episodes_to_run, trial.metric,
         )
         return trial
 
 
+def _validate_mutex(
+    label: str,
+    inline_key: str,
+    inline_value: Any,
+    schedule_key: str,
+    schedule_value: Any,
+) -> None:
+    has_inline = inline_value not in (None, [], {})
+    has_schedule = schedule_value not in (None, [], {})
+    if has_inline and has_schedule:
+        raise ValueError(
+            f"Trial config {label}: '{inline_key}' and '{schedule_key}' are "
+            f"mutually exclusive — set exactly one."
+        )
+    if not has_inline and not has_schedule:
+        raise ValueError(
+            f"Trial config {label}: at least one of '{inline_key}' / "
+            f"'{schedule_key}' must be set."
+        )
+
+
 def _apply_overrides_dataclass(target: Any, overrides: Any) -> None:
-    """Apply a possibly-nested overrides dict onto a dataclass instance.
-
-    Sections (``common``/``ppo``/``sac``/``hst``) get prefix-flattened the
-    same way TrainingParamConfig.from_yaml flattens them, so trial cfgs
-    can write::
-
-        overrides:
-          training_params:
-            common: {learning_rate: 1.0e-4}
-            ppo:    {minibatch_size: 128}
-    """
     if not overrides:
         return
     flat: dict[str, Any] = {}

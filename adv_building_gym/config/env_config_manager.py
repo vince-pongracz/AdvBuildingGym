@@ -70,31 +70,6 @@ class EnvConfigManager:
         )
         return config
 
-    @staticmethod
-    def load(
-        infras_path: str | Path,
-        statesources_path: str | Path,
-        env_meta_path: str | Path,
-    ) -> EnvConfig:
-        """Load an env config from its three split YAML files.
-
-        Args:
-            infras_path: configs/infra_cfgs/...yaml (declares ``infras`` list).
-            statesources_path: configs/statesource_cfgs/...yaml (declares ``statesources``).
-            env_meta_path: configs/env_meta/...yaml (EPISODE_LENGTH, control_step, ...).
-        """
-        infras_doc = EnvConfigManager._load_yaml(Path(infras_path))
-        statesources_doc = EnvConfigManager._load_yaml(Path(statesources_path))
-        env_meta_doc = EnvConfigManager._load_yaml(Path(env_meta_path))
-
-        config = EnvConfigManager.from_dict(infras_doc, statesources_doc, env_meta_doc)
-        config.log_values()
-
-        logger.info(
-            "Env config loaded from %s + %s + %s",
-            Path(infras_path).name, Path(statesources_path).name, Path(env_meta_path).name,
-        )
-        return config
 
     @staticmethod
     def save(

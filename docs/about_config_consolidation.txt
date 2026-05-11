@@ -1,0 +1,47 @@
+I want to bring every configuration into a single standalone file trial -- trial configuration. 
+An example for this would be trial_cfg_1_sac_default_tr_params.yaml.
+
+Everything regarding env_meta, infras, infra_schedule, rewards, reward schedule 
+statesources, statesource schedule, training params, base config 
+should be configured only by a standalone trial file, that's given to a training or eval script.
+
+Different trials mean different setups.
+
+The different config managers and config 
+schedulers only read sections
+from the single standalone trial config file.
+
+Keep the current trial_cfgs as well, there you have to inline the currently present configs.
+
+Generate trial config files based on all the current combinations of the 
+schedules, env meta, infra_cfgs, reward_cfgs, schedules (except data schedules), statesource_cfgs, 
+and training_param_cfgs.
+
+The generated trial config files should follow the GEN, TL, STA directory structure.
+
+Env meta is inlined into the trial file, yaml tag is: env_meta
+Infra-s are inlined as well, yaml tag is: infras
+Infra schedule is a new concept. An example for it is /configs/schedules/infra/train.yaml -- it holds standalone infra schedule 
+files as a list.
+In this case, the infras yaml tag of the trial file is empty, null and only the infra_schedule yaml tag is taken into account. 
+Top level yaml tag is: infra_schedule
+Statesource config is similar to infra config, inlined into trial, yaml tag is: statesources
+Statesource schedule config similar to infra schedule, yaml tag is: statesource_schedule
+Statesource schedule config holds standalone infra schedule yaml files as a list -- in this case the statesources tag of the trial is null 
+and vica versa.
+Training params are inlined and use yaml tag: training_params
+Base config, which is currently already in the trial yamls remain there, these are like the trial_name, algorithm, 
+episodes, seed, metric, checkpoint_frequency_episodes, log_trajectories, num_envs, grad_train.
+Reward functors are inlined under the yaml tag: rewards
+Rewards schedule is under the yaml tag reward_schedule. At the reward schedule, take the current dirchlet_example.yaml, 
+fix_example.yaml, grad_add_example.yaml and random_example.yaml files -- the describe how each reward schedule mode configurations
+look like and how do they work -- use them along with the AdvBuildingGym/configs/schedules/reward/README*.md files. 
+A lot of the described behaviour must be implemented regarding the reward schedules.
+Data schedule has the yaml tag: data_schedule. It has 2 subtags, train and eval -- both 
+contain a pathstring to the train and eval data schedules.
+Exploration reset section is a standalone section as well in the trial config yaml files, tag name is: exploration_reset
+Description about exploration reset is at: AdvBuildingGym/configs/schedules/reward/EXPLORATION_RESET_README.md.
+Extend the exploration reset
+
+Ask questions if something was not clear or you found some ambiguity while planning the solution.
+Plan the solution first.

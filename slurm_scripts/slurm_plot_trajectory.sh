@@ -3,8 +3,6 @@
 # Created: 2026-03-13 | Version: 1.0
 # Description: Submit a SLURM job that generates trajectory plots from HDF5 evaluation files
 
-# TODO VP: Simplify plotting scripts.
-
 # -----------------------------------------------------------------------------
 # Usage:
 #   sbatch slurm_scripts/slurm_plot_trajectory.sh [OPTIONS]

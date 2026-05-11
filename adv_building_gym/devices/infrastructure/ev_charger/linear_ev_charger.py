@@ -209,10 +209,7 @@ class LinearEVCharger(Infrastructure):
             self.soc = ev_spec.start_soc
             self.target_soc = ev_spec.target_soc
             # Cap charge_to_target_in_hrs at max_charge_time_hrs
-            self.charge_to_target_in_hrs = min(
-                ev_spec.charge_to_target_in_hrs,
-                self.max_charge_time_hrs
-            )
+            self.charge_to_target_in_hrs = min(ev_spec.charge_to_target_in_hrs, self.max_charge_time_hrs)
 
     def _snapshot_session(self) -> None:
         """Capture per-session corridor parameters at the moment of connect.

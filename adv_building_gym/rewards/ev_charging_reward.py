@@ -100,7 +100,7 @@ class EVChargingReward(RewardFunction):
         return False
 
     def get_reward(self, actions, states, info: dict | None = None) -> tuple[float, float]:
-        max_step = self.weight * self.max_reward
+        max_step = self.weight * self.max_reward_in_step
 
         allow_term = info.get("allow_early_termination", True) if info is not None else True
 

@@ -66,13 +66,9 @@ class BuildingHeatLoss(StateSource):
         # Static building physics parameters — context variables that only
         # change between episodes if building_props is swapped.
         if "ctxt_building_K" not in state_spaces:
-            state_spaces["ctxt_building_K"] = Box(
-                low=0, high=np.inf, shape=(1,), dtype=np.float32
-            )
+            state_spaces["ctxt_building_K"] = Box(low=0, high=np.inf, shape=(1,), dtype=np.float32)
         if "ctxt_building_mC" not in state_spaces:
-            state_spaces["ctxt_building_mC"] = Box(
-                low=0, high=np.inf, shape=(1,), dtype=np.float32
-            )
+            state_spaces["ctxt_building_mC"] = Box(low=0, high=np.inf, shape=(1,), dtype=np.float32)
 
         return state_spaces, action_spaces
 

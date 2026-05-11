@@ -40,7 +40,7 @@ class MinimiseEnergyConsumptionReward(RewardFunction):
         self.threshold_kWh = threshold_kWh
 
     def get_reward(self, actions, states, info: dict | None = None) -> tuple[float, float]:
-        max_step = self.weight * self.max_reward
+        max_step = self.weight * self.max_reward_in_step
 
         if info is None:
             logger.warning("MinimiseEnergyConsumptionReward: info dict is None, returning 0")

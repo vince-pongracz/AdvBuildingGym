@@ -1,48 +1,49 @@
 # Reward schedule configuration
 
-Reward schedule files (`reward_schedule_*.yaml`, `rsch_*.yaml`) control 
-reward function activation during training and how they are swapped during 
-the training (gradual TL learning).
+Reward schedule files control which reward functions are active during training/evaluation and how the active set or its weights change over the course of training (curriculum / gradual TL).
 
-## Fields
+The trial YAML's `rewards` section is the single source of truth for reward instantiation and default weights. Schedule files only **select** from that pool and may **override** weights — they never define new rewards.
 
-- `rewards_file` — path to the shared reward definitions (relative to the
-  schedule file).
-- `mode` — reward function swap strategy.
-- `swap_every_n_iterations` — frequncy of reward set change
-  (in training episodes).
-- `seed` — seed for the `random` mode (reproducibility).
-- `random_active_count` — (random mode only) size of the active reward
-  set kept stable across swaps. Defaults to `ceil(total / 2)`. Must be in
-  `[1, total_rewards]`.
-- `random_swap_count` — (random mode only) number of currently active
-  rewards swapped out per cycle for the same number of inactive ones.
-  Default `1`; clamped to `min(active, total - active)`.
-- `exploration_bump` — (optional) event-driven exploration kick applied
-  each time the active reward set changes. Linearly decays back to
-  baseline. Useful so the policy re-tests the action space under the
-  shifted objective instead of staying stuck in the previous optimum.
-  Fields:
-    - `enabled` (default `false`)
-    - `ppo_entropy_coeff` — boosted PPO entropy coefficient (default `0.05`)
-    - `ppo_entropy_baseline` — value to decay back to (default `0.0`)
-    - `sac_alpha` — value forced onto SAC `log_alpha` as `log(sac_alpha)`
-      (default `0.5`); SAC's own `alpha_lr` will continue to retune it.
-    - `decay_iterations` — iterations to linearly ramp boost → baseline
-      (default `25`).
-    - `lr_multiplier` — optional optimiser LR multiplier at the bump peak,
-      interpolated back to `1.0` over `decay_iterations` (default `1.0`,
-      i.e. off). Helps the critic / value head recalibrate to the shifted
-      reward landscape.
+See `EXPLORATION_RESET_README.md` for the standalone exploration-reset config that pairs with reward swaps.
 
 ## Modes
 
-- `off` — All rewards active, no swapping. Used for
-  eval (or switched off reward swap scenarios) so the agent performs on the full multi-objective reward.
-- `gradual_add` — Start with the first reward, add the next one every
-  `swap_every_n_iterations` episodes. Once all are added they stay active
-  for the rest.
-- `random` — Maintain a stable active set of `random_active_count` rewards.
-  Each swap, `random_swap_count` currently active rewards are swapped out
-  for the same number of currently inactive ones, so the active-set size
-  stays constant (at least N rewards are always live).
+- `off` — All rewards from the trial `rewards` section are active, no swapping. Used for evaluation and for any training run that wants the full multi-objective signal without a curriculum.
+- `fix` — Only the rewards listed in `on_rewards` are active for the whole run, with optional `w_override` per entry. No swapping.
+- `gradual_add` — Start with the first entry of `reward_order`, add the next entry every `swap_every_n_episodes`. Once all are active they stay active. Entries can be a single `name` or a `composite:` list (all members of a composite are added in the same swap step). Optional per-entry `w_override`.
+- `random` — Keep a stable active set of `random_active_count` rewards drawn from `on_rewards`. Each swap, `random_swap_count` active rewards are exchanged for the same number of inactive ones (size stays constant). Optional per-entry `w_override`.
+- `dirichlet` — Resample reward **weights** every `swap_every_n_episodes` from a Dirichlet distribution (alphas = 1 for each active reward). Sampled `w_i` are multiplied by the number of active rewards. With `rejection_sampling: true` (default), draws where any `w_i < w_low` (per-reward floor in `on_rewards`) are rejected and re-sampled. The active reward *set* is fixed (the entries of `on_rewards`); only the weights change.
+
+## Common fields
+
+- `mode` — one of the modes above.
+- `swap_every_n_episodes` — frequency of the swap (in training episodes). Not used by `off` / `fix`.
+- `seed` — optional seed for reproducibility (`random`, `dirichlet`).
+
+## Reward selection
+
+Each entry references a reward by `name` from the trial `rewards` section. Rewards in the trial section that are *not* listed here are inactive.
+
+- `on_rewards` — used by `fix`, `random`, `dirichlet`.
+  - `w_override` (optional) — overrides the trial-section weight. Default `1.0` if omitted.
+  - `w_low` (dirichlet only) — minimum acceptable weight; samples below this are rejected.
+- `reward_order` — used by `gradual_add`. Ordered list of entries; each is either a `name` or a `composite:` list of names added together.
+  - `w_override` (optional) — same semantics as above.
+
+## Mode-specific fields
+
+`gradual_add`:
+- `reward_order` (see above).
+
+`random`:
+- `random_active_count` — size of the active set kept stable across swaps. Defaults to `ceil(total / 2)`. Must be in `[1, total]`.
+- `random_swap_count` — number of active rewards exchanged per cycle. Default `1`; clamped to `min(active, total - active)`.
+
+`dirichlet`:
+- `rejection_sampling` (default `true`) — enable the `w_low` floor check.
+- `start_weights: uniform` — use uniform weights for the first window instead of an initial Dirichlet draw. If null/omitted, the first window already uses a Dirichlet sample.
+- `first_swap_after_n_episodes` — episodes before the first re-sampling (length of the start window).
+
+## Examples
+
+See `fix_example.yaml`, `grad_add_example.yaml`, `random_example.yaml`, `dirichlet_example.yaml`, and `eval.yaml` (mode `off`) in this directory.

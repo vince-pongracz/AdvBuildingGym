@@ -228,6 +228,18 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         self.infras = infras
         logger.info("Infrastructure swapped: %s", [i.name for i in infras])
 
+    def set_statesources(self, statesources) -> None:
+        """Hot-swap statesource components (statesource_schedule callback).
+
+        Names must match the existing statesources — spaces are invariant.
+        """
+        old_names = {s.name for s in self.statesources}
+        new_names = {s.name for s in statesources}
+        if old_names != new_names:
+            raise ValueError(f"Statesource names must match. Old: {old_names}, New: {new_names}")
+        self.statesources = statesources
+        logger.info("Statesources swapped: %s", [s.name for s in statesources])
+
     def get_state_space(self):
         return self.observation_space
 
@@ -424,7 +436,7 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
             infra.name: (infra.get_E(action))
             for infra in self.infras
         }
-        total_power_kW, _energy_kWh = self._energy_tracker.advance(power_breakdown)
+        total_power_kW, _energy_kWh = self._energy_tracker.add_step_E_contrib(power_breakdown)
         return total_power_kW, power_breakdown
 
     def _publish_step_info(

@@ -22,7 +22,7 @@ class WeatherDataSource(StateSource):
         'iteration', 'ts',
         'temp_abs_max', 'temp_out_raw',
         'wind_speed_abs_max', 'wind_speed_raw',
-        'sun_shine_raw',
+        'sun_shine_abs_max', 'sun_shine_raw',
     }
 
     def __init__(self, name: str, ds_path: str | None = None,
@@ -35,6 +35,7 @@ class WeatherDataSource(StateSource):
         self.wind_speed_raw: float = 0.0
         # Solar irradiance in J/cm² (DWD/Zenodo unit; see preprocessing).
         self.sun_shine_raw: float = 0.0
+        self.sun_shine_abs_max: float = 0.0
 
         if self.ts is not None:
             logger.info("Use data file: %s", ds_path)
@@ -75,9 +76,10 @@ class WeatherDataSource(StateSource):
 
         # Normalise raw columns and derive scale factors so downstream
         # components can convert between raw and normalised values.
+        # cols = { raw_col: (norm_col, scale_attr) }
         cols = {
             "temp_amb": ("s_temp_out_norm", "temp_abs_max"),
-            "sun_shine": ("s_solar_irradiance_norm", None),
+            "sun_shine": ("s_solar_irradiance_norm", "sun_shine_abs_max"),
             "avg_wind_speed": ("s_avg_wind_speed_norm", "wind_speed_abs_max"),
         }
 
@@ -108,12 +110,14 @@ class WeatherDataSource(StateSource):
             state_spaces["ctxt_temp_abs_max"] = Box(low=0, high=np.inf, shape=(1,), dtype=np.float32)
         if "ctxt_wind_speed_abs_max" not in state_spaces.keys():
             state_spaces["ctxt_wind_speed_abs_max"] = Box(low=0, high=np.inf, shape=(1,), dtype=np.float32)
+        # Solar irradiance scale factor in J/cm² per control step (raw DWD/Zenodo unit).
+        if "ctxt_solar_irradiance_max" not in state_spaces.keys():
+            state_spaces["ctxt_solar_irradiance_max"] = Box(low=0, high=np.inf, shape=(1,), dtype=np.float32)
 
         if "raw_sim_hour" not in state_spaces.keys():
             state_spaces["raw_sim_hour"] = Box(low=np.full((1,), 0, dtype=np.float32),
                                             high=np.full((1,), np.inf, dtype=np.float32),
-                                            shape=(1,),
-                                            dtype=np.float32)
+                                            shape=(1,), dtype=np.float32)
 
 
         return state_spaces, action_spaces
@@ -140,6 +144,7 @@ class WeatherDataSource(StateSource):
         # a new data variant is loaded (via _post_load_data_processing).
         states["ctxt_temp_abs_max"][0] = np.float32(self.temp_abs_max)
         states["ctxt_wind_speed_abs_max"][0] = np.float32(self.wind_speed_abs_max)
+        states["ctxt_solar_irradiance_max"][0] = np.float32(self.sun_shine_abs_max)
 
     def get_raw_values(self) -> dict[str, float]:
         return {

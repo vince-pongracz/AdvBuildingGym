@@ -33,11 +33,18 @@ logger = logging.getLogger(__name__)
 #   per-call EMA, not the cumulative per-iter time.
 _TRACKED_TIMER_KEYS = (
     "training_iteration",
+    "training_step",
     "env_runner_sampling_timer",
     "learner_update_timer",
     "replay_buffer_sampling_timer",
     "replay_buffer_add_data_timer",
+    "replay_buffer_update_prios_timer",
     "synch_env_connectors",
+    "synch_weights",
+    "restore_env_runners",
+    "evaluation_iteration",
+    "synch_eval_env_connectors",
+    "restore_eval_env_runners",
 )
 
 
@@ -68,6 +75,6 @@ def create_iter_timing_on_train_result_cb():
             else:
                 parts.append(f"{timer_key}=NA")
 
-        logger.info("Iteration %d timers: %s", iteration, ", ".join(parts))
+        logger.info("Iteration %d timers:\n  %s", iteration, "\n  ".join(parts))
 
     return on_train_result

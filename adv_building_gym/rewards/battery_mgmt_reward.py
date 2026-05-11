@@ -41,7 +41,7 @@ class BatteryMgmtReward(RewardFunction):
         episode_end_soc = float(states["s_battery_pct"][0])
         deficit = max(0.0, self.episode_start_soc - episode_end_soc)
         reward = -1.0 * float(np.clip(deficit / self.scale, 0.0, 1.0))
-        return self.weight * reward, self.weight * self.max_reward
+        return self.weight * reward, self.weight * self.max_reward_in_step
 
 
 ComponentRegistry.register('reward', BatteryMgmtReward)
