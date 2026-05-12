@@ -27,8 +27,8 @@
 #SBATCH --nodes=1
 #SBATCH --tasks-per-node=1
 # TODO VP: set to 32, 38, 16 later -- but adapt Ray to use all possible cpu cores available
-#SBATCH --cpus-per-task=8
-#SBATCH --gres=gpu:2g.10gb:1 # --gres=gpu:4g.20gb:1
+#SBATCH --cpus-per-task=5
+#SBATCH --gres=gpu:1 # --gres=gpu:4g.20gb:1 or --gres=gpu:1 or --gres=gpu:2g.10gb:1
 #SBATCH --time=00:30:00
 # Exclude nodes with known GPU issues (add problematic nodes here)
 # // # --exclude=haicn1704,haicn1711

@@ -38,10 +38,33 @@ raw:
   # Group temperature raw values into a single plot (same unit: °C)
   grouped_keys:
     - [raw_temp_out, raw_temp_in, raw_desired_temp_in]
+    # Household consumption alongside generation for an at-a-glance balance view
+    - [raw_current_consumption_kW, raw_pv_prod, raw_wind_production_kW]
 
   # Raw keys to skip in plotting
   skip_keys:
     - raw_E_price_max  # constant per episode, not useful as time series
+
+figure:
+  # Default figure width (px) applied to every trajectory figure (HTML + static export).
+  width: 1100
+  # Time-axis tick interval in minutes (labelled HH:MM at each tick).
+  tick_interval_min: 120
+  # Tick label rotation in degrees. Negative = lean lower-left in Plotly.
+  tick_angle: -90
+  # Baseline top margin (px) reserved for the title.
+  base_top_margin: 90
+  # Extra top margin per legend row. The legend is anchored above the plot
+  # and wraps when there are many items; the top margin grows so the title
+  # never overlaps the legend.
+  legend_row_px: 34
+  # Rough heuristic for how many horizontal legend items fit per row.
+  # Used to estimate row count from the trace count passed to style_figure().
+  legend_items_per_row: 5
+  # Per-figure-group width multiplier (relative to ``figure.width``).
+  # Use for groups that benefit from a wider canvas (e.g. dense bar plots).
+  width_multipliers:
+    energy: 1.5
 
 output:
   # Relative to repository root

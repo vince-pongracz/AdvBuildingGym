@@ -147,6 +147,6 @@ def plot_states(episode: EpisodeData) -> list[go.Figure]:
 
         apply_day_xaxis(fig)
         fig.update_layout(title=f"{title}  —  {suffix}", height=350)
-        figures.append(style_figure(fig))
+        figures.append(style_figure(fig, n_legend_items=trace_idx))
 
     return figures

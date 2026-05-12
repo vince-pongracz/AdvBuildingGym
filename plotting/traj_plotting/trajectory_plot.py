@@ -33,6 +33,7 @@ from .plot_actions import plot_actions
 from .plot_rewards import plot_rewards
 from .plot_energy import ENERGY_SIGN_CONVENTION_HTML, plot_energy
 from .plot_raw import plot_raw
+from .plot_raw_policy_actions import plot_raw_policy_actions
 
 logger = logging.getLogger("trajectory_plot")
 
@@ -66,7 +67,7 @@ def generate_all_plots(
     """
 
     episode = load_episode(hdf5_path, episode_id, control_step_seconds, select_by)
-    ep_id = file_prefix if file_prefix is not None else episode.episode_id
+    ep_id = file_prefix if file_prefix is not None else f"ep_{episode.episode_id}"
 
     if output_dir is None:
         output_dir = str(get_output_root() / ep_id)
@@ -75,6 +76,7 @@ def generate_all_plots(
     all_figures: dict[str, list[go.Figure]] = {
         "states": plot_states(episode),
         "actions": plot_actions(episode),
+        "raw_policy_actions": plot_raw_policy_actions(episode),
         "rewards": plot_rewards(episode),
         "energy": plot_energy(episode),
         "raw": plot_raw(episode),
@@ -114,7 +116,10 @@ def generate_all_plots(
                     filepath = os.path.join(
                         fmt_dir, f"{ep_id}_{name}{suffix}.{fmt}",
                     )
-                    fig.write_image(filepath, width=1600, height=400)
+                    # Width/height come from each figure's layout (set via
+                    # style_figure from plot_config.yaml); keep static export
+                    # consistent with the HTML render.
+                    fig.write_image(filepath)
                     logger.info("Saved: %s", filepath)
                     saved.append(filepath)
 
@@ -162,9 +167,9 @@ def main() -> None:
         help="Control timestep in seconds. Default: 300 (5 min).",
     )
     parser.add_argument(
-        "--select-by", type=str, default="reward_rate",
+        "--select-by", type=str, default="achieved_reward",
         choices=["reward_rate", "achieved_reward", "cum_E_kWh"],
-        help="Summary metric for selecting the best episode. Default: reward_rate.",
+        help="Summary metric for selecting the best episode. Default: achieved_reward.",
     )
     args = parser.parse_args()
 

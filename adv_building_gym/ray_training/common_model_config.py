@@ -228,16 +228,25 @@ def common_model_setup(
         data_combinator = DataCombinator()
 
     # Resource allocation:
-    # - Learners: one per GPU, each gets 1 GPU and 1 CPU -- it needs CPU for orchestration
-    # - Driver: 1 CPU (taken from env_runners pool)
-    # - Env runners: remaining CPUs after learners and driver
-    num_learners = max(1, slurm_resources.num_gpus)  # At least 1 learner even without GPU
-    num_gpus_per_learner = 1 if slurm_resources.num_gpus > 0 else 0
-    num_cpus_per_learner = 1
+    # - local_learner=True (default): num_learners=0, Learner runs in the driver
+    #   process. Driver's 1 CPU covers both, no separate learner CPU reservation.
+    # - local_learner=False: one remote Learner per GPU, each with 1 GPU + 1 CPU.
+    # - Env runners: remaining CPUs after learners and driver.
+    local_learner = training_config.local_learner
     num_cpus_per_env_runner = 1
-
     driver_cpus = 1
-    learner_total_cpus = num_learners * num_cpus_per_learner
+
+    if local_learner:
+        num_learners = 0
+        num_gpus_per_learner = 1 if slurm_resources.num_gpus > 0 else 0
+        num_cpus_per_learner = 0
+        learner_total_cpus = 0
+    else:
+        num_learners = max(1, slurm_resources.num_gpus)
+        num_gpus_per_learner = 1 if slurm_resources.num_gpus > 0 else 0
+        num_cpus_per_learner = 1
+        learner_total_cpus = num_learners * num_cpus_per_learner
+
     remaining_cpus = slurm_resources.num_cpus - learner_total_cpus - driver_cpus
     num_env_runners = max(1, remaining_cpus // num_cpus_per_env_runner)
 
@@ -284,7 +293,7 @@ def common_model_setup(
     # NOTE VP 2026.01.08. : about ray and rllib concept https://docs.ray.io/en/latest/rllib/key-concepts.html
     # Learning the NN, policy (gradient updates) -- needs GPU
     config.learners(
-        num_learners=0,
+        num_learners=num_learners,
         num_gpus_per_learner=num_gpus_per_learner,
         num_cpus_per_learner=num_cpus_per_learner,
     )

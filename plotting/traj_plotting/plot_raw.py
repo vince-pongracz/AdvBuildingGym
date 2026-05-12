@@ -26,6 +26,12 @@ _UNIT_LABELS: dict[str, str] = {
     "raw_E_price_max": "Price (ct/kWh)",
     "raw_wind_speed": "Wind speed (m/s)",
     "raw_solar_irradiance": "Solar irradiance (J/cm²)",
+    "raw_hp_kW": "Power (kW)",
+    "raw_pv_prod": "Power (kW)",
+    "raw_pv_max": "Power (kW)",
+    "raw_wind_production_kW": "Power (kW)",
+    "raw_wind_available_kW": "Power (kW)",
+    "raw_current_consumption_kW": "Power (kW)",
 }
 
 # Suffix-based fallback for keys not in _UNIT_LABELS (auto-discovered _raw attrs).
@@ -122,6 +128,6 @@ def plot_raw(episode: EpisodeData) -> list[go.Figure]:
             yaxis_title=y_label,
             height=350,
         )
-        figures.append(style_figure(fig))
+        figures.append(style_figure(fig, n_legend_items=len(keys)))
 
     return figures

@@ -52,7 +52,11 @@ class TrainingParamConfig(LoggableConfig):
     seed: int = 42
     max_episodes_to_run:int = 10000
     clip_actions_to_env_bounds: bool = True
-    
+    # When True, num_learners=0 → the Learner runs inside the driver process
+    # (no remote Learner actor). The driver's CPU then covers both driver and
+    # learner duties, freeing one CPU for an extra EnvRunner.
+    local_learner: bool = True
+
     ppo_episodes_per_iteration: int = 25
     ppo_minibatch_size: int = 128 # Rllib default
     ppo_num_epochs: int = 20

@@ -125,6 +125,11 @@ class HouseholdEnergyConsumers(Infrastructure):
         seed = RngService.get().get_random(self.name)
         noise = np.random.default_rng(seed).normal(loc=0.0, scale=0.05)
         return float(np.clip(base + noise, 0.0, 1.0))
+    
+    def get_raw_values(self) -> Dict[str, float]:
+        return {
+            "raw_current_consumption_kW": self.current_consumption_kW
+        }
 
     def get_E(self, actions: Dict) -> tuple[float, float]:
         """Get current electric energy consumption from household consumers.

@@ -5,7 +5,13 @@ from __future__ import annotations
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from plotting.utils import EpisodeData, align_zero_dual_yaxes, apply_day_xaxis, style_figure
+from plotting.utils import (
+    EpisodeData,
+    align_zero_dual_yaxes,
+    apply_day_xaxis,
+    get_width_multiplier,
+    style_figure,
+)
 
 
 def plot_energy(episode: EpisodeData) -> list[go.Figure]:
@@ -86,7 +92,7 @@ def plot_energy(episode: EpisodeData) -> list[go.Figure]:
 
     fig.update_layout(
         title=f"Energy (full breakdown) — {episode.title_suffix()}",
-        height=450, width=2200,
+        height=450,
     )
     fig.update_yaxes(title_text="Power (kW)", secondary_y=False)
     fig.update_yaxes(title_text="Cumulative Energy (kWh)", secondary_y=True)
@@ -118,14 +124,19 @@ def plot_energy(episode: EpisodeData) -> list[go.Figure]:
 
     fig_net.update_layout(
         title=f"Net Energy — {episode.title_suffix()}",
-        height=400, width=2200,
+        height=400,
         bargap=0.25,
     )
     fig_net.update_yaxes(title_text="Net Power (kW)", secondary_y=False)
     fig_net.update_yaxes(title_text="Cumulative Energy (kWh)", secondary_y=True)
     align_zero_dual_yaxes(fig_net, power, cum_e)
 
-    return [style_figure(fig), style_figure(fig_net)]
+    n_full_legend = 2 + len(power_breakdown)  # net power + cum energy + breakdown traces
+    wm = get_width_multiplier("energy")
+    return [
+        style_figure(fig, n_legend_items=n_full_legend, width_multiplier=wm),
+        style_figure(fig_net, n_legend_items=2, width_multiplier=wm),
+    ]
 
 
 # HTML footnote rendered as a separate div below the energy plot

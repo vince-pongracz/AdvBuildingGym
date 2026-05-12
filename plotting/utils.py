@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import math
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -97,6 +98,9 @@ class EpisodeData:
     # Raw (unnormalised) physical values  {name: 1-D ndarray}
     # e.g. temp_out_raw (°C), desired_temp_in_raw (°C), temp_in_raw (°C)
     raw: dict[str, np.ndarray] = field(default_factory=dict)
+
+    # Raw policy actions (pre-rescale, tanh-bounded) {raw_policy_action_<d>: 1-D ndarray}
+    raw_policy_actions: dict[str, np.ndarray] = field(default_factory=dict)
 
     # -- convenience helpers ------------------------------------------------
 
@@ -246,10 +250,14 @@ def load_episode(
 
         # Energy
         cum_e = traj["cum_E_kWh"][:] if "cum_E_kWh" in traj else np.zeros_like(steps)
-        power = (
-            traj["net_power_kW"][:] if "net_power_kW" in traj
-            else np.zeros_like(steps)
-        )
+        # ``net_power_kW`` is the current key; older HDF5 files used
+        # ``step_power_kW`` for the same quantity.
+        if "net_power_kW" in traj:
+            power = traj["net_power_kW"][:]
+        elif "step_power_kW" in traj:
+            power = traj["step_power_kW"][:]
+        else:
+            power = np.zeros_like(steps)
 
         # Per-infrastructure power breakdown
         power_breakdown: dict[str, np.ndarray] = {}
@@ -262,6 +270,14 @@ def load_episode(
         if "raw" in traj:
             for key in traj["raw"]:
                 raw[key] = traj["raw"][key][:]
+
+        # Raw policy actions (top-level datasets named raw_policy_action_<d>).
+        # Pre-rescale tanh outputs from the policy network, useful for
+        # diagnosing saturation. Dataset count = action-space dimensionality.
+        raw_policy_actions: dict[str, np.ndarray] = {}
+        for key in traj.keys():
+            if key.startswith("raw_policy_action_") and isinstance(traj[key], h5py.Dataset):
+                raw_policy_actions[key] = traj[key][:]
 
     return EpisodeData(
         episode_id=episode_id,
@@ -278,6 +294,7 @@ def load_episode(
         cum_E_kWh=cum_e,
         power_breakdown=power_breakdown,
         raw=raw,
+        raw_policy_actions=raw_policy_actions,
     )
 
 
@@ -285,11 +302,27 @@ def load_episode(
 # Figure styling helpers
 # ---------------------------------------------------------------------------
 
+def _fig_cfg() -> dict[str, Any]:
+    """Return the ``figure:`` subdict from plot_config.yaml (with defaults)."""
+    cfg = load_plot_config().get("figure", {}) or {}
+    return {
+        "width": int(cfg.get("width", 1100)),
+        "tick_interval_min": int(cfg.get("tick_interval_min", 120)),
+        "tick_angle": int(cfg.get("tick_angle", -60)),
+        "base_top_margin": int(cfg.get("base_top_margin", 60)),
+        "legend_row_px": int(cfg.get("legend_row_px", 22)),
+        "legend_items_per_row": max(1, int(cfg.get("legend_items_per_row", 5))),
+    }
+
+
 def apply_day_xaxis(
     fig: go.Figure,
     n_rows: int | None = None,
 ) -> None:
-    """Configure x-axis as a 24-hour day with ticks every 5 minutes.
+    """Configure x-axis as a 24-hour day.
+
+    Tick interval and rotation are loaded from ``plot_config.yaml`` under the
+    ``figure:`` section (``tick_interval_min`` / ``tick_angle``).
 
     Args:
         fig: Plotly figure.
@@ -297,18 +330,15 @@ def apply_day_xaxis(
             so the label is placed on the bottom subplot. None for a plain
             figure without subplots.
     """
-    # 24 h = 1440 min; ticks every 5 min
-    tick_vals = list(range(0, 1441, 5))
-    # Show HH:MM labels every 60 min, empty string for intermediate ticks
-    tick_text = [
-        f"{m // 60:02d}:{m % 60:02d}" if m % 60 == 0 else ""
-        for m in tick_vals
-    ]
+    cfg = _fig_cfg()
+    interval = cfg["tick_interval_min"]
+    tick_vals = list(range(0, 1441, interval))
+    tick_text = [f"{m // 60:02d}:{m % 60:02d}" for m in tick_vals]
     base_kwargs: dict = dict(
         range=[0, 1440],
         tickvals=tick_vals,
         ticktext=tick_text,
-        tickangle=0,
+        tickangle=cfg["tick_angle"],
     )
     if n_rows is not None:
         for row in range(1, n_rows + 1):
@@ -350,15 +380,59 @@ def align_zero_dual_yaxes(fig: go.Figure, y1_data: list[float], y2_data: list[fl
     fig.update_yaxes(range=[-frac * span2, (1 - frac) * span2], secondary_y=True)
 
 
-def style_figure(fig: go.Figure) -> go.Figure:
-    """Apply consistent styling."""
+def style_figure(
+    fig: go.Figure,
+    *,
+    n_legend_items: int = 0,
+    width_multiplier: float = 1.0,
+) -> go.Figure:
+    """Apply consistent styling.
+
+    The top margin grows with ``n_legend_items`` so the title never overlaps
+    the (top-anchored, horizontal) legend regardless of legend size. The
+    title is pinned to the top of the paper, the legend stacked directly
+    below it. Figure width is ``figure.width * width_multiplier`` (defaults
+    to the configured ``figure.width``).
+    """
+    cfg = _fig_cfg()
+    rows = math.ceil(n_legend_items / cfg["legend_items_per_row"]) if n_legend_items else 0
+    legend_block = rows * cfg["legend_row_px"]
+    top_margin = cfg["base_top_margin"] + legend_block
+    width = int(cfg["width"] * width_multiplier)
+
+    # Reserve the top ~30 px of the margin for the title, then place the
+    # legend (top-anchored) just below it. Both title and legend use
+    # container coordinates ([0, 1] across the FULL figure including
+    # margins) — the default yref for legend is "paper" (plot area only),
+    # which would put the legend inside the plot.
+    height = fig.layout.height or 450
+    title_band_px = 30
+    title_y = 1 - (title_band_px / 2) / height       # centre of title band
+    legend_y = 1 - (title_band_px + 6) / height       # top of legend, 6 px below title
+
     fig.update_layout(
         template="plotly_white",
         font=dict(size=12),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-        margin=dict(l=60, r=30, t=60, b=50),
+        width=width,
+        title=dict(y=title_y, yanchor="middle", xanchor="left", x=0.02),
+        legend=dict(
+            orientation="h",
+            yref="container", yanchor="top", y=legend_y,
+            xref="container", xanchor="right", x=1 - 30 / width,
+        ),
+        margin=dict(l=60, r=30, t=top_margin, b=50),
     )
     return fig
+
+
+def get_width_multiplier(group: str) -> float:
+    """Return the configured width multiplier for a plot group (default 1.0)."""
+    cfg = load_plot_config().get("figure", {}) or {}
+    mults = cfg.get("width_multipliers", {}) or {}
+    try:
+        return float(mults.get(group, 1.0))
+    except (TypeError, ValueError):
+        return 1.0
 
 
 def write_figure_list_html(
