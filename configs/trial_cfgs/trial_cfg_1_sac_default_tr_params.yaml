@@ -194,6 +194,13 @@ rewards:
     weight: 1.0
     params: {}
 
+  - class_name: ActionSmoothnessReward
+    weight: 1.0
+    params:
+      n_steps: 16
+      mode: weighted
+      freq_exponent: 1.0
+
 reward_schedule: null
 infra_schedule: null
 statesource_schedule: null

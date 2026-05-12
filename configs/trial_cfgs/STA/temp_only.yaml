@@ -125,6 +125,12 @@ rewards:
     recovery_steps: 3
     terminate_threshold_pct: 1.1
     terminate_penalty: -10
+- class_name: ActionSmoothnessReward
+  weight: 1.0
+  params:
+    n_steps: 16
+    mode: weighted
+    freq_exponent: 1.0
 
 infra_schedule: null
 

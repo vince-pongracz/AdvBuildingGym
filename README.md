@@ -96,8 +96,6 @@ My problem -- energy management: Control problem, almost infinite horizon
 ### Issues
 
 - Dynamic env assumed -- during development the env changes, the rewards change, their weights change
-- TODO VP: check the raw data plotting and energy chart plotting -- it probably does not show the energy used for EV charge and discharge...
-- TODO VP: the plots about the syn_cfg time series csv-s should be plotted to the same plot, but they should have different traces, with different colors.
 
 ## References, data sources
 

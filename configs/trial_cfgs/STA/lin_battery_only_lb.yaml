@@ -119,6 +119,12 @@ rewards:
 - class_name: LongTermEconomicReward
   weight: 1.0
   params: {}
+- class_name: ActionSmoothnessReward
+  weight: 1.0
+  params:
+    n_steps: 16
+    mode: weighted
+    freq_exponent: 1.0
 
 infra_schedule: null
 
