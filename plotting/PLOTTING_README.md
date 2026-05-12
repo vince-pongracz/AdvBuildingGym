@@ -106,7 +106,7 @@ in `docs/about_traj_hdf5_export.md`. Each episode group contains:
 <episode_id>/
 ├── summary/       (attrs: achieved_reward, reward_rate, cum_E_kWh, ...)
 └── trajectory/
-    ├── step, reward, cum_E_kWh, step_power_kW   (1-D arrays)
+    ├── step, reward, cum_E_kWh, net_power_kW    (1-D arrays)
     ├── state/          (one dataset per state variable)
     ├── action/         (one dataset per action variable)
     └── reward_breakdown/  (one dataset per reward component)

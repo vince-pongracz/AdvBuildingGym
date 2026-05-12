@@ -106,10 +106,8 @@ class SolarPanel(Infrastructure):
         )
         self.current_production_kW = np.clip(self.current_production_kW, 0.0, self.max_power_kW)
 
-        # Write normalized production as read-only output (negative = production)
-        # TODO VP 2026.05.06.: no meaning behind positive and negative action signs,
-        # as power generation and consumption do not depend on the action sign, because it's per Infra computed
-        solar_action = -irradiance_norm
+        # Write normalized production as read-only output
+        solar_action = irradiance_norm
         if "a_solar" not in actions:
             actions["a_solar"] = np.array([solar_action], dtype=np.float32)
         else:
@@ -129,8 +127,8 @@ class SolarPanel(Infrastructure):
     
     def get_raw_values(self) -> Dict[str, float]:
         return {
-            "raw_pv_prod": self.current_production_kW,
-            "raw_pv_max": self.max_power_kW
+            "raw_pv_prod_kW": self.current_production_kW,
+            "raw_pv_max_kW": self.max_power_kW
         }
 
     def get_E(self, actions: Dict) -> tuple[float, float]:

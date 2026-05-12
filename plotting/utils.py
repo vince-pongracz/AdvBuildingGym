@@ -85,8 +85,8 @@ class EpisodeData:
     # Per-component reward breakdown  {name: 1-D ndarray}
     reward_breakdown: dict[str, np.ndarray] = field(default_factory=dict)
 
-    # Instantaneous power per timestep (kW)
-    step_power_kW: np.ndarray = field(default_factory=lambda: np.empty(0, dtype=np.float32))
+    # Instantaneous net power per timestep (kW)
+    net_power_kW: np.ndarray = field(default_factory=lambda: np.empty(0, dtype=np.float32))
 
     # Cumulative energy per timestep (kWh)
     cum_E_kWh: np.ndarray = field(default_factory=lambda: np.empty(0, dtype=np.float32))
@@ -247,7 +247,7 @@ def load_episode(
         # Energy
         cum_e = traj["cum_E_kWh"][:] if "cum_E_kWh" in traj else np.zeros_like(steps)
         power = (
-            traj["step_power_kW"][:] if "step_power_kW" in traj
+            traj["net_power_kW"][:] if "net_power_kW" in traj
             else np.zeros_like(steps)
         )
 
@@ -274,7 +274,7 @@ def load_episode(
         actions=actions,
         rewards=rewards,
         reward_breakdown=reward_breakdown,
-        step_power_kW=power,
+        net_power_kW=power,
         cum_E_kWh=cum_e,
         power_breakdown=power_breakdown,
         raw=raw,

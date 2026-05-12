@@ -95,6 +95,9 @@ env_meta:
   # to keep episodes running through breaches with only the regular
   # reward/penalty curves applied.
   allow_early_termination: false
+  hst_env_wrapper:
+    enabled: true
+    hst_len: 288
 
 # --- training params + schedules ---
 training_params:

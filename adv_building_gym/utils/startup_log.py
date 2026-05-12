@@ -240,9 +240,9 @@ def _section_schedules(
     body: list[str] = []
 
     reward_mode = getattr(reward_manager, "mode", "?")
-    reward_swap = getattr(reward_manager, "swap_every_n_iterations", "?")
+    reward_swap = getattr(reward_manager, "swap_every_n_episodes", "?")
     body.append(
-        f"  Reward schedule : mode={reward_mode}  swap every {reward_swap} iter  "
+        f"  Reward schedule : mode={reward_mode}  swap every {reward_swap} episodes  "
         f"(grad_train={grad_train})"
     )
 
@@ -251,7 +251,7 @@ def _section_schedules(
         body.append(
             f"  Infra schedule  : mode={infra_combinator.mode}  "
             f"{len(infra_combinator.config_paths)} configs  "
-            f"swap every {infra_combinator.swap_every_n_iterations} iter"
+            f"swap every {infra_combinator.swap_every_n_episodes} episodes"
         )
     else:
         body.append("  Infra schedule  : none  (single static infra config)")

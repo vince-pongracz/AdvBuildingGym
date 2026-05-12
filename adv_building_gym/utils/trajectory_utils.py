@@ -81,7 +81,7 @@ def extract_trajectory_from_infos(
         Keys include "step", "state" (nested dict keyed by original state
         names — scalars as flat lists, vectors preserved as lists of lists),
         "action" (nested dict, same convention), "reward",
-        "reward_breakdown" (nested dict), "cum_E_kWh", "step_power_kW",
+        "reward_breakdown" (nested dict), "cum_E_kWh", "net_power_kW",
         and optionally "power_breakdown" (nested dict keyed by infra name).
     """
     if not infos:
@@ -211,8 +211,8 @@ def extract_trajectory_from_infos(
     cum_values = [float(row.get("cum_E_kWh", 0.0)) for row in all_rows]
     trajectory["cum_E_kWh"] = cum_values
 
-    # Instantaneous power (kW) in a step = ΔEnergy (kWh) / ΔTime (h)
-    trajectory["step_power_kW"] = [float(row.get("step_power_kW", 0.0)) for row in all_rows]
+    # Instantaneous net power (kW) in a step = ΔEnergy (kWh) / ΔTime (h)
+    trajectory["net_power_kW"] = [float(row.get("net_power_kW", 0.0)) for row in all_rows]
 
     # Per-infrastructure power breakdown (nested under "power_breakdown" dict)
     if power_names:

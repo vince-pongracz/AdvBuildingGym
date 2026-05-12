@@ -31,20 +31,20 @@ class StatesourceCombinator:
         self,
         config_paths: list[str],
         control_step: int,
-        swap_every_n_iterations: int = 300,
+        swap_every_n_episodes: int = 300,
         mode: Literal["cycle", "off"] = "cycle",
     ) -> None:
         self.config_paths = config_paths
         self.control_step = control_step
-        self.swap_every_n_iterations = swap_every_n_iterations
+        self.swap_every_n_episodes = swap_every_n_episodes
         self.mode = mode
         self._swap_index: int = 0
 
         self._configs: list[_ParsedConfig] = [self._load_config(p, control_step) for p in config_paths]
         
         logger.info(
-            "StatesourceCombinator: %d configs loaded, mode=%s, swap_every_n_iterations=%d",
-            len(self._configs), self.mode, self.swap_every_n_iterations,
+            "StatesourceCombinator: %d configs loaded, mode=%s, swap_every_n_episodes=%d",
+            len(self._configs), self.mode, self.swap_every_n_episodes,
         )
         
         for i, cfg in enumerate(self._configs):
@@ -93,7 +93,7 @@ class StatesourceCombinator:
         return cls(
             config_paths=list(raw.get("configs", [])),
             control_step=control_step,
-            swap_every_n_iterations=raw.get("swap_every_n_iterations", 300),
+            swap_every_n_episodes=raw["swap_every_n_episodes"],
             mode=raw.get("mode", "cycle"),
         )
 

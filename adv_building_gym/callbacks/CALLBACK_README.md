@@ -75,11 +75,13 @@ Outputs:
 
 ### DataScheduleCallback (`data_schedule_callback.py`)
 
-Factory: `create_data_schedule_on_train_result(combinator, swap_every_n_iterations)`
+Factory: `create_data_schedule_on_train_result_cb(combinator, num_env_runners)`
 
-Fires on `on_train_result`. Every N training iterations, pushes a new `DataCombinator`
-variant to all env_runners (training + evaluation) via `foreach_env_runner`. An empty
-combinator (no variants) is a safe no-op.
+Fires on `on_train_result`. Pushes a new `DataCombinator` variant to all env_runners
+(training + evaluation) once `num_episodes_lifetime` advances by at least
+`max(combinator.swap_every_n_episodes, num_env_runners)` since the previous swap.
+The first call always fires (initial CSV push); subsequent calls obey the
+episode-count threshold. An empty combinator (no variants) is a safe no-op.
 
 ## Important: `on_episode_end` vs `on_train_result`
 

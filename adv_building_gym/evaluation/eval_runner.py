@@ -118,7 +118,7 @@ def evaluate_model(
     logger.info("Loading algorithm from checkpoint...")
     rl_module = load_rl_module(checkpoint_path)
     
-    # TODO VP 2026.03.16. : Train long term -- for 7 days, for 30 days, for 365 days -- episodes
+    # TODO VP 2026.03.16. : Partially resolved -- Train long term -- for 7 days, for 30 days, for 365 days -- episodes
     # --> Eval long term as well. Not only single day optimisation, long term optimisation learnt
     # On trial level it's already realised, but still have to try and test it
 
@@ -145,6 +145,14 @@ def evaluate_model(
 
     # TrajectoryCollector reads spaces from the unwrapped env
     collector = TrajectoryCollector(base_env) if log_trajectories else None
+
+    if active_config.hst_env_wrapper_enabled:
+        from adv_building_gym.envs.history_wrapper import HistoryWrapper
+        base_env = HistoryWrapper(base_env, hst_len=active_config.hst_env_wrapper_hst_len)
+        logger.info(
+            "eval_runner: HistoryWrapper enabled (hst_len=%d)",
+            active_config.hst_env_wrapper_hst_len,
+        )
 
     env = wrap_action_space(base_env)
 

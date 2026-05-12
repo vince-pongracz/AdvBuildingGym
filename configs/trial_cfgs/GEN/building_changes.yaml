@@ -11,6 +11,9 @@ env_meta:
   EPISODE_LENGTH: 288
   control_step: 300
   allow_early_termination: false
+  hst_env_wrapper:
+    enabled: true
+    hst_len: 288
 
 training_params:
   common:
@@ -160,7 +163,7 @@ infra_schedule: null
 
 statesource_schedule:
   mode: cycle
-  swap_every_n_iterations: 300
+  swap_every_n_episodes: 300
   configs:
   - configs/statesource_cfgs/GEN/building/building_1.yaml
   - configs/statesource_cfgs/GEN/building/building_2.yaml

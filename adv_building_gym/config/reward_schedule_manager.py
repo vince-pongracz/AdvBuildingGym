@@ -109,7 +109,9 @@ class RewardScheduleManager:
     buffer carry rewards from the previous reward set.  Keep
     ``swap_every_n_episodes`` large relative to buffer turnover.
     """
-    # TODO VP 2026.05.11.: Flush half of the buffer?
+    # TODO VP 2026.05.11.: Flush half of the replay buffer in case of new objectives?
+    # Or just gather some samples without training after a swap, to "prime" the buffer with the new rewards?
+    # So the buffer is half old-reward, half new-reward for a while, then fully new-reward after that.
 
     def __init__(
         self,
@@ -206,13 +208,21 @@ class RewardScheduleManager:
         else:
             raise ValueError("Reward schedule omits 'seed' and no default_seed was supplied")
 
-        # Accept both swap_every_n_episodes (preferred, README) and
-        # swap_every_n_iterations (legacy).  At least one must be present
-        # for swapping modes.
-        swap_n = cfg.get("swap_every_n_episodes")
-        if swap_n is None:
-            swap_n = cfg.get("swap_every_n_iterations", 1)
-        swap_n = int(swap_n)
+        # Number of episodes (summed across all env_runners) between
+        # swaps. The scheduler callback clamps this to
+        # max(N, num_env_runners) at registration time. Not meaningful
+        # for OFF / FIX (no swapping happens), so it's optional there.
+        static_modes = (RewardScheduleMode.OFF, RewardScheduleMode.FIX)
+        if "swap_every_n_episodes" not in cfg:
+            if mode not in static_modes:
+                raise ValueError(
+                    "Reward schedule YAML must declare 'swap_every_n_episodes' "
+                    "(episodes across all env_runners between reward swaps) "
+                    f"for mode={mode.value}."
+                )
+            swap_n = 1
+        else:
+            swap_n = int(cfg["swap_every_n_episodes"])
 
         if mode is RewardScheduleMode.OFF:
             mgr = RewardScheduleManager(mode, swap_n, seed, reward_specs=list(rewards))

@@ -1,13 +1,15 @@
-"""Iteration-aligned data variant scheduling via RLlib callback.
+"""Episode-budget-aligned data variant scheduling via RLlib callback.
 
 Pushes a variant from the DataCombinator to every env_runner — both
-``algorithm.env_runner_group`` and ``algorithm.eval_env_runner_group`` — at
-training-iteration boundaries, so all workers consume the same year-long CSV
-bundle within an iteration window. This is one of three independent and
-additive swap surfaces (the other two being the episode-boundary swap inside
-``AdvBuildingGym.reset()`` and the ``reset(options={"data_variant": ...})``
-external override). See ``docs/about_data_mgmt.md`` for the full picture and
-the wiring entry point in ``ray_training/common_model_config.py``.
+``algorithm.env_runner_group`` and ``algorithm.eval_env_runner_group`` — once
+``num_episodes_lifetime`` (summed across all env_runners) has advanced by at
+least ``max(swap_every_n_episodes, num_env_runners)`` since the previous
+swap, so all workers consume the same year-long CSV bundle within a swap
+window. This is one of three independent and additive swap surfaces (the
+other two being the episode-boundary swap inside ``AdvBuildingGym.reset()``
+and the ``reset(options={"data_variant": ...})`` external override). See
+``docs/about_data_mgmt.md`` for the full picture and the wiring entry point
+in ``ray_training/common_model_config.py``.
 
 ``create_data_schedule_on_train_result_cb(...)`` returns an ``on_train_result``
 function that can be passed directly to
@@ -23,14 +25,14 @@ Notes on synchronisation scope:
   of the same variant.
 - In-training eval is pushed the TRAINING combinator's variant. A held-out
   eval data config is only honoured by ``run_eval_ray.py``.
-- Iteration-aligned swap is required for interpretability, not correctness:
+- Synchronised swap is required for interpretability, not correctness:
   PPO/SAC do not need synchronous variants across runners — the policy is
   conditioned on per-variant scale factors via ``ctxt_*`` observation keys
   (e.g. ``ctxt_temp_abs_max``), so mixed-variant batches are fine. The
-  synchronous swap buys clean per-iteration semantics: in-training eval
+  synchronous swap buys clean per-swap-window semantics: in-training eval
   reports on the same variant the training batch was collected on, reward /
   infra curriculum callbacks (also fired on ``on_train_result``) stay aligned
-  with the data, and TensorBoard curves read as "iteration N had variant Z"
+  with the data, and TensorBoard curves read as "window N had variant Z"
   instead of a moving cocktail across runners.
 - Episodes longer than one day read consecutively past the day boundary. If
   ``EPISODE_LENGTH`` exceeds one calendar day, ``steps_per_day`` in
@@ -40,6 +42,7 @@ Notes on synchronisation scope:
 
 import logging
 
+from adv_building_gym.callbacks._swap_trigger import make_swap_gate
 from adv_building_gym.data_combinator import DataCombinator
 from adv_building_gym.envs.data_variant import DataVariantProvider
 
@@ -48,31 +51,32 @@ logger = logging.getLogger(__name__)
 
 def create_data_schedule_on_train_result_cb(
     combinator: DataCombinator,
-    swap_every_n_iterations: int,
+    num_env_runners: int,
 ):
     """Factory returning an ``on_train_result`` function for ``config.callbacks()``.
 
-    Usage::
-
-        config.callbacks(
-            CheckpointCallbackClass,
-            on_episode_end=episode_end_fn,
-            on_train_result=create_data_schedule_on_train_result(combinator, 10),
-        )
-
     Args:
         combinator: DataCombinator instance that defines the variant pool.
-        swap_every_n_iterations: Push a new variant every N training iterations.
+        num_env_runners: Active env_runner count; used as the floor on the
+            configured ``swap_every_n_episodes`` so each swap window spans
+            at least one episode per runner.
     """
+    gate = make_swap_gate(
+        "DataSchedule", combinator.swap_every_n_episodes, num_env_runners,
+    )
+    swap_index = {"i": 0}
 
     def on_train_result(*, algorithm, result: dict, **kwargs) -> None:
         iteration: int = result.get("training_iteration", 0)
-        if iteration % swap_every_n_iterations != 0:
+        decision = gate(iteration, result)
+        if not decision.should_fire:
             return
 
-        variant = combinator.get_variant(iteration // swap_every_n_iterations)
-        if not variant:
+        pool = combinator.variants
+        if not pool:
             return
+        variant = pool[swap_index["i"] % len(pool)]
+        swap_index["i"] += 1
 
         _publish_variant_to_runners(algorithm, variant, iteration)
 

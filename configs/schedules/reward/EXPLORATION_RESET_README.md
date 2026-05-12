@@ -28,6 +28,6 @@ exploration_reset_schedule:
   ppo_entropy_coeff: 0.05
   ppo_entropy_baseline: 0.0
   sac_alpha: 0.5
-  decay_iterations: 50    # half of swap_every_n_iterations
+  decay_iterations: 50    # iterations over which to decay the bump back to baseline
   lr_multiplier: 1.5
 ```

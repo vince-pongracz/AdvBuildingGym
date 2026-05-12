@@ -54,6 +54,7 @@ def _compose_on_train_result(*fns):
 
 def register_callbacks(
     config: AlgorithmConfig,
+    num_env_runners: int,
     metrics_base_dir: str = "ep_metrics",
     data_combinator: DataCombinator | None = None,
     log_trajectories: bool = False,
@@ -113,51 +114,60 @@ def register_callbacks(
     on_train_result_fns = [
         create_iter_timing_on_train_result_cb(),
         create_data_schedule_on_train_result_cb(
-            data_combinator, data_combinator.swap_every_n_episodes,
+            data_combinator, num_env_runners=num_env_runners,
         ),
     ]
     logger.info(
-        "DataScheduleCallback: swap every %d iterations, %d variants",
-        data_combinator.swap_every_n_episodes, len(data_combinator.variants),
+        "DataScheduleCallback: swap_every_n_episodes=%d (num_env_runners=%d), %d variants",
+        data_combinator.swap_every_n_episodes, num_env_runners, len(data_combinator.variants),
     )
 
     if (reward_schedule_manager is not None
             and reward_schedule_manager.mode is not RewardScheduleMode.OFF):
         on_train_result_fns.append(
             create_reward_switch_on_train_result_cb(
-                reward_schedule_manager, exploration_reset=exploration_reset,
+                reward_schedule_manager,
+                num_env_runners=num_env_runners,
+                exploration_reset=exploration_reset,
             ),
         )
         logger.info(
-            "RewardSwitchCallback: mode=%s, swap every %d episodes, active rewards: %s",
+            "RewardSwitchCallback: mode=%s, swap_every_n_episodes=%d (num_env_runners=%d), active rewards: %s",
             reward_schedule_manager.mode,
             reward_schedule_manager.swap_every_n_episodes,
+            num_env_runners,
             reward_schedule_manager.get_active_reward_names(),
         )
 
     if infra_combinator is not None and infra_combinator.is_enabled():
         on_train_result_fns.append(
             create_infra_schedule_on_train_result_cb(
-                infra_combinator, exploration_reset=exploration_reset,
+                infra_combinator,
+                num_env_runners=num_env_runners,
+                exploration_reset=exploration_reset,
             ),
         )
         logger.info(
-            "InfraScheduleCallback: mode=%s, swap every %d iterations, %d configs in pool",
+            "InfraScheduleCallback: mode=%s, swap_every_n_episodes=%d (num_env_runners=%d), %d configs in pool",
             infra_combinator.mode,
-            infra_combinator.swap_every_n_iterations,
+            infra_combinator.swap_every_n_episodes,
+            num_env_runners,
             len(infra_combinator.config_paths),
         )
 
     if statesource_combinator is not None and statesource_combinator.is_enabled():
         on_train_result_fns.append(
             create_statesource_schedule_on_train_result_cb(
-                statesource_combinator, exploration_reset=exploration_reset,
+                statesource_combinator,
+                num_env_runners=num_env_runners,
+                exploration_reset=exploration_reset,
             ),
         )
         logger.info(
-            "StatesourceScheduleCallback: mode=%s, swap every %d iterations, %d configs in pool",
+            "StatesourceScheduleCallback: mode=%s, swap_every_n_episodes=%d (num_env_runners=%d), %d configs in pool",
             statesource_combinator.mode,
-            statesource_combinator.swap_every_n_iterations,
+            statesource_combinator.swap_every_n_episodes,
+            num_env_runners,
             len(statesource_combinator.config_paths),
         )
 
@@ -346,6 +356,7 @@ def common_model_setup(
 
     register_callbacks(
         config,
+        num_env_runners=num_env_runners,
         metrics_base_dir=metrics_base_dir,
         data_combinator=data_combinator,
         log_trajectories=log_trajectories,

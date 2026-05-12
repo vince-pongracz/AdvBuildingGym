@@ -446,8 +446,9 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         power_breakdown: dict[str, float],
     ) -> None:
         # Reward functions read these from _component_info instead of holding
-        # references to infrastructures.
-        self._component_info["power_breakdown"] = power_breakdown
+        # references to infrastructures. power_breakdown is not republished
+        # here — it is emitted only on the returned step info dict (consumed
+        # by trajectory logging / plotting), no reward needs it internally.
         self._component_info["net_power_kW"] = total_power_kW
         self._component_info["penalisable_power_kW"] = sum(
             infra.get_penalisable_consumption(action, self.state)
@@ -509,7 +510,7 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
             "reward_breakdown": reward_breakdown,
             "max_reward_step": max_reward_step,
             "cum_E_kWh": self._energy_tracker.cum_E_kWh,
-            "step_power_kW": total_power_kW,
+            "net_power_kW": total_power_kW,
             "power_breakdown": power_breakdown,
             "raw": self._raw_state_collector.collect(self.statesources, self.infras, self.state),
         }

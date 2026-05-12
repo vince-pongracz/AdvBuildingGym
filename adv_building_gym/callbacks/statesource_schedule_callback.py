@@ -1,13 +1,16 @@
-"""Iteration-aligned statesource scheduling via RLlib on_train_result callback.
+"""Episode-budget-aligned statesource scheduling via RLlib on_train_result callback.
 
 Mirror of ``infra_schedule_callback.py`` for statesource bundles.  Pushes
-fresh StateSource instances to all env_runners at training iteration
-boundaries.  Optionally fires the shared exploration-reset bump.
+fresh StateSource instances to all env_runners once
+``num_episodes_lifetime`` has advanced by at least
+``max(swap_every_n_episodes, num_env_runners)`` since the previous swap.
+Optionally fires the shared exploration-reset bump.
 """
 
 import logging
 
 from adv_building_gym.callbacks._exploration_reset_util import make_decay_loop
+from adv_building_gym.callbacks._swap_trigger import make_swap_gate
 from adv_building_gym.config.exploration_reset import ExplorationResetConfig
 from adv_building_gym.statesource_combinator import StatesourceCombinator
 
@@ -16,16 +19,24 @@ logger = logging.getLogger(__name__)
 
 def create_statesource_schedule_on_train_result_cb(
     statesource_combinator: StatesourceCombinator,
+    num_env_runners: int,
     exploration_reset: ExplorationResetConfig | None = None,
 ):
     expl_cfg = exploration_reset or ExplorationResetConfig()
     _state, maybe_decay, fire_bump = make_decay_loop(expl_cfg, "on_statesource_swap")
+    gate = make_swap_gate(
+        "StatesourceSchedule", statesource_combinator.swap_every_n_episodes, num_env_runners,
+    )
 
     def on_train_result(*, algorithm, result: dict, **kwargs) -> None:
         iteration: int = result.get("training_iteration", 0)
         maybe_decay(algorithm, iteration)
 
-        if iteration % statesource_combinator.swap_every_n_iterations != 0:
+        decision = gate(iteration, result)
+        if not decision.should_fire:
+            return
+        if decision.is_first_fire:
+            _push_statesources_to_runners(algorithm, statesource_combinator)
             return
 
         changed = statesource_combinator.advance()

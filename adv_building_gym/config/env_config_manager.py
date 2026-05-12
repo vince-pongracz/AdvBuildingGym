@@ -55,6 +55,12 @@ class EnvConfigManager:
         episode_length = env_meta_doc.get("EPISODE_LENGTH", 288)
         allow_early_termination = bool(env_meta_doc.get("allow_early_termination", True))
 
+        hst_cfg = env_meta_doc.get("hst_env_wrapper") or {}
+        hst_enabled = bool(hst_cfg.get("enabled", False))
+        hst_len = int(hst_cfg.get("hst_len", 0))
+        if hst_enabled and hst_len <= 0:
+            raise ValueError("env_meta.hst_env_wrapper: hst_len must be > 0 when enabled=true")
+
         infra_specs = list(infras_doc.get("infras", []))
         statesource_specs = list(statesources_doc.get("statesources", []))
 
@@ -62,6 +68,8 @@ class EnvConfigManager:
             EPISODE_LENGTH=episode_length,
             CONTROL_STEP=control_step,
             allow_early_termination=allow_early_termination,
+            hst_env_wrapper_enabled=hst_enabled,
+            hst_env_wrapper_hst_len=hst_len,
             infra_specs=infra_specs,
             statesource_specs=statesource_specs,
             infras=None,
@@ -97,6 +105,11 @@ class EnvConfigManager:
             "control_step": config.CONTROL_STEP,
             "allow_early_termination": config.allow_early_termination,
         }
+        if config.hst_env_wrapper_enabled:
+            env_meta_doc["hst_env_wrapper"] = {
+                "enabled": True,
+                "hst_len": config.hst_env_wrapper_hst_len,
+            }
 
         for path, doc in (
             (infras_path, infras_doc),

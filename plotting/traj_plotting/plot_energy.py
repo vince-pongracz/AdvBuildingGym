@@ -16,7 +16,7 @@ def plot_energy(episode: EpisodeData) -> list[go.Figure]:
     Falls back to a single bar when breakdown data is unavailable.
     """
     time = episode.time_minutes
-    power = episode.step_power_kW
+    power = episode.net_power_kW
     cum_e = episode.cum_E_kWh
     time_hhmm = episode.time_hhmm
     power_breakdown = episode.power_breakdown

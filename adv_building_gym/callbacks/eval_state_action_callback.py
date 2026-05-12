@@ -93,7 +93,6 @@ def make_eval_state_action_cb_class(
                 if not isinstance(info, dict):
                     continue
 
-                # TODO VP 2026.04.30. : Check whether the keys are still present in the info dict.
                 # Raw (denormalised) physical values: temp_in_raw, temp_out_raw, …
                 for key, val in info.get("raw", {}).items():
                     ep_data[f"raw/{key}"].append(float(val))
@@ -114,8 +113,8 @@ def make_eval_state_action_cb_class(
                         ep_data[f"action/{act_key}_{dim}"].append(float(scalar))
 
                 # Instantaneous net power (kW)
-                if "step_power_kW" in info:
-                    ep_data["power/net_kW"].append(float(info["step_power_kW"]))
+                if "net_power_kW" in info:
+                    ep_data["power/net_kW"].append(float(info["net_power_kW"]))
 
             _episode_buffer.append(dict(ep_data))
 

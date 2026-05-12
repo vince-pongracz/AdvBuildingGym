@@ -483,10 +483,8 @@ Tensorboard:
 - track policy_entropy, episode_reward_mean
 
 
-TODO VP: continue here with this IDEA -- no need for real reward scheduling, because it's enough to have a fix set of rewards and it's enough to schedule the weighting of the rewards -- switched off rewards get 0.0 as weight.
-Overhaul the whole reward ocosystem. A group of yaml files are responsible for the reward function parametrisation.
-Another group of yamls are responsible for the weight allocation to each of the reward functions.
-The open question is the scheduling -- how are then the reward weights scheduled among all the rewards?
+TODO VP: This is implemented already: no need for real reward scheduling, because it's enough to have a fix set of rewards and it's enough to schedule the weighting of the rewards -- switched off rewards get 0.0 as weight.
+The open question is the scheduling -- how are then the reward weights scheduled among all the rewards? --> e.g. Dirichlet (more or less)
 
 Conclusion:
 - Idea: use trajectory tracking for the hard constraints -- for temperature, EV charging, etc.., and use RL based controllers for th ESS -- which can react to the changes, it can plan and follow strategy.

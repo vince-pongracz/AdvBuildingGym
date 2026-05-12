@@ -89,9 +89,9 @@ def select_model(
         config.training(
             # NOTE VP 2026.02.11. : Actor critic methods SAC & PPO - blog
             # Link: https://joel-baptista.github.io/phd-weekly-report/posts/ac/
-            actor_lr=training_config.learning_rate,  # LR of the policy network. RLlib default: 3e-5
-            critic_lr=training_config.learning_rate,  # LR of the critic network. RLlib default: 3e-4
-            alpha_lr=training_config.learning_rate,  # Influences weight of entropy -- and thus exploration. RLlib default: 3e-4
+            # actor_lr=training_config.learning_rate,  # LR of the policy network. RLlib default: 3e-5
+            # critic_lr=training_config.learning_rate,  # LR of the critic network. RLlib default: 3e-4
+            # alpha_lr=training_config.learning_rate,  # Influences weight of entropy -- and thus exploration. RLlib default: 3e-4
             # PrioritizedEpisodeReplayBuffer crashes on Ray 2.52.1 with
             # KeyError in sum-tree when priorities degenerate to zero.
             # Use uniform EpisodeReplayBuffer until the bug is fixed upstream.

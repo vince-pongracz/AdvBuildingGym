@@ -11,6 +11,9 @@ env_meta:
   EPISODE_LENGTH: 288
   control_step: 300
   allow_early_termination: false
+  hst_env_wrapper:
+    enabled: true
+    hst_len: 288
 
 training_params:
   common:
@@ -185,11 +188,3 @@ data_schedule:
   train: configs/schedules/data/train.yaml
   eval: configs/schedules/data/eval.yaml
 
-exploration_reset:
-  enabled: false
-  trigger: on_reward_swap
-  ppo_entropy_coeff: 0.05
-  ppo_entropy_baseline: 0.0
-  sac_alpha: 0.5
-  decay_iterations: 50
-  lr_multiplier: 1.5

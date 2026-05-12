@@ -84,16 +84,19 @@ row_offset, day_mode = self.data_combinator.get_day_offset(...)
 
 This is the only swap path for evaluation, controllers, and any non-Ray driver. In Ray
 training it provides per-worker variance: each env_runner advances its own counter, so
-workers explore different variants between iteration-aligned pushes.
+workers explore different variants between episode-budget pushes.
 
-### 2. Iteration-boundary push (`data_schedule_callback.py`)
+### 2. Episode-budget push (`data_schedule_callback.py`)
 
-`create_data_schedule_on_train_result_cb(combinator, swap_every_n_iterations)` returns
-an `on_train_result` function. Every N iterations it pulls
-`combinator.get_variant(iteration // N)` and pushes it to **every** env_runner —
+`create_data_schedule_on_train_result_cb(combinator, num_env_runners)` returns
+an `on_train_result` function. After every
+`max(combinator.swap_every_n_episodes, num_env_runners)` episodes accumulated across
+all env_runners (read from `result["env_runners"]["num_episodes_lifetime"]`) it pulls
+the next variant from `combinator.variants` and pushes it to **every** env_runner —
 both `algorithm.env_runner_group` and `algorithm.eval_env_runner_group` — via
-`foreach_env_runner`. Each runner traverses its wrapper chain to reach `AdvBuildingGym`
-and calls `apply_data_variant(variant)`.
+`foreach_env_runner`. The first invocation always fires (initial CSV push). Each
+runner traverses its wrapper chain to reach `AdvBuildingGym` and calls
+`apply_data_variant(variant)`.
 
 What this buys:
 
@@ -170,8 +173,8 @@ day offset.
   `ev_state.ds_path == p` regardless of episode counter.
 - **Roundtrip**: `EnvConfigManager.save(...)` / `load(...)` preserves the
   data-combinator YAML reference (combinator state itself lives in the data YAML).
-- **Iteration push**: with `swap_every_n_iterations=1`, after iteration 1 every
-  env_runner reports the expected `ds_path`. Inspecting from outside requires walking
+- **Episode-budget push**: with `swap_every_n_episodes=1`, after the first swap
+  every env_runner reports the expected `ds_path`. Inspecting from outside requires walking
   the wrapper chain:
   `env_runner.env.env.envs[0].unwrapped.statesources[-1].ds_path`.
 

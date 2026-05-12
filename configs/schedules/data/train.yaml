@@ -6,7 +6,8 @@
 shuffle: true
 
 # Variant cycling settings
-swap_every_n_episodes: 120
+swap_every_n_episodes: 5 # Unfortunately this depends on the number of env_runners...
+# Each env_runner swaps variant after 5 episode --> 14 x 5 = 70 episode / variant
 mode: cycle      # "cycle" (round-robin each variant) or "random" (pick variants randomly)
 day: random      # "random", "each", or a date string like "2025-03-15"
 

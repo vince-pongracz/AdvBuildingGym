@@ -40,6 +40,13 @@ class EnvConfig(LoggableConfig):
     # toggle between "terminate on hard breach" and "soft, non-terminating".
     allow_early_termination: bool = True
 
+    # Per-key rolling observation history applied as an env wrapper.
+    # When enabled, HistoryWrapper replaces every s_*, a_*_prev, and
+    # raw_sim_hour Dict obs entry with an (hst_len, *original_shape) buffer
+    # (oldest -> newest, zero-padded). See envs/history_wrapper.py.
+    hst_env_wrapper_enabled: bool = False
+    hst_env_wrapper_hst_len: int = 0
+
     # Raw component specs as parsed from YAML.  Source of truth for the
     # factory methods below; never reach into hardcoded defaults.
     # Building envelope params (K, mC) live on BuildingHeatLoss directly —
@@ -131,6 +138,8 @@ class EnvConfig(LoggableConfig):
             f"  CONTROL_STEP = {self.CONTROL_STEP}",
             f"  ACTION_HISTORY_LENGTH = {self.ACTION_HISTORY_LENGTH}",
             f"  allow_early_termination = {self.allow_early_termination}",
+            f"  hst_env_wrapper_enabled = {self.hst_env_wrapper_enabled}",
+            f"  hst_env_wrapper_hst_len = {self.hst_env_wrapper_hst_len}",
         ]
         logger.info("%s:\n%s", self._log_label(), "\n".join(lines))
 

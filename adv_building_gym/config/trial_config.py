@@ -25,8 +25,8 @@ Schema (top-level keys, ordered):
     rewards:         [{class_name, weight, params}, ...]
 
     # schedules — inlined; data_schedule keeps its path-based form
-    infra_schedule:        {mode, swap_every_n_iterations, configs: [...]} | null
-    statesource_schedule:  {mode, swap_every_n_iterations, configs: [...]} | null
+    infra_schedule:        {mode, swap_every_n_episodes, configs: [...]} | null
+    statesource_schedule:  {mode, swap_every_n_episodes, configs: [...]} | null
     reward_schedule:       {mode, swap_every_n_episodes, ...} | null
     data_schedule:         {train: <path>, eval: <path>}
 
@@ -238,9 +238,9 @@ class TrialConfig:
             if infra_combinator._configs:
                 env_config.infra_specs = list(infra_combinator._configs[0].infra_dicts)
             logger.info(
-                "Infra schedule enabled: mode=%s, %d configs, swap every %d iterations",
+                "Infra schedule enabled: mode=%s, %d configs, swap every %d episodes",
                 infra_combinator.mode, len(infra_combinator.config_paths),
-                infra_combinator.swap_every_n_iterations,
+                infra_combinator.swap_every_n_episodes,
             )
 
         # ---- statesource schedule (inlined) ----
@@ -258,9 +258,9 @@ class TrialConfig:
                     statesource_combinator._configs[0].statesource_dicts
                 )
             logger.info(
-                "Statesource schedule enabled: mode=%s, %d configs, swap every %d iterations",
+                "Statesource schedule enabled: mode=%s, %d configs, swap every %d episodes",
                 statesource_combinator.mode, len(statesource_combinator.config_paths),
-                statesource_combinator.swap_every_n_iterations,
+                statesource_combinator.swap_every_n_episodes,
             )
 
         # ---- exploration reset (standalone) ----

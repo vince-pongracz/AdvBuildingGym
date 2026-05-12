@@ -27,11 +27,11 @@
 #SBATCH --nodes=1
 #SBATCH --tasks-per-node=1
 # TODO VP: set to 32, 38, 16 later -- but adapt Ray to use all possible cpu cores available
-#SBATCH --cpus-per-task=16
+#SBATCH --cpus-per-task=8
 #SBATCH --gres=gpu:2g.10gb:1 # --gres=gpu:4g.20gb:1
 #SBATCH --time=00:30:00
 # Exclude nodes with known GPU issues (add problematic nodes here)
-#SBATCH --exclude=haicn1704,haicn1711
+# // # --exclude=haicn1704,haicn1711
 #SBATCH --output=slurm_logs/train/slurm-train-ray-%j.out
 #SBATCH --error=slurm_logs/train/slurm-train-ray-%j.err
 #SBATCH --job-name=ray-train-%j
@@ -104,9 +104,29 @@ export PYTHONUNBUFFERED=1
 # Build command: Forward every param as they are
 CMD=(python -u run_train_ray.py "${SCRIPT_ARGS[@]}")
 
+# Filter for harmless EnvRunner.__del__/sigterm_handler tracebacks Ray prints
+# when env-runner actors are SIGTERM'd at the end of tuner.fit().  Tune kills
+# those actors as soon as fit() returns, so the in-process ray.shutdown() call
+# in run_train_ray.py cannot prevent the noise — we strip it at the stderr
+# boundary instead.  See: slurm_scripts/util/filter_ray_shutdown_spam.awk
+SHUTDOWN_SPAM_FILTER="${SLURM_SUBMIT_DIR:-$PWD}/slurm_scripts/util/filter_ray_shutdown_spam.awk"
+
 echo "======"
 echo "Running: ${CMD[*]}"
-"${CMD[@]}"
+
+set +e
+"${CMD[@]}" 2> >(exec awk -f "${SHUTDOWN_SPAM_FILTER}" >&2)
+TRAIN_EC=$?
+set -e
+
+# Drain the stderr filter's process substitution before this script exits so
+# its buffered output is flushed into the SLURM .err file.
+wait
+
+if [ "${TRAIN_EC}" -ne 0 ]; then
+    echo "Training failed with exit code ${TRAIN_EC}"
+    exit "${TRAIN_EC}"
+fi
 
 echo "Training completed successfully."
 

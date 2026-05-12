@@ -11,6 +11,9 @@ env_meta:
   EPISODE_LENGTH: 288
   control_step: 300
   allow_early_termination: false
+  hst_env_wrapper:
+    enabled: true
+    hst_len: 288
 
 training_params:
   common:
@@ -126,7 +129,7 @@ rewards:
 
 infra_schedule:
   mode: cycle
-  swap_every_n_iterations: 300
+  swap_every_n_episodes: 300
   configs:
   - configs/infra_cfgs/GEN/battery_tre_capacity/battery_tre_cap_1.yaml
   - configs/infra_cfgs/GEN/battery_tre_capacity/battery_tre_cap_2.yaml

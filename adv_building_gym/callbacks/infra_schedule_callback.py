@@ -1,10 +1,11 @@
-"""Iteration-aligned infrastructure config scheduling via RLlib callback.
+"""Episode-budget-aligned infrastructure config scheduling via RLlib callback.
 
-Pushes fresh Infrastructure instances to all env_runners at training
-iteration boundaries, ensuring all workers change configuration
-simultaneously.
+Pushes fresh Infrastructure instances to all env_runners once
+``num_episodes_lifetime`` has advanced by at least
+``max(swap_every_n_episodes, num_env_runners)`` since the previous swap,
+ensuring all workers change configuration simultaneously.
 
-Pattern mirrors ``data_schedule_callback.py`` (Approach D1).
+Pattern mirrors ``data_schedule_callback.py``.
 
 ``create_infra_schedule_on_train_result_cb(...)`` returns an
 ``on_train_result`` function that can be passed as a keyword argument
@@ -14,6 +15,7 @@ to ``config.callbacks(ExistingClass, on_train_result=func)``.
 import logging
 
 from adv_building_gym.callbacks._exploration_reset_util import make_decay_loop
+from adv_building_gym.callbacks._swap_trigger import make_swap_gate
 from adv_building_gym.config.exploration_reset import ExplorationResetConfig
 from adv_building_gym.infra_combinator import InfraCombinator
 
@@ -22,16 +24,25 @@ logger = logging.getLogger(__name__)
 
 def create_infra_schedule_on_train_result_cb(
     infra_combinator: InfraCombinator,
+    num_env_runners: int,
     exploration_reset: ExplorationResetConfig | None = None,
 ):
     """Factory that returns an ``on_train_result`` callable."""
     expl_cfg = exploration_reset or ExplorationResetConfig()
     _state, maybe_decay, fire_bump = make_decay_loop(expl_cfg, "on_infra_swap")
+    gate = make_swap_gate(
+        "InfraSchedule", infra_combinator.swap_every_n_episodes, num_env_runners,
+    )
 
     def on_train_result(*, algorithm, result: dict, **kwargs) -> None:
         iteration: int = result.get("training_iteration", 0)
         maybe_decay(algorithm, iteration)
-        if iteration % infra_combinator.swap_every_n_iterations != 0:
+        decision = gate(iteration, result)
+        if not decision.should_fire:
+            return
+        if decision.is_first_fire:
+            # Push the initial infra config without advancing the cycle.
+            _push_infras_to_runners(algorithm, infra_combinator)
             return
         changed = infra_combinator.advance()
         if not changed:

@@ -54,7 +54,7 @@ class TrainingParamConfig(LoggableConfig):
     clip_actions_to_env_bounds: bool = True
     
     ppo_episodes_per_iteration: int = 25
-    ppo_minibatch_size: int = 64
+    ppo_minibatch_size: int = 128 # Rllib default
     ppo_num_epochs: int = 20
     
     sac_replay_batch_size: int = 256 # NOTE VP 2026.05.08.: Rllib default

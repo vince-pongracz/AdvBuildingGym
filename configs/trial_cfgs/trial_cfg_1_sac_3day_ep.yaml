@@ -11,6 +11,9 @@ env_meta:
   EPISODE_LENGTH: 864 # 3day long episode
   control_step: 300
   allow_early_termination: false
+  hst_env_wrapper:
+    enabled: true
+    hst_len: 288
 
 training_params:
   common:

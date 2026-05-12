@@ -4,7 +4,7 @@ Cycles through infra YAMLs (``configs/infra_cfgs/**/*.yaml``) during training so
 the agent generalises across many building configurations.
 
 The swap is synchronised across all Ray workers via the companion
-``infra_schedule_callback`` (iteration-aligned ``on_train_result``).
+``infra_schedule_callback`` (episode-budget-aligned ``on_train_result``).
 """
 
 import logging
@@ -42,7 +42,9 @@ class InfraCombinator:
         config_paths: Ordered list of infra YAML file paths.
         control_step: Control step (seconds) of the active env config; used
             as deserialisation context for all entries.
-        swap_every_n_iterations: Hold each config for N training iterations.
+        swap_every_n_episodes: Hold each config for N episodes collected
+            across all env_runners. The scheduler callback clamps this
+            to ``max(N, num_env_runners)`` at registration time.
         mode: ``"cycle"`` for round-robin, ``"off"`` to disable swapping.
     """
 
@@ -50,12 +52,12 @@ class InfraCombinator:
         self,
         config_paths: list[str],
         control_step: int,
-        swap_every_n_iterations: int = 300,
+        swap_every_n_episodes: int = 300,
         mode: Literal["cycle", "off"] = "cycle",
     ) -> None:
         self.config_paths = config_paths
         self.control_step = control_step
-        self.swap_every_n_iterations = swap_every_n_iterations
+        self.swap_every_n_episodes = swap_every_n_episodes
         self.mode = mode
         self._swap_index: int = 0
 
@@ -65,8 +67,8 @@ class InfraCombinator:
 
         logger.info(
             "InfraCombinator: %d configs loaded, mode=%s, "
-            "swap_every_n_iterations=%d",
-            len(self._configs), self.mode, self.swap_every_n_iterations,
+            "swap_every_n_episodes=%d",
+            len(self._configs), self.mode, self.swap_every_n_episodes,
         )
         for i, cfg in enumerate(self._configs):
             logger.info("  [%d] %s", i, cfg.name)
@@ -134,7 +136,7 @@ class InfraCombinator:
         Expected layout::
 
             mode: cycle
-            swap_every_n_iterations: 300
+            swap_every_n_episodes: 300
             configs:
               - configs/infra_cfgs/test1_small.yaml
               - configs/infra_cfgs/test1_mid.yaml
@@ -144,7 +146,7 @@ class InfraCombinator:
         return cls(
             config_paths=list(raw.get("configs", [])),
             control_step=control_step,
-            swap_every_n_iterations=raw.get("swap_every_n_iterations", 300),
+            swap_every_n_episodes=raw["swap_every_n_episodes"],
             mode=raw.get("mode", "cycle"),
         )
 
