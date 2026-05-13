@@ -2,7 +2,7 @@ trial_name: gen_battery_lin_capacity
 algorithm: sac
 seed: 42
 metric: episode_return_mean
-checkpoint_frequency_episodes: 20
+checkpoint_frequency_episodes: 10
 log_trajectories: false
 num_envs: 1
 grad_train: false
@@ -19,13 +19,15 @@ training_params:
   common:
     learning_rate: 0.0003
     episode_lookback_horizon_steps: 120
-    max_episodes_to_run: 3500
+    max_episodes_to_run: 4000
     clip_actions_to_env_bounds: true
   ppo:
     episodes_per_iteration: 10
     minibatch_size: 64
     num_epochs: 20
   sac:
+    replay_batch_size: 256
+    training_intensity: 256
     episodes_to_keep_in_replay_buffer: 1200
     n_step_return: 6
     learning_starts_after_n_episodes: 50
@@ -137,11 +139,16 @@ infra_schedule:
   mode: cycle
   swap_every_n_episodes: 100
   configs:
-  - configs/infra_cfgs/GEN/battery_lin_capacity/battery_lin_cap_1.yaml
-  - configs/infra_cfgs/GEN/battery_lin_capacity/battery_lin_cap_2.yaml
-  - configs/infra_cfgs/GEN/battery_lin_capacity/battery_lin_cap_3.yaml
-  - configs/infra_cfgs/GEN/battery_lin_capacity/battery_lin_cap_4.yaml
-  - configs/infra_cfgs/GEN/battery_lin_capacity/battery_lin_cap_5.yaml
+    train:
+    - configs/infra_cfgs/GEN/battery_lin_capacity/battery_lin_cap_1.yaml
+    - configs/infra_cfgs/GEN/battery_lin_capacity/battery_lin_cap_2.yaml
+    - configs/infra_cfgs/GEN/battery_lin_capacity/battery_lin_cap_3.yaml
+    - configs/infra_cfgs/GEN/battery_lin_capacity/battery_lin_cap_4.yaml
+    - configs/infra_cfgs/GEN/battery_lin_capacity/battery_lin_cap_5.yaml
+    eval:
+    - configs/infra_cfgs/GEN/battery_lin_capacity/battery_lin_cap_eval_1.yaml
+    - configs/infra_cfgs/GEN/battery_lin_capacity/battery_lin_cap_eval_2.yaml
+    - configs/infra_cfgs/GEN/battery_lin_capacity/battery_lin_cap_eval_3.yaml
 
 statesource_schedule: null
 
@@ -152,8 +159,8 @@ data_schedule:
   eval: configs/schedules/data/eval.yaml
 
 exploration_reset:
-  enabled: false
-  trigger: on_reward_swap
+  enabled: true
+  trigger: on_infra_swap
   ppo_entropy_coeff: 0.05
   ppo_entropy_baseline: 0.0
   sac_alpha: 0.5

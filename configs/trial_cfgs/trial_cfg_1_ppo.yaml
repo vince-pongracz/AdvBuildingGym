@@ -57,6 +57,13 @@ infras:
   max_power_kW: 15.0
   pv_efficiency: 0.22
   panel_area_m2: 170
+- class: WindTurbine
+  name: wind_turbine
+  max_power_kW: 5.0
+  rated_power_kW: 5.0
+  cut_in_speed: 3.0
+  rated_speed: 12.0
+  cut_out_speed: 25.0
 - class: HouseholdEnergyConsumers
   name: hh_consumers
   peak_consumption_kW: 8.0
@@ -120,8 +127,8 @@ training_params:
     episodes_to_keep_in_replay_buffer: 500 # ≈ 500 * EPISODE_LENGTH transitions
     # UTD = training_intensity / replay_batch_size. 256/256 = 1.0 (vanilla SAC).
     # Without this RLlib falls back to round-robin (UTD ≈ 0.001) → no real learning.
-    training_intensity: 64
-    n_step_return: 3 # 6-step is biased under non-stationary rewards / curricula
+    training_intensity: 256
+    n_step_return: 6 # 6-step is biased under non-stationary rewards / curricula
     learning_starts_after_n_episodes: 50
 
   # Per-key strided history via StridedHistoryConnector.

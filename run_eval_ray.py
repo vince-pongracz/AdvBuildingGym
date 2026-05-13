@@ -3,9 +3,17 @@
 Single CLI entry point: ``--trial <trial_cfg.yaml>``. The trial config
 bundles env topology + reward schedule + (optional) data schedule. Eval
 overrides for ``--checkpoint`` and a few presentation flags remain.
+
+When the trial declares ``infra_schedule`` or ``statesource_schedule``
+with multiple ``configs.eval`` entries, this script iterates them: each
+entry is evaluated for ``--episodes`` episodes, with results landing in
+its own per-config subdirectory. Mutex guard: only one of the two axes
+can have multi-entry ``configs.eval`` at a time (enforced by
+``TrialConfig`` at load).
 """
 
 import argparse
+import datetime
 import logging
 import os
 import sys
@@ -66,7 +74,7 @@ def parse_args() -> argparse.Namespace:
         help="Plot the best episode's trajectory after evaluation (implies trajectory logging)",
     )
     parser.add_argument(
-        "--plot-all", action="store_true", default=False,
+        "--plot-all", action="store_true", default=True,
         help="Plot all episodes' trajectories after evaluation (implies trajectory logging)",
     )
     parser.add_argument(
@@ -80,6 +88,49 @@ def parse_args() -> argparse.Namespace:
     return args
 
 
+def _generate_plots(results, args, logger) -> None:
+    """Render trajectory plots for the just-completed evaluate_model() run."""
+    if not (args.plot or args.plot_all) or args.no_save:
+        return
+    import h5py
+
+    actual_output_dir = results.output_dir or args.output_dir
+    hdf5_path = os.path.join(actual_output_dir, "trajectories.hdf5")
+    if not os.path.isfile(hdf5_path):
+        logger.warning("No trajectories.hdf5 found at %s — skipping plots.", hdf5_path)
+        return
+
+    from plotting.traj_plotting.trajectory_plot import generate_all_plots
+
+    plot_dir = os.path.join(actual_output_dir, "plots")
+
+    if args.plot_all:
+        with h5py.File(hdf5_path, "r") as hf:
+            episode_ids = list(hf.keys())
+        total_paths: list[str] = []
+        for ep_id in episode_ids:
+            ep_label = f"ep_{ep_id}"
+            ep_plot_dir = os.path.join(plot_dir, ep_label)
+            paths = generate_all_plots(
+                hdf5_path=hdf5_path,
+                episode_id=ep_id,
+                output_dir=ep_plot_dir,
+                file_prefix=ep_label,
+            )
+            total_paths.extend(paths)
+        logger.info(
+            "Generated %d plot files for %d episodes in %s",
+            len(total_paths), len(episode_ids), plot_dir,
+        )
+    else:
+        paths = generate_all_plots(
+            hdf5_path=hdf5_path,
+            output_dir=plot_dir,
+            file_prefix="ep_best",
+        )
+        logger.info("Generated %d plot files in %s", len(paths), plot_dir)
+
+
 def main() -> None:
     """Parse arguments, load the trial config, and run evaluation."""
     args = parse_args()
@@ -91,14 +142,13 @@ def main() -> None:
     seed = trial.seed
     RngService.initialize(seed)
 
-    # Push the loaded eval rewards onto the env config (single source of truth).
-    trial.env_config.reward_config.rewards = trial.reward_manager.create_active_rewards()
+    # Push the eval-mode rewards onto the env config (single source of truth):
+    # OFF/FIX -> as-is, RANDOM/GRAD_ADD/DIRICHLET -> full pool with original weights.
+    trial.env_config.reward_config.rewards = trial.reward_manager.create_eval_rewards()
     logger.info(
-        "Eval rewards loaded from schedule: %s",
-        trial.reward_manager.get_active_reward_names(),
+        "Eval rewards: %s",
+        [type(r).__name__ for r in trial.env_config.reward_config.rewards],
     )
-
-    trial.env_config.init_singletons()
 
     data_combinator = trial.data_combinator
     if data_combinator is not None:
@@ -127,61 +177,85 @@ def main() -> None:
         algorithm=trial.algorithm,
     )
 
+    # ---- decide eval iteration axis ----
+    # Only one axis can iterate (TrialConfig already enforced this). When
+    # neither schedule has >1 eval entry, we run a single pass with whatever
+    # infras/statesources the trial seeded onto env_config.
+    infra_eval_n = trial.infra_combinator.eval_count() if trial.infra_combinator else 0
+    ss_eval_n = trial.statesource_combinator.eval_count() if trial.statesource_combinator else 0
+
+    iteration_axis: str | None = None
+    n_iters = 1
+    if infra_eval_n > 1:
+        iteration_axis = "infra"
+        n_iters = infra_eval_n
+    elif ss_eval_n > 1:
+        iteration_axis = "statesource"
+        n_iters = ss_eval_n
+    elif trial.infra_combinator is not None:
+        # Single eval entry: still source it from the combinator so eval uses
+        # the eval list rather than the train-seeded singleton.
+        iteration_axis = "infra"
+        n_iters = 1
+    elif trial.statesource_combinator is not None:
+        iteration_axis = "statesource"
+        n_iters = 1
+
+    # Shared timestamp so per-config dirs sit under one parent run dir.
+    run_stamp = datetime.datetime.now().strftime("%Y%m%d_%H%M") + "_eval"
+
     try:
-        results = evaluate_model(
-            checkpoint_path=checkpoint_path,
-            active_config=trial.env_config,
-            trial_name=trial.trial_name,
-            num_episodes=args.episodes,
-            seed=seed,
-            save_results=not args.no_save,
-            output_dir=args.output_dir,
-            log_trajectories=log_trajectories,
-            algorithm_hint=trial.algorithm,
-            timeout_seconds=300,
-            data_combinator=data_combinator,
-            stochastic=args.stochastic,
-        )
-        logger.info("Evaluation completed successfully!")
+        all_results = []
+        for idx in range(n_iters):
+            subdir: str | None = None
+            if iteration_axis == "infra":
+                cfg_name = trial.infra_combinator.get_eval_config_name(idx)
+                subdir = cfg_name if n_iters > 1 else None
+                trial.env_config.infras = trial.infra_combinator.create_infras(idx, split="eval")
+                logger.info(
+                    "[eval %d/%d] infra config: %s", idx + 1, n_iters, cfg_name,
+                )
+            elif iteration_axis == "statesource":
+                cfg_name = trial.statesource_combinator.get_eval_config_name(idx)
+                subdir = cfg_name if n_iters > 1 else None
+                trial.env_config.statesources = trial.statesource_combinator.create_statesources(idx, split="eval")
+                logger.info(
+                    "[eval %d/%d] statesource config: %s", idx + 1, n_iters, cfg_name,
+                )
 
-        # Generate trajectory plots if requested
-        if (args.plot or args.plot_all) and not args.no_save:
-            import h5py
+            # Materialise any remaining singletons (the inline-list case, or
+            # the axis we did NOT swap this iteration).
+            trial.env_config.init_singletons()
 
-            actual_output_dir = results.output_dir or args.output_dir
-            hdf5_path = os.path.join(actual_output_dir, "trajectories.hdf5")
-            if os.path.isfile(hdf5_path):
-                from plotting.traj_plotting.trajectory_plot import generate_all_plots
+            results = evaluate_model(
+                checkpoint_path=checkpoint_path,
+                active_config=trial.env_config,
+                trial_name=trial.trial_name,
+                num_episodes=args.episodes,
+                seed=seed,
+                save_results=not args.no_save,
+                output_dir=args.output_dir,
+                log_trajectories=log_trajectories,
+                algorithm_hint=trial.algorithm,
+                timeout_seconds=300,
+                data_combinator=data_combinator,
+                stochastic=args.stochastic,
+                run_stamp=run_stamp,
+                subdir=subdir,
+            )
+            all_results.append((subdir, results))
+            logger.info("Evaluation pass %d/%d completed.", idx + 1, n_iters)
 
-                plot_dir = os.path.join(actual_output_dir, "plots")
+            _generate_plots(results, args, logger)
 
-                if args.plot_all:
-                    with h5py.File(hdf5_path, "r") as hf:
-                        episode_ids = list(hf.keys())
-                    total_paths: list[str] = []
-                    for ep_id in episode_ids:
-                        ep_label = f"ep_{ep_id}"
-                        ep_plot_dir = os.path.join(plot_dir, ep_label)
-                        paths = generate_all_plots(
-                            hdf5_path=hdf5_path,
-                            episode_id=ep_id,
-                            output_dir=ep_plot_dir,
-                            file_prefix=ep_label,
-                        )
-                        total_paths.extend(paths)
-                    logger.info(
-                        "Generated %d plot files for %d episodes in %s",
-                        len(total_paths), len(episode_ids), plot_dir,
-                    )
-                else:
-                    paths = generate_all_plots(
-                        hdf5_path=hdf5_path,
-                        output_dir=plot_dir,
-                        file_prefix="ep_best",
-                    )
-                    logger.info("Generated %d plot files in %s", len(paths), plot_dir)
-            else:
-                logger.warning("No trajectories.hdf5 found at %s — skipping plots.", hdf5_path)
+        if n_iters > 1:
+            logger.info("=" * 70)
+            logger.info("Per-config eval summary (mean reward / mean reward_rate):")
+            for subdir, r in all_results:
+                logger.info(
+                    "  %-40s  mean_reward=%.4f  mean_rate=%.4f",
+                    subdir, r.mean_reward, r.mean_reward_rate,
+                )
     except Exception as e:
         logger.error("Evaluation failed: %s", str(e), exc_info=True)
         logger.error("==================")

@@ -316,6 +316,20 @@ class RewardScheduleManager:
     def create_active_rewards(self) -> list:
         return [self._create_reward_from_spec(s) for s in self._get_active_specs()]
 
+    def create_eval_rewards(self) -> list:
+        """Return reward instances for evaluation.
+
+        OFF / FIX -> same set as create_active_rewards().
+        RANDOM / GRAD_ADD / DIRICHLET -> entire reward pool with the
+        original pool weights (ignore swap-time subsampling and sampled
+        Dirichlet weights).
+        """
+        # TODO VP 2026.05.13.: For the RANDOM, GRAD_ADD, DIRICHLET modes: 
+        # filter the pool to the on_rewards/reward_order set (if specified), but ignore the per-swap active subset / weights.
+        if self.mode in (RewardScheduleMode.OFF, RewardScheduleMode.FIX):
+            return self.create_active_rewards()
+        return [self._create_reward_from_spec(s) for s in self._reward_specs]
+
     def get_active_reward_names(self) -> list[str]:
         return [s["class_name"] for s in self._get_active_specs()]
 

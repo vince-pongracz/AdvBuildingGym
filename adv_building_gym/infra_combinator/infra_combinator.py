@@ -5,6 +5,21 @@ the agent generalises across many building configurations.
 
 The swap is synchronised across all Ray workers via the companion
 ``infra_schedule_callback`` (episode-budget-aligned ``on_train_result``).
+
+Schedule YAML carries separate train and eval lists::
+
+    mode: cycle
+    swap_every_n_episodes: 300
+    configs:
+      train:
+        - configs/infra_cfgs/.../foo_1.yaml
+        - configs/infra_cfgs/.../foo_2.yaml
+      eval:
+        - configs/infra_cfgs/.../foo_1.yaml
+        - configs/infra_cfgs/.../foo_2.yaml
+
+Training cycles ``configs.train``; ``run_eval_ray.py`` iterates each entry
+of ``configs.eval`` for the requested number of eval episodes.
 """
 
 import logging
@@ -16,6 +31,9 @@ import yaml
 from adv_building_gym.devices.infrastructure.base import Infrastructure
 
 logger = logging.getLogger(__name__)
+
+
+Split = Literal["train", "eval"]
 
 
 class _ParsedConfig:
@@ -33,45 +51,60 @@ class _ParsedConfig:
 class InfraCombinator:
     """Schedule infra YAML files for infrastructure curriculum training.
 
-    Loads a sequence of infra YAMLs (``configs/infra_cfgs/**/*.yaml``) and cycles
-    through them during training.  Each file declares only the ``infras``
-    list -- statesources, timing, building envelope, and rewards are
-    managed separately.
+    Loads two ordered lists of infra YAMLs (``configs/infra_cfgs/**/*.yaml``):
+    one for training (cycled by the swap callback) and one for evaluation
+    (iterated by the eval orchestrator).  Each file declares only the
+    ``infras`` list -- statesources, timing, building envelope, and rewards
+    are managed separately.
 
     Args:
-        config_paths: Ordered list of infra YAML file paths.
+        train_config_paths: Ordered list of infra YAML file paths for training.
+        eval_config_paths:  Ordered list of infra YAML file paths for evaluation.
         control_step: Control step (seconds) of the active env config; used
             as deserialisation context for all entries.
-        swap_every_n_episodes: Hold each config for N episodes collected
+        swap_every_n_episodes: Hold each train config for N episodes collected
             across all env_runners. The scheduler callback clamps this
             to ``max(N, num_env_runners)`` at registration time.
-        mode: ``"cycle"`` for round-robin, ``"off"`` to disable swapping.
+        mode: ``"cycle"`` for round-robin, ``"off"`` to disable swapping
+            (training only -- eval always iterates ``eval_config_paths``).
     """
 
     def __init__(
         self,
-        config_paths: list[str],
+        train_config_paths: list[str],
+        eval_config_paths: list[str],
         control_step: int,
         swap_every_n_episodes: int = 300,
         mode: Literal["cycle", "off"] = "cycle",
     ) -> None:
-        self.config_paths = config_paths
+        if not train_config_paths:
+            raise ValueError("InfraCombinator: configs.train must be a non-empty list")
+        if not eval_config_paths:
+            raise ValueError("InfraCombinator: configs.eval must be a non-empty list")
+
         self.control_step = control_step
         self.swap_every_n_episodes = swap_every_n_episodes
         self.mode = mode
         self._swap_index: int = 0
 
-        self._configs: list[_ParsedConfig] = [
-            self._load_config(p, control_step) for p in config_paths
-        ]
+        self._configs: dict[Split, list[_ParsedConfig]] = {
+            "train": [self._load_config(p, control_step) for p in train_config_paths],
+            "eval":  [self._load_config(p, control_step) for p in eval_config_paths],
+        }
+        self._config_paths: dict[Split, list[str]] = {
+            "train": list(train_config_paths),
+            "eval":  list(eval_config_paths),
+        }
 
         logger.info(
-            "InfraCombinator: %d configs loaded, mode=%s, "
+            "InfraCombinator: %d train / %d eval configs, mode=%s, "
             "swap_every_n_episodes=%d",
-            len(self._configs), self.mode, self.swap_every_n_episodes,
+            len(self._configs["train"]), len(self._configs["eval"]),
+            self.mode, self.swap_every_n_episodes,
         )
-        for i, cfg in enumerate(self._configs):
-            logger.info("  [%d] %s", i, cfg.name)
+        for split in ("train", "eval"):
+            for i, cfg in enumerate(self._configs[split]):
+                logger.info("  [%s %d] %s", split, i, cfg.name)
 
     @staticmethod
     def _load_config(path_str: str, control_step: int) -> _ParsedConfig:
@@ -100,30 +133,47 @@ class InfraCombinator:
     # Runtime API
     # ------------------------------------------------------------------
 
-    def create_infras(self, swap_index: int) -> list[Infrastructure]:
-        """Create fresh Infrastructure instances for the config at *swap_index*."""
-        cfg = self._configs[swap_index % len(self._configs)]
+    def create_infras(self, swap_index: int, split: Split = "train") -> list[Infrastructure]:
+        """Create fresh Infrastructure instances for *split* at *swap_index*."""
+        cfgs = self._configs[split]
+        cfg = cfgs[swap_index % len(cfgs)]
         return [
             Infrastructure.from_dict(spec, cfg.context)
             for spec in cfg.infra_dicts
         ]
 
     def advance(self) -> bool:
-        """Advance to the next config. Returns True if changed."""
-        if not self.is_enabled() or len(self._configs) < 2:
+        """Advance the *training* cycle to the next config. Returns True if changed."""
+        if not self.is_enabled() or len(self._configs["train"]) < 2:
             return False
         self._swap_index += 1
         return True
 
-    def get_active_config_name(self) -> str:
-        """Return the name (file stem) of the currently active YAML."""
-        if not self._configs:
+    def get_active_config_name(self, split: Split = "train", swap_index: int | None = None) -> str:
+        """Return the name (file stem) of the currently active YAML in *split*."""
+        cfgs = self._configs[split]
+        if not cfgs:
             return "<none>"
-        return self._configs[self._swap_index % len(self._configs)].name
+        idx = self._swap_index if swap_index is None else swap_index
+        return cfgs[idx % len(cfgs)].name
 
     def is_enabled(self) -> bool:
-        """Return True if infra scheduling is active."""
-        return self.mode != "off" and len(self._configs) > 0
+        """Return True if (training-side) infra scheduling is active."""
+        return self.mode != "off" and len(self._configs["train"]) > 0
+
+    def train_count(self) -> int:
+        return len(self._configs["train"])
+
+    def eval_count(self) -> int:
+        return len(self._configs["eval"])
+
+    def get_eval_config_name(self, idx: int) -> str:
+        return self._configs["eval"][idx].name
+
+    @property
+    def config_paths(self) -> list[str]:
+        """Backwards-compatible alias for the training paths."""
+        return list(self._config_paths["train"])
 
     # ------------------------------------------------------------------
     # Serialisation
@@ -138,13 +188,20 @@ class InfraCombinator:
             mode: cycle
             swap_every_n_episodes: 300
             configs:
-              - configs/infra_cfgs/test1_small.yaml
-              - configs/infra_cfgs/test1_mid.yaml
+              train: [<path>, ...]
+              eval:  [<path>, ...]
         """
         if not raw:
             raise ValueError("InfraCombinator: empty schedule dict")
+        configs = raw.get("configs")
+        if not isinstance(configs, dict) or "train" not in configs or "eval" not in configs:
+            raise ValueError(
+                "InfraCombinator: 'configs' must be a dict with 'train' and "
+                "'eval' keys (lists of infra YAML paths)."
+            )
         return cls(
-            config_paths=list(raw.get("configs", [])),
+            train_config_paths=list(configs.get("train") or []),
+            eval_config_paths=list(configs.get("eval") or []),
             control_step=control_step,
             swap_every_n_episodes=raw["swap_every_n_episodes"],
             mode=raw.get("mode", "cycle"),

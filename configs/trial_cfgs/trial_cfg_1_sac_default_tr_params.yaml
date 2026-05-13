@@ -8,7 +8,7 @@ trial_name: trial_1_sac_default
 algorithm: sac                 # ppo | sac
 seed: 42                       # overrides training_params.seed
 metric: episode_return_mean    # reward_rate | achieved_reward | episode_return_mean
-checkpoint_frequency_episodes: 20
+checkpoint_frequency_episodes: 10
 log_trajectories: false
 num_envs: 1
 grad_train: false              # if true, the reward schedule mode is honoured;
@@ -57,6 +57,13 @@ infras:
   max_power_kW: 15.0
   pv_efficiency: 0.22
   panel_area_m2: 170
+- class: WindTurbine
+  name: wind_turbine
+  max_power_kW: 5.0
+  rated_power_kW: 5.0
+  cut_in_speed: 3.0
+  rated_speed: 12.0
+  cut_out_speed: 25.0
 - class: HouseholdEnergyConsumers
   name: hh_consumers
   peak_consumption_kW: 8.0
@@ -120,6 +127,7 @@ training_params:
     # UTD = training_intensity / replay_batch_size. 256/256 = 1.0 (vanilla SAC).
     # Without this RLlib falls back to round-robin (UTD ≈ 0.001) → no real learning.
     n_step_return: 6 # 6-step is biased under non-stationary rewards / curricula
+    training_intensity: 256
     learning_starts_after_n_episodes: 50
 
   # Per-key strided history via StridedHistoryConnector.
@@ -206,7 +214,7 @@ infra_schedule: null
 statesource_schedule: null
 
 exploration_reset:
-  enabled: true
+  enabled: false
   trigger: on_reward_swap        # off | on_reward_swap | on_infra_swap | on_statesource_swap | on_reward_and_infra | all
   ppo_entropy_coeff: 0.05
   ppo_entropy_baseline: 0.0

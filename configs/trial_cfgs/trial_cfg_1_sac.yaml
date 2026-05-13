@@ -28,6 +28,7 @@ training_params:
   sac:
     episodes_to_keep_in_replay_buffer: 500
     n_step_return: 6
+    training_intensity: 256
     learning_starts_after_n_episodes: 50
   hst:
     offsets:

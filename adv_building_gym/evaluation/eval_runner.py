@@ -53,6 +53,8 @@ def evaluate_model(
     timeout_seconds: int = 300,
     data_combinator: DataCombinator | None = None,
     stochastic: bool = False,
+    run_stamp: str | None = None,
+    subdir: str | None = None,
 ) -> EvalResults:
     """Evaluate a Ray/RLlib trained model on AdvBuildingGym.
 
@@ -82,9 +84,15 @@ def evaluate_model(
     # Load the default YAML training config if the caller didn't pass one —
     # eval MUST use the same hst settings as training or obs dimensions diverge.
 
-    # Create a timestamped subdirectory so successive eval runs never collide
-    run_stamp = datetime.datetime.now().strftime("%Y%m%d_%H%M") + "_eval"
+    # Create a timestamped subdirectory so successive eval runs never collide.
+    # Caller can supply a fixed `run_stamp` to share one timestamp across
+    # multiple per-config eval passes, and a `subdir` to nest each pass under
+    # its own directory.
+    if run_stamp is None:
+        run_stamp = datetime.datetime.now().strftime("%Y%m%d_%H%M") + "_eval"
     output_dir = os.path.join(output_dir, run_stamp)
+    if subdir:
+        output_dir = os.path.join(output_dir, subdir)
     os.makedirs(output_dir, exist_ok=True)
 
     logger.info("=" * 70)

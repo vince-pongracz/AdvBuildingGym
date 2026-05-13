@@ -25,8 +25,8 @@ Schema (top-level keys, ordered):
     rewards:         [{class_name, weight, params}, ...]
 
     # schedules — inlined; data_schedule keeps its path-based form
-    infra_schedule:        {mode, swap_every_n_episodes, configs: [...]} | null
-    statesource_schedule:  {mode, swap_every_n_episodes, configs: [...]} | null
+    infra_schedule:        {mode, swap_every_n_episodes, configs: {train: [...], eval: [...]}} | null
+    statesource_schedule:  {mode, swap_every_n_episodes, configs: {train: [...], eval: [...]}} | null
     reward_schedule:       {mode, swap_every_n_episodes, ...} | null
     data_schedule:         {train: <path>, eval: <path>}
 
@@ -234,12 +234,17 @@ class TrialConfig:
             infra_combinator = InfraCombinator.from_dict(
                 infra_sch_inline, control_step=env_config.CONTROL_STEP,
             )
-            # Seed env_config with the first scheduled variant so env startup works.
-            if infra_combinator._configs:
-                env_config.infra_specs = list(infra_combinator._configs[0].infra_dicts)
+            # Seed env_config with the first train (or eval, when not training) entry
+            # so env startup works before the first hot-swap.
+            seed_split = "train" if is_training else "eval"
+            seed_cfgs = infra_combinator._configs[seed_split]
+            if seed_cfgs:
+                env_config.infra_specs = list(seed_cfgs[0].infra_dicts)
             logger.info(
-                "Infra schedule enabled: mode=%s, %d configs, swap every %d episodes",
-                infra_combinator.mode, len(infra_combinator.config_paths),
+                "Infra schedule enabled: mode=%s, %d train / %d eval configs, "
+                "swap every %d episodes",
+                infra_combinator.mode,
+                infra_combinator.train_count(), infra_combinator.eval_count(),
                 infra_combinator.swap_every_n_episodes,
             )
 
@@ -253,15 +258,26 @@ class TrialConfig:
             statesource_combinator = StatesourceCombinator.from_dict(
                 ss_sch_inline, control_step=env_config.CONTROL_STEP,
             )
-            if statesource_combinator._configs:
-                env_config.statesource_specs = list(
-                    statesource_combinator._configs[0].statesource_dicts
-                )
+            seed_split = "train" if is_training else "eval"
+            seed_cfgs = statesource_combinator._configs[seed_split]
+            if seed_cfgs:
+                env_config.statesource_specs = list(seed_cfgs[0].statesource_dicts)
             logger.info(
-                "Statesource schedule enabled: mode=%s, %d configs, swap every %d episodes",
-                statesource_combinator.mode, len(statesource_combinator.config_paths),
+                "Statesource schedule enabled: mode=%s, %d train / %d eval configs, "
+                "swap every %d episodes",
+                statesource_combinator.mode,
+                statesource_combinator.train_count(), statesource_combinator.eval_count(),
                 statesource_combinator.swap_every_n_episodes,
             )
+
+        # ---- multi-axis eval guard ----
+        if not is_training and infra_combinator is not None and statesource_combinator is not None:
+            if infra_combinator.eval_count() > 1 and statesource_combinator.eval_count() > 1:
+                raise ValueError(
+                    f"Trial config {label}: cannot iterate both "
+                    "infra_schedule.configs.eval and statesource_schedule.configs.eval "
+                    "during evaluation; choose one axis."
+                )
 
         # ---- exploration reset (standalone) ----
         exploration_reset = ExplorationResetConfig.from_dict(trial_dict.get("exploration_reset"))

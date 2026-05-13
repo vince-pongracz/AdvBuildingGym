@@ -182,7 +182,7 @@ def make_decay_loop(exploration_reset: ExplorationResetConfig, event: str):
                     break
             return ent, alpha, lr
 
-        snaps = algorithm.learner_group.foreach_learner(_snapshot) or []
+        snaps = [r.get() for r in algorithm.learner_group.foreach_learner(_snapshot).ignore_errors()]
         ent_was, alpha_was, lr_was = snaps[0] if snaps else (None, None, None)
 
         apply_exploration_level(algorithm, exploration_reset, frac=1.0)

@@ -102,6 +102,29 @@ GEN trials cycle a list of YAMLs through `infra_schedule` or
 `statesource_schedule` so the agent sees a population of variants during a
 single training run.
 
+`infra_schedule.configs` and `statesource_schedule.configs` are dicts with
+`train` and `eval` lists (both required):
+
+```yaml
+infra_schedule:
+  mode: cycle
+  swap_every_n_episodes: 100
+  configs:
+    train:
+      - configs/infra_cfgs/.../foo_1.yaml
+      - configs/infra_cfgs/.../foo_2.yaml
+    eval:
+      - configs/infra_cfgs/.../foo_1.yaml
+      - configs/infra_cfgs/.../foo_2.yaml
+```
+
+Training cycles `configs.train` via the swap callback. `run_eval_ray.py`
+iterates each entry of `configs.eval` for `--episodes` episodes, writing
+results into per-config subdirectories under
+`eval_results/<timestamp>_eval/<config_stem>/`. Only one of
+`infra_schedule.configs.eval` and `statesource_schedule.configs.eval` may
+have more than one entry; the other axis must stay single-entry.
+
 ### `GEN/battery_lin_capacity.yaml`
 ```bash
 sbatch slurm_scripts/slurm_train_ray.sh --trial configs/trial_cfgs/GEN/battery_lin_capacity.yaml

@@ -302,6 +302,8 @@ TODO VP: How to solve that the same model used for different infra/state configs
 TODO noprio VP: tune discount factor of the Q values -- long term or short term optimisation
 
 TODO VP: take out big oscillations from the battery charge discharge actions -- or at least inspect whether it happens or not -- refactor the ActionSmoothReward that it catches automatically the last 10 actions and computes the FT and detects high frequency oscillations -- if detected, punishes, if not detected, zero reward.
+--> Check this out, it's implemented, but the effect has to be proved
+
 TODO VP: at ESS -- add lifetime decay/degradation in capacity or in discharge rate
 TODO VP: use the WPuQ PV production data (actions..?) along with its weather data?
 

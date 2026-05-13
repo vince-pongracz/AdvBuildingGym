@@ -2,6 +2,9 @@
 
 Mirrors ``InfraCombinator`` but cycles statesource bundles instead of infras.
 Companion callback: ``statesource_schedule_callback.py``.
+
+Schedule YAML carries separate train and eval lists (see
+``InfraCombinator`` for the layout).
 """
 
 import logging
@@ -13,6 +16,9 @@ import yaml
 from adv_building_gym.devices.statesources.base import StateSource
 
 logger = logging.getLogger(__name__)
+
+
+Split = Literal["train", "eval"]
 
 
 class _ParsedConfig:
@@ -29,26 +35,41 @@ class StatesourceCombinator:
 
     def __init__(
         self,
-        config_paths: list[str],
+        train_config_paths: list[str],
+        eval_config_paths: list[str],
         control_step: int,
         swap_every_n_episodes: int = 300,
         mode: Literal["cycle", "off"] = "cycle",
     ) -> None:
-        self.config_paths = config_paths
+        if not train_config_paths:
+            raise ValueError("StatesourceCombinator: configs.train must be a non-empty list")
+        if not eval_config_paths:
+            raise ValueError("StatesourceCombinator: configs.eval must be a non-empty list")
+
         self.control_step = control_step
         self.swap_every_n_episodes = swap_every_n_episodes
         self.mode = mode
         self._swap_index: int = 0
 
-        self._configs: list[_ParsedConfig] = [self._load_config(p, control_step) for p in config_paths]
-        
+        self._configs: dict[Split, list[_ParsedConfig]] = {
+            "train": [self._load_config(p, control_step) for p in train_config_paths],
+            "eval":  [self._load_config(p, control_step) for p in eval_config_paths],
+        }
+        self._config_paths: dict[Split, list[str]] = {
+            "train": list(train_config_paths),
+            "eval":  list(eval_config_paths),
+        }
+
         logger.info(
-            "StatesourceCombinator: %d configs loaded, mode=%s, swap_every_n_episodes=%d",
-            len(self._configs), self.mode, self.swap_every_n_episodes,
+            "StatesourceCombinator: %d train / %d eval configs, mode=%s, "
+            "swap_every_n_episodes=%d",
+            len(self._configs["train"]), len(self._configs["eval"]),
+            self.mode, self.swap_every_n_episodes,
         )
-        
-        for i, cfg in enumerate(self._configs):
-            logger.info("  [%d] %s", i, cfg.name)
+
+        for split in ("train", "eval"):
+            for i, cfg in enumerate(self._configs[split]):
+                logger.info("  [%s %d] %s", split, i, cfg.name)
 
     @staticmethod
     def _load_config(path_str: str, control_step: int) -> _ParsedConfig:
@@ -68,30 +89,54 @@ class StatesourceCombinator:
             control_step=control_step,
         )
 
-    def create_statesources(self, swap_index: int) -> list[StateSource]:
-        cfg = self._configs[swap_index % len(self._configs)]
+    def create_statesources(self, swap_index: int, split: Split = "train") -> list[StateSource]:
+        cfgs = self._configs[split]
+        cfg = cfgs[swap_index % len(cfgs)]
         return [StateSource.from_dict(spec, cfg.context) for spec in cfg.statesource_dicts]
 
     def advance(self) -> bool:
-        if not self.is_enabled() or len(self._configs) < 2:
+        if not self.is_enabled() or len(self._configs["train"]) < 2:
             return False
         self._swap_index += 1
         return True
 
-    def get_active_config_name(self) -> str:
-        if not self._configs:
+    def get_active_config_name(self, split: Split = "train", swap_index: int | None = None) -> str:
+        cfgs = self._configs[split]
+        if not cfgs:
             return "<none>"
-        return self._configs[self._swap_index % len(self._configs)].name
+        idx = self._swap_index if swap_index is None else swap_index
+        return cfgs[idx % len(cfgs)].name
 
     def is_enabled(self) -> bool:
-        return self.mode != "off" and len(self._configs) > 0
+        return self.mode != "off" and len(self._configs["train"]) > 0
+
+    def train_count(self) -> int:
+        return len(self._configs["train"])
+
+    def eval_count(self) -> int:
+        return len(self._configs["eval"])
+
+    def get_eval_config_name(self, idx: int) -> str:
+        return self._configs["eval"][idx].name
+
+    @property
+    def config_paths(self) -> list[str]:
+        """Backwards-compatible alias for the training paths."""
+        return list(self._config_paths["train"])
 
     @classmethod
     def from_dict(cls, raw: dict, control_step: int) -> "StatesourceCombinator":
         if not raw:
             raise ValueError("StatesourceCombinator: empty schedule dict")
+        configs = raw.get("configs")
+        if not isinstance(configs, dict) or "train" not in configs or "eval" not in configs:
+            raise ValueError(
+                "StatesourceCombinator: 'configs' must be a dict with 'train' "
+                "and 'eval' keys (lists of statesource YAML paths)."
+            )
         return cls(
-            config_paths=list(raw.get("configs", [])),
+            train_config_paths=list(configs.get("train") or []),
+            eval_config_paths=list(configs.get("eval") or []),
             control_step=control_step,
             swap_every_n_episodes=raw["swap_every_n_episodes"],
             mode=raw.get("mode", "cycle"),
