@@ -440,18 +440,63 @@ def write_figure_list_html(
     filepath: str,
     footnote: str = "",
 ) -> None:
-    """Write a list of independent figures into a single HTML file."""
+    """Write a list of independent figures into a single HTML file.
+
+    Each figure is wrapped in a ``resize: both`` div and rendered with
+    ``responsive: true`` + autosize, so the user can drag the bottom-right
+    corner to resize the plot live. A ResizeObserver re-triggers
+    Plotly.Plots.resize on the corresponding graph div so axis ranges and
+    tick density update accordingly.
+    """
+    import json as _json
+
     parts: list[str] = [
-        "<html><head><meta charset='utf-8'/>"
+        "<html><head><meta charset='utf-8'/>",
+        "<style>"
+        ".plot-resize{position:relative;resize:both;overflow:hidden;"
+        "width:100%;min-width:320px;min-height:200px;"
+        "border:1px solid #e0e0e0;margin-bottom:14px;box-sizing:border-box;"
+        "background:#fff;}"
+        ".plot-resize>.js-plotly-plot,"
+        ".plot-resize>.js-plotly-plot>.plot-container,"
+        ".plot-resize>.js-plotly-plot>.plot-container>.svg-container"
+        "{width:100%!important;height:100%!important;}"
+        "</style>",
         "</head><body>",
     ]
+    div_ids: list[str] = []
     # First figure embeds the bundled Plotly.js so the version always matches
     # the binary-encoded arrays that Plotly Python generates.
     for i, fig in enumerate(figures):
         include_js = True if i == 0 else False
-        parts.append(fig.to_html(full_html=False, include_plotlyjs=include_js))
+        initial_h = int(fig.layout.height) if fig.layout.height else 450
+        # Make the figure fill its container; the wrapper div drives sizing.
+        fig.update_layout(autosize=True, width=None, height=None)
+        div_id = f"adv_plot_{i}"
+        div_ids.append(div_id)
+        parts.append(f'<div class="plot-resize" style="height:{initial_h}px;">')
+        parts.append(fig.to_html(
+            full_html=False,
+            include_plotlyjs=include_js,
+            div_id=div_id,
+            default_width="100%",
+            default_height="100%",
+            config={"responsive": True},
+        ))
+        parts.append("</div>")
     if footnote:
         parts.append(footnote)
+    parts.append(
+        "<script>(function(){var ids=" + _json.dumps(div_ids) + ";"
+        "function attach(){ids.forEach(function(id){"
+        "var gd=document.getElementById(id);if(!gd)return;"
+        "var wrap=gd.closest('.plot-resize');if(!wrap)return;"
+        "var ro=new ResizeObserver(function(){"
+        "if(window.Plotly&&Plotly.Plots&&Plotly.Plots.resize)Plotly.Plots.resize(gd);"
+        "});ro.observe(wrap);});}"
+        "if(document.readyState==='complete')attach();"
+        "else window.addEventListener('load',attach);})();</script>"
+    )
     parts.append("</body></html>")
     with open(filepath, "w", encoding="utf-8") as f:
         f.write("\n".join(parts))

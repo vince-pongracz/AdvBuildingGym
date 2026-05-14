@@ -96,6 +96,10 @@ figure:
   # Default per-chart height in pixels (applies to every weather / price /
   # profile figure). Increase for taller y-axes.
   height: 450
+  # Per-chart height used by overview plots (monthly_overview, cross_year,
+  # dwd_awattar combos) where many syn_cfg overlays inflate the legend and
+  # squeeze the plot area. Increase for taller y-axes.
+  overview_height: 750
   # EV schedule height grows with the number of lanes; this is the floor.
   ev_min_height: 250
   # Extra pixels added per EV profile lane on top of the base height.

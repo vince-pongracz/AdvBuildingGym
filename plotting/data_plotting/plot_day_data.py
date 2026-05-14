@@ -160,6 +160,7 @@ def _build_figures(
     sources: dict[str, dict],
     stat_only: bool,
     y_ranges: dict[str, tuple[float, float]] | None = None,
+    height: int | None = None,
 ) -> list[go.Figure]:
     """Build all figures from loaded source data.
 
@@ -175,12 +176,14 @@ def _build_figures(
         figures.extend(build_weather_figures(
             sources["weather"], stat_only=stat_only, y_ranges=y_ranges,
             syn_frames=sources.get("weather_syn") or None,
+            height=height,
         ))
 
     if sources.get("price"):
         figures.append(build_price_figure(
             sources["price"], stat_only=stat_only, y_range=y_ranges.get("baseprice"),
             syn_frames=sources.get("price_syn") or None,
+            height=height,
         ))
 
     if sources.get("desired_temp_in"):

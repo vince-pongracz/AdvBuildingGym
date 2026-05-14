@@ -27,7 +27,7 @@ _WEATHER_COLS = [
     ("temp_amb", "Temperature (\u00b0C)", None),
     ("rel_humidity", "Relative humidity (%)", None),
     ("avg_wind_speed", "Wind speed (m/s)", None),
-    ("sun_shine", "Global irradiance (J/cm\u00b2)", "direct_sun_shine"),
+    ("sun_shine", "Global irradiance (W/m\u00b2)", "direct_sun_shine"),
 ]
 
 
@@ -192,6 +192,7 @@ def build_overlay_figure(
     stat_only: bool = False,
     y_range: tuple[float, float] | None = None,
     syn_frames: dict[str, dict[str, pd.DataFrame]] | None = None,
+    height: int | None = None,
 ) -> go.Figure:
     """Build a single figure with one line trace per entry, plus stat bands.
 
@@ -226,7 +227,7 @@ def build_overlay_figure(
     if is_multi and stat_only:
         title += _days_subtitle(list(day_frames.keys()))
 
-    finalize_figure(fig, title)
+    finalize_figure(fig, title, height=height)
     return fig
 
 
@@ -239,6 +240,7 @@ def build_weather_figures(
     stat_only: bool = False,
     y_ranges: dict[str, tuple[float, float]] | None = None,
     syn_frames: dict[str, dict[str, pd.DataFrame]] | None = None,
+    height: int | None = None,
 ) -> list[go.Figure]:
     """Create one standalone figure per weather variable, each with all days overlaid.
 
@@ -262,6 +264,7 @@ def build_weather_figures(
             stat_only=stat_only,
             y_range=(y_ranges or {}).get(col),
             syn_frames=syn_frames,
+            height=height,
         )
         for col, label in available
     ]
@@ -272,6 +275,7 @@ def build_price_figure(
     stat_only: bool = False,
     y_range: tuple[float, float] | None = None,
     syn_frames: dict[str, dict[str, pd.DataFrame]] | None = None,
+    height: int | None = None,
 ) -> go.Figure:
     """Create a single-panel figure with one price trace per day.
 
@@ -330,7 +334,7 @@ def build_price_figure(
     if is_multi and stat_only:
         title += _days_subtitle(day_labels)
 
-    finalize_figure(fig, title)
+    finalize_figure(fig, title, height=height)
     return fig
 
 

@@ -7,6 +7,7 @@ from gymnasium.spaces import Box
 
 from .base import Infrastructure
 from adv_building_gym.utils.serializable import ComponentRegistry
+from adv_building_gym.utils.constants import SLOWDOWN_TERM, W_PER_KW
 
 logger = logging.getLogger(__name__)
 
@@ -85,12 +86,6 @@ class HP(Infrastructure):
         hp_action = float(np.atleast_1d(actions["a_hp"])[0])
         energy = abs(hp_action)
 
-        # Building thermal mass is owned and published by BuildingHeatLoss.
-        # Reading it as an observation keeps envelope params on a single owner
-        # and removes the implicit context injection that used to duplicate
-        # K/mC across components.
-        mC = float(states["ctxt_building_mC"][0])
-
         # NOTE VP 2026.01.20. : Thermal model is 1R1C, same as links below
         # Thermal power Q_thermal = energy * max_power_kW * COP
         # Sign of q_hp follows the action: positive = heating, negative = cooling
@@ -121,28 +116,43 @@ class HP(Infrastructure):
         # Link: https://www.sciencedirect.com/science/article/pii/S0378778812003039?via%3Dihub
         # NOTE VP 2026.01.20. : According to paper2, 1R1C mean RMS error to the reality is ~0.47 C --> influences precision
 
-        dTemp = 0.001 * self.control_step * q_hp / mC
+        # Building thermal mass is owned and published by BuildingHeatLoss.
+        # Reading it as an observation keeps envelope params on a single owner
+        # and removes the implicit context injection that used to duplicate
+        # K/mC across components.
+        mC = float(states["ctxt_building_mC"][0])
+        temp_abs_max = float(states["ctxt_temp_abs_max"][0]) if "ctxt_temp_abs_max" in states else 60.0
+
+        # 1R1C update in strict SI (LLEC convention):
+        #   dT_raw [K] = SLOWDOWN_TERM * dt * q_hp_W / mC
+        # q_hp arrives in kW from the action mapping above, so convert to W
+        # explicitly. SLOWDOWN_TERM is the dynamical slowdown (separate from
+        # the unit conversion); see utils/constants.py.
+        # The state buffer s_temp_in_norm lives in normalised units, so the
+        # raw °C change is divided by temp_abs_max before being written.
+        q_hp_W = q_hp * W_PER_KW
+        dT_raw = SLOWDOWN_TERM * self.control_step * q_hp_W / mC
+        dTemp_norm = dT_raw / temp_abs_max if temp_abs_max > 0 else 0.0
 
         # Check if temperature would be clipped after the change
-        current_temp = states["s_temp_in_norm"][0]
-        new_temp = current_temp + dTemp
+        current_temp_norm = states["s_temp_in_norm"][0]
+        new_temp_norm = current_temp_norm + dTemp_norm
 
-        if new_temp > 1.0 or new_temp < -1.0:
+        if new_temp_norm > 1.0 or new_temp_norm < -1.0:
             # Calculate actual temperature change needed to reach the limit
-            if new_temp > 1.0:
-                actual_dTemp = 1.0 - current_temp
+            if new_temp_norm > 1.0:
+                actual_dTemp = 1.0 - current_temp_norm
             else:  # new_temp < -1.0
-                actual_dTemp = -1.0 - current_temp
+                actual_dTemp = -1.0 - current_temp_norm
 
-            # Back-calculate actual q_hp from actual dTemp
-            # dTemp = 0.001 * control_step * q_hp / mC
-            # => q_hp = dTemp * mC / (0.001 * control_step)
-            actual_q_hp = actual_dTemp * mC / (0.001 * self.control_step)
-
-            # Back-calculate actual energy from actual q_hp
-            # |q_hp| = energy * max_power_kW * cop
-            # => energy = |q_hp| / (max_power_kW * cop)
-            actual_energy = abs(actual_q_hp) / (self.max_power_kW * cop) if (self.max_power_kW * cop) > 0 else 0.0
+            # Invert the forward path:
+            #   actual_dTemp (norm) -> actual_dT_raw [K]
+            #   actual_dT_raw -> actual_q_hp_W
+            #   actual_q_hp_W -> actual_q_hp (kW) -> actual_energy
+            actual_dT_raw = actual_dTemp * temp_abs_max
+            actual_q_hp_W = actual_dT_raw * mC / (SLOWDOWN_TERM * self.control_step)
+            actual_q_hp_kW = actual_q_hp_W / W_PER_KW
+            actual_energy = abs(actual_q_hp_kW) / (self.max_power_kW * cop) if (self.max_power_kW * cop) > 0 else 0.0
             actual_energy = np.clip(actual_energy, 0.0, 1.0)
 
             # Update action preserving sign (cooling/heating direction)
@@ -154,7 +164,7 @@ class HP(Infrastructure):
             self.actual_power_kW = actual_energy * self.max_power_kW
         else:
             # No clipping needed, use the original dTemp
-            self.temp_in_norm_change = dTemp
+            self.temp_in_norm_change = dTemp_norm
             self.actual_power_kW = energy * self.max_power_kW
 
     def update_state(self, states, info=None) -> None:

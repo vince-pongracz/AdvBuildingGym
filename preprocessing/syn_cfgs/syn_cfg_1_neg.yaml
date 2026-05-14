@@ -27,13 +27,13 @@ weather:
   # noised components: DWD `direct + diff`, Zenodo alias of `direct`.
   direct_sun_shine:
     transforms:
-      - {type: constant_shift, value: -0.5}                                           # J/cm²
-      - {type: gaussian_noise, std: 3.0, smooth: {kind: moving_average, window: 6}}   # J/cm²
+      - {type: constant_shift, value: -8.0}                                            # W/m²
+      - {type: gaussian_noise, std: 50.0, smooth: {kind: moving_average, window: 6}}   # W/m²
     clip: {min: 0.0}
   diff_sun_shine:
     transforms:
-      - {type: constant_shift, value: -0.3}                                           # J/cm²
-      - {type: gaussian_noise, std: 2.0, smooth: {kind: moving_average, window: 6}}   # J/cm²
+      - {type: constant_shift, value: -5.0}                                            # W/m²
+      - {type: gaussian_noise, std: 33.0, smooth: {kind: moving_average, window: 6}}   # W/m²
     clip: {min: 0.0}
 
 hh_consumption:

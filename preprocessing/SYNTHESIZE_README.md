@@ -157,8 +157,8 @@ difference between presets is the `constant_shift` offsets:
 | `baseprice`         | 0.3    | ct/kWh — tick-size jitter on hourly day-ahead prices     |
 | `temp_amb`          | 0.5    | °C — DWD air-temperature sensor accuracy                 |
 | `avg_wind_speed`    | 0.3    | m/s — DWD anemometer accuracy                            |
-| `direct_sun_shine`  | 3.0    | J/cm² — pyranometer direct-component noise floor         |
-| `diff_sun_shine`    | 2.0    | J/cm² — diffuse-component noise floor                    |
+| `direct_sun_shine`  | 50.0   | W/m² — pyranometer direct-component noise floor          |
+| `diff_sun_shine`    | 33.0   | W/m² — diffuse-component noise floor                     |
 | `hh_consumption_kW` | 0.05   | kW — baseload jitter for a single SFH (typical 0.1-3 kW) |
 
 `sun_shine` is *not* noised directly: `synthesize.py` reconstructs it after the
@@ -178,8 +178,8 @@ ladder (roughly ½× / 1× / 3× the medium tier) and are mirror-symmetric acros
 | `baseprice` (ct/kWh)         | ±1.0             | ±2.0               | ±3.0               |
 | `temp_amb` (°C)              | ±0.5             | ±1.0               | ±1.5               |
 | `avg_wind_speed` (m/s)       | ±0.5             | ±1.0               | ±1.5               |
-| `direct_sun_shine` (J/cm²)   | ±0.5             | ±1.0               | ±3.0               |
-| `diff_sun_shine` (J/cm²)     | ±0.3             | ±0.5               | ±1.0               |
+| `direct_sun_shine` (W/m²)    | ±8.0             | ±17.0              | ±50.0              |
+| `diff_sun_shine` (W/m²)      | ±5.0             | ±8.0               | ±17.0              |
 | `hh_consumption_kW` (kW)     | ±0.075           | ±0.125             | ±0.25              |
 
 `syn_cfg_0` carries no shifts — it is the noise-only baseline and always uses

@@ -14,7 +14,20 @@ logger = logging.getLogger(__name__)
 
 
 class WeatherDataSource(StateSource):
-    """WeatherDataSource"""
+    """WeatherDataSource — exposes ambient temperature, wind speed, and global
+    solar irradiance from a preprocessed weather CSV.
+
+    Units (raw, before runtime normalisation):
+        - ``temp_amb`` / ``raw_temp_out``         : °C
+        - ``avg_wind_speed`` / ``raw_wind_speed`` : m/s
+        - ``sun_shine`` / ``raw_solar_irradiance``: W/m² (mean over the 5-min step)
+
+    Both DWD and Zenodo/WPuQ preprocessing pipelines emit ``sun_shine`` in W/m²
+    (DWD is converted from J/cm² per 10 min in ``dwd_preprocess.py``;
+    Zenodo is native W/m²). The ``ctxt_solar_irradiance_max`` context entry
+    is the scale factor used to recover the raw W/m² from the normalised
+    ``s_solar_irradiance_norm ∈ [0, 1]`` observation.
+    """
 
     # normalise is an enum, need special handling for serialization
     _context_params: ClassVar[Set[str]] = {'control_step'}
@@ -33,7 +46,9 @@ class WeatherDataSource(StateSource):
         # Raw values for get_raw_values() — updated each step
         self.temp_out_raw: float = 0.0
         self.wind_speed_raw: float = 0.0
-        # Solar irradiance in J/cm² (DWD/Zenodo unit; see preprocessing).
+        # Solar irradiance in W/m² — mean over the 5-min control step.
+        # Both DWD (converted from J/cm² per 10 min during preprocessing) and
+        # Zenodo/WPuQ (native W/m²) CSVs deliver this column in W/m².
         self.sun_shine_raw: float = 0.0
         self.sun_shine_abs_max: float = 0.0
 
@@ -110,7 +125,8 @@ class WeatherDataSource(StateSource):
             state_spaces["ctxt_temp_abs_max"] = Box(low=0, high=np.inf, shape=(1,), dtype=np.float32)
         if "ctxt_wind_speed_abs_max" not in state_spaces.keys():
             state_spaces["ctxt_wind_speed_abs_max"] = Box(low=0, high=np.inf, shape=(1,), dtype=np.float32)
-        # Solar irradiance scale factor in J/cm² per control step (raw DWD/Zenodo unit).
+        # Solar irradiance scale factor in W/m² (max value seen during normalisation).
+        # Use raw_irradiance = s_solar_irradiance_norm * ctxt_solar_irradiance_max.
         if "ctxt_solar_irradiance_max" not in state_spaces.keys():
             state_spaces["ctxt_solar_irradiance_max"] = Box(low=0, high=np.inf, shape=(1,), dtype=np.float32)
 

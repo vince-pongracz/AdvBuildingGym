@@ -25,7 +25,7 @@ _UNIT_LABELS: dict[str, str] = {
     "raw_E_price": "Price (ct/kWh)",
     "raw_E_price_max": "Price (ct/kWh)",
     "raw_wind_speed": "Wind speed (m/s)",
-    "raw_solar_irradiance": "Solar irradiance (J/cm²)",
+    "raw_solar_irradiance": "Solar irradiance (W/m²)",
     "raw_hp_kW": "Power (kW)",
     "raw_pv_prod_kW": "Power (kW)",
     "raw_pv_max": "Power (kW)",

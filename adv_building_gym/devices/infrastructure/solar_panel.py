@@ -12,24 +12,27 @@ logger = logging.getLogger(__name__)
 class SolarPanel(Infrastructure):
     """Solar Panel (PV) infrastructure component.
 
-    Solar panels always produce the full energy amount determined by solar irradiance.
+    Solar panels always produce the full power determined by global solar irradiance.
     There is no policy-controlled action — production is purely a function of irradiance
-    and peak power capacity. The actual production is written into actions['solar_action']
-    as a read-only output for other components to observe.
+    (W/m², supplied by ``WeatherDataSource``) and peak power capacity. The actual
+    production is written into ``actions['a_solar']`` as a read-only output for
+    other components to observe.
 
     Action convention: negative = production (energy to grid).
     solar_action value: -1 = full peak production, 0 = no production.
 
-    Irradiance can be provided via:
-    - External state update (from a DataSource providing irradiance)
-    - Synthetic time-based profile (default)
+    Irradiance is denormalised from ``s_solar_irradiance_norm ∈ [0, 1]`` using
+    the scale factor ``ctxt_solar_irradiance_max`` (W/m²) published by
+    ``WeatherDataSource``. Electrical output:
+        ``P[kW] = G[W/m²] * A[m²] * η / 1000``,
+    clipped to ``max_power_kW``.
     """
 
     POWER_FLOW = "generator"
 
     # Internal state variables - don't serialize
     _exclude_params: ClassVar[Set[str]] = {
-        'iteration', 'irradiance_norm', 'current_production_kW'
+        'iteration', 'irradiance_W_m2', 'current_production_kW'
     }
 
     def __init__(self,
@@ -52,7 +55,7 @@ class SolarPanel(Infrastructure):
         super().__init__(name, max_power_kW)
 
         # State variables
-        self.irradiance_Jcm2 = 0.0  # Irradiance
+        self.irradiance_W_m2 = 0.0  # Global irradiance in W/m² (raw, denormalised)
         self.current_production_kW = 0.0  # Actual power production in kW
         self.pv_efficiency = pv_efficiency
         self.panel_area_m2 = panel_area_m2
@@ -90,19 +93,19 @@ class SolarPanel(Infrastructure):
         as a read-only output for other components.
         """
 
-        # Denormalise irradiance: s_solar_irradiance_norm in [0,1], scale by
-        # ctxt_solar_irradiance_max (J/cm² per control step, published by WeatherDataSource).
+        # Denormalise irradiance: s_solar_irradiance_norm in [0,1], scaled by
+        # ctxt_solar_irradiance_max (W/m², published by WeatherDataSource).
         irradiance_norm = float(states["s_solar_irradiance_norm"][0])
-        irradiance_max_Jcm2 = float(states["ctxt_solar_irradiance_max"][0])
-        self.irradiance_Jcm2 = irradiance_norm * irradiance_max_Jcm2
+        irradiance_max_W_m2 = float(states["ctxt_solar_irradiance_max"][0])
+        self.irradiance_W_m2 = irradiance_norm * irradiance_max_W_m2
 
-        # Convert energy [J/cm² per step] over panel area [m²] to mean power [kW] over the step.
-        # 1 m² = 10_000 cm² → J per m² = Jcm2 * 10_000; J → kJ → /1000; kJ / s = kW → /control_step.
-        # Combined factor: 10_000 / 1000 / control_step = 10 / control_step.
+        # Convert irradiance [W/m²] over panel area [m²] to electrical power [kW].
+        # P[W] = G[W/m²] * A[m²] * η  →  P[kW] = G * A * η / 1000.
+        # No control_step factor: irradiance is a power flux (already per-second),
+        # so power is independent of the sampling interval.
         # Link: https://www.alternative-energy-tutorials.com/solar-power/solar-panel-efficiency.html
         self.current_production_kW = (
-            self.irradiance_Jcm2 * self.panel_area_m2 * self.pv_efficiency
-            * 10.0 / self.control_step
+            self.irradiance_W_m2 * self.panel_area_m2 * self.pv_efficiency / 1000.0
         )
         self.current_production_kW = np.clip(self.current_production_kW, 0.0, self.max_power_kW)
 
@@ -121,7 +124,7 @@ class SolarPanel(Infrastructure):
 
     def reset(self, states: Dict, info=None) -> None:
         """Clear per-episode irradiance/production readouts."""
-        self.irradiance_Jcm2 = 0.0
+        self.irradiance_W_m2 = 0.0
         self.current_production_kW = 0.0
         super().reset(states, info)
     

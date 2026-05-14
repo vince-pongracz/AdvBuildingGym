@@ -5,6 +5,13 @@ Reads weather data from the WEATHER_SERVICE/IN group in the HDF5 file,
 merges all weather variables into a single DataFrame, drops NaN rows,
 and saves to CSV.
 
+Units note (irradiance): the WPuQ/Zenodo ``WEATHER_SOLAR_IRRADIANCE_GLOBAL``
+field is instantaneous global irradiance in W/m² (Schlemminger et al.,
+"Dataset on electrical single-family house and heat pump load profiles in
+Germany", Scientific Data 2022). It is renamed to ``direct_sun_shine`` /
+``sun_shine`` here without any unit conversion; values remain W/m²,
+linearly interpolated onto the 5-min uniform grid.
+
 Usage:
     python -m preproc.weather.extract_weather_csv
     # or
@@ -19,7 +26,11 @@ import sys
 import warnings
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
+
+RESAMPLE_FREQ = "5min"
+CIRCULAR_COLUMNS: tuple[str, ...] = ("wind_dir",)
 
 try:
     from .preproc_types import WeatherExtractionStats
@@ -39,7 +50,10 @@ warnings.filterwarnings("ignore", category=Warning, module="tables.path")
 logging.basicConfig(level=logging.INFO, format="%(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
-# Rename WPuQ/Zenodo column names to match environment statesource conventions
+# Rename WPuQ/Zenodo column names to match environment statesource conventions.
+# Note: ``solar_irradiance`` is W/m² (instantaneous global irradiance) in the
+# WPuQ HDF5; renaming to ``direct_sun_shine`` is a column-name alignment only,
+# values remain in W/m². See module docstring.
 COLUMN_RENAMES: dict[str, str] = {
     "temperature": "temp_amb",
     "relative_humidity": "rel_humidity",
@@ -83,6 +97,37 @@ def clean_column_name(key: str) -> str:
         name = name[:-7]
     # Convert to lowercase
     return name.lower()
+
+
+def resample_to_uniform_grid(df: pd.DataFrame, freq: str = RESAMPLE_FREQ) -> pd.DataFrame:
+    """Resample an irregular-cadence weather DataFrame onto a uniform datetime grid.
+
+    Linear (time-based) interpolation is applied to numeric columns. Circular
+    columns listed in ``CIRCULAR_COLUMNS`` (e.g. wind direction in degrees) are
+    interpolated via sin/cos decomposition so wrap-around at 0/360 is handled
+    correctly (e.g. linear interp between 350 deg and 10 deg yields 0 deg, not
+    180 deg).
+    """
+    if df.empty:
+        return df
+
+    new_index = pd.date_range(df.index.min(), df.index.max(), freq=freq)
+    combined = df.reindex(df.index.union(new_index))
+
+    for col in CIRCULAR_COLUMNS:
+        if col in combined.columns:
+            rad = np.deg2rad(combined[col].astype(float))
+            sin_i = np.sin(rad).interpolate(method="time", limit_direction="both")
+            cos_i = np.cos(rad).interpolate(method="time", limit_direction="both")
+            combined[col] = np.mod(np.rad2deg(np.arctan2(sin_i, cos_i)), 360.0)
+
+    linear_cols = [c for c in combined.columns if c not in CIRCULAR_COLUMNS]
+    if linear_cols:
+        combined[linear_cols] = combined[linear_cols].interpolate(
+            method="time", limit_direction="both"
+        )
+
+    return combined.reindex(new_index)
 
 
 def extract_weather_data(
@@ -222,7 +267,9 @@ def extract_weather_data(
         df_merged.rename(columns=COLUMN_RENAMES, inplace=True)
 
         # Zenodo CSVs have only direct_sun_shine (no diffuse component).
-        # Create sun_shine alias so downstream code can use a single column name.
+        # Create sun_shine alias (W/m², instantaneous global irradiance) so
+        # downstream code can use a single column name across DWD and Zenodo
+        # CSVs — both unified on W/m².
         if "direct_sun_shine" in df_merged.columns and "sun_shine" not in df_merged.columns:
             df_merged["sun_shine"] = df_merged["direct_sun_shine"]
 
@@ -244,6 +291,18 @@ def extract_weather_data(
         if cols_to_drop:
             df_merged.drop(columns=cols_to_drop, inplace=True)
             logger.info("Dropped columns: %s", cols_to_drop)
+
+        # Resample to a uniform 5-min grid so downstream consumers see one
+        # cadence per file. Some Zenodo years ship hourly data while others
+        # already have 5-min cadence — linear interpolation (with circular
+        # handling for wind direction) bridges the gap. See
+        # resample_to_uniform_grid() for details.
+        rows_before_resample = len(df_merged)
+        df_merged = resample_to_uniform_grid(df_merged, freq=RESAMPLE_FREQ)
+        logger.info(
+            "Resampled to %s grid: %d -> %d rows",
+            RESAMPLE_FREQ, rows_before_resample, len(df_merged),
+        )
 
         stats["columns"] = list(df_merged.columns)
 

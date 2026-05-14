@@ -509,7 +509,7 @@ in each section.
 
 | Figure | Content |
 |--------|---------|
-| Weather panels | One figure per variable: temperature (°C), humidity (%), wind speed (m/s), irradiance (J/cm²) |
+| Weather panels | One figure per variable: temperature (°C), humidity (%), wind speed (m/s), irradiance (W/m²) |
 | Energy price | Price traces (ct/kWh) with area fill (single day) or overlay (multi-day) |
 
 **Output:** `plotting/out/data_plots/`.

@@ -165,7 +165,8 @@ def _run_monthly(
         logger.info("No data for %s — skipping.", base_name)
         return
 
-    figures = _build_figures(cfg, sources, stat_only, y_ranges=y_ranges)
+    height = cfg.get("figure", {}).get("overview_height")
+    figures = _build_figures(cfg, sources, stat_only, y_ranges=y_ranges, height=height)
     if not figures:
         logger.info("No figures for %s — skipping.", base_name)
         return

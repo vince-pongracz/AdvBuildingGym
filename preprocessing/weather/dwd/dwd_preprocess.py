@@ -3,6 +3,15 @@
 Takes per-type DataFrames (from dwd_fetch), selects relevant columns,
 merges on MESS_DATUM, renames columns, and drops all-missing rows.
 Can be run standalone or imported.
+
+Units note (irradiance): DWD ``GS_10`` / ``DS_10`` are documented as 10-minute
+sums of global / diffuse shortwave radiation in J/cm² (see DWD
+BESCHREIBUNG_obsgermany_climate_10min_solar_*.pdf). They are converted here
+to mean W/m² over the 10-min interval (factor 10000/600 ≈ 16.6667) before
+the 10→5-min upsampling, so that all downstream weather columns
+(``direct_sun_shine``, ``diff_sun_shine``, ``sun_shine``) are W/m² —
+matching the Zenodo/WPuQ ``solar_irradiance`` column and the canonical unit
+used in PV libraries (pvlib, MERRA, ERA5).
 """
 
 import logging
@@ -71,7 +80,17 @@ def merge_dataframes(dataframes: dict[str, pd.DataFrame]) -> pd.DataFrame | None
         merged = merged[~all_missing].reset_index(drop=True)
         logger.info("Dropped %d rows where all measurements were NaN", n_dropped)
 
-    # Sum direct and diffuse solar irradiance into a combined column.
+    # Convert irradiance from J/cm² per 10 min (DWD archival unit) to mean W/m²
+    # over the 10-min interval: (x J/cm²) * (10000 cm²/m²) / (600 s) = x * 50/3 W/m².
+    # Done before sun_shine derivation and before upsampling so all downstream
+    # values share a single unit (W/m²) and linear interpolation between samples
+    # is meaningful (mean irradiance at the 5-min midpoint).
+    J_PER_CM2_PER_10MIN_TO_W_PER_M2 = 10000.0 / 600.0
+    for col in ("direct_sun_shine", "diff_sun_shine"):
+        if col in merged.columns:
+            merged[col] = merged[col] * J_PER_CM2_PER_10MIN_TO_W_PER_M2
+
+    # Sum direct and diffuse solar irradiance into a combined global column (W/m²).
     # Treat NaN as 0 so a partial sum is still usable (only NaN if both are NaN).
     merged["sun_shine"] = (
         merged["direct_sun_shine"].fillna(0) + merged["diff_sun_shine"].fillna(0)

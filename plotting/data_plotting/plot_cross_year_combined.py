@@ -149,6 +149,7 @@ def _build_combined_weather_figures(
     datasets: dict[str, dict[str, object]],
     month_label: str,
     y_ranges: dict[str, tuple[float, float]] | None = None,
+    height: int | None = None,
 ) -> list[go.Figure]:
     """Build one figure per weather variable with stat bands from each dataset.
 
@@ -206,7 +207,7 @@ def _build_combined_weather_figures(
         else:
             fig.update_yaxes(title_text=label)
         title = f"{label} \u2014 {month_label} (all datasets)"
-        finalize_figure(fig, title)
+        finalize_figure(fig, title, height=height)
         figures.append(fig)
 
     return figures
@@ -216,6 +217,7 @@ def _build_combined_price_figure(
     datasets: dict[str, dict[str, object]],
     month_label: str,
     y_range: tuple[float, float] | None = None,
+    height: int | None = None,
 ) -> go.Figure | None:
     """Build one price figure with stat bands from each price dataset."""
     fig = go.Figure()
@@ -237,7 +239,7 @@ def _build_combined_price_figure(
     else:
         fig.update_yaxes(title_text="Energy price (ct/kWh)")
     title = f"Energy price \u2014 {month_label} (all datasets)"
-    finalize_figure(fig, title)
+    finalize_figure(fig, title, height=height)
     return fig
 
 
@@ -358,11 +360,16 @@ def run_combined(
         figures: list[go.Figure] = []
         month_label = f"{month_name} ({start_year}\u2013{end_year})"
 
+        height = cfg.get("figure", {}).get("overview_height")
         if weather_data:
-            figures.extend(_build_combined_weather_figures(weather_data, month_label, y_ranges=weather_y_ranges))
+            figures.extend(_build_combined_weather_figures(
+                weather_data, month_label, y_ranges=weather_y_ranges, height=height,
+            ))
 
         if price_data:
-            price_fig = _build_combined_price_figure(price_data, month_label, y_range=price_range)
+            price_fig = _build_combined_price_figure(
+                price_data, month_label, y_range=price_range, height=height,
+            )
             if price_fig is not None:
                 figures.append(price_fig)
 
