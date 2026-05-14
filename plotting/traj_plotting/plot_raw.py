@@ -27,7 +27,7 @@ _UNIT_LABELS: dict[str, str] = {
     "raw_wind_speed": "Wind speed (m/s)",
     "raw_solar_irradiance": "Solar irradiance (J/cm²)",
     "raw_hp_kW": "Power (kW)",
-    "raw_pv_prod": "Power (kW)",
+    "raw_pv_prod_kW": "Power (kW)",
     "raw_pv_max": "Power (kW)",
     "raw_wind_production_kW": "Power (kW)",
     "raw_wind_available_kW": "Power (kW)",
@@ -60,7 +60,7 @@ def plot_raw(episode: EpisodeData) -> list[go.Figure]:
 
     Temperature keys are grouped into a single figure by default (they
     share units and are directly comparable).  Grouping is configurable
-    via ``plot_config.yaml`` under the ``raw:`` section.
+    via ``traj_plot_config.yaml`` under the ``raw:`` section.
 
     Returns a list of figures to be rendered sequentially in one HTML file.
     """

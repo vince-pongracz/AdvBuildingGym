@@ -65,8 +65,26 @@ def add_stat_traces(
     stats: ColumnStats,
     value_label: str,
     value_fmt: str = ".1f",
+    *,
+    color: str | None = None,
+    band_std: str | None = None,
+    band_mm: str | None = None,
+    legend_prefix: str = "",
+    legendgroup: str | None = None,
 ) -> None:
-    """Add mean line, +/-1 std band (grey), and min-max band (lighter grey)."""
+    """Add mean line, +/-1 std band, and min-max band.
+
+    When *color* / *band_std* / *band_mm* are ``None`` the defaults (black
+    mean, grey bands) are used \u2014 matching the original single-series style.
+    Pass an explicit *color* to draw a coloured stat overlay for a
+    syn_cfg trace group; *legend_prefix* labels the legend entries so
+    multiple stat groups can coexist in the same figure.
+    """
+    line_color = color or STAT_COLOR
+    fill_mm = band_mm or BAND_COLOR_MINMAX
+    fill_std = band_std or BAND_COLOR_STD
+    prefix = f"{legend_prefix} " if legend_prefix else ""
+
     minutes = stats.minutes
     hhmm = [f"{int(m) // 60:02d}:{int(m) % 60:02d}" for m in minutes]
 
@@ -74,13 +92,14 @@ def add_stat_traces(
     fig.add_trace(go.Scatter(
         x=minutes, y=stats.vmax,
         mode="lines", line=dict(width=0),
-        showlegend=False, hoverinfo="skip",
+        legendgroup=legendgroup, showlegend=False, hoverinfo="skip",
     ))
     fig.add_trace(go.Scatter(
         x=minutes, y=stats.vmin,
         mode="lines", line=dict(width=0),
-        fill="tonexty", fillcolor=BAND_COLOR_MINMAX,
-        name="min\u2013max", showlegend=True, hoverinfo="skip",
+        fill="tonexty", fillcolor=fill_mm,
+        legendgroup=legendgroup,
+        name=f"{prefix}min\u2013max", showlegend=True, hoverinfo="skip",
     ))
 
     # --- +/-1 std band (inner, darker) ---
@@ -89,27 +108,29 @@ def add_stat_traces(
     fig.add_trace(go.Scatter(
         x=minutes, y=upper_std,
         mode="lines", line=dict(width=0),
-        showlegend=False, hoverinfo="skip",
+        legendgroup=legendgroup, showlegend=False, hoverinfo="skip",
     ))
     fig.add_trace(go.Scatter(
         x=minutes, y=lower_std,
         mode="lines", line=dict(width=0),
-        fill="tonexty", fillcolor=BAND_COLOR_STD,
-        name="\u00b11 std", showlegend=True, hoverinfo="skip",
+        fill="tonexty", fillcolor=fill_std,
+        legendgroup=legendgroup,
+        name=f"{prefix}\u00b11 std", showlegend=True, hoverinfo="skip",
     ))
 
     # --- mean line ---
     fig.add_trace(go.Scatter(
         x=minutes, y=stats.mean,
-        mode="lines", name="mean",
-        line=dict(color=STAT_COLOR, width=1.5),
+        mode="lines", name=f"{prefix}mean",
+        legendgroup=legendgroup,
+        line=dict(color=line_color, width=1.5),
         customdata=np.column_stack([
             hhmm,
             [f"{v:{value_fmt}}" for v in stats.vmin],
             [f"{v:{value_fmt}}" for v in stats.vmax],
         ]),
         hovertemplate=(
-            "<b>mean</b> %{customdata[0]}<br>"
+            f"<b>{prefix}mean</b> " + "%{customdata[0]}<br>"
             f"{value_label}: " + "%{y:" + value_fmt + "}"
             " [%{customdata[1]} .. %{customdata[2]}]"
             "<extra></extra>"

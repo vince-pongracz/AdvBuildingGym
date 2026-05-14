@@ -117,7 +117,7 @@ def generate_all_plots(
                         fmt_dir, f"{ep_id}_{name}{suffix}.{fmt}",
                     )
                     # Width/height come from each figure's layout (set via
-                    # style_figure from plot_config.yaml); keep static export
+                    # style_figure from traj_plot_config.yaml); keep static export
                     # consistent with the HTML render.
                     fig.write_image(filepath)
                     logger.info("Saved: %s", filepath)

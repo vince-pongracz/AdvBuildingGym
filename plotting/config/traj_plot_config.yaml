@@ -39,7 +39,7 @@ raw:
   grouped_keys:
     - [raw_temp_out, raw_temp_in, raw_desired_temp_in]
     # Household consumption alongside generation for an at-a-glance balance view
-    - [raw_current_consumption_kW, raw_pv_prod, raw_wind_production_kW]
+    - [raw_current_consumption_kW, raw_pv_prod_kW, raw_wind_production_kW]
 
   # Raw keys to skip in plotting
   skip_keys:

@@ -92,5 +92,14 @@ ev_schedule:
     - ev_5.csv
   timestamp_col: start
 
+figure:
+  # Default per-chart height in pixels (applies to every weather / price /
+  # profile figure). Increase for taller y-axes.
+  height: 450
+  # EV schedule height grows with the number of lanes; this is the floor.
+  ev_min_height: 250
+  # Extra pixels added per EV profile lane on top of the base height.
+  ev_lane_px: 50
+
 output:
   dir: plotting/out/data_plots

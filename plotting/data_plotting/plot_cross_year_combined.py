@@ -45,6 +45,7 @@ from .common import (
     load_config,
     load_profiles_from_cfg,
     resolve_source,
+    syn_cfg_style,
     write_output,
 )
 from .figure_builders import (
@@ -54,7 +55,7 @@ from .figure_builders import (
     build_user_energy_need_figure,
     finalize_figure,
 )
-from .loaders import load_days
+from .loaders import load_days, load_syn_cfg_days
 from .stats import ColumnStats, compute_column_stats
 
 logger = logging.getLogger(__name__)
@@ -72,11 +73,18 @@ def _add_dataset_stat_traces(
     value_fmt: str = ".1f",
 ) -> None:
     """Add mean line + std band + min-max band for one dataset, colour-coded."""
-    style = DATASET_STYLES.get(dataset_name, {
-        "color": "#888",
-        "rgba_std": "rgba(136,136,136,0.20)",
-        "rgba_mm": "rgba(136,136,136,0.08)",
-    })
+    # Synthesised variants are keyed "<base>:<cfg_name>" and get a
+    # syn_cfg-palette colour so they stand apart from the base dataset.
+    if dataset_name in DATASET_STYLES:
+        style = DATASET_STYLES[dataset_name]
+    elif ":" in dataset_name:
+        style = syn_cfg_style(dataset_name.split(":", 1)[1])
+    else:
+        style = {
+            "color": "#888",
+            "rgba_std": "rgba(136,136,136,0.20)",
+            "rgba_mm": "rgba(136,136,136,0.08)",
+        }
     minutes = stats.minutes
     hhmm = [f"{int(m) // 60:02d}:{int(m) % 60:02d}" for m in minutes]
 
@@ -243,20 +251,27 @@ def _load_multi_datasets(
     dataset_keys: list[str],
     dates: list[datetime],
 ) -> dict[str, dict[str, object]]:
-    """Load data from every dataset variant in *dataset_keys*."""
+    """Load data from every dataset variant in *dataset_keys*.
+
+    Additionally globs sibling ``*_syn_cfg_*.csv`` files for each dataset
+    and adds them as pseudo-datasets keyed ``"<base>:<cfg_name>"`` so the
+    existing per-dataset stat-band machinery renders them alongside the
+    originals in a distinct colour.
+    """
     result: dict[str, dict[str, object]] = {}
     for ds_key in dataset_keys:
         src = resolve_source(cfg_section, section_name, key=ds_key)
         if src is None:
             continue
+        ds_dir = REPO_ROOT / src["dir"]
         frames = load_days(
-            REPO_ROOT / src["dir"],
-            src["file_pattern"],
-            src["timestamp_col"],
-            dates,
+            ds_dir, src["file_pattern"], src["timestamp_col"], dates,
         )
         if frames:
             result[ds_key] = frames
+        syn_frames = load_syn_cfg_days(ds_dir, src["file_pattern"], src["timestamp_col"], dates)
+        for cfg_name, cfg_frames in syn_frames.items():
+            result[f"{ds_key}:{cfg_name}"] = cfg_frames
     return result
 
 

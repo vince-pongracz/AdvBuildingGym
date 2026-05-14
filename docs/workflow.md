@@ -370,26 +370,26 @@ weather/price data inspection).
 
 ### 4.1 Trajectory Plotting (standalone)
 
-**Script:** `python -m plotting`
+**Script:** `python -m plotting.traj_plotting`
 **SLURM:** `sbatch slurm_scripts/slurm_plot_trajectory.sh [OPTIONS]`
 
 SLURM resources: 1 CPU, no GPU.
 
 ```bash
 # Auto-discover latest HDF5, plot best episode
-python -m plotting
+python -m plotting.traj_plotting
 
 # Specific HDF5 file
-python -m plotting --hdf5 eval_results/20260324_eval/trajectories.hdf5
+python -m plotting.traj_plotting --hdf5 eval_results/20260324_eval/trajectories.hdf5
 
 # Select best episode by a specific metric
-python -m plotting --select-by achieved_reward
+python -m plotting.traj_plotting --select-by achieved_reward
 
 # Specific episode, multiple output formats
-python -m plotting --episode be574d --format html svg png
+python -m plotting.traj_plotting --episode be574d --format html svg png
 
 # Custom output directory
-python -m plotting --output-dir my_plots/
+python -m plotting.traj_plotting --output-dir my_plots/
 ```
 
 **Key arguments:**
@@ -403,14 +403,14 @@ python -m plotting --output-dir my_plots/
 | `--output-dir PATH` | `plotting/out/<episode_id>/` | Output directory |
 | `--control-step N` | `300` | Timestep in seconds (for x-axis) |
 
-**Configuration:** `plotting/config/plot_config.yaml` — domain-specific rendering
+**Configuration:** `plotting/config/traj_plot_config.yaml` — domain-specific rendering
 settings. Edit this (not Python code) when adding new statesources or infrastructure.
 
 ```yaml
 states:
   skip_keys: [E_price_max, sim_hour, _temp_abs_max]   # omit from plots
   grouped_keys:                                         # share a subplot
-    - [battery_pct, battery_target_pct]
+    - [battery_pct, ]
     - [temp_in_norm, desired_temp_in_norm, temp_out_norm]
     - [ev_soc, ev_target_soc]
   mask_when_disconnected:
@@ -472,23 +472,23 @@ Useful for inspecting data quality, comparing days, and verifying preprocessing 
 Each day is overlaid as a separate trace; multi-day plots add a mean curve with
 +/- 1 std-dev band.
 
-**Script:** `python -m plotting.data_plotting.plot_day_data`
+**Script:** `python -m plotting.traj_plotting.data_plotting.plot_day_data`
 
 ```bash
 # Single day
-python -m plotting.data_plotting.plot_day_data 2020-07-15
+python -m plotting.traj_plotting.data_plotting.plot_day_data 2020-07-15
 
 # Multiple explicit dates (overlaid)
-python -m plotting.data_plotting.plot_day_data 2020-07-15 2020-08-01 2021-01-10
+python -m plotting.traj_plotting.data_plotting.plot_day_data 2020-07-15 2020-08-01 2021-01-10
 
 # Start date + N consecutive days
-python -m plotting.data_plotting.plot_day_data 2020-07-15 --days 7
+python -m plotting.traj_plotting.data_plotting.plot_day_data 2020-07-15 --days 7
 
 # Statistical summary only (mean + std band, hide individual traces)
-python -m plotting.data_plotting.plot_day_data 2020-07-15 --days 7 --stat
+python -m plotting.traj_plotting.data_plotting.plot_day_data 2020-07-15 --days 7 --stat
 
 # Custom config and output formats
-python -m plotting.data_plotting.plot_day_data 2020-07-15 --config plotting/config/data_plot_config.yaml --format html png
+python -m plotting.traj_plotting.data_plotting.plot_day_data 2020-07-15 --config plotting/config/data_plot_config.yaml --format html png
 ```
 
 **Key arguments:**

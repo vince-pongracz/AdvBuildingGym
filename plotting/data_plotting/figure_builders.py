@@ -9,6 +9,7 @@ for export.  All figures share the same 24-hour x-axis via
 from __future__ import annotations
 
 import logging
+from datetime import date, timedelta
 
 import numpy as np
 import pandas as pd
@@ -16,6 +17,7 @@ import plotly.graph_objects as go
 
 from plotting.utils import COLORS, apply_day_xaxis, style_figure
 
+from .common import get_data_figure_config, syn_cfg_style
 from .stats import add_stat_traces, compute_column_stats
 
 logger = logging.getLogger(__name__)
@@ -33,8 +35,14 @@ _WEATHER_COLS = [
 # Shared helpers
 # ---------------------------------------------------------------------------
 
-def finalize_figure(fig: go.Figure, title: str, height: int = 350) -> None:
-    """Apply title, sizing, and shared styling to a figure."""
+def finalize_figure(fig: go.Figure, title: str, height: int | None = None) -> None:
+    """Apply title, sizing, and shared styling to a figure.
+
+    When *height* is ``None`` the default is read from the ``figure.height``
+    key in ``data_plot_config.yaml`` (fallback: 450 px).
+    """
+    if height is None:
+        height = int(get_data_figure_config().get("height", 450))
     fig.update_layout(
         title_text=title, height=height, showlegend=True,
         title=dict(automargin=True, yref="container"),
@@ -44,8 +52,28 @@ def finalize_figure(fig: go.Figure, title: str, height: int = 350) -> None:
 
 
 def _days_subtitle(day_labels: list[str]) -> str:
-    """Build a subtitle listing the aggregated days."""
-    return "<br><sub>Days: " + ", ".join(day_labels) + "</sub>"
+    """Build a single-line subtitle summarising the aggregated days.
+
+    For ≤ 3 labels the days are listed verbatim (used by plot_day_data.py).
+    For larger aggregates a compact summary keeps the subtitle on one line so
+    it stays inside the title band reserved by ``style_figure``.
+    """
+    n = len(day_labels)
+    if n == 0:
+        return ""
+    if n <= 3:
+        return "<br><sub>Days: " + ", ".join(day_labels) + "</sub>"
+
+    try:
+        parsed = sorted(date.fromisoformat(d) for d in day_labels)
+    except ValueError:
+        return f"<br><sub>{n} days · {day_labels[0]} … {day_labels[-1]}</sub>"
+
+    first, last = parsed[0], parsed[-1]
+    contiguous = (last - first == timedelta(days=n - 1)) and (first.year, first.month) == (last.year, last.month)
+    if contiguous:
+        return f"<br><sub>{first.isoformat()} → {last.isoformat()} ({n} days)</sub>"
+    return f"<br><sub>{n} days · {first.isoformat()} … {last.isoformat()}</sub>"
 
 
 def _add_day_traces(
@@ -54,27 +82,89 @@ def _add_day_traces(
     col: str,
     hover_label: str,
     hover_fmt: str = ".1f",
+    *,
+    color: str | None = None,
+    name_prefix: str = "",
+    legendgroup: str | None = None,
+    line_width: float = 1.5,
 ) -> None:
-    """Add one coloured line trace per day for *col*."""
+    """Add one coloured line trace per day for *col*.
+
+    When *color* is provided every day shares that colour (used by syn_cfg
+    overlays so all per-day lines of one cfg are visually grouped); pass a
+    non-empty *name_prefix* / *legendgroup* to keep legends tidy.
+    """
     for day_idx, (day_label, df) in enumerate(day_frames.items()):
         if col not in df.columns:
             continue
-        color = COLORS[day_idx % len(COLORS)]
+        line_color = color or COLORS[day_idx % len(COLORS)]
         minutes = df["minutes"]
         hhmm = [f"{int(m) // 60:02d}:{int(m) % 60:02d}" for m in minutes]
+        trace_name = f"{name_prefix}{day_label}" if name_prefix else day_label
         fig.add_trace(go.Scatter(
             x=minutes,
             y=df[col],
             mode="lines",
-            name=day_label,
-            line=dict(color=color, width=1.5),
-            customdata=np.column_stack([hhmm, [day_label] * len(minutes)]),
+            name=trace_name,
+            legendgroup=legendgroup,
+            line=dict(color=line_color, width=line_width),
+            customdata=np.column_stack([hhmm, [trace_name] * len(minutes)]),
             hovertemplate=(
                 "<b>%{customdata[1]}</b> %{customdata[0]}<br>"
                 f"{hover_label}: " + "%{y:" + hover_fmt + "}"
                 "<extra></extra>"
             ),
         ))
+
+
+def _add_syn_overlays(
+    fig: go.Figure,
+    syn_frames: dict[str, dict[str, pd.DataFrame]],
+    col: str,
+    hover_label: str,
+    hover_fmt: str,
+    *,
+    stat_only: bool,
+) -> None:
+    """Render every syn_cfg's traces on *fig* for column *col*.
+
+    Behaviour matches plot_day_data's modes:
+      - Single day per cfg: one solid line per cfg.
+      - Multi-day, not stat_only: per-day lines (cfg colour, thinner) plus
+        mean + ±1σ + min-max band in the same colour.
+      - Multi-day, stat_only: only mean + ±1σ + min-max band.
+    """
+    for cfg_name, frames in syn_frames.items():
+        if not frames:
+            continue
+        style = syn_cfg_style(cfg_name)
+        is_multi = len(frames) > 1
+
+        if not is_multi:
+            # Single day: just one solid line per cfg.
+            _add_day_traces(
+                fig, frames, col, hover_label, hover_fmt,
+                color=style["color"], name_prefix=f"{cfg_name} ",
+                legendgroup=cfg_name, line_width=1.5,
+            )
+            continue
+
+        if not stat_only:
+            # Per-day lines (faint) so the stat overlay reads on top.
+            _add_day_traces(
+                fig, frames, col, hover_label, hover_fmt,
+                color=style["color"], name_prefix=f"{cfg_name} ",
+                legendgroup=cfg_name, line_width=0.8,
+            )
+
+        stats = compute_column_stats(frames, col)
+        if stats is not None:
+            add_stat_traces(
+                fig, stats, value_label=hover_label, value_fmt=hover_fmt,
+                color=style["color"], band_std=style["rgba_std"],
+                band_mm=style["rgba_mm"],
+                legend_prefix=cfg_name, legendgroup=cfg_name,
+            )
 
 
 def resolve_weather_cols(sample_df: pd.DataFrame) -> list[tuple[str, str]]:
@@ -101,6 +191,7 @@ def build_overlay_figure(
     hover_fmt: str = ".1f",
     stat_only: bool = False,
     y_range: tuple[float, float] | None = None,
+    syn_frames: dict[str, dict[str, pd.DataFrame]] | None = None,
 ) -> go.Figure:
     """Build a single figure with one line trace per entry, plus stat bands.
 
@@ -119,6 +210,12 @@ def build_overlay_figure(
         stats = compute_column_stats(day_frames, value_col)
         if stats is not None:
             add_stat_traces(fig, stats, value_label=hover_label, value_fmt=hover_fmt)
+
+    if syn_frames:
+        _add_syn_overlays(
+            fig, syn_frames, value_col, hover_label, hover_fmt,
+            stat_only=stat_only,
+        )
 
     apply_day_xaxis(fig)
     if y_range is not None:
@@ -141,11 +238,13 @@ def build_weather_figures(
     day_frames: dict[str, pd.DataFrame],
     stat_only: bool = False,
     y_ranges: dict[str, tuple[float, float]] | None = None,
+    syn_frames: dict[str, dict[str, pd.DataFrame]] | None = None,
 ) -> list[go.Figure]:
     """Create one standalone figure per weather variable, each with all days overlaid.
 
     *y_ranges* maps column names to (min, max) bounds; when supplied, the
-    matching figure's y-axis is fixed to that range.
+    matching figure's y-axis is fixed to that range. *syn_frames* layers
+    synthesised configurations onto every figure that has the column.
     """
     sample_df = next(iter(day_frames.values()))
     available = resolve_weather_cols(sample_df)
@@ -162,6 +261,7 @@ def build_weather_figures(
             hover_label=col,
             stat_only=stat_only,
             y_range=(y_ranges or {}).get(col),
+            syn_frames=syn_frames,
         )
         for col, label in available
     ]
@@ -171,6 +271,7 @@ def build_price_figure(
     day_frames: dict[str, pd.DataFrame],
     stat_only: bool = False,
     y_range: tuple[float, float] | None = None,
+    syn_frames: dict[str, dict[str, pd.DataFrame]] | None = None,
 ) -> go.Figure:
     """Create a single-panel figure with one price trace per day.
 
@@ -209,6 +310,12 @@ def build_price_figure(
         stats = compute_column_stats(day_frames, "baseprice")
         if stats is not None:
             add_stat_traces(fig, stats, value_label="price", value_fmt=".2f")
+
+    if syn_frames:
+        _add_syn_overlays(
+            fig, syn_frames, "baseprice", "price", ".2f",
+            stat_only=stat_only,
+        )
 
     apply_day_xaxis(fig)
     if y_range is not None:
@@ -353,6 +460,9 @@ def build_ev_schedule_figure(
 
     n = len(ev_labels)
     title = f"EV charging schedule \u2014 {n} profile{'s' if n != 1 else ''}"
-    height = max(250, 80 + 50 * n)
+    fig_cfg = get_data_figure_config()
+    min_h = int(fig_cfg.get("ev_min_height", 250))
+    lane_px = int(fig_cfg.get("ev_lane_px", 50))
+    height = max(min_h, 80 + lane_px * n)
     finalize_figure(fig, title, height=height)
     return fig

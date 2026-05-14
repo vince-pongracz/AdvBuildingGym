@@ -27,15 +27,15 @@ COLORS = [
 ]
 
 # ---------------------------------------------------------------------------
-# Plot configuration (loaded from plot_config.yaml)
+# Plot configuration (loaded from traj_plot_config.yaml)
 # ---------------------------------------------------------------------------
 
-_PLOT_CONFIG_PATH = Path(__file__).resolve().parent / "config" / "plot_config.yaml"
+_PLOT_CONFIG_PATH = Path(__file__).resolve().parent / "config" / "traj_plot_config.yaml"
 _plot_config_cache: dict[str, Any] | None = None
 
 
 def load_plot_config() -> dict[str, Any]:
-    """Load and cache ``plotting/config/plot_config.yaml``."""
+    """Load and cache ``plotting/config/traj_plot_config.yaml``."""
     global _plot_config_cache
     if _plot_config_cache is None:
         with open(_PLOT_CONFIG_PATH, encoding="utf-8") as fh:
@@ -45,7 +45,7 @@ def load_plot_config() -> dict[str, Any]:
 
 
 def get_output_root() -> Path:
-    """Return the trajectory output directory from plot_config.yaml."""
+    """Return the trajectory output directory from traj_plot_config.yaml."""
     cfg = load_plot_config()
     rel = cfg.get("output", {}).get("dir", "plotting/out/traj")
     return _REPO_ROOT / rel
@@ -303,7 +303,7 @@ def load_episode(
 # ---------------------------------------------------------------------------
 
 def _fig_cfg() -> dict[str, Any]:
-    """Return the ``figure:`` subdict from plot_config.yaml (with defaults)."""
+    """Return the ``figure:`` subdict from traj_plot_config.yaml (with defaults)."""
     cfg = load_plot_config().get("figure", {}) or {}
     return {
         "width": int(cfg.get("width", 1100)),
@@ -321,7 +321,7 @@ def apply_day_xaxis(
 ) -> None:
     """Configure x-axis as a 24-hour day.
 
-    Tick interval and rotation are loaded from ``plot_config.yaml`` under the
+    Tick interval and rotation are loaded from ``traj_plot_config.yaml`` under the
     ``figure:`` section (``tick_interval_min`` / ``tick_angle``).
 
     Args:

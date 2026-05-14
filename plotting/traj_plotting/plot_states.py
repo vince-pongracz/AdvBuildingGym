@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 def plot_states(episode: EpisodeData) -> list[go.Figure]:
     """One independent plot per state variable (or group of variables).
 
-    Keys listed in ``grouped_keys`` (from ``plot_config.yaml``) are merged
+    Keys listed in ``grouped_keys`` (from ``traj_plot_config.yaml``) are merged
     into a single plot.
     Returns a list of figures to be rendered sequentially in one HTML file.
     """

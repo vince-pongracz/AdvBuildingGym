@@ -82,6 +82,7 @@ def _make_config_variant(
 
 
 _DATE_KEYED_SOURCES = ("weather", "price")
+_DATE_KEYED_SYN_SOURCES = ("weather_syn", "price_syn")
 
 
 def _slice_sources(
@@ -91,12 +92,20 @@ def _slice_sources(
     """Filter year-partitioned sources to a subset of date labels.
 
     Profile sources (desired_temp_in, ev_schedule, user_energy_need) are
-    date-independent and passed through unchanged.
+    date-independent and passed through unchanged. ``*_syn`` entries are
+    nested ``{cfg_name: {date_label: df}}`` and get sliced one level deeper.
     """
     sliced: dict[str, dict] = {}
     for name, frames in sources.items():
         if name in _DATE_KEYED_SOURCES:
             sliced[name] = {k: v for k, v in frames.items() if k in date_labels}
+        elif name in _DATE_KEYED_SYN_SOURCES:
+            sliced[name] = {
+                cfg: {k: v for k, v in cfg_frames.items() if k in date_labels}
+                for cfg, cfg_frames in frames.items()
+            }
+            # Drop fully-empty cfgs for tidy figures.
+            sliced[name] = {c: f for c, f in sliced[name].items() if f}
         else:
             sliced[name] = frames
     return sliced
@@ -112,15 +121,24 @@ def _compute_y_ranges(
     figures from different months/years visually comparable.
     """
     per_col: dict[str, list[np.ndarray]] = {}
+
+    def _ingest(df: pd.DataFrame) -> None:
+        for col in df.columns:
+            if col == "minutes" or not pd.api.types.is_numeric_dtype(df[col]):
+                continue
+            arr = df[col].to_numpy(dtype=float)
+            arr = arr[np.isfinite(arr)]
+            if arr.size:
+                per_col.setdefault(col, []).append(arr)
+
     for name in _DATE_KEYED_SOURCES:
         for df in (sources.get(name) or {}).values():
-            for col in df.columns:
-                if col == "minutes" or not pd.api.types.is_numeric_dtype(df[col]):
-                    continue
-                arr = df[col].to_numpy(dtype=float)
-                arr = arr[np.isfinite(arr)]
-                if arr.size:
-                    per_col.setdefault(col, []).append(arr)
+            _ingest(df)
+    # Include syn_cfg frames so the shared y-axis encompasses their range too.
+    for name in _DATE_KEYED_SYN_SOURCES:
+        for cfg_frames in (sources.get(name) or {}).values():
+            for df in cfg_frames.values():
+                _ingest(df)
 
     ranges: dict[str, tuple[float, float]] = {}
     for col, arrs in per_col.items():

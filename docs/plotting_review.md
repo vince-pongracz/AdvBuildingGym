@@ -10,8 +10,8 @@
 ```
 plotting/
 ├── __init__.py              # Public API re-exports from src/
-├── __main__.py              # CLI entry point: python -m plotting
-├── plot_config.yaml         # Domain-specific settings (groupings, labels, skip keys)
+├── __main__.py              # CLI entry point: python -m plotting.traj_plotting
+├── traj_plot_config.yaml         # Domain-specific settings (groupings, labels, skip keys)
 ├── PLOTTING_README.md
 └── src/
     ├── __init__.py          # Modular API exports
@@ -23,11 +23,11 @@ plotting/
     └── plot_energy.py       # Energy/power dual-axis plot
 ```
 
-Single entry point: `python -m plotting`. Public Python API via `from plotting import ...`.
+Single entry point: `python -m plotting.traj_plotting`. Public Python API via `from plotting import ...`.
 All plot functions accept an `EpisodeData` dataclass loaded by `load_episode()`.
 All plot functions return `list[go.Figure]` uniformly.
 Domain-specific settings (state groupings, skip keys, action dimension labels) are
-centralised in `plot_config.yaml`.
+centralised in `traj_plot_config.yaml`.
 
 ---
 

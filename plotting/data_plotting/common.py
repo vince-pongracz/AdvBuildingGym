@@ -10,7 +10,9 @@ from __future__ import annotations
 import argparse
 import calendar
 import logging
+import zlib
 from datetime import datetime
+from functools import lru_cache
 from pathlib import Path
 
 import plotly.graph_objects as go
@@ -44,6 +46,38 @@ DATASET_STYLES: dict[str, dict] = {
     "e_charts": {"color": "#AB63FA", "rgba_std": "rgba(171,99,250,0.20)",  "rgba_mm": "rgba(171,99,250,0.08)"},
 }
 
+# Distinct colours for synthesised configurations, kept clear of the
+# DATASET_STYLES hues above so the original-vs-synthesised distinction stays
+# visually obvious. Cycled deterministically by syn_cfg name.
+_SYN_CFG_PALETTE: list[tuple[str, str]] = [
+    ("#FFA15A", "255,161,90"),    # orange
+    ("#19D3F3", "25,211,243"),    # cyan
+    ("#FF6692", "255,102,146"),   # pink
+    ("#B6E880", "182,232,128"),   # lime
+    ("#FECB52", "254,203,82"),    # yellow
+    ("#FF9DA6", "255,157,166"),   # salmon
+    ("#1F77B4", "31,119,180"),    # steel blue
+    ("#BCBD22", "188,189,34"),    # olive
+]
+
+
+def syn_cfg_style(cfg_name: str, *, index: int | None = None) -> dict[str, str]:
+    """Return ``{color, rgba_std, rgba_mm}`` for a syn_cfg trace group.
+
+    Uses a deterministic hash of *cfg_name* so the same cfg always renders
+    in the same colour across plots, unless an explicit *index* overrides
+    the assignment (useful when cycling through a known list).
+    """
+    if index is None:
+        # zlib.crc32 is stable across processes, unlike builtin hash().
+        index = zlib.crc32(cfg_name.encode("utf-8")) % len(_SYN_CFG_PALETTE)
+    hex_color, rgb = _SYN_CFG_PALETTE[index % len(_SYN_CFG_PALETTE)]
+    return {
+        "color": hex_color,
+        "rgba_std": f"rgba({rgb},0.20)",
+        "rgba_mm": f"rgba({rgb},0.08)",
+    }
+
 
 # ---------------------------------------------------------------------------
 # Config helpers
@@ -53,6 +87,21 @@ def load_config(config_path: Path) -> dict:
     """Load a YAML config file and return the parsed dict."""
     with open(config_path, encoding="utf-8") as fh:
         return yaml.safe_load(fh)
+
+
+@lru_cache(maxsize=1)
+def get_data_figure_config() -> dict:
+    """Return the ``figure`` section of the default data-plot config.
+
+    Cached so figure_builders can call it cheaply per figure. Mirrors the
+    pattern in ``plotting.utils._fig_cfg`` — always reads ``DEFAULT_CONFIG``,
+    not whatever ``--config`` was passed on the CLI.
+    """
+    try:
+        cfg = load_config(DEFAULT_CONFIG)
+    except OSError:
+        return {}
+    return (cfg.get("figure") or {})
 
 
 def resolve_source(cfg_section: dict, section_name: str, key: str | None = None) -> dict | None:

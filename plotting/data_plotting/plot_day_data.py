@@ -52,7 +52,7 @@ from .figure_builders import (
     build_user_energy_need_figure,
     build_weather_figures,
 )
-from .loaders import load_days
+from .loaders import load_days, load_syn_cfg_days
 
 logger = logging.getLogger(__name__)
 
@@ -116,16 +116,30 @@ def _load_all_sources(
 
     # Year-partitioned sources (weather, price)
     weather_cfg = resolve_source(cfg["weather"], "weather")
+    weather_dir = REPO_ROOT / weather_cfg["dir"]
     sources["weather"] = load_days(
-        REPO_ROOT / weather_cfg["dir"],
+        weather_dir,
+        weather_cfg["file_pattern"],
+        weather_cfg["timestamp_col"],
+        dates,
+    )
+    sources["weather_syn"] = load_syn_cfg_days(
+        weather_dir,
         weather_cfg["file_pattern"],
         weather_cfg["timestamp_col"],
         dates,
     )
 
     price_cfg = resolve_source(cfg["price"], "price")
+    price_dir = REPO_ROOT / price_cfg["dir"]
     sources["price"] = load_days(
-        REPO_ROOT / price_cfg["dir"],
+        price_dir,
+        price_cfg["file_pattern"],
+        price_cfg["timestamp_col"],
+        dates,
+    )
+    sources["price_syn"] = load_syn_cfg_days(
+        price_dir,
         price_cfg["file_pattern"],
         price_cfg["timestamp_col"],
         dates,
@@ -158,10 +172,16 @@ def _build_figures(
     y_ranges = y_ranges or {}
 
     if sources.get("weather"):
-        figures.extend(build_weather_figures(sources["weather"], stat_only=stat_only, y_ranges=y_ranges))
+        figures.extend(build_weather_figures(
+            sources["weather"], stat_only=stat_only, y_ranges=y_ranges,
+            syn_frames=sources.get("weather_syn") or None,
+        ))
 
     if sources.get("price"):
-        figures.append(build_price_figure(sources["price"], stat_only=stat_only, y_range=y_ranges.get("baseprice")))
+        figures.append(build_price_figure(
+            sources["price"], stat_only=stat_only, y_range=y_ranges.get("baseprice"),
+            syn_frames=sources.get("price_syn") or None,
+        ))
 
     if sources.get("desired_temp_in"):
         figures.append(build_desired_temp_figure(

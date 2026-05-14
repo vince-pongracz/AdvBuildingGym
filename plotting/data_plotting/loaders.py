@@ -17,6 +17,7 @@ used as the common x-axis across all day-data plots.
 from __future__ import annotations
 
 import logging
+import re
 from datetime import date, datetime
 from pathlib import Path
 
@@ -122,6 +123,66 @@ def load_days(
         df = load_day_csv(directory, file_pattern, timestamp_col, date)
         if not df.empty:
             result[str(date.date())] = df
+    return result
+
+
+def _syn_cfg_stem(file_pattern: str, year: int) -> str:
+    """Stem (no .csv) of the canonical per-year file for *year*."""
+    name = file_pattern.format(year=year)
+    return name[:-4] if name.endswith(".csv") else name
+
+
+def discover_syn_cfg_files(
+    directory: Path,
+    file_pattern: str,
+    years: set[int],
+) -> dict[str, dict[int, Path]]:
+    """Find sibling synthesised CSVs for every year that has them.
+
+    Returns ``{cfg_name: {year: filepath}}``. ``cfg_name`` is everything
+    after the canonical stem, e.g. ``syn_cfg_1_pos`` for a file like
+    ``2016_merged_04177_syn_cfg_1_pos.csv``.
+    """
+    result: dict[str, dict[int, Path]] = {}
+    if not directory.exists():
+        return result
+    for year in years:
+        stem = _syn_cfg_stem(file_pattern, year)
+        for match in directory.glob(f"{stem}_syn_cfg_*.csv"):
+            cfg_name = match.stem[len(stem) + 1:]  # strip "<stem>_"
+            result.setdefault(cfg_name, {})[year] = match
+    return result
+
+
+def load_syn_cfg_days(
+    directory: Path,
+    file_pattern: str,
+    timestamp_col: str,
+    dates: list[datetime],
+) -> dict[str, dict[str, pd.DataFrame]]:
+    """Load every discoverable ``*_syn_cfg_*.csv`` for the given dates.
+
+    Returns ``{cfg_name: {date_label: DataFrame}}``. Empty when no
+    synthesised siblings exist in *directory*.
+    """
+    requested_years = {d.year for d in dates}
+    cfg_files = discover_syn_cfg_files(directory, file_pattern, requested_years)
+    if not cfg_files:
+        return {}
+
+    # Per-cfg file_pattern reuses load_day_csv so day-slicing logic is shared.
+    result: dict[str, dict[str, pd.DataFrame]] = {}
+    for cfg_name, year_paths in sorted(cfg_files.items()):
+        frames: dict[str, pd.DataFrame] = {}
+        for d in dates:
+            path = year_paths.get(d.year)
+            if path is None:
+                continue
+            df = load_day_csv(path.parent, path.name, timestamp_col, d)
+            if not df.empty:
+                frames[str(d.date())] = df
+        if frames:
+            result[cfg_name] = frames
     return result
 
 
