@@ -3,8 +3,8 @@
 # Generalisation for RL
 
 General google search: 
-- How well can the algorithm perform on a different configuration, but same task. 
-- Ability to perform.
+- How well can the algorithm perform on a different configuration, but same task
+- Ability to perform
 - performance on unseen context?
 - performance between training and varied environments
 

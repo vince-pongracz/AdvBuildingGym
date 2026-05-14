@@ -14,7 +14,7 @@ import os
 import json
 import logging
 import datetime
-from typing import List, Optional, Type
+from typing import Optional, Type
 
 import numpy as np
 
@@ -27,8 +27,7 @@ from ..utils.trajectory_utils import extract_trajectory_from_infos, write_episod
 logger = logging.getLogger(__name__)
 
 
-def make_trajectory_logging_callback_class(
-    rewards: List,
+def make_trajectory_logging_cb_class(
     metrics_base_dir: str = "ep_metrics",
     exec_date: Optional[datetime.datetime] = None,
 ) -> Type["TrajectoryLoggingCallback"]:
@@ -40,7 +39,6 @@ def make_trajectory_logging_callback_class(
     no trajectory I/O happens during training.
 
     Args:
-        rewards: List of reward objects (used for summary statistics).
         metrics_base_dir: Base directory for saving trajectory JSON and HDF5.
         exec_date: Execution datetime for directory naming. Defaults to now.
 
@@ -50,7 +48,6 @@ def make_trajectory_logging_callback_class(
     if exec_date is None:
         exec_date = datetime.datetime.now()
 
-    _rewards = rewards
     _metrics_base_dir = os.path.abspath(metrics_base_dir)
     _exec_date = exec_date
 
@@ -131,6 +128,7 @@ def make_trajectory_logging_callback_class(
                     "seed": initial_info.get("seed") if initial_info else None,
                     "length": ep_length,
                     "eval": env_runner.config.in_evaluation,
+                    "episode_date": initial_info.get("episode_date") if initial_info else None,
                     "summary": {
                         "achieved_reward": ep_achieved_reward,
                         "max_achievable_reward": float(max_achievable_reward),
@@ -141,7 +139,7 @@ def make_trajectory_logging_callback_class(
                 }
 
                 ep_metrics_dir = (
-                    f"{_metrics_base_dir}/{_exec_date.strftime('%Y%m%d_%H%M')}00"
+                    f"{_metrics_base_dir}/{_exec_date.strftime('%Y%m%d_%H%M%S')}"
                 )
                 os.makedirs(ep_metrics_dir, exist_ok=True)
                 jsons_dir = f"{ep_metrics_dir}/jsons"

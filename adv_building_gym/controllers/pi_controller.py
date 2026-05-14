@@ -14,6 +14,13 @@ class PIController:
     where e(t) is the temperature error (T_in - T_set).
     """
 
+    # TODO VP 2026.04.30. : Why are these particular Kp, Ki, and dt values chosen?
+    # Are they tuned for a specific environment or building configuration?
+    # It would be good to document the rationale behind these choices,
+    # and whether they are expected to work well across different scenarios or 
+    # if they may need retuning.
+    # How to use ray.Tune for tuning these parameters?
+
     def __init__(self, Kp=0.15, Ki=0.0002, dt=300):
         """
         Initialize PI controller gains and state.

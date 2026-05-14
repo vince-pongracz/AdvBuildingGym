@@ -8,6 +8,13 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
+class SlurmResources:
+    """SLURM-allocated hardware resources detected from environment variables."""
+    num_cpus: int
+    num_gpus: int
+
+
+@dataclass
 class ResourceAllocation:
     """Container for computed resource allocation."""
     total_cpu_usage: int
@@ -73,8 +80,10 @@ def validate_resource_allocation(
             f"but only {allocation.slurm_gpus} available."
         )
 
-    # Warn if GPU available but not used
-    if allocation.slurm_gpus > 0 and total_gpu_request == 0:
+    # Warn if GPU available but not used. With num_learners=0 (local learner on
+    # driver), num_gpus_per_learner > 0 still claims the GPU for the driver-side
+    # learner, so check that instead of total_gpu_request.
+    if allocation.slurm_gpus > 0 and num_gpus_per_learner == 0:
         logger.warning(
             "GPU available (%d) but no learner configured to use it. "
             "Set num_gpus_per_learner > 0 in config to utilize GPU.",

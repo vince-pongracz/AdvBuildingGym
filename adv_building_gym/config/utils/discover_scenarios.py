@@ -1,4 +1,4 @@
-"""Utilities for discovering augmented data scenarios on disk."""
+"""Utilities for discovering synthesised data scenarios on disk."""
 
 import logging
 from pathlib import Path
@@ -6,15 +6,31 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 
-def discover_augmented_scenarios(
+# (directory, per-year glob pattern) — use {year} as a placeholder.
+DEFAULT_WEATHER_SOURCES: list[tuple[str, str]] = [
+    ("data/weather/dwd/preprocessed", "{year}_merged_*_syn_cfg_*.csv"),
+    ("data/weather/zenodo/csvs_weather", "{year}_weather_syn_cfg_*.csv"),
+]
+
+
+def discover_synthetic_scenarios(
     years: range,
-    weather_dir: str = "data/weather/dwd/preprocessed",
+    weather_dir: str | list[tuple[str, str]] = "data/weather/dwd/preprocessed",
     price_dirs: dict[str, str] | None = None,
 ) -> list[dict[str, str]]:
-    """Glob for augmented yearly CSVs and pair weather + price by year.
+    """Glob for synthesised yearly CSVs and pair weather + price by year.
 
-    Only adds a scenario when both the augmented weather and augmented
-    price file exist for a given year and source.
+    Args:
+        years: Year range to search.
+        weather_dir: Either a single DWD-style directory (for backwards-compat;
+            uses the DWD glob `{year}_merged_*_syn_cfg_*.csv`) or an explicit
+            list of ``(dir, pattern)`` pairs. ``pattern`` may use ``{year}`` as
+            a placeholder. If left at its default the function automatically
+            also picks up Zenodo synthesised CSVs (see ``DEFAULT_WEATHER_SOURCES``).
+        price_dirs: Map ``source_name → directory`` for price CSVs.
+
+    Only adds a scenario when both a synthesised weather and a synthesised
+    price file exist for a given year.
     """
     if price_dirs is None:
         price_dirs = {
@@ -22,28 +38,63 @@ def discover_augmented_scenarios(
             "e_charts": "data/e_price/e_charts",
         }
 
-    weather_path = Path(weather_dir)
+    if isinstance(weather_dir, str):
+        if weather_dir == "data/weather/dwd/preprocessed":
+            weather_sources = DEFAULT_WEATHER_SOURCES
+        else:
+            weather_sources = [(weather_dir, "{year}_merged_*_syn_cfg_*.csv")]
+    else:
+        weather_sources = weather_dir
+
     scenarios: list[dict[str, str]] = []
 
+    def _syn_cfg_token(path: Path) -> str | None:
+        # Extract the cfg id from a filename stem ending in `..._syn_cfg_<token>`.
+        stem = path.stem
+        marker = "_syn_cfg_"
+        idx = stem.rfind(marker)
+        if idx == -1:
+            return None
+        return stem[idx + len(marker):]
+
     for year in years:
-        # Find any augmented weather file for this year (any seed)
-        aug_weather = sorted(weather_path.glob(f"{year}_merged_*_aug_*.csv"))
-        if not aug_weather:
+        # Group synthesised weather files for this year by their syn_cfg token
+        syn_weather_by_cfg: dict[str, list[Path]] = {}
+        for w_dir, w_pattern in weather_sources:
+            for path in sorted(Path(w_dir).glob(w_pattern.format(year=year))):
+                token = _syn_cfg_token(path)
+                if token is None:
+                    continue
+                syn_weather_by_cfg.setdefault(token, []).append(path)
+        if not syn_weather_by_cfg:
             continue
 
-        for source_name, source_dir in price_dirs.items():
-            aug_prices = sorted(Path(source_dir).glob(f"price_data_{year}_aug*.csv"))
-            if not aug_prices:
+        for _, source_dir in price_dirs.items():
+            syn_price_by_cfg: dict[str, list[Path]] = {}
+            for path in sorted(Path(source_dir).glob(f"price_data_{year}_syn_cfg_*.csv")):
+                token = _syn_cfg_token(path)
+                if token is None:
+                    continue
+                syn_price_by_cfg.setdefault(token, []).append(path)
+            if not syn_price_by_cfg:
                 continue
 
-            # Pair each augmented weather file with each augmented price file
-            for w in aug_weather:
-                for p in aug_prices:
-                    scenarios.append({
-                        "weather": str(w),
-                        "E_price": str(p),
-                    })
+            # Pair only weather + price files that share the same syn_cfg token
+            shared_tokens = set(syn_weather_by_cfg) & set(syn_price_by_cfg)
+            unmatched = (set(syn_weather_by_cfg) | set(syn_price_by_cfg)) - shared_tokens
+            if unmatched:
+                logger.warning(
+                    "Year %d: skipping unmatched syn_cfg tokens %s (no weather/price counterpart)",
+                    year, sorted(unmatched),
+                )
+            for token in sorted(shared_tokens):
+                for weather_path in syn_weather_by_cfg[token]:
+                    for price_path in syn_price_by_cfg[token]:
+                        scenarios.append({
+                            "weather": str(weather_path),
+                            "E_price": str(price_path),
+                        })
 
     if scenarios:
-        logger.info("Discovered %d augmented scenario(s)", len(scenarios))
+        logger.info("Discovered %d synthesised scenario(s)", len(scenarios))
     return scenarios

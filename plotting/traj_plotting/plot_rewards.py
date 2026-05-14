@@ -52,4 +52,5 @@ def plot_rewards(episode: EpisodeData) -> list[go.Figure]:
         yaxis_title="Reward",
         height=450,
     )
-    return [style_figure(fig)]
+    n_legend = len(breakdown) + 1  # +1 for the total reward trace
+    return [style_figure(fig, n_legend_items=n_legend)]

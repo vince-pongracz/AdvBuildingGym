@@ -1,0 +1,53 @@
+
+❯ What are options to encourage more exploration of the policy?                 
+
+● Here are the main levers for encouraging exploration, ordered from simplest to
+   most involved:
+
+  1. Entropy regularization (easiest)
+  - PPO: Increase entropy_coeff (default 0.0). Values like 0.01–0.05 add an
+  entropy bonus to the loss, discouraging premature convergence to deterministic
+   actions.
+  - SAC: Adjust initial_alpha or use automatic alpha tuning (_target_entropy).
+  SAC already maximizes entropy by design — lowering the target entropy
+  threshold encourages more exploration.
+
+  2. Learning rate / update frequency
+  - Lower learning rate → slower convergence → more time exploring.
+  - PPO: Fewer num_epochs per update (e.g., 2 instead of 4) or larger
+  ppo_episodes_per_iteration to collect more diverse data before each update.
+
+  3. Action noise
+  - Add Gaussian noise to actions during training (not eval). RLlib supports
+  exploration_config with noise schedules.
+  - For SAC, the stochastic policy already provides this; you can widen the
+  initial log-std bounds.
+
+  4. Reward shaping
+  - Add an intrinsic curiosity bonus (e.g., ICM or RND) on top of your existing
+  rewards.
+  - Flatten reward magnitudes early in training (reduce reward weights) so the
+  agent doesn't exploit a single easy objective.
+
+  5. Reward schedule (you already have this)
+  - Your reward_cfg/reward_schedule_train.yaml can start with low weights, letting the
+  agent explore before rewards sharpen. Gradually increasing weights encourages
+  broad exploration early on.
+
+  6. Network architecture
+  - Smaller networks explore more (less capacity to memorize). Your current [32,
+   32, 32] is already small, which is good.
+  - Separate value and policy networks can help PPO explore more freely.
+
+  7. Data diversity
+  - Your DataCombinator already cycles through different CSVs/years/scenarios —
+  more diverse training data naturally forces broader exploration.
+
+  8. KL divergence constraint (PPO-specific)
+  - You have use_kl_loss=True. Increasing the KL target allows larger policy
+  updates per iteration, enabling faster exploration of new behaviors.
+
+  ---
+  Quickest wins for your setup: bump entropy_coeff to 0.01–0.03 in PPO, or
+  adjust your reward schedule to start with flatter weights. Want me to
+  implement any of these?

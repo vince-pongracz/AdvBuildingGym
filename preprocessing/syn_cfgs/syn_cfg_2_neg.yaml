@@ -1,0 +1,42 @@
+# Medium synthetic-data preset (negative-shift twin of syn_cfg_2_pos).
+# Same Gaussian noise as syn_cfg_1 / syn_cfg_3; moderate negative shifts
+# (cooler weather, cheaper electricity).
+
+name: syn_cfg_2_neg
+
+price:
+  baseprice:
+    transforms:
+      - {type: constant_shift, value: -2.0}                                           # ct/kWh
+      - {type: gaussian_noise, std: 0.3, smooth: {kind: moving_average, window: 6}}   # ct/kWh
+
+weather:
+  temp_amb:
+    transforms:
+      - {type: constant_shift, value: -1.0}                                           # °C
+      - {type: gaussian_noise, std: 0.5, smooth: {kind: moving_average, window: 6}}   # °C
+    clip: {min: -50.0, max: 60.0}
+  avg_wind_speed:
+    transforms:
+      - {type: constant_shift, value: -1.0}                                           # m/s
+      - {type: gaussian_noise, std: 0.3, smooth: {kind: moving_average, window: 6}}   # m/s
+    clip: {min: 0.0}
+  # sun_shine intentionally absent — synthesize.py reconstructs it from the
+  # noised components: DWD `direct + diff`, Zenodo alias of `direct`.
+  direct_sun_shine:
+    transforms:
+      - {type: constant_shift, value: -1.0}                                           # J/cm²
+      - {type: gaussian_noise, std: 3.0, smooth: {kind: moving_average, window: 6}}   # J/cm²
+    clip: {min: 0.0}
+  diff_sun_shine:
+    transforms:
+      - {type: constant_shift, value: -0.5}                                           # J/cm²
+      - {type: gaussian_noise, std: 2.0, smooth: {kind: moving_average, window: 6}}   # J/cm²
+    clip: {min: 0.0}
+
+hh_consumption:
+  hh_consumption_kW:
+    transforms:
+      - {type: constant_shift, value: -0.125}                                         # kW
+      - {type: gaussian_noise, std: 0.05, smooth: {kind: moving_average, window: 6}}  # kW
+    clip: {min: 0.0}

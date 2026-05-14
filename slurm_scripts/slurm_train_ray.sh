@@ -8,24 +8,14 @@
 # Usage:
 #   sbatch slurm_scripts/slurm_train_ray.sh [OPTIONS]
 #
-# All arguments are forwarded directly to run_train_ray.py. Available options:
-#   --algorithm ALGO          Algorithm to use (ppo, sac) [default: ppo]
-#   --config_name, -cn NAME   Configuration name for the experiment
-#   --load-config PATH        Path to YAML config file to load
-#   --save-config PATH        Path to save config as YAML
-#   --episodes N              Total training episodes [default: 3500]
-#   --timesteps N             (Deprecated, prefer --episodes) Total timesteps
-#   --seed N                  Random seed
-#   --eval-freq N             Evaluation frequency [default: 20000]
-#   --metric METRIC           Metric to optimize (episode_return_mean, achieved_reward, reward_rate) [default: reward_rate]
-#   --checkpoint-frequency-episodes N   Checkpoint frequency in episodes [default: 20]
-#   --log-trajectories              Save per-step trajectory JSON during eval episodes [default: off]
-#   --no-log-trajectories           Disable trajectory logging (default)
+# Forwarded directly to run_train_ray.py. Single required option:
+#   --trial PATH              Path to trial config YAML (REQUIRED)
+#
+# All run parameters (algorithm, seed, episodes, metric, checkpoint cadence,
+# schedules) live inside the trial YAML — see configs/trial_cfgs/*.yaml.
 #
 # Examples:
-#   sbatch slurm_scripts/slurm_train_ray.sh --algorithm ppo --episodes 3500 --seed 42
-#   sbatch slurm_scripts/slurm_train_ray.sh --algorithm sac --load-config configs/my_config.yaml
-#   sbatch slurm_scripts/slurm_train_ray.sh --algorithm ppo --episodes 5000 --checkpoint-frequency-episodes 50
+#   sbatch slurm_scripts/slurm_train_ray.sh --trial configs/trial_cfgs/trial_cfg_1.yaml
 #
 # The script activates the project's Python virtualenv and runs the training
 # script while logging SLURM and GPU info.
@@ -36,11 +26,12 @@
 #SBATCH --partition=normal
 #SBATCH --nodes=1
 #SBATCH --tasks-per-node=1
-#SBATCH --cpus-per-task=4
-#SBATCH --gres=gpu:full:1
-#SBATCH --time=00:10:00
+# TODO VP: set to 32, 38, 16 later -- but adapt Ray to use all possible cpu cores available
+#SBATCH --cpus-per-task=5
+#SBATCH --gres=gpu:1 # --gres=gpu:4g.20gb:1 or --gres=gpu:1 or --gres=gpu:2g.10gb:1
+#SBATCH --time=00:30:00
 # Exclude nodes with known GPU issues (add problematic nodes here)
-#SBATCH --exclude=haicn1704,haicn1711
+# // # --exclude=haicn1704,haicn1711
 #SBATCH --output=slurm_logs/train/slurm-train-ray-%j.out
 #SBATCH --error=slurm_logs/train/slurm-train-ray-%j.err
 #SBATCH --job-name=ray-train-%j
@@ -113,9 +104,29 @@ export PYTHONUNBUFFERED=1
 # Build command: Forward every param as they are
 CMD=(python -u run_train_ray.py "${SCRIPT_ARGS[@]}")
 
+# Filter for harmless EnvRunner.__del__/sigterm_handler tracebacks Ray prints
+# when env-runner actors are SIGTERM'd at the end of tuner.fit().  Tune kills
+# those actors as soon as fit() returns, so the in-process ray.shutdown() call
+# in run_train_ray.py cannot prevent the noise — we strip it at the stderr
+# boundary instead.  See: slurm_scripts/util/filter_ray_shutdown_spam.awk
+SHUTDOWN_SPAM_FILTER="${SLURM_SUBMIT_DIR:-$PWD}/slurm_scripts/util/filter_ray_shutdown_spam.awk"
+
 echo "======"
 echo "Running: ${CMD[*]}"
-"${CMD[@]}"
+
+set +e
+"${CMD[@]}" 2> >(exec awk -f "${SHUTDOWN_SPAM_FILTER}" >&2)
+TRAIN_EC=$?
+set -e
+
+# Drain the stderr filter's process substitution before this script exits so
+# its buffered output is flushed into the SLURM .err file.
+wait
+
+if [ "${TRAIN_EC}" -ne 0 ]; then
+    echo "Training failed with exit code ${TRAIN_EC}"
+    exit "${TRAIN_EC}"
+fi
 
 echo "Training completed successfully."
 
@@ -123,9 +134,7 @@ echo "Training completed successfully."
 # Notes:
 # - Make the script executable:
 #     chmod +x slurm_scripts/slurm_train_ray.sh
-# - Submit with named arguments:
-#     sbatch slurm_scripts/slurm_train_ray.sh --algorithm ppo --episodes 3500 --seed 42
-# - All arguments from run_train_ray.py are supported with their default values
-# - Available metrics: episode_return_mean, achieved_reward, reward_rate
+# - Submit:
+#     sbatch slurm_scripts/slurm_train_ray.sh --trial configs/trial_cfgs/trial_cfg_1.yaml
 # - Output and error logs will be written to `slurm_logs/train/`.
 # -------------------------------------------------------------------------------

@@ -10,7 +10,6 @@ When ``--hdf5`` is omitted the script auto-discovers the latest
 ``trajectories.hdf5`` under ``ep_metrics/trajectories/``.
 """
 
-# TODO VP 2026.03.16. : Just as an idea -- Reward the reward smoothness?
 # That would prevent immediate full charging actions, as if the EV is connected, it's a huge jump in rewards if charge is possible as well.
 
 from __future__ import annotations
@@ -19,6 +18,7 @@ import argparse
 import logging
 import os
 
+import h5py
 import plotly.graph_objects as go
 
 from plotting.utils import (
@@ -33,6 +33,7 @@ from .plot_actions import plot_actions
 from .plot_rewards import plot_rewards
 from .plot_energy import ENERGY_SIGN_CONVENTION_HTML, plot_energy
 from .plot_raw import plot_raw
+from .plot_raw_policy_actions import plot_raw_policy_actions
 
 logger = logging.getLogger("trajectory_plot")
 
@@ -66,7 +67,7 @@ def generate_all_plots(
     """
 
     episode = load_episode(hdf5_path, episode_id, control_step_seconds, select_by)
-    ep_id = file_prefix if file_prefix is not None else episode.episode_id
+    ep_id = file_prefix if file_prefix is not None else f"ep_{episode.episode_id}"
 
     if output_dir is None:
         output_dir = str(get_output_root() / ep_id)
@@ -75,6 +76,7 @@ def generate_all_plots(
     all_figures: dict[str, list[go.Figure]] = {
         "states": plot_states(episode),
         "actions": plot_actions(episode),
+        "raw_policy_actions": plot_raw_policy_actions(episode),
         "rewards": plot_rewards(episode),
         "energy": plot_energy(episode),
         "raw": plot_raw(episode),
@@ -114,7 +116,10 @@ def generate_all_plots(
                     filepath = os.path.join(
                         fmt_dir, f"{ep_id}_{name}{suffix}.{fmt}",
                     )
-                    fig.write_image(filepath, width=1600, height=400)
+                    # Width/height come from each figure's layout (set via
+                    # style_figure from traj_plot_config.yaml); keep static export
+                    # consistent with the HTML render.
+                    fig.write_image(filepath)
                     logger.info("Saved: %s", filepath)
                     saved.append(filepath)
 
@@ -144,6 +149,11 @@ def main() -> None:
         help="Episode ID to plot. Default: best by --select-by metric.",
     )
     parser.add_argument(
+        "--all-episodes", action="store_true",
+        help="Plot every episode in the HDF5 file (one subdir per episode). "
+            "Mutually exclusive with --episode.",
+    )
+    parser.add_argument(
         "--output-dir", type=str, default=None,
         help="Output directory. Default: plotting/out/<episode_id>/.",
     )
@@ -157,28 +167,53 @@ def main() -> None:
         help="Control timestep in seconds. Default: 300 (5 min).",
     )
     parser.add_argument(
-        "--select-by", type=str, default="reward_rate",
+        "--select-by", type=str, default="achieved_reward",
         choices=["reward_rate", "achieved_reward", "cum_E_kWh"],
-        help="Summary metric for selecting the best episode. Default: reward_rate.",
+        help="Summary metric for selecting the best episode. Default: achieved_reward.",
     )
     args = parser.parse_args()
 
+    if args.all_episodes and args.episode is not None:
+        parser.error("--all-episodes and --episode are mutually exclusive.")
+
     hdf5_path = args.hdf5 if args.hdf5 else find_latest_hdf5()
 
-    paths = generate_all_plots(
-        hdf5_path=hdf5_path,
-        episode_id=args.episode,
-        output_dir=args.output_dir,
-        control_step_seconds=args.control_step,
-        formats=args.format,
-        select_by=args.select_by,
-    )
+    if args.all_episodes:
+        with h5py.File(hdf5_path, "r") as hf:
+            episode_ids = list(hf.keys())
+        base_output_dir = args.output_dir or str(get_output_root())
+        paths: list[str] = []
+        for ep_id in episode_ids:
+            ep_label = f"ep_{ep_id}"
+            ep_output_dir = os.path.join(base_output_dir, ep_label)
+            paths.extend(generate_all_plots(
+                hdf5_path=hdf5_path,
+                episode_id=ep_id,
+                output_dir=ep_output_dir,
+                control_step_seconds=args.control_step,
+                formats=args.format,
+                select_by=args.select_by,
+                file_prefix=ep_label,
+            ))
+        logger.info(
+            "Generated %d plot files for %d episodes under %s",
+            len(paths), len(episode_ids), base_output_dir,
+        )
+    else:
+        paths = generate_all_plots(
+            hdf5_path=hdf5_path,
+            episode_id=args.episode,
+            output_dir=args.output_dir,
+            control_step_seconds=args.control_step,
+            formats=args.format,
+            select_by=args.select_by,
+        )
 
     for p in paths:
         print(f"Saved: {p}")
 
 
-# TODO VP 2026.03.12. : Use float64 everywhere -- for training, for actions, etc... -- more precision is key
+# TODO noprio VP 2026.03.12. : Use float64 everywhere -- for training, for actions, etc... -- more precision is key
 
 if __name__ == "__main__":
     main()

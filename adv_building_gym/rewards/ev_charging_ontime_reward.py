@@ -1,11 +1,12 @@
 """EV charging progress reward function."""
 
 import logging
-from typing import ClassVar, Dict, List, Set
+from typing import Dict
+
+import numpy as np
 
 from .base import RewardFunction
-from adv_building_gym.config.utils.serializable import ComponentRegistry
-from adv_building_gym.devices.infrastructure.ev_charger import LinearEVCharger
+from adv_building_gym.utils.serializable import ComponentRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +18,10 @@ class EVChargingOnTimeReward(RewardFunction):
     time remaining to reach the target SoC. The reward is based on whether
     the target can be achieved given the remaining time and charging capacity.
 
+    EV charger parameters (max_charging_kW, max_cap_kWh, charger_efficiency,
+    max_charge_time_hrs) are read from the ``info`` dict at each step,
+    published by the LinearEVCharger infrastructure.
+
     Reward calculation:
     - If EV not connected: reward = 0 (max reward also 0)
     - If target SoC already achieved (soc >= target_soc): reward = 1
@@ -27,75 +32,77 @@ class EVChargingOnTimeReward(RewardFunction):
     - energy_achievable = max_charging_kW * charger_efficiency * remaining_hours
     """
 
-    # infrastructures comes from context (the Config's infras list)
-    _context_params: ClassVar[Set[str]] = {'infrastructures'}
-
     def __init__(self,
-                 infrastructures: List,
-                 weight: float,
-                 name: str = "ev_charging_ontime_reward") -> None:
-        """Initialize EVChargingReward.
+                weight: float,
+                name: str = "ev_charging_ontime_reward",
+                harsh_penalty: float = -5.0
+                ) -> None:
+        """Initialize EVChargingOnTimeReward.
 
         Args:
-            infrastructures: List of Infrastructure instances; must contain a LinearEVCharger
             weight: Reward weight for multi-objective optimization
             name: Reward function identifier
+            harsh_penalty: Penalty applied when no time remains and target
+                is not met.
         """
         super().__init__(weight, name)
+        self.harsh_penalty = harsh_penalty
+        
+    # TODO noprio VP 2026.03.25. : Check whether pydispatcher could be used instead of info objects...
 
-        # NOTE VP 2026.02.20. : For now it's okay, however if other charger types are added, this will need to be refactored.
-        ev_charger: LinearEVCharger | None = next(
-            (infra for infra in infrastructures if isinstance(infra, LinearEVCharger)),
-            None
-        )
-        if ev_charger is None:
-            raise ValueError("EVChargingOnTimeReward requires a LinearEVCharger in infrastructures")
-
-        self.max_charging_kW = ev_charger.max_charging_kW
-        self.max_cap_kWh = ev_charger.max_cap_kWh
-        self.charger_efficiency = ev_charger.charger_efficiency
-        self.max_charge_time_hrs = ev_charger.max_charge_time_hrs
-
-    def get_reward(self, actions: Dict, states: Dict) -> tuple[float, float]:
+    def get_reward(self, actions: Dict, states: Dict, info: dict | None = None) -> tuple[float, float]:
         """Calculate EV charging progress reward.
 
         Args:
-            _actions: Dictionary of actions (unused)
-            states: Dictionary of current environment states
+            actions: Dictionary of actions taken by the agent.
+            states: Dictionary of current environment states.
+            info: Shared inter-component dict containing EV charger params
+                (ctxt_ev_max_charging_kW, ctxt_ev_max_cap_kWh,
+                ctxt_ev_charger_efficiency, ctxt_ev_max_charge_time_hrs).
 
         Returns:
             Tuple of (reward, max_reward_for_this_step):
             - (0, 0) if EV not connected
             - (weight, weight) if target achieved or on track
         """
-        ev_connected = states["ev_connected"][0]
+        ev_connected = states["s_ev_connected"][0]
 
         if ev_connected < 0.5:
             return 0.0, 0.0
 
-        max_step = self.weight * self.max_reward
-        current_soc = states["ev_soc"][0]
-        target_soc = states["ev_target_soc"][0]
+        if info is None:
+            logger.warning("EVChargingOnTimeReward: info dict is None, returning 0")
+            return 0.0, 0.0
+
+        max_step = self.weight * self.max_reward_in_step
+        current_soc = states["s_ev_soc"][0]
+        target_soc = states["s_ev_target_soc"][0]
 
         # Max reward if target already achieved
         if current_soc >= target_soc:
             return self.weight * 1.0, max_step
 
+        # Read EV charger parameters from info dict (published by LinearEVCharger)
+        max_charging_kW = info["ctxt_ev_max_charging_kW"]
+        max_cap_kWh = info["ctxt_ev_max_cap_kWh"]
+        charger_efficiency = info["ctxt_ev_charger_efficiency"]
+        max_charge_time_hrs = info["ctxt_ev_max_charge_time_hrs"]
+
         # Denormalize remaining time from [0, 1] to hours
-        normalized_time = states["ev_charge_to_target_hrs_norm"][0]
-        remaining_hrs = normalized_time * self.max_charge_time_hrs
+        normalized_time = states["s_ev_charge_to_target_hrs_norm"][0]
+        remaining_hrs = normalized_time * max_charge_time_hrs
 
         # Calculate energy needed to reach target (in kWh)
-        energy_needed = (target_soc - current_soc) * self.max_cap_kWh
+        energy_needed = (target_soc - current_soc) * max_cap_kWh
 
         # Calculate energy achievable in remaining time (in kWh)
         # energy = power * efficiency * time
-        energy_achievable = self.max_charging_kW * self.charger_efficiency * remaining_hrs
+        energy_achievable = max_charging_kW * charger_efficiency * remaining_hrs
 
         # Avoid division by zero
         if energy_achievable <= 0:
-            # No time left, can't achieve target
-            return 0.0, max_step
+            # No time left, target not met — apply harsh penalty
+            return self.weight * self.harsh_penalty, max_step
 
         # Calculate ratio of needed vs achievable energy
         ratio = energy_needed / energy_achievable
@@ -103,6 +110,13 @@ class EVChargingOnTimeReward(RewardFunction):
         # Reward: 1 when ratio=0 (target achieved), decreasing as ratio increases
         # Clipped to [0, 1] - no negative rewards
         reward = max(0.0, 1.0 - ratio)
+
+        # Only give reward if the agent is actually charging at least a tiny bit.
+        # Without this gate the reward rewards inaction (having time left) instead
+        # of rewarding charging progress.
+        ev_action = float(np.atleast_1d(actions.get("a_lin_ev_charger", [0]))[0])
+        if ev_action < 0.01:
+            reward = 0.0
 
         return self.weight * reward, max_step
 

@@ -1,0 +1,67 @@
+# Data combinator configuration for evaluation
+# Uses deterministic round-robin traversal for reproducible multi-scenario eval.
+# Same scenario pool as training; key differences:
+#   - mode: cycle (deterministic, not random)
+#   - day: each (sequential days for reproducible coverage)
+#   - swap_every_n_episodes: 1 (new variant each episode)
+
+shuffle: false
+
+# Variant cycling settings -- deterministic for eval
+swap_every_n_episodes: 1
+mode: random       # round-robin through all variants
+day: random        # sequential days for reproducible eval
+
+# Years to include in scenario generation
+years: [2025, 2026]
+
+# Whether to auto-discover and include synthesised data files
+include_synthesized: true
+
+# Scenario source definitions (same pool as training)
+scenario_sources:
+  - weather: data/weather/dwd/preprocessed/{year}_merged_04177.csv
+    E_price: data/e_price/awattar/price_data_{year}.csv
+  - weather: data/weather/dwd/preprocessed/{year}_merged_04177.csv
+    E_price: data/e_price/e_charts/price_data_{year}.csv
+  # WPuQ/Zenodo weather (only 2018–2020 available; missing years are
+  # filtered out at load time by data_config.py)
+  - weather: data/weather/zenodo/csvs_weather/{year}_weather.csv
+    E_price: data/e_price/awattar/price_data_{year}.csv
+  - weather: data/weather/zenodo/csvs_weather/{year}_weather.csv
+    E_price: data/e_price/e_charts/price_data_{year}.csv
+
+# Synthesised data discovery paths
+synthesized_paths:
+  weather_dir: data/weather/dwd/preprocessed
+  price_dirs:
+    awattar: data/e_price/awattar
+    e_charts: data/e_price/e_charts
+
+# Independent variable sources
+variable:
+  ev_schedule:
+    - data/ev_usage_profiles/ev_eval_0.csv
+    - data/ev_usage_profiles/ev_eval_1.csv
+    - data/ev_usage_profiles/ev_eval_2.csv
+    - data/ev_usage_profiles/ev_eval_3.csv
+  desired_temp_in:
+    - data/inside_temp/inside_temp_eval_0.csv
+    - data/inside_temp/inside_temp_eval_1.csv
+    - data/inside_temp/inside_temp_eval_2.csv
+    - data/inside_temp/inside_temp_eval_3.csv
+  user_energy_need:
+    - data/hh_consumption/wpuq/2018_SFH10.csv
+    - data/hh_consumption/wpuq/2018_SFH30.csv
+    - data/hh_consumption/wpuq/2018_SFH10_syn_cfg_1_neg.csv
+    - data/hh_consumption/wpuq/2018_SFH10_syn_cfg_1_pos.csv
+    - data/hh_consumption/wpuq/2018_SFH10_syn_cfg_2_neg.csv
+    - data/hh_consumption/wpuq/2018_SFH10_syn_cfg_2_pos.csv
+    - data/hh_consumption/wpuq/2018_SFH10_syn_cfg_3_neg.csv
+    - data/hh_consumption/wpuq/2018_SFH10_syn_cfg_3_pos.csv
+    - data/hh_consumption/wpuq/2018_SFH30_syn_cfg_1_neg.csv
+    - data/hh_consumption/wpuq/2018_SFH30_syn_cfg_1_pos.csv
+    - data/hh_consumption/wpuq/2018_SFH30_syn_cfg_2_neg.csv
+    - data/hh_consumption/wpuq/2018_SFH30_syn_cfg_2_pos.csv
+    - data/hh_consumption/wpuq/2018_SFH30_syn_cfg_3_neg.csv
+    - data/hh_consumption/wpuq/2018_SFH30_syn_cfg_3_pos.csv

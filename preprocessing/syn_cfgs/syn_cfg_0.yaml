@@ -1,0 +1,68 @@
+# Noise-only baseline preset (no constant shifts).
+# Gaussian noise std values are sized at the *raw* sensor / market scale —
+# roughly the measurement uncertainty of each input — so this preset adds
+# realistic perturbation without biasing the distribution.
+# Noise is moving-average smoothed over 6 samples (= 30 min at 5-min step)
+# to suppress high-frequency oscillations.
+#
+# Unit conventions across the repository (preprocessing CSVs, syn_cfgs, plotting):
+#   - Electricity price `baseprice` : ct/kWh  (1 EUR/kWh = 100 ct/kWh)
+#   - Ambient temperature           : °C
+#   - Wind speed                    : m/s
+#   - Solar irradiance              : J/cm²
+#   - Household consumption         : kW
+#
+# Typical EPEX Spot day-ahead price ranges (DE):
+#   - Common range : ~2 to 15 ct/kWh   (= 0.02 to 0.15 EUR/kWh)
+#   - Spikes       : up to 20-30 ct/kWh
+#   - Negatives    : down to ~ -5 ct/kWh during high-renewable / low-load hours
+# Use these as a sanity reference when picking `constant_shift` / `gaussian_noise.std`
+# values in the `price.baseprice` block of the syn_cfg_*.yaml presets.
+
+name: syn_cfg_0
+
+price:
+  baseprice:
+    transforms:
+      # ~0.3 ct/kWh ≈ tick-size noise on hourly day-ahead prices
+      - {type: gaussian_noise, std: 0.3, smooth: {kind: moving_average, window: 6}}   # ct/kWh
+
+weather:
+  # DWD sensor accuracy targets — see SYNTHESIZE_README.md "Tune weather noise std".
+  temp_amb:
+    transforms:
+      - {type: gaussian_noise, std: 0.5, smooth: {kind: moving_average, window: 6}}   # °C
+    clip: {min: -50.0, max: 60.0}
+  avg_wind_speed:
+    transforms:
+      - {type: gaussian_noise, std: 0.3, smooth: {kind: moving_average, window: 6}}   # m/s
+    clip: {min: 0.0}
+  # Three irradiance columns coexist on disk:
+  #   - sun_shine        : DWD = direct_sun_shine + diff_sun_shine (combined);
+  #                        Zenodo = alias of direct_sun_shine (no diffuse channel).
+  #                        This is the ONLY column WeatherDataSource consumes
+  #                        (publishes s_solar_irradiance_norm / raw_solar_irradiance).
+  #   - direct_sun_shine : DWD GS_10 (global radiation; "direct" is a legacy
+  #                        misnomer) / Zenodo solar_irradiance. Noised here.
+  #   - diff_sun_shine   : DWD DS_10 (diffuse radiation only). Noised here for
+  #                        DWD CSVs; absent in Zenodo CSVs (skipped).
+  # `direct_sun_shine` and `diff_sun_shine` are noised independently. `sun_shine`
+  # is NOT listed for synthesis: `synthesize.py` reconstructs it after the
+  # column transforms so the additive identity holds in the output CSV:
+  #   - DWD    → sun_shine = direct_sun_shine + diff_sun_shine
+  #   - Zenodo → sun_shine = direct_sun_shine  (alias)
+  direct_sun_shine:
+    transforms:
+      - {type: gaussian_noise, std: 3.0, smooth: {kind: moving_average, window: 6}}   # J/cm²
+    clip: {min: 0.0}
+  diff_sun_shine:
+    transforms:
+      - {type: gaussian_noise, std: 2.0, smooth: {kind: moving_average, window: 6}}   # J/cm²
+    clip: {min: 0.0}
+
+hh_consumption:
+  hh_consumption_kW:
+    # 0.05 kW ≈ baseload jitter for a single SFH (typical draw 0.1-3 kW).
+    transforms:
+      - {type: gaussian_noise, std: 0.05, smooth: {kind: moving_average, window: 6}}  # kW
+    clip: {min: 0.0}

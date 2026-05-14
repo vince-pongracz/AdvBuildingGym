@@ -1,0 +1,71 @@
+# Domain-specific plotting configuration.
+#
+# Extend this file when adding new state sources, infrastructure, or actions
+# instead of editing Python plot modules.
+
+states:
+  # State keys excluded from plotting (constants or non-informative values)
+  # Keys listed here are skipped; in addition any key starting with
+  # ``ctxt_`` (static physical context) is automatically excluded.
+  skip_keys:
+    - raw_sim_hour
+
+  # Groups of state keys that share a single plot.
+  # Each entry is a list of keys rendered together.
+  grouped_keys:
+    - [s_battery_pct, s_battery_target_pct]
+    - [s_temp_in_norm, s_desired_temp_in_norm, s_temp_out_norm]
+    - [ctxt_ev_schedule_start_soc, ctxt_ev_schedule_target_soc]
+    - [s_ev_soc, s_ev_target_soc]
+
+  # Keys masked with NaN when a condition key is below 0.5.
+  # Produces non-continuous lines (gaps) when the device is disconnected.
+  mask_when_disconnected:
+    condition_key: s_ev_connected
+    keys:
+      - s_ev_soc
+      - s_ev_target_soc
+      - hst_s_ev_soc
+      - s_ev_charge_to_target_hrs_norm
+
+
+actions:
+  # Human-readable dimension labels for multi-dimensional actions.
+  # Keys that are not listed here fall back to numeric indices (0, 1, …).
+  dim_labels: {}
+
+raw:
+  # Group temperature raw values into a single plot (same unit: °C)
+  grouped_keys:
+    - [raw_temp_out, raw_temp_in, raw_desired_temp_in]
+    # Household consumption alongside generation for an at-a-glance balance view
+    - [raw_current_consumption_kW, raw_pv_prod_kW, raw_wind_production_kW]
+
+  # Raw keys to skip in plotting
+  skip_keys:
+    - raw_E_price_max  # constant per episode, not useful as time series
+
+figure:
+  # Default figure width (px) applied to every trajectory figure (HTML + static export).
+  width: 1100
+  # Time-axis tick interval in minutes (labelled HH:MM at each tick).
+  tick_interval_min: 120
+  # Tick label rotation in degrees. Negative = lean lower-left in Plotly.
+  tick_angle: -90
+  # Baseline top margin (px) reserved for the title.
+  base_top_margin: 90
+  # Extra top margin per legend row. The legend is anchored above the plot
+  # and wraps when there are many items; the top margin grows so the title
+  # never overlaps the legend.
+  legend_row_px: 34
+  # Rough heuristic for how many horizontal legend items fit per row.
+  # Used to estimate row count from the trace count passed to style_figure().
+  legend_items_per_row: 5
+  # Per-figure-group width multiplier (relative to ``figure.width``).
+  # Use for groups that benefit from a wider canvas (e.g. dense bar plots).
+  width_multipliers:
+    energy: 1.5
+
+output:
+  # Relative to repository root
+  dir: plotting/out/traj_plots

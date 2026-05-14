@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import math
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -26,15 +27,15 @@ COLORS = [
 ]
 
 # ---------------------------------------------------------------------------
-# Plot configuration (loaded from plot_config.yaml)
+# Plot configuration (loaded from traj_plot_config.yaml)
 # ---------------------------------------------------------------------------
 
-_PLOT_CONFIG_PATH = Path(__file__).resolve().parent / "config" / "plot_config.yaml"
+_PLOT_CONFIG_PATH = Path(__file__).resolve().parent / "config" / "traj_plot_config.yaml"
 _plot_config_cache: dict[str, Any] | None = None
 
 
 def load_plot_config() -> dict[str, Any]:
-    """Load and cache ``plotting/config/plot_config.yaml``."""
+    """Load and cache ``plotting/config/traj_plot_config.yaml``."""
     global _plot_config_cache
     if _plot_config_cache is None:
         with open(_PLOT_CONFIG_PATH, encoding="utf-8") as fh:
@@ -44,7 +45,7 @@ def load_plot_config() -> dict[str, Any]:
 
 
 def get_output_root() -> Path:
-    """Return the trajectory output directory from plot_config.yaml."""
+    """Return the trajectory output directory from traj_plot_config.yaml."""
     cfg = load_plot_config()
     rel = cfg.get("output", {}).get("dir", "plotting/out/traj")
     return _REPO_ROOT / rel
@@ -65,6 +66,7 @@ class EpisodeData:
     episode_id: str
     seed: int
     length: int
+    episode_date: str | None = None
 
     # Summary scalars (reward_rate, achieved_reward, cum_E_kWh, …)
     summary: dict[str, float] = field(default_factory=dict)
@@ -84,8 +86,8 @@ class EpisodeData:
     # Per-component reward breakdown  {name: 1-D ndarray}
     reward_breakdown: dict[str, np.ndarray] = field(default_factory=dict)
 
-    # Instantaneous power per timestep (kW)
-    step_power_kW: np.ndarray = field(default_factory=lambda: np.empty(0, dtype=np.float32))
+    # Instantaneous net power per timestep (kW)
+    net_power_kW: np.ndarray = field(default_factory=lambda: np.empty(0, dtype=np.float32))
 
     # Cumulative energy per timestep (kWh)
     cum_E_kWh: np.ndarray = field(default_factory=lambda: np.empty(0, dtype=np.float32))
@@ -97,6 +99,9 @@ class EpisodeData:
     # e.g. temp_out_raw (°C), desired_temp_in_raw (°C), temp_in_raw (°C)
     raw: dict[str, np.ndarray] = field(default_factory=dict)
 
+    # Raw policy actions (pre-rescale, tanh-bounded) {raw_policy_action_<d>: 1-D ndarray}
+    raw_policy_actions: dict[str, np.ndarray] = field(default_factory=dict)
+
     # -- convenience helpers ------------------------------------------------
 
     @property
@@ -107,10 +112,22 @@ class EpisodeData:
         ]
 
     def title_suffix(self) -> str:
-        """Short suffix with episode metadata for figure titles."""
+        """Short suffix with episode metadata for figure titles.
+
+        Format: ``ep {id}, date: {YYYY.MM.DD} | reward_rate {x} ; achieved_reward {y}``.
+        Falls back gracefully when the date is missing.
+        """
+        date_str = self.episode_date or ""
+        # Convention: dots between Y/M/D in titles, even if HDF5 stored "YYYY-MM-DD".
+        if date_str:
+            date_str = date_str.replace("-", ".")
+            ep_part = f"ep {self.episode_id}, date: {date_str}"
+        else:
+            ep_part = f"ep {self.episode_id}"
         return (
-            f"ep {self.episode_id}  |  "
-            f"reward_rate {self.summary.get('reward_rate', 0):.3f}"
+            f"{ep_part}  |  "
+            f"reward_rate {self.summary.get('reward_rate', 0):.3f} ; "
+            f"achieved_reward {self.summary.get('achieved_reward', 0):.2f}"
         )
 
 
@@ -200,6 +217,10 @@ def load_episode(
 
         seed = int(ep.attrs.get("seed", 0))
         length = int(ep.attrs.get("length", 0))
+        ep_date_attr = ep.attrs.get("episode_date")
+        if isinstance(ep_date_attr, bytes):
+            ep_date_attr = ep_date_attr.decode("utf-8")
+        episode_date = str(ep_date_attr) if ep_date_attr is not None else None
         summary = {k: float(v) for k, v in ep["summary"].attrs.items()}
 
         traj = ep["trajectory"]
@@ -229,10 +250,14 @@ def load_episode(
 
         # Energy
         cum_e = traj["cum_E_kWh"][:] if "cum_E_kWh" in traj else np.zeros_like(steps)
-        power = (
-            traj["step_power_kW"][:] if "step_power_kW" in traj
-            else np.zeros_like(steps)
-        )
+        # ``net_power_kW`` is the current key; older HDF5 files used
+        # ``step_power_kW`` for the same quantity.
+        if "net_power_kW" in traj:
+            power = traj["net_power_kW"][:]
+        elif "step_power_kW" in traj:
+            power = traj["step_power_kW"][:]
+        else:
+            power = np.zeros_like(steps)
 
         # Per-infrastructure power breakdown
         power_breakdown: dict[str, np.ndarray] = {}
@@ -246,20 +271,30 @@ def load_episode(
             for key in traj["raw"]:
                 raw[key] = traj["raw"][key][:]
 
+        # Raw policy actions (top-level datasets named raw_policy_action_<d>).
+        # Pre-rescale tanh outputs from the policy network, useful for
+        # diagnosing saturation. Dataset count = action-space dimensionality.
+        raw_policy_actions: dict[str, np.ndarray] = {}
+        for key in traj.keys():
+            if key.startswith("raw_policy_action_") and isinstance(traj[key], h5py.Dataset):
+                raw_policy_actions[key] = traj[key][:]
+
     return EpisodeData(
         episode_id=episode_id,
         seed=seed,
         length=length,
+        episode_date=episode_date,
         summary=summary,
         time_minutes=time_minutes,
         states=states,
         actions=actions,
         rewards=rewards,
         reward_breakdown=reward_breakdown,
-        step_power_kW=power,
+        net_power_kW=power,
         cum_E_kWh=cum_e,
         power_breakdown=power_breakdown,
         raw=raw,
+        raw_policy_actions=raw_policy_actions,
     )
 
 
@@ -267,11 +302,27 @@ def load_episode(
 # Figure styling helpers
 # ---------------------------------------------------------------------------
 
+def _fig_cfg() -> dict[str, Any]:
+    """Return the ``figure:`` subdict from traj_plot_config.yaml (with defaults)."""
+    cfg = load_plot_config().get("figure", {}) or {}
+    return {
+        "width": int(cfg.get("width", 1100)),
+        "tick_interval_min": int(cfg.get("tick_interval_min", 120)),
+        "tick_angle": int(cfg.get("tick_angle", -60)),
+        "base_top_margin": int(cfg.get("base_top_margin", 60)),
+        "legend_row_px": int(cfg.get("legend_row_px", 22)),
+        "legend_items_per_row": max(1, int(cfg.get("legend_items_per_row", 5))),
+    }
+
+
 def apply_day_xaxis(
     fig: go.Figure,
     n_rows: int | None = None,
 ) -> None:
-    """Configure x-axis as a 24-hour day with ticks every 5 minutes.
+    """Configure x-axis as a 24-hour day.
+
+    Tick interval and rotation are loaded from ``traj_plot_config.yaml`` under the
+    ``figure:`` section (``tick_interval_min`` / ``tick_angle``).
 
     Args:
         fig: Plotly figure.
@@ -279,18 +330,15 @@ def apply_day_xaxis(
             so the label is placed on the bottom subplot. None for a plain
             figure without subplots.
     """
-    # 24 h = 1440 min; ticks every 5 min
-    tick_vals = list(range(0, 1441, 5))
-    # Show HH:MM labels every 60 min, empty string for intermediate ticks
-    tick_text = [
-        f"{m // 60:02d}:{m % 60:02d}" if m % 60 == 0 else ""
-        for m in tick_vals
-    ]
+    cfg = _fig_cfg()
+    interval = cfg["tick_interval_min"]
+    tick_vals = list(range(0, 1441, interval))
+    tick_text = [f"{m // 60:02d}:{m % 60:02d}" for m in tick_vals]
     base_kwargs: dict = dict(
         range=[0, 1440],
         tickvals=tick_vals,
         ticktext=tick_text,
-        tickangle=0,
+        tickangle=cfg["tick_angle"],
     )
     if n_rows is not None:
         for row in range(1, n_rows + 1):
@@ -303,15 +351,88 @@ def apply_day_xaxis(
         fig.update_xaxes(**base_kwargs, title_text="Time (HH:MM)")
 
 
-def style_figure(fig: go.Figure) -> go.Figure:
-    """Apply consistent styling."""
+def align_zero_dual_yaxes(fig: go.Figure, y1_data: list[float], y2_data: list[float]) -> None:
+    """Set both y-axis ranges so that zero sits at the same vertical position."""
+    min1, max1 = min(y1_data), max(y1_data)
+    min2, max2 = min(y2_data), max(y2_data)
+
+    # Add 10% padding
+    pad1 = (max1 - min1) * 0.1 or 1.0
+    pad2 = (max2 - min2) * 0.1 or 1.0
+    min1, max1 = min1 - pad1, max1 + pad1
+    min2, max2 = min2 - pad2, max2 + pad2
+
+    # Compute the fraction of the range below zero for each axis
+    frac1 = abs(min1) / (abs(min1) + abs(max1)) if (abs(min1) + abs(max1)) > 0 else 0.5
+    frac2 = abs(min2) / (abs(min2) + abs(max2)) if (abs(min2) + abs(max2)) > 0 else 0.5
+
+    # Use the larger zero-fraction so both axes have room
+    frac = max(frac1, frac2)
+
+    # Expand each axis so zero sits at the same relative position
+    # range_below = frac * total_range, range_above = (1 - frac) * total_range
+    span1 = max(abs(min1) / frac if frac > 0 else max1,
+                abs(max1) / (1 - frac) if frac < 1 else abs(min1))
+    span2 = max(abs(min2) / frac if frac > 0 else max2,
+                abs(max2) / (1 - frac) if frac < 1 else abs(min2))
+
+    fig.update_yaxes(range=[-frac * span1, (1 - frac) * span1], secondary_y=False)
+    fig.update_yaxes(range=[-frac * span2, (1 - frac) * span2], secondary_y=True)
+
+
+def style_figure(
+    fig: go.Figure,
+    *,
+    n_legend_items: int = 0,
+    width_multiplier: float = 1.0,
+) -> go.Figure:
+    """Apply consistent styling.
+
+    The top margin grows with ``n_legend_items`` so the title never overlaps
+    the (top-anchored, horizontal) legend regardless of legend size. The
+    title is pinned to the top of the paper, the legend stacked directly
+    below it. Figure width is ``figure.width * width_multiplier`` (defaults
+    to the configured ``figure.width``).
+    """
+    cfg = _fig_cfg()
+    rows = math.ceil(n_legend_items / cfg["legend_items_per_row"]) if n_legend_items else 0
+    legend_block = rows * cfg["legend_row_px"]
+    top_margin = cfg["base_top_margin"] + legend_block
+    width = int(cfg["width"] * width_multiplier)
+
+    # Reserve the top ~30 px of the margin for the title, then place the
+    # legend (top-anchored) just below it. Both title and legend use
+    # container coordinates ([0, 1] across the FULL figure including
+    # margins) — the default yref for legend is "paper" (plot area only),
+    # which would put the legend inside the plot.
+    height = fig.layout.height or 450
+    title_band_px = 30
+    title_y = 1 - (title_band_px / 2) / height       # centre of title band
+    legend_y = 1 - (title_band_px + 6) / height       # top of legend, 6 px below title
+
     fig.update_layout(
         template="plotly_white",
         font=dict(size=12),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-        margin=dict(l=60, r=30, t=60, b=50),
+        width=width,
+        title=dict(y=title_y, yanchor="middle", xanchor="left", x=0.02),
+        legend=dict(
+            orientation="h",
+            yref="container", yanchor="top", y=legend_y,
+            xref="container", xanchor="right", x=1 - 30 / width,
+        ),
+        margin=dict(l=60, r=30, t=top_margin, b=50),
     )
     return fig
+
+
+def get_width_multiplier(group: str) -> float:
+    """Return the configured width multiplier for a plot group (default 1.0)."""
+    cfg = load_plot_config().get("figure", {}) or {}
+    mults = cfg.get("width_multipliers", {}) or {}
+    try:
+        return float(mults.get(group, 1.0))
+    except (TypeError, ValueError):
+        return 1.0
 
 
 def write_figure_list_html(

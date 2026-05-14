@@ -7,22 +7,19 @@
 # Usage:
 #   sbatch slurm_scripts/slurm_eval_ray.sh [OPTIONS]
 #
-# All arguments are forwarded directly to run_eval_ray.py. Available options:
-#   --algorithm, -a ALGO    Algorithm to evaluate (ppo, sac) [default: ppo]
-#   --config-name, -cn NAME Configuration name (used in checkpoint search path)
-#   --load-config PATH      Path to YAML config file to load
+# Forwarded directly to run_eval_ray.py.  Required:
+#   --trial PATH            Path to trial config YAML
+# Optional:
 #   --checkpoint PATH       Path to Ray checkpoint directory (auto-detects best if omitted)
 #   --episodes N            Number of evaluation episodes [default: 10]
-#   --seed N                Random seed [default: 42]
 #   --output-dir PATH       Directory to save evaluation results [default: eval_results]
 #   --no-save               Do not save results to file
-#   --log-trajectories      Save per-step trajectory JSON per episode [default: on]
-#   --no-log-trajectories   Disable trajectory logging
+#   --plot / --plot-all     Plot trajectory after evaluation
 #
 # Examples:
-#   sbatch slurm_scripts/slurm_eval_ray.sh --algorithm ppo --episodes 10 --seed 42
-#   sbatch slurm_scripts/slurm_eval_ray.sh --algorithm sac -cn test1 --episodes 20
-#   sbatch slurm_scripts/slurm_eval_ray.sh --checkpoint models/test1/ray/ppo/best_model_ep100
+#   sbatch slurm_scripts/slurm_eval_ray.sh --trial configs/trial_cfgs/trial_cfg_1.yaml --episodes 10
+#   sbatch slurm_scripts/slurm_eval_ray.sh --trial configs/trial_cfgs/trial_cfg_1.yaml \
+#         --checkpoint models/env_test1_small/ray/ppo/best_model_ep100
 #
 # Note: Inference runs on CPU (sufficient for the small [32,32,32] network).
 # No GPU is requested.
@@ -33,7 +30,6 @@
 #SBATCH --partition=normal
 #SBATCH --nodes=1
 #SBATCH --tasks-per-node=1
-# TODO VP: paralellise eval script -- run episodes parallel
 #SBATCH --cpus-per-task=2
 #SBATCH --time=00:10:00
 #SBATCH --output=slurm_logs/eval/slurm-eval-ray-%j.out
@@ -80,7 +76,7 @@ echo "Evaluation completed successfully."
 # Notes:
 # - Make the script executable:
 #     chmod +x slurm_scripts/slurm_eval_ray.sh
-# - Submit with named arguments:
-#     sbatch slurm_scripts/slurm_eval_ray.sh --algorithm ppo --episodes 10 --seed 42
+# - Submit:
+#     sbatch slurm_scripts/slurm_eval_ray.sh --trial configs/trial_cfgs/trial_cfg_1.yaml
 # - Output and error logs will be written to `slurm_logs/eval/`.
 # -------------------------------------------------------------------------------

@@ -35,31 +35,60 @@ def _safe_divide(series: pd.Series, numerator: pd.Series, divisor: float) -> pd.
     return series * 0.0
 
 
-def normalise_series(series: pd.Series, method: Normalisation | None) -> pd.Series:
-    """Normalise a pandas Series using the given method.
-
-    Args:
-        series: Input data.
-        method: Normalisation strategy. None returns the series unchanged.
+def normalise_with_scale_factor(
+    series: pd.Series,
+    method: Normalisation | None,
+) -> tuple[pd.Series, float]:
+    """Normalise a pandas Series and return the scale factor used.
 
     Returns:
-        Normalised pandas Series.
+        (normalised_series, scale_factor) — the denominator that was
+        divided out.  ``raw ≈ norm * scale_factor`` for symmetric methods
+        (ABS_MIN_MAX, MAX_ABS).  For MIN_MAX_SCALING the offset is
+        ``series.min()``; for STANDARDISATION it is ``series.mean()``.
+        scale_factor is 1.0 when *method* is ``None``.
     """
     match method:
         case Normalisation.ABS_MIN_MAX_SCALING:
-            # norm = val / max(|min|, |max|), maps to [-1, 1]
-            abs_max = max(abs(series.min()), abs(series.max()))
-            return _safe_divide(series, series, abs_max)
+            scale = float(max(abs(series.min()), abs(series.max()))) or 1.0
+            return _safe_divide(series, series, scale), scale
         case Normalisation.MAX_ABS_SCALING:
-            max_abs = series.abs().max()
-            return _safe_divide(series, series, max_abs)
+            scale = float(series.abs().max()) or 1.0
+            return _safe_divide(series, series, scale), scale
         case Normalisation.MIN_MAX_SCALING:
-            range_ = series.max() - series.min()
-            return _safe_divide(series, series - series.min(), range_)
+            scale = float(series.max() - series.min()) or 1.0
+            return _safe_divide(series, series - series.min(), scale), scale
         case Normalisation.STANDARDISATION:
-            std = series.std()
-            return _safe_divide(series, series - series.mean(), std)
+            scale = float(series.std()) or 1.0
+            return _safe_divide(series, series - series.mean(), scale), scale
         case None:
-            return series
+            return series, 1.0
         case _:
             raise ValueError(f"Unknown normalisation method: {method}")
+
+
+def get_scale_factor(series: pd.Series, method: Normalisation | None) -> float:
+    """Return the denominator that normalisation would divide by.
+
+    Standalone implementation — computes only the scalar, without
+    normalising the full series.
+    """
+    match method:
+        case Normalisation.ABS_MIN_MAX_SCALING:
+            return float(max(abs(series.min()), abs(series.max()))) or 1.0
+        case Normalisation.MAX_ABS_SCALING:
+            return float(series.abs().max()) or 1.0
+        case Normalisation.MIN_MAX_SCALING:
+            return float(series.max() - series.min()) or 1.0
+        case Normalisation.STANDARDISATION:
+            return float(series.std()) or 1.0
+        case None:
+            return 1.0
+        case _:
+            raise ValueError(f"Unknown normalisation method: {method}")
+
+
+def normalise_series(series: pd.Series, method: Normalisation | None) -> pd.Series:
+    """Normalise a pandas Series using the given method."""
+    normalised, _ = normalise_with_scale_factor(series, method)
+    return normalised

@@ -1,7 +1,7 @@
 import numpy as np
 
 from .base import RewardFunction
-from adv_building_gym.config.utils.serializable import ComponentRegistry
+from adv_building_gym.utils.serializable import ComponentRegistry
 
 
 class UserEnergyNeedReward(RewardFunction):
@@ -15,7 +15,7 @@ class UserEnergyNeedReward(RewardFunction):
     def __init__(self, weight: float, name: str = "user_energy_need_reward") -> None:
         super().__init__(weight, name)
 
-    def get_reward(self, actions, states) -> tuple[float, float]:
+    def get_reward(self, actions, states, info: dict | None = None) -> tuple[float, float]:
         """Calculate reward based on meeting desired energy need.
 
         Penalizes underproduction but does not penalize overproduction.
@@ -28,13 +28,13 @@ class UserEnergyNeedReward(RewardFunction):
             Tuple of (reward, max_reward_for_this_step).
         """
         # Get desired energy need from states
-        desired_energy = float(states.get("desired_energy_need", [0.0])[0])
+        desired_energy = float(states.get("s_desired_energy_need", [0.0])[0])
 
         # Sum all energy-related actions (positive = produce, negative = consume)
         actual_energy = sum(
             float(np.atleast_1d(actions[k])[0])
             for k in actions.keys()
-            if "_action" in k
+            if k.startswith("a_")
         )
 
         # Only penalize when underproducing, not when overproducing
@@ -46,7 +46,7 @@ class UserEnergyNeedReward(RewardFunction):
             shortfall = desired_energy - actual_energy
             reward = np.exp(-shortfall)
 
-        return float(self.weight * reward), self.weight * self.max_reward
+        return float(self.weight * reward), self.weight * self.max_reward_in_step
 
 
 # Register UserEnergyNeedReward with the component registry

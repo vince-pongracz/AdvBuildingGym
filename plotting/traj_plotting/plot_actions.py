@@ -60,6 +60,6 @@ def plot_actions(episode: EpisodeData) -> list[go.Figure]:
         ))
         apply_day_xaxis(fig)
         fig.update_layout(title=f"{label}  —  {suffix}", height=350)
-        figures.append(style_figure(fig))
+        figures.append(style_figure(fig, n_legend_items=1))
 
     return figures

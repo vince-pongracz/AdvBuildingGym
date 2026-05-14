@@ -19,8 +19,12 @@ from stable_baselines3.common.vec_env import SubprocVecEnv, DummyVecEnv, VecMoni
 from stable_baselines3.common.callbacks import EvalCallback, BaseCallback
 
 from adv_building_gym import AdvBuildingGym
-from adv_building_gym.config import config as env_config
+from adv_building_gym.config import EnvConfig
 from adv_building_gym.utils import CustomJSONEncoder
+
+# SB3 path keeps its own EnvConfig instance (the Ray driver normally hands
+# one in via EnvConfigManager.load(...) — this script is the secondary path).
+env_config = EnvConfig()
 
 # Logging configuration
 logging.basicConfig(
@@ -88,7 +92,7 @@ class CustomEvalCallback(EvalCallback):
         # Assumes each reward function can contribute up to 1.0 per timestep
         # max_achievable_reward = episode_length * num_reward_functions
         self.episode_length = env_config.EPISODE_LENGTH + 1  # ~289 timesteps
-        self.num_rewards = len(env_config.rewards)
+        self.num_rewards = len(env_config.reward_config.rewards)
         self.max_achievable_reward = self.episode_length * self.num_rewards
 
         logger.info(
@@ -260,13 +264,13 @@ def make_env(rank: int, seed: int):
         # Each env gets its own infras/statesources/rewards with independent state.
         infras = env_config.create_infras()
         statesources = env_config.create_statesources()
-        rewards = env_config.create_rewards(infras)
+        rewards = list(env_config.reward_config.rewards)
 
         env = AdvBuildingGym(
             infras=infras,
             statesources=statesources,
             rewards=rewards,
-            building_props=env_config.building_props,
+            env_config=env_config,
         )
         from adv_building_gym.envs.env_creator import wrap_action_space
         env = wrap_action_space(env)
@@ -441,7 +445,7 @@ def main():
         "device": str(device),
         "run_name": run_name,
         "infras": [str(i) for i in env_config.infras],
-        "rewards": [str(r) for r in env_config.rewards],
+        "rewards": [str(r) for r in env_config.reward_config.rewards],
     }
     with open(f"{model_save_path}/config.json", "w", encoding="utf-8") as f:
         json.dump(config_dump, f, cls=CustomJSONEncoder, indent=4)

@@ -258,7 +258,10 @@ HP_CHANNEL = {
 BATTERY_CHANNEL = {
     "action_key": "battery_action",
     "action_dim": 1,
-    "setpoint_key": "battery_target_pct",   # Target SoC
+    # The battery component is hardware-only and no longer publishes a
+    # target SoC into the obs space.  A PID-style controller must supply
+    # its own setpoint.
+    "setpoint_key": "battery_target_pct",   # Caller-supplied; not in obs
     "measurement_key": "battery_pct",       # Current SoC
     "kp": 1.0,                              # Tune via Ray Tune
     "ki": 0.0,
@@ -395,19 +398,6 @@ else:
     )
 ```
 
-Also, when PID is used, the `observation_space` should be provided to the config (since without FlattenObservations, RLlib needs the Dict space):
-
-```python
-if isinstance(config, PIDConfig):
-    _obs_space, action_space = get_env_spaces(env_creator)
-    config.environment(
-        env="AdvBuilding",
-        observation_space=_obs_space,  # Provide Dict obs space
-        action_space=action_space,
-        clip_actions=clip_actions,
-    )
-```
-
 ### 4.3 `run_train_ray.py` — Accept `--algorithm pid`
 
 Add `"pid"` to the `choices` list in the argparse `--algorithm` argument.
@@ -484,7 +474,7 @@ tune.Tuner(
 
 ## 8. Verification Plan
 
-1. Run `python run_train_ray.py --algorithm pid --timesteps 10000` and verify:
+1. Run `python run_train_ray.py --algorithm pid --episodes 35` and verify:
    - No crashes during rollout
    - Episode metrics logged (reward_rate, achieved_reward, cum_E_kWh)
    - Checkpoint saved successfully

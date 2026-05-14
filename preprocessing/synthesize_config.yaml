@@ -1,0 +1,20 @@
+# Top-level configuration for synthetic dataset generation.
+# Selects which per-level configs (syn_cfg_*.yaml) are applied as the final
+# step of the preprocessing pipeline. For each input CSV and each active
+# syn_cfg, a sibling file <stem>_<syn_cfg_name>.csv is written.
+#
+# The per-level configs live in `syn_cfg_dir` and define the per-column
+# transform pipeline (Gaussian noise — optionally smoothed — and constant
+# shift) plus clipping bounds.
+
+seed: 42
+syn_cfg_dir: preprocessing/syn_cfgs
+
+# Which syn_cfg_*.yaml files to apply. All listed are run for every input CSV.
+active_configs:
+  - syn_cfg_1_neg
+  - syn_cfg_1_pos
+  - syn_cfg_2_neg
+  - syn_cfg_2_pos
+  - syn_cfg_3_neg
+  - syn_cfg_3_pos

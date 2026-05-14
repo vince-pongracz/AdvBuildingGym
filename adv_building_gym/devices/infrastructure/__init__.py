@@ -15,6 +15,7 @@ from .ev_charger import LinearEVCharger, EvSpec
 from .hh_consumers import HouseholdEnergyConsumers
 from .hp import HP
 from .solar_panel import SolarPanel
+from .wind_turbine import WindTurbine
 
 __all__ = [
     "Infrastructure",
@@ -25,4 +26,5 @@ __all__ = [
     "LinearEVCharger",
     "EvSpec",
     "SolarPanel",
+    "WindTurbine",
 ]

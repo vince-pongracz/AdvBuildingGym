@@ -1,10 +1,7 @@
-"""Serialization and discovery utilities for configuration components."""
+"""Discovery utilities for configuration components."""
 
-from .serializable import Serializable, ComponentRegistry
-from .discover_scenarios import discover_augmented_scenarios
+from .discover_scenarios import discover_synthetic_scenarios
 
 __all__ = [
-    "Serializable",
-    "ComponentRegistry",
-    "discover_augmented_scenarios",
+    "discover_synthetic_scenarios",
 ]

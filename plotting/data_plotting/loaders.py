@@ -1,0 +1,226 @@
+"""Data loading utilities for day-based CSV plotting.
+
+Two loading strategies:
+
+1. **Year-partitioned files** (weather, price, household consumption):
+   ``load_day_csv`` / ``load_days`` locate the correct ``{year}`` file and
+   extract a single calendar day.
+
+2. **Profile files** (desired temperature, EV schedule):
+   ``load_profile_csv`` / ``load_profiles`` load standalone single-day
+   template CSVs that are date-independent.
+
+All loaders add a ``minutes`` column (minutes since midnight, float32)
+used as the common x-axis across all day-data plots.
+"""
+
+from __future__ import annotations
+
+import logging
+import re
+from datetime import date, datetime
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+
+logger = logging.getLogger(__name__)
+
+_WARN_FUTURE_DATA: bool = False
+
+
+def set_warn_future_data(enabled: bool) -> None:
+    """Toggle "No data for <date>" warnings for dates in the future.
+
+    Default behaviour (disabled) suppresses the warning when the requested
+    day has not yet occurred, since missing data is expected in that case.
+    """
+    global _WARN_FUTURE_DATA
+    _WARN_FUTURE_DATA = bool(enabled)
+
+
+def _is_future(d: datetime) -> bool:
+    return d.date() > date.today()
+
+
+def load_day_csv(
+    directory: Path,
+    file_pattern: str,
+    timestamp_col: str,
+    date: datetime,
+) -> pd.DataFrame:
+    """Load CSV data for a single calendar day.
+
+    Returns an empty DataFrame if the file does not exist or contains no
+    data for the requested day.
+    """
+    year = date.year
+    filename = file_pattern.format(year=year)
+    filepath = directory / filename
+    if not filepath.exists():
+        logger.warning("File not found: %s", filepath)
+        return pd.DataFrame()
+
+    df = pd.read_csv(filepath, parse_dates=[timestamp_col])
+    if df[timestamp_col].dt.tz is not None:
+        df[timestamp_col] = df[timestamp_col].dt.tz_localize(None)
+
+    day_start = pd.Timestamp(date)
+    day_end = day_start + pd.Timedelta(days=1)
+    mask = (df[timestamp_col] >= day_start) & (df[timestamp_col] < day_end)
+    day_df = df.loc[mask].copy()
+
+    if day_df.empty:
+        if _WARN_FUTURE_DATA or not _is_future(date):
+            logger.warning("No data for %s in %s", date.date(), filepath)
+        return pd.DataFrame()
+
+    day_df["minutes"] = (
+        (day_df[timestamp_col] - day_start).dt.total_seconds() / 60.0
+    ).astype(np.float32)
+
+    return day_df
+
+
+def _available_years(
+    directory: Path,
+    file_pattern: str,
+    years: set[int],
+) -> set[int]:
+    """Return the subset of *years* for which a data file exists on disk."""
+    available: set[int] = set()
+    for year in years:
+        filepath = directory / file_pattern.format(year=year)
+        if filepath.exists():
+            available.add(year)
+    return available
+
+
+def load_days(
+    directory: Path,
+    file_pattern: str,
+    timestamp_col: str,
+    dates: list[datetime],
+) -> dict[str, pd.DataFrame]:
+    """Load CSV data for multiple days. Returns ``{date_label: DataFrame}``.
+
+    Pre-checks which year files exist so that missing years produce a
+    single warning instead of one per day.
+    """
+    requested_years = {d.year for d in dates}
+    available = _available_years(directory, file_pattern, requested_years)
+    missing = sorted(requested_years - available)
+    if missing:
+        logger.warning(
+            "Skipping years with no data file in %s (pattern %s): %s",
+            directory, file_pattern, ", ".join(str(y) for y in missing),
+        )
+
+    result: dict[str, pd.DataFrame] = {}
+    for date in dates:
+        if date.year not in available:
+            continue
+        df = load_day_csv(directory, file_pattern, timestamp_col, date)
+        if not df.empty:
+            result[str(date.date())] = df
+    return result
+
+
+def _syn_cfg_stem(file_pattern: str, year: int) -> str:
+    """Stem (no .csv) of the canonical per-year file for *year*."""
+    name = file_pattern.format(year=year)
+    return name[:-4] if name.endswith(".csv") else name
+
+
+def discover_syn_cfg_files(
+    directory: Path,
+    file_pattern: str,
+    years: set[int],
+) -> dict[str, dict[int, Path]]:
+    """Find sibling synthesised CSVs for every year that has them.
+
+    Returns ``{cfg_name: {year: filepath}}``. ``cfg_name`` is everything
+    after the canonical stem, e.g. ``syn_cfg_1_pos`` for a file like
+    ``2016_merged_04177_syn_cfg_1_pos.csv``.
+    """
+    result: dict[str, dict[int, Path]] = {}
+    if not directory.exists():
+        return result
+    for year in years:
+        stem = _syn_cfg_stem(file_pattern, year)
+        for match in directory.glob(f"{stem}_syn_cfg_*.csv"):
+            cfg_name = match.stem[len(stem) + 1:]  # strip "<stem>_"
+            result.setdefault(cfg_name, {})[year] = match
+    return result
+
+
+def load_syn_cfg_days(
+    directory: Path,
+    file_pattern: str,
+    timestamp_col: str,
+    dates: list[datetime],
+) -> dict[str, dict[str, pd.DataFrame]]:
+    """Load every discoverable ``*_syn_cfg_*.csv`` for the given dates.
+
+    Returns ``{cfg_name: {date_label: DataFrame}}``. Empty when no
+    synthesised siblings exist in *directory*.
+    """
+    requested_years = {d.year for d in dates}
+    cfg_files = discover_syn_cfg_files(directory, file_pattern, requested_years)
+    if not cfg_files:
+        return {}
+
+    # Per-cfg file_pattern reuses load_day_csv so day-slicing logic is shared.
+    result: dict[str, dict[str, pd.DataFrame]] = {}
+    for cfg_name, year_paths in sorted(cfg_files.items()):
+        frames: dict[str, pd.DataFrame] = {}
+        for d in dates:
+            path = year_paths.get(d.year)
+            if path is None:
+                continue
+            df = load_day_csv(path.parent, path.name, timestamp_col, d)
+            if not df.empty:
+                frames[str(d.date())] = df
+        if frames:
+            result[cfg_name] = frames
+    return result
+
+
+def load_profile_csv(
+    filepath: Path,
+    timestamp_col: str,
+) -> pd.DataFrame:
+    """Load a single-day profile CSV and add a ``minutes`` column.
+
+    Returns an empty DataFrame when the file is missing or empty.
+    """
+    if not filepath.exists():
+        logger.warning("Profile file not found: %s", filepath)
+        return pd.DataFrame()
+
+    df = pd.read_csv(filepath, parse_dates=[timestamp_col])
+    if df.empty:
+        return pd.DataFrame()
+
+    if df[timestamp_col].dt.tz is not None:
+        df[timestamp_col] = df[timestamp_col].dt.tz_localize(None)
+
+    day_start = df[timestamp_col].iloc[0].normalize()
+    df["minutes"] = (
+        (df[timestamp_col] - day_start).dt.total_seconds() / 60.0
+    ).astype(np.float32)
+    return df
+
+
+def load_profiles(
+    directory: Path,
+    filenames: list[str],
+    timestamp_col: str,
+) -> dict[str, pd.DataFrame]:
+    """Load all profile CSVs. Returns ``{filename_stem: DataFrame}``."""
+    result: dict[str, pd.DataFrame] = {}
+    for name in filenames:
+        df = load_profile_csv(directory / name, timestamp_col)
+        if not df.empty:
+            result[Path(name).stem] = df
+    return result

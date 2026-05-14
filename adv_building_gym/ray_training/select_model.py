@@ -48,8 +48,6 @@ def select_model(
     if training_config is None:
         training_config = TrainingParamConfig.from_yaml(_DEFAULT_TRAINING_CONFIG)
 
-    learning_starts = 10 * episode_length
-
     # Algorithm-specific configuration
     if algorithm == "ppo":
         config = PPOConfig()
@@ -64,13 +62,14 @@ def select_model(
         # collected batch).  Smaller than train_batch_size_per_learner.
         ppo_batch_timesteps = training_config.ppo_episodes_per_iteration * episode_length
         config.training(
-            lr=training_config.learning_rate,
-            train_batch_size_per_learner=ppo_batch_timesteps,
-            minibatch_size=training_config.ppo_minibatch_size,
-            num_epochs=training_config.ppo_num_epochs,
-            use_critic=True,
-            use_gae=True,
-            use_kl_loss=True,
+            lr=training_config.learning_rate,  # RLlib default: 5e-5
+            train_batch_size_per_learner=ppo_batch_timesteps,  # RLlib default: 4000
+            minibatch_size=training_config.ppo_minibatch_size,  # RLlib default: 128
+            num_epochs=training_config.ppo_num_epochs,  # RLlib default: 30
+            use_critic=True,  # RLlib default
+            use_gae=True,  # RLlib default
+            lambda_=0.95, # GAE lambda, 0 means 1 step return, 1.0 means infinite step return, limited by the rollout length. # RLlib default: 1
+            use_kl_loss=True,  # RLlib default
             # NOTE VP 2026.01.12. : tune these and other hyperparameters later -- using tune
         )
 
@@ -84,23 +83,38 @@ def select_model(
         # collected per iteration.
         # New API stack (default in RLlib 2.7+) requires EpisodeReplayBuffer
         # and separate learning rates for actor, critic, and alpha.
+        # Collect complete episodes before returning to learner.
+        # Without this, SAC defaults rollout_fragment_length to 1, causing
+        # training episodes to be reported as length = 1 in callbacks.
         config.training(
             # NOTE VP 2026.02.11. : Actor critic methods SAC & PPO - blog
             # Link: https://joel-baptista.github.io/phd-weekly-report/posts/ac/
-            actor_lr=training_config.learning_rate,  # LR of the policy network
-            critic_lr=training_config.learning_rate,  # LR of the critic network
-            alpha_lr=training_config.learning_rate,  # Influences weight of entropy -- and thus exploration
+            # actor_lr=training_config.learning_rate,  # LR of the policy network. RLlib default: 3e-5
+            # critic_lr=training_config.learning_rate,  # LR of the critic network. RLlib default: 3e-4
+            # alpha_lr=training_config.learning_rate,  # Influences weight of entropy -- and thus exploration. RLlib default: 3e-4
+            # PrioritizedEpisodeReplayBuffer crashes on Ray 2.52.1 with
+            # KeyError in sum-tree when priorities degenerate to zero.
+            # Use uniform EpisodeReplayBuffer until the bug is fixed upstream.
+            # Link: https://github.com/ray-project/ray/issues/50966
             replay_buffer_config={
                 "type": "EpisodeReplayBuffer",
-                "capacity": episode_length * training_config.sac_days_to_keep_in_replay_buffer,
+                "capacity": episode_length * training_config.sac_episodes_to_keep_in_replay_buffer,
             },
             # SAC-specific hyperparameters
-            twin_q=True,  # Use twin Q-networks to reduce overestimation bias
-            initial_alpha=1.0,  # Initial entropy coefficient (auto-tuned)
-            target_network_update_freq=4,  # Update target networks every step
-            tau=0.005,  # Soft update coefficient for target networks (at Polyak averaging)
-            train_batch_size_per_learner=training_config.sac_replay_batch_size,
-            num_steps_sampled_before_learning_starts=learning_starts, # Number of steps to collect before starting learning (to fill up replay buffer)
+            twin_q=True,  # Use twin Q-networks to reduce overestimation bias. RLlib default
+            initial_alpha=1.0,  # Initial entropy coefficient (auto-tuned via alpha_lr). RLlib default
+            # target_network_update_freq=1,  # Update target networks every step. RLlib default: 0
+            n_step=training_config.sac_n_step_return,  # RLlib default: 1
+            tau=0.005,  # Soft update coefficient for target networks (at Polyak averaging). RLlib default
+            train_batch_size_per_learner=training_config.sac_replay_batch_size,  # RLlib default: 256
+            # training_intensity = replayed_steps / sampled_steps.
+            # Without this, RLlib defaults to [1, 1] round-robin: only
+            # 1 gradient update per ~864 sampled env steps (UTD ≈ 0.001).
+            # Standard SAC uses UTD ≈ 1.0 (1 grad step per env step).
+            # UTD = training_intensity / batch_size.
+            # Link: https://arxiv.org/abs/1802.09477
+            training_intensity=training_config.sac_training_intensity,  # RLlib default: None
+            num_steps_sampled_before_learning_starts=training_config.sac_learning_starts_after_n_episodes * episode_length, # Warm up replay buffer with N episodes before learning starts.
             # Gradient clipping mitigates but does NOT fully prevent NaN in
             # the policy network. If the loss itself is NaN/Inf (e.g. from
             # extreme Q-values caused by large reward spikes like the -2.0
@@ -109,7 +123,7 @@ def select_model(
             # per-step rewards in a bounded range (ideally [-1, 1] total).
             # See: slurm job 1624328 — crash at iter 48 with
             # "normal expects all elements of std >= 0.0".
-            grad_clip=1.0,
+            grad_clip=1.0,  # RLlib default: None
         )
     # NOTE VP 2026.02.11. : Maybe add DreamerV3 -- but in that case drop the forecasting states
     # DreamerV3 paper link: https://arxiv.org/pdf/2301.04104
@@ -123,9 +137,9 @@ def select_model(
         # Use new API to avoid RLModule(config=RLModuleConfig) deprecation warning
         # TODO VP 2026.01.12. : Use transformer model for better learning, it is a time series after all -- but does it really matter here?
         model_config=DefaultModelConfig(
-            fcnet_activation='relu',
+            fcnet_activation='tanh', # RLlib default: tanh
             # NOTE VP 2026.03.10. : What is the NN structure which is needed to learn this task complexity?
-            fcnet_hiddens=[256, 256],
+            fcnet_hiddens=[256, 256],  # RLlib default: [256, 256]
             # [256, 256, 256]
             # Use LSTM to exploit temporal dependencies
             # use_lstm=True,

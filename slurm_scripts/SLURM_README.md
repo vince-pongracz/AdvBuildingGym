@@ -81,12 +81,10 @@ Key `run_train_ray.py` options:
 |------|-------------|---------|
 | `--algorithm` | `ppo` or `sac` | `ppo` |
 | `--episodes N` | Total training episodes | 3500 |
-| `-cn NAME` | Configuration name | `test1` |
+| `--load-config PATH` | Load env config from YAML (**required**) | - |
 | `--seed N` | Random seed | 42 |
 | `--metric METRIC` | Optimisation target (`reward_rate`, `achieved_reward`, `episode_return_mean`) | `reward_rate` |
 | `--checkpoint-frequency-episodes N` | Checkpoint every N episodes | 20 |
-| `--load-config PATH` | Load config from YAML | - |
-| `--save-config PATH` | Save config to YAML | - |
 | `--log-trajectories` | Save per-step trajectory JSON during eval | off |
 
 The script also sets up CUDA environment variables and fixes cuDNN library
@@ -98,9 +96,10 @@ Runs CPU-only inference (no GPU needed for the small `[32,32,32]` network).
 All arguments are forwarded to `run_eval_ray.py`.
 
 ```bash
-sbatch slurm_scripts/slurm_eval_ray.sh --algorithm ppo --episodes 10 --seed 42
-sbatch slurm_scripts/slurm_eval_ray.sh --algorithm sac -cn test1 --episodes 20
-sbatch slurm_scripts/slurm_eval_ray.sh --checkpoint models/test1/ray/ppo/best_model_ep100
+sbatch slurm_scripts/slurm_eval_ray.sh --algorithm ppo --load-config configs/env/env_test1_small.yaml --episodes 10 --seed 42
+sbatch slurm_scripts/slurm_eval_ray.sh --algorithm sac --load-config configs/env/env_test1_mid.yaml --episodes 20
+sbatch slurm_scripts/slurm_eval_ray.sh --algorithm ppo --load-config configs/env/env_test1_small.yaml \
+    --checkpoint models/env_test1_small/ray/ppo/best_model_ep100
 ```
 
 Key `run_eval_ray.py` options:
@@ -109,7 +108,7 @@ Key `run_eval_ray.py` options:
 |------|-------------|---------|
 | `--algorithm, -a` | `ppo` or `sac` | `ppo` |
 | `--checkpoint PATH` | Checkpoint directory (auto-detects best if omitted) | - |
-| `-cn NAME` | Configuration name | - |
+| `--load-config PATH` | Load env config from YAML (**required**) | - |
 | `--episodes N` | Number of eval episodes | 10 |
 | `--seed N` | Random seed | 42 |
 | `--output-dir PATH` | Results directory | `eval_results` |
@@ -133,12 +132,12 @@ Defaults: `ppo`, `4` envs, `1000000` timesteps, seed `42`.
 ## Data setup (slurm_data_setup.sh)
 
 Fetches and preprocesses energy price and weather data. CPU-only.
-All arguments are forwarded to `preproc/data_setup.py`.
+All arguments are forwarded to `preprocessing/data_setup.py`.
 
 ```bash
 sbatch slurm_scripts/slurm_data_setup.sh
 sbatch slurm_scripts/slurm_data_setup.sh --skip-weather
-sbatch slurm_scripts/slurm_data_setup.sh --skip-weather --skip-price-fetch --years 2023 --augment
+sbatch slurm_scripts/slurm_data_setup.sh --skip-weather --skip-price-fetch --years 2023 --synthesize
 ```
 
 Key options:
@@ -149,8 +148,11 @@ Key options:
 | `--price-source` | `awattar` or `energy-charts` | `awattar` |
 | `--skip-prices` | Skip entire price pipeline | - |
 | `--skip-price-fetch` | Skip fetching, use existing raw files | - |
-| `--skip-weather` | Skip weather/Zenodo pipeline | - |
-| `--augment` | Run price augmentation after preprocessing | - |
+| `--skip-weather` | Skip all weather pipelines (WPuQ/Zenodo and DWD) | - |
+| `--skip-wpuq` | Skip WPuQ/Zenodo weather pipeline only | - |
+| `--skip-dwd` | Skip DWD weather pipeline only | - |
+| `--synthesize` | Generate synthetic dataset variants as the final pipeline step | - |
+| `--synthesize-config` | Path to top-level synthesise config | `preprocessing/synthesize_config.yaml` |
 
 ## Trajectory plotting (slurm_plot_trajectory.sh)
 

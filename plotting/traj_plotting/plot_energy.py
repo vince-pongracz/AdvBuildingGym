@@ -5,36 +5,13 @@ from __future__ import annotations
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from plotting.utils import EpisodeData, apply_day_xaxis, style_figure
-
-# TODO VP 2026.03.17. : Move this to plotting utils
-def _align_zero_dual_yaxes(fig, y1_data: list[float], y2_data: list[float]) -> None:
-    """Set both y-axis ranges so that zero sits at the same vertical position."""
-    min1, max1 = min(y1_data), max(y1_data)
-    min2, max2 = min(y2_data), max(y2_data)
-
-    # Add 10% padding
-    pad1 = (max1 - min1) * 0.1 or 1.0
-    pad2 = (max2 - min2) * 0.1 or 1.0
-    min1, max1 = min1 - pad1, max1 + pad1
-    min2, max2 = min2 - pad2, max2 + pad2
-
-    # Compute the fraction of the range below zero for each axis
-    frac1 = abs(min1) / (abs(min1) + abs(max1)) if (abs(min1) + abs(max1)) > 0 else 0.5
-    frac2 = abs(min2) / (abs(min2) + abs(max2)) if (abs(min2) + abs(max2)) > 0 else 0.5
-
-    # Use the larger zero-fraction so both axes have room
-    frac = max(frac1, frac2)
-
-    # Expand each axis so zero sits at the same relative position
-    # range_below = frac * total_range, range_above = (1 - frac) * total_range
-    span1 = max(abs(min1) / frac if frac > 0 else max1,
-                abs(max1) / (1 - frac) if frac < 1 else abs(min1))
-    span2 = max(abs(min2) / frac if frac > 0 else max2,
-                abs(max2) / (1 - frac) if frac < 1 else abs(min2))
-
-    fig.update_yaxes(range=[-frac * span1, (1 - frac) * span1], secondary_y=False)
-    fig.update_yaxes(range=[-frac * span2, (1 - frac) * span2], secondary_y=True)
+from plotting.utils import (
+    EpisodeData,
+    align_zero_dual_yaxes,
+    apply_day_xaxis,
+    get_width_multiplier,
+    style_figure,
+)
 
 
 def plot_energy(episode: EpisodeData) -> list[go.Figure]:
@@ -45,7 +22,7 @@ def plot_energy(episode: EpisodeData) -> list[go.Figure]:
     Falls back to a single bar when breakdown data is unavailable.
     """
     time = episode.time_minutes
-    power = episode.step_power_kW
+    power = episode.net_power_kW
     cum_e = episode.cum_E_kWh
     time_hhmm = episode.time_hhmm
     power_breakdown = episode.power_breakdown
@@ -115,11 +92,11 @@ def plot_energy(episode: EpisodeData) -> list[go.Figure]:
 
     fig.update_layout(
         title=f"Energy (full breakdown) — {episode.title_suffix()}",
-        height=450, width=2200,
+        height=450,
     )
     fig.update_yaxes(title_text="Power (kW)", secondary_y=False)
     fig.update_yaxes(title_text="Cumulative Energy (kWh)", secondary_y=True)
-    _align_zero_dual_yaxes(fig, power, cum_e)
+    align_zero_dual_yaxes(fig, power, cum_e)
 
     # --- Second figure: net power + cumulative energy only ---
     fig_net = make_subplots(specs=[[{"secondary_y": True}]])
@@ -147,14 +124,19 @@ def plot_energy(episode: EpisodeData) -> list[go.Figure]:
 
     fig_net.update_layout(
         title=f"Net Energy — {episode.title_suffix()}",
-        height=400, width=2200,
+        height=400,
         bargap=0.25,
     )
     fig_net.update_yaxes(title_text="Net Power (kW)", secondary_y=False)
     fig_net.update_yaxes(title_text="Cumulative Energy (kWh)", secondary_y=True)
-    _align_zero_dual_yaxes(fig_net, power, cum_e)
+    align_zero_dual_yaxes(fig_net, power, cum_e)
 
-    return [style_figure(fig), style_figure(fig_net)]
+    n_full_legend = 2 + len(power_breakdown)  # net power + cum energy + breakdown traces
+    wm = get_width_multiplier("energy")
+    return [
+        style_figure(fig, n_legend_items=n_full_legend, width_multiplier=wm),
+        style_figure(fig_net, n_legend_items=2, width_multiplier=wm),
+    ]
 
 
 # HTML footnote rendered as a separate div below the energy plot

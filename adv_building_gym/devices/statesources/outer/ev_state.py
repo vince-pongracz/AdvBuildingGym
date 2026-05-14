@@ -7,13 +7,13 @@ import numpy as np
 import pandas as pd
 from gymnasium.spaces import Box
 
+from adv_building_gym.utils.constants import SECONDS_PER_HOUR
+
 from ..base import StateSource
-from adv_building_gym.config.utils.serializable import ComponentRegistry
+from adv_building_gym.utils.serializable import ComponentRegistry
 from ...infrastructure.ev_charger.ev_spec import EvSpec
 
 logger = logging.getLogger(__name__)
-
-# TODO VP 2026.02.12. : Check this, as this one is still provisional
 
 
 class EVState(StateSource):
@@ -51,9 +51,15 @@ class EVState(StateSource):
     KEY_MAX_CHARGE = "ev_schedule_max_charging_kW"
     KEY_CHARGE_EFF = "ev_schedule_charger_eff"
     KEY_DISCHARGE_EFF = "ev_schedule_discharge_eff"
-    KEY_V2G = "ev_schedule_v2g"
-    KEY_START_SOC = "ev_schedule_start_soc"
-    KEY_TARGET_SOC = "ev_schedule_target_soc"
+    KEY_V2G = "ctxt_ev_schedule_v2g"
+    KEY_START_SOC = "ctxt_ev_schedule_start_soc"
+    KEY_TARGET_SOC = "ctxt_ev_schedule_target_soc"
+    # Hours from connect within which the session must hit target_soc.  This
+    # is the user-observable charging contract and the deadline driving the
+    # corridor (s_ev_soc_min lazy-back-from-target, s_ev_soc_max forward-from-
+    # start) in LinearEVCharger.  Not the actual disconnect time, which is
+    # not assumed observable.
+    KEY_CHARGE_TO_TARGET_HRS = "ev_schedule_charge_to_target_hrs"
 
     def __init__(
         self,
@@ -72,7 +78,7 @@ class EVState(StateSource):
         self._event_lookup: Dict[int, Tuple[bool, Optional[EvSpec]]] = {}
 
         if self.ts is not None:
-            self._post_load_data_processing()
+            self._run_post_load()
 
     def _post_load_data_processing(self) -> None:
         """Parse events and reset runtime state after CSV load / reload."""
@@ -88,7 +94,7 @@ class EVState(StateSource):
 
         for _, row in self.ts.iterrows():
             ts = row["start"]
-            seconds_from_midnight = ts.hour * 3600 + ts.minute * 60 + ts.second
+            seconds_from_midnight = ts.hour * SECONDS_PER_HOUR + ts.minute * 60 + ts.second
             iteration_index = int(seconds_from_midnight // self.control_step)
 
             if pd.notna(row.get("max_cap_kWh")):
@@ -100,6 +106,7 @@ class EVState(StateSource):
                     v2g_enabled=str(row["v2g_enabled"]).strip().lower() == "true",
                     start_soc=float(row["start_soc"]),
                     target_soc=float(row["target_soc"]),
+                    charge_to_target_in_hrs=float(row["target_soc_reach_duration_h"]),
                 )
                 self._events.append((iteration_index, True, ev_spec))
                 self._event_lookup[iteration_index] = (True, ev_spec)
@@ -109,7 +116,7 @@ class EVState(StateSource):
 
         self._events.sort(key=lambda e: e[0])
 
-        logger.info(
+        logger.debug(
             "EVState '%s': parsed %d events from %s",
             self.name, len(self._events), self.ds_path,
         )
@@ -127,19 +134,13 @@ class EVState(StateSource):
     def setup_spaces(self, state_spaces, action_spaces):
         """Register bounded EV schedule keys in the observation space.
 
-        Unbounded keys (``max_cap_kWh``, ``max_charging_kW``) and the
-        connection flag are written to the shared info dict instead (see
-        ``update_state``).  The bounded [0, 1] keys below are useful for
-        the control policy and safe for the neural network.
+        Unbounded keys (``max_cap_kWh``, ``max_charging_kW``), the
+        connection flag, and static per-session parameters
+        (``charger_efficiency``, ``discharge_efficiency``) are written to
+        the shared info dict instead (see ``update_state``).  The bounded
+        [0, 1] keys below are useful for the control policy and safe for
+        the neural network.
         """
-        if self.KEY_CHARGE_EFF not in state_spaces:
-            state_spaces[self.KEY_CHARGE_EFF] = Box(
-                low=0, high=1, shape=(1,), dtype=np.float32,
-            )
-        if self.KEY_DISCHARGE_EFF not in state_spaces:
-            state_spaces[self.KEY_DISCHARGE_EFF] = Box(
-                low=0, high=1, shape=(1,), dtype=np.float32,
-            )
         if self.KEY_V2G not in state_spaces:
             state_spaces[self.KEY_V2G] = Box(
                 low=0, high=1, shape=(1,), dtype=np.float32,
@@ -167,14 +168,10 @@ class EVState(StateSource):
         # Zero everything when EV is disconnected so the agent sees a clean
         # signal instead of stale spec values from the previous session.
         if self._ev_connected and self._current_spec is not None:
-            states[self.KEY_CHARGE_EFF][0] = np.float32(self._current_spec.charger_efficiency)
-            states[self.KEY_DISCHARGE_EFF][0] = np.float32(self._current_spec.discharge_efficiency)
             states[self.KEY_V2G][0] = np.float32(1.0 if self._current_spec.v2g_enabled else 0.0)
             states[self.KEY_START_SOC][0] = np.float32(self._current_spec.start_soc)
             states[self.KEY_TARGET_SOC][0] = np.float32(self._current_spec.target_soc)
         else:
-            states[self.KEY_CHARGE_EFF][0] = np.float32(0.0)
-            states[self.KEY_DISCHARGE_EFF][0] = np.float32(0.0)
             states[self.KEY_V2G][0] = np.float32(0.0)
             states[self.KEY_START_SOC][0] = np.float32(0.0)
             states[self.KEY_TARGET_SOC][0] = np.float32(0.0)
@@ -192,6 +189,7 @@ class EVState(StateSource):
             info[self.KEY_V2G] = (1.0 if self._current_spec.v2g_enabled else 0.0) if connected else 0.0
             info[self.KEY_START_SOC] = self._current_spec.start_soc if connected else 0.0
             info[self.KEY_TARGET_SOC] = self._current_spec.target_soc if connected else 0.0
+            info[self.KEY_CHARGE_TO_TARGET_HRS] = self._current_spec.charge_to_target_in_hrs if connected else 0.0
 
 
 ComponentRegistry.register('statesource', EVState)

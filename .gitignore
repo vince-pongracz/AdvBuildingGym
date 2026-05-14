@@ -17,14 +17,8 @@ dist/
 .idea/
 
 # SLURM output logs
-**/slurm_logs/eval/**.out
-**/slurm_logs/eval/**.err
-**/slurm_logs/train/**.err
-**/slurm_logs/train/**.out
-**/slurm_logs/data_setup/**.err
-**/slurm_logs/data_setup/**.out
-**/slurm_logs/plotting/**.err
-**/slurm_logs/plotting/**.out
+**/slurm_logs/**/**.out
+**/slurm_logs/**/**.err
 
 # Environment and runtime
 .env
@@ -36,7 +30,9 @@ dist/
 result_**.json
 result.json
 
+# Trained models/checkpoints
 models/test1/**
+models/env_**/**
 
 # Episode metrics -- on episode end
 ep_metrics/**
@@ -53,6 +49,7 @@ data/weather/**/10min**
 data/weather/**/produkt_zehn**
 data/weather/dwd/downloaded/**
 data/weather/dwd/preprocessed/**
+data/hh_consumption/**
 # Energy price data -- ignore all, scripts are there for fetching and preprocessing the data.
 data/e_price/**
 
@@ -69,4 +66,11 @@ param_space.json
 # Plotting outputs
 plotting/out/**
 
+# Eval results
 eval_results/**
+
+# Preprocessing, data quality summary -- only the figure needed
+data/quality_reports/data_quality_summary.csv
+
+**/meeting_notes.md
+**/models/**

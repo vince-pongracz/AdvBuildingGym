@@ -16,7 +16,7 @@ Data is always about the last 10 minutes, except the air temp data
 
 ### Scripts
 
-Scripts are in `preproc/weather/dwd/`.
+Scripts are in `preprocessing/weather/dwd/`.
 
 - `dwd_fetch.py` — Downloads and extracts wind, solar, and air_temperature zip archives (historical + recent) for station 04177 from the DWD CDC server. Converts the semicolon-delimited `.txt` files to `.csv`. Can be run standalone to download only.
 - `dwd_preprocess.py` — Imports data via `dwd_fetch`, selects relevant columns, merges the three data types on timestamp, renames columns, converts the date to UTC datetime, and drops rows where all measurements are missing (-999). Outputs `merged_04177.csv`.
@@ -29,7 +29,7 @@ Merged output columns:
 | FF_10      | avg_wind_speed   |
 | DD_10      | wind_dir         |
 | GS_10      | sun_shine        |
-| DS_10      | diff_sky_shine   |
+| DS_10      | diff_sun_shine   |
 | TT_10      | air_temp_2m      |
 | RF_10      | rel_humidity     |
 

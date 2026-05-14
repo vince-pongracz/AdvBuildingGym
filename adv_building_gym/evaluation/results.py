@@ -60,7 +60,7 @@ class EvalResults:
 
     episodes: list[EpisodeStats]
     checkpoint_path: str
-    env_config_name: str
+    trial_name: str
     algorithm: str | None
     seed: int
     eval_time_seconds: float
@@ -80,7 +80,7 @@ class EvalResults:
         cls,
         episodes: list[EpisodeStats],
         checkpoint_path: str,
-        env_config_name: str,
+        trial_name: str,
         algorithm: str | None,
         seed: int,
         eval_time_seconds: float,
@@ -90,7 +90,7 @@ class EvalResults:
         result = cls(
             episodes=episodes,
             checkpoint_path=checkpoint_path,
-            env_config_name=env_config_name,
+            trial_name=trial_name,
             algorithm=algorithm,
             seed=seed,
             eval_time_seconds=eval_time_seconds,
@@ -111,7 +111,7 @@ class EvalResults:
         """Return a backward-compatible dict matching the old script output."""
         d: dict = {
             "checkpoint_path": self.checkpoint_path,
-            "env_config_name": self.env_config_name,
+            "trial_name": self.trial_name,
             "algorithm": self.algorithm,
             "num_episodes": len(self.episodes),
             "seed": self.seed,

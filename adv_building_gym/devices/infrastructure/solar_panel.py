@@ -5,13 +5,9 @@ import numpy as np
 from gymnasium.spaces import Box
 
 from .base import Infrastructure
-from adv_building_gym.config.utils.serializable import ComponentRegistry
+from adv_building_gym.utils.serializable import ComponentRegistry
 
 logger = logging.getLogger(__name__)
-
-# TODO VP 2026.02.17. : Add parameters for solar panel modeling.
-# E.g. temperature effects, panel orientation, inverter efficiency, etc.
-# For now it's kept simple with a direct mapping from irradiance to production.
 
 class SolarPanel(Infrastructure):
     """Solar Panel (PV) infrastructure component.
@@ -29,51 +25,38 @@ class SolarPanel(Infrastructure):
     - Synthetic time-based profile (default)
     """
 
-    # control_step and seed come from config context
-    _context_params: ClassVar[Set[str]] = {'control_step', 'seed'}
+    POWER_FLOW = "generator"
 
     # Internal state variables - don't serialize
     _exclude_params: ClassVar[Set[str]] = {
-        'iteration', 'irradiance_norm', 'current_production_kW', '_base_seed'
+        'iteration', 'irradiance_norm', 'current_production_kW'
     }
 
     def __init__(self,
                 name: str,
-                Q_electric_max: float,
-                peak_power_kW: float,
-                # TODO VP 2026.03.17. : Solar panel seed -- channel global seed in.
-                seed: int = 42,
-                control_step: int = 300
+                max_power_kW: float,
+                control_step: int,
+                # Link: https://www.ise.fraunhofer.de/content/dam/ise/de/documents/publications/studies/Photovoltaics-Report.pdf
+                pv_efficiency: float,
+                panel_area_m2: float
                 ) -> None:
         """Initialize Solar Panel infrastructure.
 
         Args:
             name: Component identifier
-            Q_electric_max: Maximum power production in kW (typically = peak_power_kW)
-            peak_power_kW: Peak power output under standard test conditions (STC)
-            seed: Random seed for reproducible noise generation
-            control_step: Control timestep in seconds (stored for future use)
+            max_power_kW: Peak power output under standard test conditions (STC).
+                ``-1.0`` in ``a_solar`` corresponds to production at this value.
         """
-        super().__init__(name, Q_electric_max)
-
-        # NOTE VP 2026.01.24. : Inverter efficiency is not considered, 
-        # peak power means peak output power, produced by the solar panel
-        self.peak_power_kW = peak_power_kW # -1.0 at actions means the peak power
-        self._base_seed = seed
-        self.rng = np.random.default_rng(seed=seed)
-        self.control_step = control_step
+        # NOTE VP 2026.01.24. : Inverter efficiency is not considered,
+        # max power means peak output power, produced by the solar panel.
+        super().__init__(name, max_power_kW)
 
         # State variables
-        self.irradiance_norm = 0.0  # Normalized irradiance [0, 1]
+        self.irradiance_Jcm2 = 0.0  # Irradiance
         self.current_production_kW = 0.0  # Actual power production in kW
-
-
-    def synchronise(self, iteration: int, row_offset: int | None = None) -> None:
-        super().synchronise(iteration, row_offset)
-        # Reseed RNG at episode reset (row_offset is only passed on reset, not
-        # per-step) so that solar noise is reproducible per episode.
-        if row_offset is not None:
-            self.rng = np.random.default_rng(seed=self._base_seed + row_offset)
+        self.pv_efficiency = pv_efficiency
+        self.panel_area_m2 = panel_area_m2
+        self.control_step = control_step
 
     def setup_spaces(self,
                     state_spaces,
@@ -84,11 +67,17 @@ class SolarPanel(Infrastructure):
         fully determined by solar irradiance. Only state space is registered.
         """
 
-        if "solar_irradiance_norm" not in state_spaces.keys():
+        if "s_solar_irradiance_norm" not in state_spaces.keys():
             # Normalized irradiance [0, 1]
-            state_spaces["solar_irradiance_norm"] = Box(
-                low=0, high=1, shape=(1,), dtype=np.float32
-            )
+            state_spaces["s_solar_irradiance_norm"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
+
+        # Raw peak power capacity (kW) — static context variable, only
+        # changes between episodes if the config is swapped.
+        if "ctxt_solar_max_power_kW" not in state_spaces.keys():
+            state_spaces["ctxt_solar_max_power_kW"] = Box(low=0, high=np.inf, shape=(1,), dtype=np.float32)
+            
+        if "ctxt_pv_efficiency" not in state_spaces.keys():
+            state_spaces["ctxt_pv_efficiency"] = Box(low=0, high=np.inf, shape=(1,), dtype=np.float32)
 
         return state_spaces, action_spaces
 
@@ -101,58 +90,58 @@ class SolarPanel(Infrastructure):
         as a read-only output for other components.
         """
 
-        # Update irradiance from state if available (set by DataSource)
-        if "solar_irradiance_norm" in states:
-            self.irradiance_norm = float(states["solar_irradiance_norm"][0])
+        # Denormalise irradiance: s_solar_irradiance_norm in [0,1], scale by
+        # ctxt_solar_irradiance_max (J/cm² per control step, published by WeatherDataSource).
+        irradiance_norm = float(states["s_solar_irradiance_norm"][0])
+        irradiance_max_Jcm2 = float(states["ctxt_solar_irradiance_max"][0])
+        self.irradiance_Jcm2 = irradiance_norm * irradiance_max_Jcm2
 
-        # If no external irradiance, use synthetic time-based profile
-        if self.irradiance_norm == 0.0 and "sim_hour" in states:
-            self.irradiance_norm = self._synthetic_irradiance(states)
+        # Convert energy [J/cm² per step] over panel area [m²] to mean power [kW] over the step.
+        # 1 m² = 10_000 cm² → J per m² = Jcm2 * 10_000; J → kJ → /1000; kJ / s = kW → /control_step.
+        # Combined factor: 10_000 / 1000 / control_step = 10 / control_step.
+        # Link: https://www.alternative-energy-tutorials.com/solar-power/solar-panel-efficiency.html
+        self.current_production_kW = (
+            self.irradiance_Jcm2 * self.panel_area_m2 * self.pv_efficiency
+            * 10.0 / self.control_step
+        )
+        self.current_production_kW = np.clip(self.current_production_kW, 0.0, self.max_power_kW)
 
-        # Production = irradiance * peak_power
-        self.current_production_kW = self.irradiance_norm * self.peak_power_kW
-
-        # Write normalized production as read-only output (negative = production)
-        solar_action = -self.irradiance_norm
-        if "solar_action" not in actions:
-            actions["solar_action"] = np.array([solar_action], dtype=np.float32)
+        # Write normalized production as read-only output
+        solar_action = irradiance_norm
+        if "a_solar" not in actions:
+            actions["a_solar"] = np.array([solar_action], dtype=np.float32)
         else:
-            actions["solar_action"][0] = solar_action
+            actions["a_solar"][0] = solar_action
 
-    def _synthetic_irradiance(self, states: Dict) -> float:
-        """Generate synthetic irradiance based on time of day.
+    def update_state(self, states: Dict, info=None) -> None:
+        """Publish static peak power into the observable state."""
+        super().update_state(states, info)
+        states["ctxt_solar_max_power_kW"][0] = np.float32(self.max_power_kW)
+        states["ctxt_pv_efficiency"][0] = np.float32(self.pv_efficiency)
 
-        Simple bell curve approximation of solar irradiance with Gaussian noise.
-        Peak at solar noon (12:00), zero at night.
-        """
-        sim_hour = float(states.get("sim_hour", np.array([12.0]))[0])
+    def reset(self, states: Dict, info=None) -> None:
+        """Clear per-episode irradiance/production readouts."""
+        self.irradiance_Jcm2 = 0.0
+        self.current_production_kW = 0.0
+        super().reset(states, info)
+    
+    def get_raw_values(self) -> Dict[str, float]:
+        return {
+            "raw_pv_prod_kW": self.current_production_kW,
+            "raw_pv_max_kW": self.max_power_kW
+        }
 
-        # Sunrise ~6:00, sunset ~18:00, peak at 12:00
-        if sim_hour < 6 or sim_hour > 18:
-            return 0.0
-
-        # Cosine-based profile centered at noon
-        # Maps 6-18 hours to 0-pi, with peak at pi/2 (noon)
-        hour_fraction = (sim_hour - 6) / 12.0  # [0, 1] over daylight hours
-        base_irradiance = np.sin(hour_fraction * np.pi)
-
-        # Add Gaussian noise for realistic cloud cover variations
-        noise = self.rng.normal(loc=0.0, scale=0.05)
-        irradiance = base_irradiance + noise
-
-        return float(np.clip(irradiance, 0.0, 1.0))
-
-    def get_electric_consumption(self, actions: Dict) -> float:
+    def get_E(self, actions: Dict) -> tuple[float, float]:
         """Get current electric energy consumption (production) from solar panel.
 
-        Sign convention: positive = consumption from grid, negative = production to grid.
         Solar panels produce energy, so this returns a negative value.
 
         Returns:
-            Negative value representing energy provided to the building/grid (kW).
+            float1 -- production
+            float2 -- consumption
         """
         # Negative consumption = production to grid
-        return -self.current_production_kW
+        return self.current_production_kW, 0.0
 
 
 # Register SolarPanel with the component registry

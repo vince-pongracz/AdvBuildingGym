@@ -30,7 +30,7 @@ def write_episode_to_hdf5(hdf5_path: str, episode_id: str, traj_dump: dict) -> N
         ep_grp = f.create_group(episode_id)
 
         # Scalar metadata as group attributes
-        for key in ("version", "episode_id", "seed", "length", "eval"):
+        for key in ("version", "episode_id", "seed", "length", "eval", "episode_date"):
             val = traj_dump.get(key)
             if val is not None:
                 ep_grp.attrs[key] = val
@@ -81,7 +81,7 @@ def extract_trajectory_from_infos(
         Keys include "step", "state" (nested dict keyed by original state
         names — scalars as flat lists, vectors preserved as lists of lists),
         "action" (nested dict, same convention), "reward",
-        "reward_breakdown" (nested dict), "cum_E_kWh", "step_power_kW",
+        "reward_breakdown" (nested dict), "cum_E_kWh", "net_power_kW",
         and optionally "power_breakdown" (nested dict keyed by infra name).
     """
     if not infos:
@@ -129,7 +129,7 @@ def extract_trajectory_from_infos(
             initial_row["reward_breakdown"] = {name: 0.0 for name in reward_names}
         # Zero power breakdown
         if power_names:
-            initial_row["power_breakdown"] = {name: 0.0 for name in power_names}
+            initial_row["power_breakdown"] = {name: (0.0, 0.0) for name in power_names}
         # Raw values from reset info, or zeros
         if raw_names:
             if "raw" in initial_info:
@@ -211,8 +211,8 @@ def extract_trajectory_from_infos(
     cum_values = [float(row.get("cum_E_kWh", 0.0)) for row in all_rows]
     trajectory["cum_E_kWh"] = cum_values
 
-    # Instantaneous power (kW) in a step = ΔEnergy (kWh) / ΔTime (h)
-    trajectory["step_power_kW"] = [float(row.get("step_power_kW", 0.0)) for row in all_rows]
+    # Instantaneous net power (kW) in a step = ΔEnergy (kWh) / ΔTime (h)
+    trajectory["net_power_kW"] = [float(row.get("net_power_kW", 0.0)) for row in all_rows]
 
     # Per-infrastructure power breakdown (nested under "power_breakdown" dict)
     if power_names:
@@ -221,7 +221,12 @@ def extract_trajectory_from_infos(
             power_bd[name] = []
             for row in all_rows:
                 bd = row.get("power_breakdown", {})
-                power_bd[name].append(float(bd.get(name, 0.0)))
+                val = bd.get(name, (0.0, 0.0))
+                if isinstance(val, tuple):
+                    net_power = val[0] - val[1]
+                else:
+                    net_power = float(val)
+                power_bd[name].append(net_power)
         trajectory["power_breakdown"] = power_bd
 
     # Raw (unnormalised) physical values (nested under "raw" dict)

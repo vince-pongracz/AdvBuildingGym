@@ -1,11 +1,12 @@
 import logging
-from typing import ClassVar, Dict, Optional, Set
+from typing import ClassVar, Dict, Set
 
 import numpy as np
 from gymnasium.spaces import Box
 
+from adv_building_gym.utils.constants import SECONDS_PER_HOUR
 from ..base import Infrastructure
-from adv_building_gym.config.utils.serializable import ComponentRegistry
+from adv_building_gym.utils.serializable import ComponentRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -18,14 +19,28 @@ class BatteryLinear(Infrastructure):
     or efficiency losses are modeled - it's an ideal battery.
 
     Power-based action:
-        - action in [-1, 1] maps to [-Q_electric_max, Q_electric_max] kW
+        - action in [-1, 1] maps to [-max_power_kW, max_power_kW] kW
         - Positive action: charge battery (consume power from grid)
         - Negative action: discharge battery (provide power to grid)
 
     Energy change per timestep:
-        delta_E (kWh) = action * Q_electric_max (kW) * control_step (s) / 3600
+        delta_E (kWh) = action * max_power_kW (kW) * control_step (s) / 3600
         delta_SoC = delta_E / max_cap_kWh
+
+    NOTE on healthy-band semantics:
+        Reward-related concepts (the (min_pct, max_pct) operating band, any
+        target SoC setpoint) live on the reward side, not on the battery.
+        BatteryTargetReward owns ``min_pct`` / ``max_pct`` as constructor
+        arguments and reads ``s_battery_pct`` from the obs.  An alternative
+        we considered (Option B) was to drive the band from a CSV schedule —
+        each row gives a (min, max) pair, allowing the band to vary over
+        time (e.g. wider during the day, narrower overnight).  We chose the
+        static form for simplicity; if a time-varying band is ever wanted,
+        plumb a small data source that publishes the two values and have
+        the reward (or a connector) pull them per step.
     """
+
+    POWER_FLOW = "bidirectional"
 
     _context_params: ClassVar[Set[str]] = {'control_step'}
 
@@ -34,34 +49,31 @@ class BatteryLinear(Infrastructure):
     }
 
     def __init__(self, name: str,
-                 Q_electric_max: float,
-                 max_cap_kWh: float,
-                 start_soc_percentage: float = 0.3,
-                 target_soc: float = 0.95,
-                 control_step: int = 300,
-                 history_length: int = 4,
-                 soc_min: float = 0.1,
-                 soc_max: float = 0.95,
-                 ) -> None:
+                max_power_kW: float,
+                max_cap_kWh: float,
+                control_step: int,
+                start_soc_percentage: float,
+                history_length: int,
+                soc_min: float,
+                soc_max: float,
+                ) -> None:
         """Initialize linear battery model.
 
         Args:
             name: Component identifier
-            Q_electric_max: Maximum charge/discharge power in kW
+            max_power_kW: Maximum charge/discharge power in kW
             max_cap_kWh: Battery capacity in kWh
-            start_soc_percentage: Initial state of charge [0, 1]
-            target_soc: Target state of charge [0, 1]
             control_step: Timestep duration in seconds
+            start_soc_percentage: Initial state of charge [0, 1]
             history_length: Number of past SoC values to track
-            soc_min: Minimum allowed SoC to prevent damage
-            soc_max: Maximum allowed SoC to prevent damage
+            soc_min: Hardware minimum SoC (clipping floor)
+            soc_max: Hardware maximum SoC (clipping ceiling)
         """
-        super().__init__(name, Q_electric_max)
+        super().__init__(name, max_power_kW)
 
         self.max_cap_kWh = max_cap_kWh
+        self.start_soc_percentage = start_soc_percentage
         self.soc = start_soc_percentage
-        self.start_percentage = start_soc_percentage
-        self.target_soc = target_soc
         self.control_step = control_step
         self.history_length = history_length
         self.soc_min = soc_min
@@ -70,23 +82,21 @@ class BatteryLinear(Infrastructure):
         self.actual_power_kW = 0.0
 
     def setup_spaces(self,
-                     state_spaces,
-                     action_spaces
-                     ):
-        if "battery_action" not in action_spaces.keys():
-            action_spaces["battery_action"] = Box(low=-1, high=1, shape=(1,), dtype=np.float32)
+                    state_spaces,
+                    action_spaces):
+        if "a_battery" not in action_spaces.keys():
+            action_spaces["a_battery"] = Box(low=-1, high=1, shape=(1,), dtype=np.float32)
 
-        if "battery_pct" not in state_spaces.keys():
-            state_spaces["battery_pct"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
-        if "battery_target_pct" not in state_spaces.keys():
-            state_spaces["battery_target_pct"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
-        if "battery_pct_hist" not in state_spaces.keys():
-            state_spaces["battery_pct_hist"] = Box(low=0, high=1, shape=(self.history_length,), dtype=np.float32)
+        if "s_battery_pct" not in state_spaces.keys():
+            state_spaces["s_battery_pct"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
+
+        # Raw battery capacity (kWh) — constant hardware parameter.
+        if "ctxt_battery_capacity_kWh" not in state_spaces.keys():
+            state_spaces["ctxt_battery_capacity_kWh"] = Box(
+                low=0, high=np.inf, shape=(1,), dtype=np.float32
+            )
 
         return state_spaces, action_spaces
-
-    def set_target(self, target: Optional[float] = None) -> None:
-        self.target_soc = target
 
     def exec_action(self, actions: Dict, states: Dict, info=None) -> None:
         """Execute battery charge/discharge action using linear model.
@@ -95,17 +105,17 @@ class BatteryLinear(Infrastructure):
             - Positive: charge battery (consume power from grid)
             - Negative: discharge battery (provide power to grid)
 
-        The action represents fraction of max power (Q_electric_max).
+        The action represents fraction of max power (max_power_kW).
         """
-        action = float(np.atleast_1d(actions["battery_action"])[0])
+        action = float(np.atleast_1d(actions["a_battery"])[0])
 
         # Calculate requested power in kW
-        requested_power_kW = action * self.Q_electric_max
+        requested_power_kW = action * self.max_power_kW
 
         # Calculate energy change in this timestep
         # E (kWh) = P (kW) * t (h)
-        time_hours = self.control_step / 3600.0
-        delta_energy_kWh = requested_power_kW * time_hours
+        time_duration_in_hours = self.control_step / SECONDS_PER_HOUR
+        delta_energy_kWh = requested_power_kW * time_duration_in_hours
 
         # Convert energy to SoC change
         delta_soc = delta_energy_kWh / self.max_cap_kWh if self.max_cap_kWh > 0 else 0.0
@@ -120,28 +130,35 @@ class BatteryLinear(Infrastructure):
         actual_energy_kWh = actual_delta_soc * self.max_cap_kWh
 
         # Calculate actual power for consumption reporting
-        self.actual_power_kW = actual_energy_kWh / time_hours if time_hours > 0 else 0.0
+        self.actual_power_kW = actual_energy_kWh / time_duration_in_hours if time_duration_in_hours > 0 else 0.0
 
         # Update the action dict to reflect actual (clipped) action
-        actual_action = self.actual_power_kW / self.Q_electric_max if self.Q_electric_max > 0 else 0.0
-        actions["battery_action"] = np.array([np.float32(actual_action)], dtype=np.float32)
+        actual_action = self.actual_power_kW / self.max_power_kW if self.max_power_kW > 0 else 0.0
+        actions["a_battery"] = np.array([np.float32(actual_action)], dtype=np.float32)
 
     def update_state(self, states: Dict, info=None) -> None:
-        states["battery_pct"][0] = np.float32(self.soc)
-        states["battery_target_pct"][0] = np.float32(self.target_soc)
+        super().update_state(states, info)
+        states["s_battery_pct"][0] = np.float32(self.soc)
+        states["ctxt_battery_capacity_kWh"][0] = np.float32(self.max_cap_kWh)
 
-        history = states["battery_pct_hist"]
-        history[:-1] = history[1:]
-        history[-1] = np.float32(self.soc)
+    def reset(self, states: Dict, info=None) -> None:
+        """Re-initialise transient state at the start of every episode.
 
-    def get_electric_consumption(self, actions: Dict) -> float:
-        """Get current electric energy consumption from battery in kW.
-
-        Returns:
-            Positive value when charging (consuming from grid),
-            negative value when discharging (providing to grid).
+        The base implementation only re-emits update_state(), which would
+        leave self.soc carrying over from the previous episode.
         """
-        return self.actual_power_kW
+        self.soc = self.start_soc_percentage
+        self.actual_power_kW = 0.0
+        super().reset(states, info)
+
+    def get_E(self, actions: Dict) -> tuple[float, float]:
+        # self.actual_power_kW is positive when the battery charges -- consumes energy
+        if self.actual_power_kW > 0.0:
+            # production, consumption
+            return 0.0, self.actual_power_kW
+        else:
+            # self.actual_power_kW is negative when the battery discharges -- produces energy to the others
+            return -1.0 * self.actual_power_kW, 0.0
 
 
 ComponentRegistry.register('infrastructure', BatteryLinear)

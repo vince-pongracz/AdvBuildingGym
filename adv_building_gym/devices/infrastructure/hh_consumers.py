@@ -5,18 +5,18 @@ import numpy as np
 from gymnasium.spaces import Box
 
 from .base import Infrastructure
-from adv_building_gym.config.utils.serializable import ComponentRegistry
+from adv_building_gym.utils.serializable import ComponentRegistry
+from adv_building_gym.utils.rng_service import RngService
 
 logger = logging.getLogger(__name__)
 
 
 class HouseholdEnergyConsumers(Infrastructure):
-    """Passive household energy consumers infrastructure.
+    """Passive household energy consumer infrastructure.
 
     Reads the normalized consumption signal from the DesiredUserEnergyNeed
     statesource (``desired_energy_need`` in states) and converts it to a
-    physical kW consumption value — the same pattern SolarPanel uses with
-    irradiance.
+    physical kW consumption value.
 
     There is no policy-controlled action. The actual consumption is written
     into ``actions['hh_consumption_action']`` as a read-only output so that
@@ -26,46 +26,27 @@ class HouseholdEnergyConsumers(Infrastructure):
     hh_consumption_action value: 0 = no consumption, 1 = peak consumption.
     """
 
-    # control_step and seed come from config context
-    _context_params: ClassVar[Set[str]] = {'control_step', 'seed'}
+    POWER_FLOW = "consumer"
 
     # Internal state variables — don't serialize
     _exclude_params: ClassVar[Set[str]] = {
-        'iteration', 'consumption_norm', 'current_consumption_kW', '_base_seed'
+        'iteration', 'consumption_norm', 'current_consumption_kW'
     }
 
-    def __init__(self,
-                 name: str,
-                 Q_electric_max: float,
-                 peak_consumption_kW: float = 8.0,
-                 seed: int = 42,
-                 control_step: int = 300
-                 ) -> None:
+    def __init__(self, name: str, peak_consumption_kW: float) -> None:
         """Initialize household energy consumers infrastructure.
 
         Args:
             name: Component identifier
-            Q_electric_max: Maximum power consumption in kW (typically = peak_consumption_kW)
             peak_consumption_kW: Peak household consumption in kW
-            seed: Random seed for reproducible noise generation
-            control_step: Control timestep in seconds
         """
-        super().__init__(name, Q_electric_max)
+        super().__init__(name, peak_consumption_kW)
 
         self.peak_consumption_kW = peak_consumption_kW
-        self._base_seed = seed
-        self.rng = np.random.default_rng(seed=seed)
-        self.control_step = control_step
 
         # State variables
         self.consumption_norm = 0.0  # Normalized consumption [0, 1]
         self.current_consumption_kW = 0.0  # Actual consumption in kW
-
-    def synchronise(self, iteration: int, row_offset: int | None = None) -> None:
-        super().synchronise(iteration, row_offset)
-        # Reseed RNG at episode reset so noise is reproducible per episode
-        if row_offset is not None:
-            self.rng = np.random.default_rng(seed=self._base_seed + row_offset)
 
     def setup_spaces(self,
                     state_spaces,
@@ -76,10 +57,11 @@ class HouseholdEnergyConsumers(Infrastructure):
         consumption is determined by the DesiredUserEnergyNeed statesource.
         Only state space is registered.
         """
-        if "hh_consumption_norm" not in state_spaces:
-            state_spaces["hh_consumption_norm"] = Box(
-                low=0, high=1, shape=(1,), dtype=np.float32
-            )
+        if "s_hh_consumption_norm" not in state_spaces:
+            state_spaces["s_hh_consumption_norm"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
+        
+        if "ctxt_peak_consumption_kW" not in state_spaces:
+            state_spaces["ctxt_peak_consumption_kW"] = Box(low=0, high=np.inf, shape=(1,), dtype=np.float32)
 
         return state_spaces, action_spaces
 
@@ -91,8 +73,8 @@ class HouseholdEnergyConsumers(Infrastructure):
         time-of-day profile when no statesource signal is available.
         """
         # Read normalized consumption signal from statesource
-        if "desired_energy_need" in states:
-            self.consumption_norm = float(states["desired_energy_need"][0])
+        if "s_desired_energy_need" in states:
+            self.consumption_norm = float(states["s_desired_energy_need"][0])
         else:
             # Fallback: synthetic time-based profile
             self.consumption_norm = self._synthetic_consumption(states)
@@ -101,16 +83,25 @@ class HouseholdEnergyConsumers(Infrastructure):
         self.current_consumption_kW = self.consumption_norm * self.peak_consumption_kW
 
         # Write normalized consumption as read-only output (positive = consumption)
-        if "hh_consumption_action" not in actions:
-            actions["hh_consumption_action"] = np.array(
-                [self.consumption_norm], dtype=np.float32
-            )
+        # NOTE VP 2026.05.07.: It's not really needed to be an action...
+        # it could be a state as well... -- but later if user sets it dynamically?
+        # then it's maybe still a state...
+        if "a_hh_consumption" not in actions:
+            actions["a_hh_consumption"] = np.array([self.consumption_norm], dtype=np.float32)
         else:
-            actions["hh_consumption_action"][0] = self.consumption_norm
+            actions["a_hh_consumption"][0] = self.consumption_norm
 
     def update_state(self, states: Dict, info=None) -> None:
         """Write current normalized consumption into states for observation."""
-        states["hh_consumption_norm"][0] = np.float32(self.consumption_norm)
+        super().update_state(states, info)
+        states["s_hh_consumption_norm"][0] = np.float32(self.consumption_norm)
+        states["ctxt_peak_consumption_kW"][0] = np.float32(self.peak_consumption_kW)
+
+    def reset(self, states: Dict, info=None) -> None:
+        """Clear per-episode consumption readouts."""
+        self.consumption_norm = 0.0
+        self.current_consumption_kW = 0.0
+        super().reset(states, info)
 
     def _synthetic_consumption(self, states: Dict) -> float:
         """Generate synthetic consumption based on time of day.
@@ -118,7 +109,7 @@ class HouseholdEnergyConsumers(Infrastructure):
         Simple stepped profile matching DesiredUserEnergyNeed's synthetic
         pattern, with added Gaussian noise for realism.
         """
-        sim_hour = float(states.get("sim_hour", np.array([12.0]))[0]) % 24
+        sim_hour = float(states.get("raw_sim_hour", np.array([12.0]))[0]) % 24
 
         if sim_hour < 6:
             base = 0.2   # Low demand during night
@@ -131,10 +122,16 @@ class HouseholdEnergyConsumers(Infrastructure):
         else:
             base = 0.3   # Late evening
 
-        noise = self.rng.normal(loc=0.0, scale=0.05)
+        seed = RngService.get().get_random(self.name)
+        noise = np.random.default_rng(seed).normal(loc=0.0, scale=0.05)
         return float(np.clip(base + noise, 0.0, 1.0))
+    
+    def get_raw_values(self) -> Dict[str, float]:
+        return {
+            "raw_current_consumption_kW": self.current_consumption_kW
+        }
 
-    def get_electric_consumption(self, actions: Dict) -> float:
+    def get_E(self, actions: Dict) -> tuple[float, float]:
         """Get current electric energy consumption from household consumers.
 
         Sign convention: positive = consumption from grid.
@@ -142,7 +139,7 @@ class HouseholdEnergyConsumers(Infrastructure):
         Returns:
             Positive value representing energy consumed from the grid (kW).
         """
-        return self.current_consumption_kW
+        return 0.0, self.current_consumption_kW
 
 
 # Register HouseholdEnergyConsumers with the component registry

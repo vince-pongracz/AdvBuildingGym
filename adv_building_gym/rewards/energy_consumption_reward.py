@@ -1,64 +1,71 @@
+import logging
+
 import numpy as np
 
+from adv_building_gym.utils.constants import SECONDS_PER_HOUR
+
 from .base import RewardFunction
-from adv_building_gym.config.utils.serializable import ComponentRegistry
+from adv_building_gym.utils.serializable import ComponentRegistry
 
+logger = logging.getLogger(__name__)
 
-# TODO VP 2026.01.14. : Add battery life saving reward
+# NOTE VP 2026.01.14. : Add battery life saving reward
 
 class MinimiseEnergyConsumptionReward(RewardFunction):
     """Energy consumption-based reward function.
 
-    Penalises total energy consumption across all actions, but exempts
-    *necessary* charging: when the battery or EV has not yet reached its
-    target SoC, the positive (charging) portion of that device's action
-    is excluded from the penalty.  This prevents the reward from
-    conflicting with the battery/EV target rewards.
+    Penalises total energy consumption using ``power_breakdown`` from
+    the info dict (published by the environment from each infrastructure's
+    ``get_electric_consumption``).  This decouples the reward from action
+    semantics — only physical power matters.
+
+    Exempts *necessary* charging: when the battery or EV has not yet
+    reached its target SoC, that device's consumption is excluded from
+    the penalty.  This prevents the reward from conflicting with the
+    battery/EV target rewards.
+
+    Normalises by ``max_consumption_kW`` (also from info) so the reward
+    stays in [-1, 0].
     """
 
-    def __init__(self, weight: float, name: str = "E_consumption_reward") -> None:
+    def __init__(
+        self,
+        weight: float,
+        threshold_kWh: float,
+        name: str = "E_consumption_reward",
+    ) -> None:
         super().__init__(weight, name)
+        if threshold_kWh < 0:
+            raise ValueError("threshold_kWh must be non-negative.")
+        self.threshold_kWh = threshold_kWh
 
-    def get_reward(self, actions, states) -> tuple[float, float]:
-        e_consumption: float = 0
-        n_actions: int = 0
+    def get_reward(self, actions, states, info: dict | None = None) -> tuple[float, float]:
+        max_step = self.weight * self.max_reward_in_step
 
-        for key, v in actions.items():
-            # TODO VP 2026.03.23. : Really like this?
-            if key == "hh_consumption_action":
-                continue  # Non-controllable load — exempt from penalty
+        if info is None:
+            logger.warning("MinimiseEnergyConsumptionReward: info dict is None, returning 0")
+            return 0.0, max_step
 
-            n_actions += 1
+        penalisable = info.get("penalisable_power_kW")
+        max_consumption_kW = info.get("max_consumption_kW")
+        control_step_s = info.get("control_step_s")
 
-            if key == "HP_action":
-                # HP_action is 2D: [energy, mode], only use energy (index 0)
-                e_consumption += float(np.atleast_1d(v)[0])
+        if penalisable is None or max_consumption_kW is None or control_step_s is None:
+            logger.warning("MinimiseEnergyConsumptionReward: missing power data in info, returning 0")
+            return 0.0, max_step
 
-            elif key == "battery_action":
-                action_val = float(np.atleast_1d(v)[0])
-                battery_pct = float(states["battery_pct"][0])
-                battery_target = float(states["battery_target_pct"][0])
-                if action_val > 0 and battery_pct < battery_target:
-                    # Necessary charging — exempt from penalty
-                    continue
-                e_consumption += action_val
+        if max_consumption_kW <= 0:
+            return 0.0, max_step
 
-            elif key == "lin_ev_charger_action":
-                action_val = float(np.atleast_1d(v)[0])
-                ev_connected = float(states["ev_connected"][0])
-                ev_soc = float(states["ev_soc"][0])
-                ev_target = float(states["ev_target_soc"][0])
-                if action_val > 0 and ev_connected > 0.5 and ev_soc < ev_target:
-                    # Necessary charging — exempt from penalty
-                    continue
-                e_consumption += action_val
+        # Convert the kWh dead-zone to a kW threshold for this control step:
+        # threshold_kW = threshold_kWh / (control_step_s / 3600).
+        threshold_kW = self.threshold_kWh * SECONDS_PER_HOUR / float(control_step_s)
+        excess_kW = max(0.0, float(penalisable) - threshold_kW)
 
-            else:
-                e_consumption += np.sum(v, axis=0)
+        # Normalise to [-1, 0]: at/below threshold = 0, full consumption = -1.
+        reward = float(np.clip(-excess_kW / max_consumption_kW, -1.0, 0.0))
 
-        reward = -1.0 * e_consumption / n_actions if n_actions > 0 else 0.0
-
-        return float(self.weight * reward), self.weight * self.max_reward
+        return float(self.weight * reward), max_step
 
 
 # Register MinimiseEnergyConsumption_Reward with the component registry

@@ -30,19 +30,6 @@ are the main approaches, roughly ordered from easiest to most involved:
   a hard bound. Again, feeding a_{t-1} as an observation helps the policy learn
   within the constraint.
 
-  4. Add Previous Action to Observations
-
-  Regardless of which smoothing method you pick, feeding a_{t-1} into the
-  observation space gives the policy the information it needs to self-regulate.
-  Without it, the policy has no memory of what it did last step, making
-  oscillation almost inevitable.
-
-  5. Temporal Action Repeat / Sticky Actions
-
-  Execute each action for N timesteps instead of 1. This effectively increases
-  the control step from 5 min to e.g. 15 min, reducing oscillation frequency.
-  Simple but reduces control granularity.
-
   6. SAC Entropy Tuning
 
   If using SAC, high entropy encourages exploration of extreme actions. Lowering
@@ -61,13 +48,9 @@ suggestions. What are the drawbacks and benefits of each ot them?
 
 Let me research both the codebase context and the literature on each approach.
 
-2 agents finished (ctrl+o to expand)
-   ├─ Agent (Research action smoothing in RL) · 18 tool uses · 32.6k tokens
-   │  ⎿  Done
-   └─ Explore (Analyze codebase action handling) · 27 tool uses · 69.3k tokens
-      ⎿  Done
 
-Here's the refined analysis, incorporating both literature research and your
+
+Refined analysis, incorporating both literature research and your
   codebase specifics.
 
   ---
@@ -276,9 +259,6 @@ Here's the refined analysis, incorporating both literature research and your
   - Implement CAPS-style policy regularization via custom RLModule. This keeps
   the reward clean and regularizes the policy directly.
 
-  Want me to implement Phase 1?
-
-✻ Sautéed for 5m 3s
 
 ❯ Is this (policy can see its previous actions but has no incentive to stay     
 close to them.) really the case in the actual config and with PPO / SAC? How to 

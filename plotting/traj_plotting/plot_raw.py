@@ -2,7 +2,7 @@
 
 These values are NOT part of the RL observation space.  They exist only
 for human-readable visualisation of the actual physical quantities
-(temperatures in °C, prices in €/kWh, etc.) that the normalised state
+(temperatures in °C, prices in ct/kWh, etc.) that the normalised state
 variables represent.
 """
 
@@ -19,12 +19,40 @@ logger = logging.getLogger(__name__)
 # Human-readable y-axis unit labels for known raw-value keys.
 # Keys not listed here fall back to a generic "Value" label.
 _UNIT_LABELS: dict[str, str] = {
-    "temp_out_raw": "Temperature (°C)",
-    "temp_in_raw": "Temperature (°C)",
-    "desired_temp_in_raw": "Temperature (°C)",
-    "E_price_raw": "Price (€/kWh)",
-    "E_price_max_raw": "Price (€/kWh)",
+    "raw_temp_out": "Temperature (°C)",
+    "raw_temp_in": "Temperature (°C)",
+    "raw_desired_temp_in": "Temperature (°C)",
+    "raw_E_price": "Price (ct/kWh)",
+    "raw_E_price_max": "Price (ct/kWh)",
+    "raw_wind_speed": "Wind speed (m/s)",
+    "raw_solar_irradiance": "Solar irradiance (J/cm²)",
+    "raw_hp_kW": "Power (kW)",
+    "raw_pv_prod_kW": "Power (kW)",
+    "raw_pv_max": "Power (kW)",
+    "raw_wind_production_kW": "Power (kW)",
+    "raw_wind_available_kW": "Power (kW)",
+    "raw_current_consumption_kW": "Power (kW)",
 }
+
+# Suffix-based fallback for keys not in _UNIT_LABELS (auto-discovered _raw attrs).
+_SUFFIX_UNITS: list[tuple[str, str]] = [
+    ("_temp_", "Temperature (°C)"),
+    ("_price_", "Price (ct/kWh)"),
+    ("_kW_", "Power (kW)"),
+    ("_kWh_", "Energy (kWh)"),
+]
+
+
+def _unit_label(key: str) -> str:
+    """Return a y-axis unit label for *key*, falling back to suffix heuristics."""
+    label = _UNIT_LABELS.get(key)
+    if label is not None:
+        return label
+    lower = key.lower()
+    for fragment, unit in _SUFFIX_UNITS:
+        if fragment in f"_{lower}_":
+            return unit
+    return "Value"
 
 
 def plot_raw(episode: EpisodeData) -> list[go.Figure]:
@@ -32,7 +60,7 @@ def plot_raw(episode: EpisodeData) -> list[go.Figure]:
 
     Temperature keys are grouped into a single figure by default (they
     share units and are directly comparable).  Grouping is configurable
-    via ``plot_config.yaml`` under the ``raw:`` section.
+    via ``traj_plot_config.yaml`` under the ``raw:`` section.
 
     Returns a list of figures to be rendered sequentially in one HTML file.
     """
@@ -47,7 +75,8 @@ def plot_raw(episode: EpisodeData) -> list[go.Figure]:
 
     plot_cfg = load_plot_config().get("raw", {})
     grouped_keys: list[list[str]] = plot_cfg.get("grouped_keys", [
-        ["temp_out_raw", "temp_in_raw", "desired_temp_in_raw"],
+        ["raw_temp_out", "raw_temp_in", "raw_desired_temp_in"],
+        ["raw_E_price", "raw_E_price_max"],
     ])
     skip_keys: set[str] = set(plot_cfg.get("skip_keys", []))
 
@@ -74,7 +103,7 @@ def plot_raw(episode: EpisodeData) -> list[go.Figure]:
         fig = go.Figure()
         title = " + ".join(keys)
         # Use the unit label of the first key in the group
-        y_label = _UNIT_LABELS.get(keys[0], "Value")
+        y_label = _unit_label(keys[0])
 
         for i, key in enumerate(keys):
             if key not in raw:
@@ -99,6 +128,6 @@ def plot_raw(episode: EpisodeData) -> list[go.Figure]:
             yaxis_title=y_label,
             height=350,
         )
-        figures.append(style_figure(fig))
+        figures.append(style_figure(fig, n_legend_items=len(keys)))
 
     return figures

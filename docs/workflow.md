@@ -12,21 +12,21 @@ data setup  ──>  train  ──>  evaluate  ──>  plot
 
 Fetch and preprocess electricity prices and weather data into 5-minute resolution CSVs
 (raw physical units). Normalisation to agent-friendly ranges happens at runtime in the
-statesources, not here.
+statesources, not here -- statesources expose the normalisation constants as context variables, so the policy can see this and make decisions on this.
 
-**Script:** `preproc/data_setup.py`
+**Script:** `preprocessing/data_setup.py`
 **SLURM:** `sbatch slurm_scripts/slurm_data_setup.sh [OPTIONS]`
 
 ```bash
 # Full pipeline (prices + weather)
-python preproc/data_setup.py
+python preprocessing/data_setup.py
 
 # Prices only, specific years
-python preproc/data_setup.py --skip-weather --years 2023 2024 2025
+python preprocessing/data_setup.py --skip-weather --years 2023 2024 2025
 
-# Reuse existing raw files, add augmentation
-python preproc/data_setup.py --skip-weather --skip-price-fetch \
-    --years 2023 --raw-price-files data/e_price/awattar/2023_prices.csv --augment
+# Reuse existing raw files, then synthesise dataset variants
+python preprocessing/data_setup.py --skip-weather --skip-price-fetch \
+    --years 2023 --raw-price-files data/e_price/awattar/2023_prices.csv --synthesize
 ```
 
 **Key arguments:**
@@ -35,9 +35,9 @@ python preproc/data_setup.py --skip-weather --skip-price-fetch \
 |------|---------|
 | `--years YEAR [YEAR ...]` | Target years (default: 2017-2026) |
 | `--price-source {awattar,energy-charts}` | Price API source |
-| `--skip-weather` | Skip weather/Zenodo pipeline |
+| `--skip-weather` | Skip weather (WPuQ and DWD) pipeline |
 | `--skip-price-fetch` | Skip API calls, use local CSVs |
-| `--augment` | Run price augmentation after preprocessing |
+| `--synthesize` | Run synthetic dataset generation as the final pipeline step |
 
 **Output:** raw 5-minute CSVs in `data/`:
 - `data/e_price/awattar/price_data_<YEAR>.csv` (baseprice in ct/kWh)
@@ -45,100 +45,136 @@ python preproc/data_setup.py --skip-weather --skip-price-fetch \
 - `data/weather/dwd/preprocessed/<YEAR>_merged_04177.csv` (temp in °C, wind in m/s, etc.)
 - `data/ev_usage_profiles/ev_*.csv` (pre-existing)
 
-### 1.1 Data Augmentation
+### 1.1 Synthetic Dataset Generation
 
-Augmentation adds Gaussian noise to preprocessed CSVs, creating additional training
-variants that improve generalisation. Runs as the final pipeline step when `--augment`
-is passed, or standalone via `preproc/augment.py`.
+Synthesis produces noised / shifted copies of the preprocessed price and weather CSVs,
+expanding the scenario pool used by `DataCombinator`. Runs as the final pipeline step
+when `--synthesize` is passed, or standalone via `preprocessing/synthesize.py`. See
+[preprocessing/SYNTHESIZE_README.md](../preprocessing/SYNTHESIZE_README.md) for the
+full reference.
 
-**Configuration:** `preproc/augment_config.yaml`
+**Configuration:**
+- Top level: `preprocessing/synthesize_config.yaml` — base seed and the list of
+  active per-level configs.
+- Per level: `preprocessing/syn_cfgs/syn_cfg_*.yaml` — for each domain (`price`,
+  `weather`, `hh_consumption`) and each column, a transform pipeline (Gaussian noise
+  with optional smoothing, constant shifts, linear scaling) plus optional clip
+  bounds. The shipped presets share noise levels and only differ in their
+  `constant_shift` values, covering symmetric `_pos` / `_neg` pairs at three
+  intensities plus a noise-only baseline (`syn_cfg_0`).
 
 ```yaml
+# preprocessing/synthesize_config.yaml
 seed: 42
+syn_cfg_dir: preprocessing/syn_cfgs
+active_configs: [syn_cfg_1_neg, syn_cfg_1_pos, syn_cfg_2_neg, syn_cfg_2_pos, syn_cfg_3_neg, syn_cfg_3_pos]
+```
+
+```yaml
+# preprocessing/syn_cfgs/syn_cfg_2_pos.yaml (excerpt)
+name: syn_cfg_2_pos
 
 price:
-  columns: [baseprice]
-  noise_std:
-    baseprice: 0.3          # ct/kWh
+  baseprice:
+    transforms:
+      - {type: gaussian_noise, std: 0.3, smooth: {kind: moving_average, window: 6}}
+      - {type: constant_shift, value: +1.0}
 
 weather:
-  columns: [temp_amb, avg_wind_speed, sun_shine, direct_sun_shine, diff_sun_shine]
-  noise_std:
-    temp_amb: 0.5           # °C
-    avg_wind_speed: 0.3     # m/s
-    sun_shine: 5.0          # J/cm²
-    direct_sun_shine: 3.0   # J/cm²
-    diff_sun_shine: 2.0     # J/cm²
-  clip_min:                 # physical plausibility bounds
-    avg_wind_speed: 0.0
-    sun_shine: 0.0
-    direct_sun_shine: 0.0
-    diff_sun_shine: 0.0
-    rel_humidity: 0.0
+  temp_amb:
+    transforms:
+      - {type: gaussian_noise, std: 0.5, smooth: {kind: moving_average, window: 6}}
+      - {type: constant_shift, value: +0.5}
+    clip: {min: -50.0, max: 60.0}
 ```
 
 **Integrated usage** (via `data_setup.py`):
 
 ```bash
-# Full pipeline with augmentation as final step
-python preproc/data_setup.py --augment
+# Full pipeline with synthesis as final step
+python preprocessing/data_setup.py --synthesize
 
-# Augment existing price data only
-python preproc/data_setup.py --skip-weather --skip-price-fetch \
-    --raw-price-files data/e_price/awattar/2023_prices.csv --augment
+# Synthesise from existing preprocessed files only
+python preprocessing/data_setup.py --skip-weather --skip-price-fetch \
+    --raw-price-files data/e_price/awattar/2023_prices.csv --synthesize
 ```
 
-**Standalone usage** (via `preproc/augment.py`):
+**Standalone usage** (via `preprocessing/synthesize.py`, handy for debugging a config):
 
 ```bash
-# Price augmentation with defaults from config
-python preproc/augment.py price data/e_price/awattar/price_data_2023.csv
+# Run all active configs on a single weather CSV
+python preprocessing/synthesize.py --domain weather \
+    --input data/weather/dwd/preprocessed/2023_merged_04177.csv
 
-# Weather augmentation with custom per-column noise
-python preproc/augment.py weather data/weather/dwd/preprocessed/2023_merged_04177.csv \
-    --noise-std '{"temp_amb":0.3,"avg_wind_speed":0.1}' --seed 18
-
-# Custom output path and seed
-python preproc/augment.py price data/e_price/awattar/price_data_2023.csv \
-    -o data/e_price/awattar/price_data_2023_aug_v2.csv --seed 99
+# Restrict to a subset of active_configs
+python preprocessing/synthesize.py --domain price \
+    --input data/e_price/awattar/price_data_2023.csv --only syn_cfg_2
 ```
 
-| Flag | Default | Purpose |
-|------|---------|---------|
-| `--noise-std` | from config | Noise std: single float (all columns) or JSON dict (per-column) |
-| `--seed` | `42` | Random seed for reproducibility |
-| `-o, --output` | `<input>_aug_seed<seed>.csv` | Output path |
-| `--normalize` | off | (price only) Recompute `price_normalized` column after augmentation |
+| Flag | Purpose |
+|------|---------|
+| `--domain {price,weather}` | Which domain block to use from each `syn_cfg_*.yaml` |
+| `--input PATH` | Source CSV (one of the preprocessed files) |
+| `--only CFG [CFG ...]` | Restrict to a subset of `active_configs` |
+| `--config PATH` | Override the top-level synthesise config |
 
-**Output files:**
-- Price: `price_data_<YEAR>_aug.csv` (same directory as source)
-- Weather: `<YEAR>_merged_<STATION>_aug_seed<SEED>.csv` (same directory as source)
+**Output naming:** each input `<stem>.csv` produces one
+`<stem>_<syn_cfg_name>.csv` per active config, written next to the source file.
+Each (syn_cfg, file) pair gets a deterministic seed derived from the base seed,
+so re-running with the same configs is reproducible.
 
-**Training integration:** Set `include_augmented: true` in
-`configs/train_data_combinator_config.yaml` to auto-discover augmented files and add
-them to the scenario pool (see section 2.3).
+**Training integration:** set `include_synthesized: true` in
+`configs/train_data_combinator_config.yaml` so `discover_synthetic_scenarios`
+auto-discovers `*_syn_cfg_*.csv` files and adds them to the scenario pool
+(see section 2.3).
 
 ---
 
 ## 2. Training
 
-### 2.1 Environment config — `configs/test1.yaml`
+### 2.1 Environment config — `configs/env/env_test1_{small,mid,large}.yaml`
 
-Defines the **environment topology**: which infrastructure, statesources, and reward
-functions are instantiated, along with their parameters. This config is shared with
-evaluation — pass the same YAML to `run_eval_ray.py` via `--load-config`.
+The env config defines the **environment topology**: which infrastructures and
+statesources are instantiated and their parameters, plus episode timing. It is the
+single entry point passed to both training and evaluation via `--load-config`.
 
-| Section | What it controls | Examples |
-|---------|------------------|----------|
-| `EPISODE_LENGTH` | Steps per episode | `288` (24 h at 5-min steps) |
-| `control_step` | Seconds per step | `300` (5 min) |
-| `building_props` | 1R1C thermal model | `mC: 300`, `K: 20` |
-| `infras` | Controllable devices | HP, Battery, EV Charger, Solar, Household |
-| `statesources` | Observation providers | Weather, EnergyPrice, InsideTemp, EVState, ... |
-| `rewards` | Objective functions | TempReward, EconomicReward, ... (each with `weight`) |
+The file at `configs/env/<name>.yaml` is a thin **wrapper** that references three
+sibling YAMLs — concerns are split so an infra topology, statesource bundle, or
+timing constants can be reused independently:
 
-Load with `--load-config configs/test1.yaml` on training or eval scripts.
-Save a modified config with `--save-config configs/my_run.yaml` on the training script.
+```yaml
+# configs/env/env_test1_small.yaml  (the wrapper)
+env_config_name: env_test1_small               # used as the checkpoint dir name
+infras: configs/infras/test1_small.yaml        # controllable devices
+statesources: configs/statesources/default.yaml # observation providers
+env_meta: configs/env_meta/default.yaml        # EPISODE_LENGTH, control_step
+```
+
+| Referenced file | Top-level keys | What it controls |
+|---|---|---|
+| `configs/env_meta/*.yaml` | `EPISODE_LENGTH`, `control_step` | Steps per episode (`288` = 24 h) and seconds per step (`300`) |
+| `configs/infras/*.yaml` | `infras: [...]` | Controllable devices: HP, BatteryTremblay/Linear, LinearEVCharger, SolarPanel, WindTurbine, HouseholdEnergyConsumers — each entry is `{class, name, ...params}` |
+| `configs/statesources/*.yaml` | `statesources: [...]` | Observation providers: WeatherDataSource, EnergyPriceDataSource, InsideTemperature, DesiredUserEnergyNeed, BuildingHeatLoss (carries the 1R1C envelope params `K`, `mC`), EVState, OperatorEnergyControl |
+
+**What is NOT in the env config:**
+- **Rewards** — composed separately via `configs/reward_cfg/reward_schedule_*.yaml`
+  (passed with `--reward-schedule`); see section 2.5. There is no `rewards:` key
+  in the env wrapper.
+- **Data scenarios** — driven by `configs/data_scheduler/*.yaml` (`--data-config`).
+- **Building envelope (`K`, `mC`)** — these are parameters of the `BuildingHeatLoss`
+  statesource, not a top-level `building_props` block. Edit them in the
+  statesources YAML.
+
+`EnvConfigManager.load(wrapper_path)` resolves the three referenced paths
+relative to the project root (so they can be repo-relative like
+`configs/infras/...`), parses each, and returns a populated `EnvConfig` whose
+`create_infras()` / `create_statesources()` factories produce fresh per-worker
+instances. Round-trip is symmetric: `EnvConfigManager.save(...)` writes all four
+files back out.
+
+Load with `--load-config configs/env/env_test1_{small,mid,large}.yaml` on either
+`run_train_ray.py` or `run_eval_ray.py`. Use the same wrapper for eval as for
+training so the topology matches the checkpoint.
 
 ### 2.2 Training hyperparameters — `configs/training_param_config.yaml`
 
@@ -149,7 +185,7 @@ automatically by `run_train_ray.py`.
 common:
   learning_rate: 3.0e-4
   seed: 42
-  episode_lookback_horizon_steps: 120   # 10-hour temporal window
+  episode_lookback_horizon_steps: 120   # 10-hour temporal window; auto-raised to max(|hst.offsets|) if smaller
   max_episodes_to_run: 7000
 
 ppo:
@@ -159,7 +195,7 @@ ppo:
 
 sac:
   replay_batch_size: 256                # transitions per gradient step
-  days_to_keep_in_replay_buffer: 100
+  episodes_to_keep_in_replay_buffer: 100
 ```
 
 CLI `--seed` overrides `common.seed`. Other values are edited in the YAML directly.
@@ -177,7 +213,7 @@ mode: cycle                     # round-robin through variants
 day: random                     # random day within each scenario
 
 years: [2018, 2019, 2020, 2021, 2022, 2023, 2024]
-include_augmented: true
+include_synthesized: true
 
 scenario_sources:               # Cartesian product across years
   - weather: data/weather/dwd/preprocessed/{year}_merged_04177.csv
@@ -212,7 +248,7 @@ sbatch slurm_scripts/slurm_train_ray.sh --algorithm ppo --episodes 3500
 sbatch slurm_scripts/slurm_train_ray.sh --algorithm sac --seed 18 --episodes 5000
 
 # Load a custom environment config
-sbatch slurm_scripts/slurm_train_ray.sh --algorithm ppo --load-config configs/test1.yaml --episodes 3500
+sbatch slurm_scripts/slurm_train_ray.sh --algorithm ppo --load-config configs/env/env_test1_{s/m/l}.yaml --episodes 3500
 
 # Enable trajectory logging during training eval
 sbatch slurm_scripts/slurm_train_ray.sh --algorithm ppo --episodes 3500 --log-trajectories
@@ -227,11 +263,9 @@ sbatch slurm_scripts/slurm_train_ray.sh --algorithm ppo --episodes 3500 --log-tr
 | `--seed N` | `42` (from YAML) | Random seed |
 | `--metric {reward_rate,achieved_reward,episode_return_mean}` | `reward_rate` | Optimisation metric |
 | `--checkpoint-frequency-episodes N` | `20` | Save checkpoint every N episodes |
-| `--load-config PATH` | — | Environment YAML to load |
-| `--save-config PATH` | — | Save final config as YAML |
+| `--load-config PATH` | — (**required**) | Environment YAML to load; `env_config_name` inside sets the checkpoint dir name |
 | `--data-config PATH` | `configs/train_data_combinator_config.yaml` | Data combinator YAML |
 | `--log-trajectories` | off | Save per-step trajectory JSON during eval |
-| `-cn NAME` | — | Configuration name for experiment directories |
 
 **What the script does:**
 
@@ -336,26 +370,26 @@ weather/price data inspection).
 
 ### 4.1 Trajectory Plotting (standalone)
 
-**Script:** `python -m plotting`
+**Script:** `python -m plotting.traj_plotting`
 **SLURM:** `sbatch slurm_scripts/slurm_plot_trajectory.sh [OPTIONS]`
 
 SLURM resources: 1 CPU, no GPU.
 
 ```bash
 # Auto-discover latest HDF5, plot best episode
-python -m plotting
+python -m plotting.traj_plotting
 
 # Specific HDF5 file
-python -m plotting --hdf5 eval_results/20260324_eval/trajectories.hdf5
+python -m plotting.traj_plotting --hdf5 eval_results/20260324_eval/trajectories.hdf5
 
 # Select best episode by a specific metric
-python -m plotting --select-by achieved_reward
+python -m plotting.traj_plotting --select-by achieved_reward
 
 # Specific episode, multiple output formats
-python -m plotting --episode be574d --format html svg png
+python -m plotting.traj_plotting --episode be574d --format html svg png
 
 # Custom output directory
-python -m plotting --output-dir my_plots/
+python -m plotting.traj_plotting --output-dir my_plots/
 ```
 
 **Key arguments:**
@@ -369,14 +403,14 @@ python -m plotting --output-dir my_plots/
 | `--output-dir PATH` | `plotting/out/<episode_id>/` | Output directory |
 | `--control-step N` | `300` | Timestep in seconds (for x-axis) |
 
-**Configuration:** `plotting/config/plot_config.yaml` — domain-specific rendering
+**Configuration:** `plotting/config/traj_plot_config.yaml` — domain-specific rendering
 settings. Edit this (not Python code) when adding new statesources or infrastructure.
 
 ```yaml
 states:
   skip_keys: [E_price_max, sim_hour, _temp_abs_max]   # omit from plots
   grouped_keys:                                         # share a subplot
-    - [battery_pct, battery_target_pct]
+    - [battery_pct, ]
     - [temp_in_norm, desired_temp_in_norm, temp_out_norm]
     - [ev_soc, ev_target_soc]
   mask_when_disconnected:
@@ -438,23 +472,23 @@ Useful for inspecting data quality, comparing days, and verifying preprocessing 
 Each day is overlaid as a separate trace; multi-day plots add a mean curve with
 +/- 1 std-dev band.
 
-**Script:** `python -m plotting.data_plotting.plot_day_data`
+**Script:** `python -m plotting.traj_plotting.data_plotting.plot_day_data`
 
 ```bash
 # Single day
-python -m plotting.data_plotting.plot_day_data 2020-07-15
+python -m plotting.traj_plotting.data_plotting.plot_day_data 2020-07-15
 
 # Multiple explicit dates (overlaid)
-python -m plotting.data_plotting.plot_day_data 2020-07-15 2020-08-01 2021-01-10
+python -m plotting.traj_plotting.data_plotting.plot_day_data 2020-07-15 2020-08-01 2021-01-10
 
 # Start date + N consecutive days
-python -m plotting.data_plotting.plot_day_data 2020-07-15 --days 7
+python -m plotting.traj_plotting.data_plotting.plot_day_data 2020-07-15 --days 7
 
 # Statistical summary only (mean + std band, hide individual traces)
-python -m plotting.data_plotting.plot_day_data 2020-07-15 --days 7 --stat
+python -m plotting.traj_plotting.data_plotting.plot_day_data 2020-07-15 --days 7 --stat
 
 # Custom config and output formats
-python -m plotting.data_plotting.plot_day_data 2020-07-15 --config plotting/config/data_plot_config.yaml --format html png
+python -m plotting.traj_plotting.data_plotting.plot_day_data 2020-07-15 --config plotting/config/data_plot_config.yaml --format html png
 ```
 
 **Key arguments:**
@@ -486,7 +520,7 @@ in each section.
 
 ```bash
 # 1. Data setup (one-time, or when adding new years)
-sbatch slurm_scripts/slurm_data_setup.sh --skip-weather --years 2023 2024 2025
+sbatch slurm_scripts/slurm_data_setup.sh --years 2023 2024 2025
 
 # 2. Train
 sbatch slurm_scripts/slurm_train_ray.sh --algorithm ppo --episodes 3500 --seed 42

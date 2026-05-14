@@ -9,15 +9,23 @@ import logging
 import os
 import signal
 import time
+from pathlib import Path
 
 import numpy as np
 import ray
+import torch
+from ray.rllib.core.columns import Columns
+from ray.rllib.env.single_agent_episode import SingleAgentEpisode
 
+from adv_building_gym.config.env_config import EnvConfig
+from adv_building_gym.config.training_param_config import TrainingParamConfig
 from adv_building_gym.data_combinator import DataCombinator
 from adv_building_gym.envs import AdvBuildingGym
 from adv_building_gym.envs.env_creator import wrap_action_space
+from adv_building_gym.rewards import SumRewardAggregator
+from ray.rllib.connectors.common import AddObservationsFromEpisodesToBatch
+from ray.rllib.connectors.env_to_module import FlattenObservations
 from adv_building_gym.ray_training.rl_module_inference import (
-    flatten_observation,
     infer_action,
     load_rl_module,
 )
@@ -34,15 +42,19 @@ def _timeout_handler(signum, frame):
 
 def evaluate_model(
     checkpoint_path: str,
-    active_config,
+    active_config: EnvConfig,
+    trial_name: str,
+    seed: int,
     num_episodes: int = 1,
-    seed: int = 42,
     save_results: bool = True,
     output_dir: str = "eval_results",
     log_trajectories: bool = True,
     algorithm_hint: str | None = None,
     timeout_seconds: int = 300,
     data_combinator: DataCombinator | None = None,
+    stochastic: bool = False,
+    run_stamp: str | None = None,
+    subdir: str | None = None,
 ) -> EvalResults:
     """Evaluate a Ray/RLlib trained model on AdvBuildingGym.
 
@@ -52,8 +64,8 @@ def evaluate_model(
 
     Args:
         checkpoint_path: Absolute path to the Ray checkpoint directory.
-        active_config: Config object with infras, statesources, rewards,
-            building_props.
+        active_config: Config object with infras, statesources, rewards.
+        trial_name: Trial identifier (used for result metadata + log lines).
         num_episodes: Number of evaluation episodes.
         seed: Random seed for reproducibility.
         save_results: Whether to persist results to disk.
@@ -62,22 +74,40 @@ def evaluate_model(
         algorithm_hint: Algorithm name for metadata (informational only).
         timeout_seconds: Maximum wall-clock seconds before aborting.
         data_combinator: Optional DataCombinator for variant scheduling.
+        stochastic: If True, sample actions from the squashed-Gaussian policy
+            instead of taking ``tanh(mean)``. A ``torch.Generator`` is seeded
+            per episode from ``seed + ep`` so runs stay reproducible.
 
     Returns:
         ``EvalResults`` with per-episode stats and summary.
     """
-    # Create a timestamped subdirectory so successive eval runs never collide
-    run_stamp = datetime.datetime.now().strftime("%Y%m%d_%H%M") + "_eval"
+    # Load the default YAML training config if the caller didn't pass one —
+    # eval MUST use the same hst settings as training or obs dimensions diverge.
+
+    # Create a timestamped subdirectory so successive eval runs never collide.
+    # Caller can supply a fixed `run_stamp` to share one timestamp across
+    # multiple per-config eval passes, and a `subdir` to nest each pass under
+    # its own directory.
+    if run_stamp is None:
+        run_stamp = datetime.datetime.now().strftime("%Y%m%d_%H%M") + "_eval"
     output_dir = os.path.join(output_dir, run_stamp)
+    if subdir:
+        output_dir = os.path.join(output_dir, subdir)
     os.makedirs(output_dir, exist_ok=True)
 
     logger.info("=" * 70)
     logger.info("Starting Ray model evaluation")
     logger.info("  Checkpoint: %s", checkpoint_path)
-    logger.info("  Config: %s", active_config.env_config_name)
+    logger.info("  Trial: %s", trial_name)
     logger.info("  Episodes: %d", num_episodes)
     logger.info("  Seed: %d", seed)
     logger.info("  Output: %s", output_dir)
+    logger.info(
+        "  Action mode: %s",
+        "stochastic (squashed-Gaussian sample)"
+        if stochastic
+        else "deterministic (tanh(mean))",
+    )
     logger.info("=" * 70)
 
     # Initialize Ray with minimal resources for CPU-only inference.
@@ -96,8 +126,9 @@ def evaluate_model(
     logger.info("Loading algorithm from checkpoint...")
     rl_module = load_rl_module(checkpoint_path)
     
-    # TODO VP 2026.03.16. : Train long term -- for 7 days, for 30 days, for 365 days -- episodes
+    # TODO VP 2026.03.16. : Partially resolved -- Train long term -- for 7 days, for 30 days, for 365 days -- episodes
     # --> Eval long term as well. Not only single day optimisation, long term optimisation learnt
+    # On trial level it's already realised, but still have to try and test it
 
     # Create evaluation environment with action-space wrappers
     # (FlattenAction + RescaleAction) so the policy's flat [-1, 1] output
@@ -111,10 +142,10 @@ def evaluate_model(
     base_env = AdvBuildingGym(
         infras=active_config.infras,
         statesources=active_config.statesources,
-        rewards=active_config.rewards,
-        building_props=active_config.building_props,
-        training=False,
+        rewards=active_config.reward_config.rewards,
         data_combinator=data_combinator,
+        reward_aggregator=SumRewardAggregator(),
+        env_config=active_config,
     )
 
     if log_trajectories:
@@ -123,8 +154,37 @@ def evaluate_model(
     # TrajectoryCollector reads spaces from the unwrapped env
     collector = TrajectoryCollector(base_env) if log_trajectories else None
 
+    if active_config.hst_env_wrapper_enabled:
+        from adv_building_gym.envs.history_wrapper import HistoryWrapper
+        base_env = HistoryWrapper(base_env, hst_len=active_config.hst_env_wrapper_hst_len)
+        logger.info(
+            "eval_runner: HistoryWrapper enabled (hst_len=%d)",
+            active_config.hst_env_wrapper_hst_len,
+        )
+
     env = wrap_action_space(base_env)
-    check_space_compatibility(rl_module, env)
+
+    # Mirrors the training-side connector pipeline so the flat obs dim
+    # matches the checkpoint. StridedHistoryConnector is currently disabled
+    # (see common_model_config.py); re-wire build_env_to_module_connectors
+    # from history_connector.py here if HST is reinstated.
+    # FlattenObservations needs the input spaces set at construction —
+    # recompute_output_observation_space reads them from self, not its args.
+    # FlattenObservations rewrites the episode's last obs to a flat tensor;
+    # AddObservationsFromEpisodesToBatch then copies it into batch[OBS] for
+    # the RLModule. Without the latter, batch[OBS] never gets populated.
+    pipeline = [
+        FlattenObservations(
+            input_observation_space=base_env.observation_space,
+            input_action_space=env.action_space,
+        ),
+        AddObservationsFromEpisodesToBatch(),
+    ]
+
+    # Run the space compatibility check *after* the pipeline is built so the
+    # model's input dim is compared against the post-connector flat size (e.g.
+    # with StridedHistoryConnector stacking obs history), not the raw env obs.
+    check_space_compatibility(rl_module, env, pipeline=pipeline)
 
     episode_stats: list[EpisodeStats] = []
     start_time = time.time()
@@ -143,6 +203,14 @@ def evaluate_model(
             episode_seed = seed + ep
             logger.info("Episode %d/%d (seed: %d)", episode_num, num_episodes, episode_seed)
 
+            # Per-episode torch RNG so stochastic action sampling is
+            # reproducible across runs with the same --seed.
+            action_generator: torch.Generator | None
+            if stochastic:
+                action_generator = torch.Generator().manual_seed(episode_seed)
+            else:
+                action_generator = None
+
             obs, reset_info = env.reset(seed=episode_seed)
             ep_data_variant = reset_info.get("data_variant")
             ep_episode_date = reset_info.get("episode_date")
@@ -160,12 +228,44 @@ def evaluate_model(
                 collector.reset()
                 collector.on_reset(reset_info)
 
-            while not done and episode_length < MAX_STEPS_PER_EPISODE:
-                flat_obs = flatten_observation(obs)
-                raw_action = infer_action(rl_module, flat_obs)
+            # Persistent episode buffer — ``StridedHistoryConnector`` needs
+            # the full observation/action lookback to materialise ``hst_*``
+            # stacks at decision time.
+            sa_episode = SingleAgentEpisode(
+                observation_space=base_env.observation_space,
+                action_space=base_env.action_space,
+                observations=[obs],
+            )
 
-                next_obs, reward, terminated, truncated, step_info = env.step(
-                    raw_action,
+            while not done and episode_length < MAX_STEPS_PER_EPISODE:
+                batch: dict = {}
+                for connector in pipeline:
+                    batch = connector(
+                        rl_module=None,
+                        batch=batch,
+                        episodes=[sa_episode],
+                        explore=False, # This has nothing to do with action stochasticity.
+                        shared_data={},
+                    )
+                # ``add_batch_item`` stores: {Columns.OBS: {ep_id: [flat_obs]}}.
+                obs_column = batch[Columns.OBS]
+                flat_obs = next(iter(obs_column.values()))[-1]
+                raw_action = infer_action(
+                    rl_module,
+                    flat_obs,
+                    stochastic=stochastic,
+                    generator=action_generator,
+                )
+
+                next_obs, reward, terminated, truncated, step_info = env.step(raw_action)
+
+                sa_episode.add_env_step(
+                    observation=next_obs,
+                    action=raw_action,
+                    reward=reward,
+                    terminated=terminated,
+                    truncated=truncated,
+                    infos=step_info,
                 )
 
                 if collector is not None:
@@ -218,7 +318,7 @@ def evaluate_model(
                     episode_id=episode_num,
                     seed=episode_seed,
                     metadata={
-                        "env_config_name": active_config.env_config_name,
+                        "trial_name": trial_name,
                         "checkpoint_path": checkpoint_path,
                         "algorithm": algorithm_hint,
                     },
@@ -254,7 +354,7 @@ def evaluate_model(
     results = EvalResults.from_episodes(
         episodes=episode_stats,
         checkpoint_path=checkpoint_path,
-        env_config_name=active_config.env_config_name,
+        trial_name=trial_name,
         algorithm=algorithm_hint,
         seed=seed,
         eval_time_seconds=eval_time,

@@ -43,21 +43,63 @@ price:
     timestamp_col: start
 
   test1:
-    # test1 scenario price data (single pre-built scenario file).
-    # Includes pre-computed price_normalized column.
+    # test1 scenario price data (single pre-built legacy scenario file).
+    # Includes a pre-computed price_normalized column (preprocessing no longer
+    # generates this column; the file is kept here only as a static scenario).
     # Columns: start, baseprice, unit, hour, price_normalized
     dir: data/test1
     file_pattern: "price_data_2025_1.csv"
     timestamp_col: start
 
-ev:
-  # EV usage profile data (per-vehicle files, ev_0 through ev_5).
+desired_temp_in:
+  # Desired indoor temperature profiles (single-day templates, 5-min resolution).
+  # Each file is one occupancy/comfort profile.  All are overlaid in a single plot.
+  # Columns: timestamp, desired_temp_in [°C]
+  dir: data/inside_temp
+  files:
+    - inside_temp_0.csv
+    - inside_temp_1.csv
+    - inside_temp_2.csv
+  timestamp_col: timestamp
+  value_col: "desired_temp_in [°C]"
+
+user_energy_need:
+  # Household electricity consumption profiles (per-year files, 5-min resolution).
+  # Multiple household profiles are overlaid for each requested date.
+  # Columns: timestamp, hh_consumption_kW
+  dir: data/hh_consumption/wpuq
+  file_pattern: "{year}_{profile}.csv"
+  profiles:
+    - SFH10
+    - SFH30
+  timestamp_col: timestamp
+  value_col: hh_consumption_kW
+
+ev_schedule:
+  # EV usage profiles (single-day event-based schedules).
+  # Each file defines plug-in/departure events for one EV variant.
+  # Rows with data = plug-in event; rows with empty fields = departure.
   # Columns: start, max_cap_kWh, max_charging_kW, charger_efficiency,
   #          discharge_efficiency, v2g_enabled, start_soc, target_soc,
   #          target_soc_reach_duration_h
-  # dir: data/ev_usage_profiles
-  # file_pattern: "ev_{id}.csv"
-  # timestamp_col: start
+  dir: data/ev_usage_profiles
+  files:
+    - ev_0.csv
+    - ev_1.csv
+    - ev_2.csv
+    - ev_3.csv
+    - ev_4.csv
+    - ev_5.csv
+  timestamp_col: start
+
+figure:
+  # Default per-chart height in pixels (applies to every weather / price /
+  # profile figure). Increase for taller y-axes.
+  height: 450
+  # EV schedule height grows with the number of lanes; this is the floor.
+  ev_min_height: 250
+  # Extra pixels added per EV profile lane on top of the base height.
+  ev_lane_px: 50
 
 output:
   dir: plotting/out/data_plots

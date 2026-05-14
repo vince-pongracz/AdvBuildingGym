@@ -1,0 +1,69 @@
+Rllib new api stack, SAC, PPO -- how to reset or encourage exploration after a certain amount of training / steps? E.g. after every N-th episode, the rewards shift a bit -- part of the objectives change -- how to encourage exploration again, so the new objectives can be "tested"?
+
+In the RLlib New API Stack (Ray 2.10+), exploration management has shifted from the old Exploration classes to the RLModule and Learner components. To reset or "kickstart" exploration after a reward shift, you have three primary levers:
+
+1. The "Schedule" Approach (Pre-planned)
+If you know ahead of time that you want to increase exploration at step T, you can pass a schedule directly into the entropy_coeff (for PPO) or alpha (for SAC). The new stack handles linear interpolation between these points.  
+
+Python
+from ray.rllib.algorithms.ppo import PPOConfig
+
+config = (
+    PPOConfig()
+    .training(
+        # Start high, decay to 0.01 at 1M steps, 
+        # then JUMP back to 0.2 at 1.1M steps to "re-explore"
+        entropy_coeff=[
+            [0, 0.2], 
+            [1000000, 0.01], 
+            [1100000, 0.2]
+        ]
+    )
+)
+2. The "Dynamic Callback" Approach (Event-driven)
+If you want to trigger exploration based on a condition (like N episodes passing or a detected reward shift), use the on_train_result callback. In the New API Stack, you use the LearnerGroup to update hyperparameters across all distributed learner workers.
+
+Python
+from ray.rllib.callbacks.callbacks import RLlibCallback
+
+class ExplorationResetCallback(RLlibCallback):
+    def on_train_result(self, *, algorithm, result, **kwargs):
+        # Example: Reset every 100k steps
+        if result["training_iteration"] % 100 == 0:
+            print("Detected shift point - Bumping entropy coefficient!")
+            
+            # Use the LearnerGroup to push new hyperparameters
+            # Note: The key must match the Learner's internal hyperparameter name
+            algorithm.learner_group.set_weights(
+                # You can also use set_info or specific hyperparameter setters
+                # depending on the version. 
+                # In 2.37+, use update_config or specific hyperparameter APIs:
+            )
+            # A common way is to update the Learner's config directly:
+            def update_entropy(learner):
+                # This affects the loss calculation in the next update
+                learner.hps.entropy_coeff = 0.1 
+            
+            algorithm.learner_group.foreach_learner(update_entropy)
+3. Resetting Weights (The "Nuclear" Option)
+If the reward shift is so drastic that the old policy is a "hindrance," you can reset the weights of the RLModule while keeping the optimizer state (or resetting that too).
+
+Python
+def reset_module_weights(algorithm, module_id="default_policy"):
+    # Access the LearnerGroup
+    def _reset(learner):
+        # Re-initialize the specific RLModule's weights
+        # This requires your RLModule to have a reset or init method
+        new_module = learner.module_spec.build() 
+        learner.get_module(module_id).set_state(new_module.get_state())
+        
+    algorithm.learner_group.foreach_learner(_reset)
+4. Custom forward_exploration
+For SAC specifically, you can implement a custom RLModule and override _forward_exploration. You can pass a "global variable" (like is_resetting) via the Learner and use it to add extra noise or increase the temperature α manually.
+
+Summary of Tactics
+Algorithm	Exploration Key	Method to "Reset"
+PPO	entropy_coeff	Increase this to penalize "certainty" and force a broader distribution.
+SAC	alpha (temp)	Force alpha higher. SAC will then prioritize the entropy term in the objective.
+Both	Weights	Re-initialize the "head" of the network (policy/action dist) while keeping the encoder.
+Pro-tip: For non-stationary environments where objectives change, it is often more effective to bump the Learning Rate slightly along with the Entropy/Alpha. This helps the optimizer "break out" of the old local optima that the previous reward structure created.

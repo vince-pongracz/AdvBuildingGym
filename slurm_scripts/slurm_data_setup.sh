@@ -12,15 +12,18 @@
 #   --price-source {awattar,energy-charts}  Price data source (default: awattar)
 #   --skip-prices                 Skip the entire price pipeline
 #   --skip-price-fetch            Skip fetching, use existing raw files
-#   --skip-weather                Skip the entire weather/Zenodo pipeline
+#   --skip-weather                Skip all weather pipelines (WPuQ/Zenodo and DWD)
+#   --skip-wpuq                   Skip the WPuQ/Zenodo weather pipeline only
+#   --skip-dwd                    Skip the DWD weather pipeline only
 #   --steps STEP [STEP ...]       Select which steps to run
-#   --augment                     Run price augmentation after preprocessing
+#   --synthesize                  Generate synthetic datasets after preprocessing
 #   --log-level {DEBUG,INFO,...}  Logging level (default: INFO)
 #
 # Examples:
 #   sbatch slurm_scripts/slurm_data_setup.sh
+#   sbatch slurm_scripts/slurm_data_setup.sh --synthesize
 #   sbatch slurm_scripts/slurm_data_setup.sh --skip-weather
-#   sbatch slurm_scripts/slurm_data_setup.sh --skip-weather --skip-price-fetch --years 2023 --raw-price-files data/e_price/2023_prices.csv --augment
+#   sbatch slurm_scripts/slurm_data_setup.sh --skip-weather --skip-price-fetch --years 2023 --raw-price-files data/e_price/2023_prices.csv --synthesize
 #
 # Note: Data setup runs on CPU only. No GPU is requested.
 # -----------------------------------------------------------------------------
@@ -30,8 +33,9 @@
 #SBATCH --partition=normal
 #SBATCH --nodes=1
 #SBATCH --tasks-per-node=1
-#SBATCH --cpus-per-task=2
-#SBATCH --time=00:10:00
+# NOTE VP: parallelisation options...
+#SBATCH --cpus-per-task=1
+#SBATCH --time=01:00:00
 #SBATCH --output=slurm_logs/data_setup/slurm-data-setup-%j.out
 #SBATCH --error=slurm_logs/data_setup/slurm-data-setup-%j.err
 #SBATCH --job-name=data-setup-%j
@@ -53,8 +57,6 @@ echo "=== SLURM Resource Info ==="
 echo "SLURM_CPUS_PER_TASK : ${SLURM_CPUS_PER_TASK:-}"
 echo "Node                : $(hostname)"
 
-echo "=== Python Info ==="
-python slurm_scripts/util/print_env_info.py
 
 # Disable ANSI color codes and log deduplication in Ray logs
 export RAY_COLOR_PREFIX=0
@@ -64,7 +66,7 @@ export PYTHONUNBUFFERED=1
 export RAY_SCHEDULER_EVENTS=0
 
 # Forward all arguments directly to data_setup.py
-CMD=(python -u preproc/data_setup.py "$@")
+CMD=(python -u preprocessing/data_setup.py "$@")
 
 echo "======"
 echo "Running: ${CMD[*]}"

@@ -137,11 +137,14 @@ class TrajectoryCollector:
         cum_values = trajectory.get("cum_E_kWh", [])
         final_cum_E = cum_values[-1] if cum_values else 0.0
 
+        episode_date = self._initial_info.get("episode_date") if self._initial_info else None
+
         result = {
             "version": 1,
             "episode_id": self._episode_id,
             "seed": self._seed,
             "length": ep_length,
+            "episode_date": episode_date,
             "metadata": self._metadata or {},
             "summary": {
                 "achieved_reward": float(achieved_reward),

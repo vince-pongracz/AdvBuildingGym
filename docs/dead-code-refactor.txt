@@ -1,0 +1,26 @@
+Dead Code Report
+
+Scripts
+
+adv_building_gym/evaluation/__init__.py — EpisodeStats export
+10. Dead export. EpisodeStats is exported from the evaluation package
+__init__.py but never imported outside the evaluation subpackage itself
+
+adv_building_gym/envs/__init__.py — controller re-exports
+11. Dead re-exports. FuzzyController, MPCController, PIController,
+PIDController are re-exported from envs/__init__.py (line 8), but no code
+imports controllers through the adv_building_gym.envs path — they're all
+imported from adv_building_gym directly
+
+
+Summary table
+
+#: 7
+Location: evaluation/__init__.py
+Item: EpisodeStats export
+Status: Never imported outside evaluation package
+────────────────────────────────────────
+#: 8
+Location: envs/__init__.py:8
+Item: Controller re-exports
+Status: Nobody imports controllers via envs path

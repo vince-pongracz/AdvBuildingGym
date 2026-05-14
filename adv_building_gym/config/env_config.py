@@ -1,154 +1,109 @@
 
 import logging
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
-# TODO VP 2026.02.20. : Simplyfy env config somehow, too much code here, too little declarative stuff...
-from adv_building_gym.envs.utils import BuildingProps
+from adv_building_gym.config.utils.loggable_config import LoggableConfig
 
 logger = logging.getLogger(__name__)
 
-from adv_building_gym.devices.infrastructure import (
-    Infrastructure, HP, BatteryTremblay,
-    SolarPanel, LinearEVCharger, HouseholdEnergyConsumers
-)
-
-from adv_building_gym.devices.statesources import (
-    StateSource, BuildingHeatLoss, DesiredUserEnergyNeed, EVState, InsideTemperature,
-    EnergyPriceDataSource, WeatherDataSource
-)
-
-from adv_building_gym.rewards import (
-    RewardFunction, ActionSmoothnessReward, BatteryTargetReward, TempReward,
-    EconomicReward, EVChargingOnTimeReward, EVChargingReward,
-    MinimiseEnergyConsumptionReward, UserEnergyNeedReward,
-    OperatorEnergyControlReward
-)
-
+from adv_building_gym.devices.infrastructure import Infrastructure
+from adv_building_gym.devices.statesources import StateSource
+from adv_building_gym.config.reward_config import RewardConfig
 
 
 @dataclass
-class EnvConfig:
-    """
-    Config serialisation -- by ConfigManager.
-    - Save config: ConfigManager.save(config, path)
-    - Load config: ConfigManager.load(path)
+class EnvConfig(LoggableConfig):
+    """Environment topology configuration — state sources, infrastructure, and physics.
 
-    **IMPORTANT**: Use the factory methods (create_infras, create_statesources, create_rewards)
-    when creating env instances to ensure each env gets independent component instances.
-    Direct access to self.infras/statesources/rewards returns shared singletons and should
-    only be used for inspection, not for passing to AdvBuildingGym in parallel environments.
-    """
-    env_config_name: str = "test1"
+    Components are always declared in YAML (``configs/infra_cfgs/**/*.yaml`` and
+    ``configs/statesource_cfgs/*.yaml``) and reach this dataclass via
+    ``EnvConfigManager.from_dict(...)``, which populates ``infra_specs`` and
+    ``statesource_specs`` (the raw component dicts).  The factory methods
+    ``create_infras`` / ``create_statesources`` deserialise those specs into
+    fresh component instances per call.
 
+    **IMPORTANT**: Use the factory methods (``create_infras``,
+    ``create_statesources``) when creating env instances to ensure each env
+    gets independent component instances.  Direct access to ``self.infras`` /
+    ``self.statesources`` returns shared singletons populated by
+    ``init_singletons()`` and is intended for inspection only.
+
+    Reward composition is managed by ``reward_config`` (``RewardConfig``).
+    """
     EPISODE_LENGTH: int = 288 # a day
     CONTROL_STEP: int = 300  # seconds (5 minutes)
-    ACTION_HISTORY_LENGTH: int = 4  # rolling window of past actions exposed in observations
+    ACTION_HISTORY_LENGTH: int = 15  # rolling window of past actions kept in env for reward functions (not in obs)
+    # When False, reward should_terminate hooks are bypassed and rewards skip
+    # their terminal-only branches (huge penalties / success bonuses), keeping
+    # only the regular reward/penalty curves. Lets a single env config family
+    # toggle between "terminate on hard breach" and "soft, non-terminating".
+    allow_early_termination: bool = True
 
-    building_props: BuildingProps = field(default_factory=lambda:
-        BuildingProps(mC=300, K=20)
-    )
+    # Per-key rolling observation history applied as an env wrapper.
+    # When enabled, HistoryWrapper replaces every s_*, a_*_prev, and
+    # raw_sim_hour Dict obs entry with an (hst_len, *original_shape) buffer
+    # (oldest -> newest, zero-padded). See envs/history_wrapper.py.
+    hst_env_wrapper_enabled: bool = False
+    hst_env_wrapper_hst_len: int = 0
 
-    # Cached singleton instances (for backward compatibility and inspection)
-    # WARNING: Do not pass these to parallel environments - use factory methods instead
+    # Raw component specs as parsed from YAML.  Source of truth for the
+    # factory methods below; never reach into hardcoded defaults.
+    # Building envelope params (K, mC) live on BuildingHeatLoss directly —
+    # there is no separate building_props on the env config.
+    infra_specs: List[Dict[str, Any]] = field(default_factory=list)
+    statesource_specs: List[Dict[str, Any]] = field(default_factory=list)
+
+    # Cached singleton instances populated by init_singletons().
+    # Do NOT pass these to parallel environments — use the factory methods.
     infras: Optional[List[Infrastructure]] = None
     statesources: Optional[List[StateSource]] = None
-    rewards: Optional[List[RewardFunction]] = None
+
+    # Reward composition — separate config
+    reward_config: RewardConfig = field(default_factory=RewardConfig)
+
+    def _infra_context(self) -> Dict[str, Any]:
+        return {"control_step": self.CONTROL_STEP}
+
+    def _statesource_context(self) -> Dict[str, Any]:
+        return {"timestep": self.CONTROL_STEP}
 
     def create_statesources(self) -> List[StateSource]:
-        """
-        Factory method to create fresh StateSource instances.
+        """Deserialise fresh StateSource instances from ``statesource_specs``.
 
-        Each call returns NEW independent instances, safe for parallel environments.
-        Components have their own iteration counter and state.
-
-        Returns:
-            List of newly created StateSource instances.
+        Each call returns NEW independent instances, safe for parallel
+        environments.  Raises if no specs were loaded — every env config
+        must declare its statesources via YAML.
         """
-        return [
-            EnergyPriceDataSource("E_price"),
-            WeatherDataSource("weather"),
-            InsideTemperature("desired_temp_in"),
-            DesiredUserEnergyNeed("user_energy_need"),
-            BuildingHeatLoss(
-                name="building_heat_loss",
-                K=self.building_props.K,
-                mC=self.building_props.mC,
-                timestep=self.CONTROL_STEP
-            ),
-            EVState("ev_schedule"),
-        ]
+        if not self.statesource_specs:
+            raise RuntimeError(
+                "EnvConfig.create_statesources: no statesource_specs loaded. "
+                "Statesources must be declared in a YAML file referenced by "
+                "the trial config (configs/trial_cfgs/<name>.yaml → statesources)."
+            )
+        ctx = self._statesource_context()
+        return [StateSource.from_dict(spec, ctx) for spec in self.statesource_specs]
 
     def create_infras(self) -> List[Infrastructure]:
+        """Deserialise fresh Infrastructure instances from ``infra_specs``.
+
+        Each call returns NEW independent instances, safe for parallel
+        environments.  Raises if no specs were loaded — every env config
+        must declare its infras via YAML.
         """
-        Factory method to create fresh Infrastructure instances.
-
-        Each call returns NEW independent instances, safe for parallel environments.
-        Components have their own iteration counter and state.
-
-        Returns:
-            List of newly created Infrastructure instances.
-        """
-        return [
-            HP(
-                name="HP",
-                Q_electric_max=5.0,  # kW (consistent with battery 19 kW, EV 7 kW, solar 5 kW)
-                K=self.building_props.K,
-                mC=self.building_props.mC,
-                cop_heat=3.0,
-                cop_cool=2.5,
-                control_step=self.CONTROL_STEP
-            ),
-            BatteryTremblay("battery", control_step=self.CONTROL_STEP),
-            LinearEVCharger(
-                "ev_charger",
-                Q_electric_max=7.0,
-                max_cap_kWh=60.0,
-                max_charging_kW=7.0,
-                control_step=self.CONTROL_STEP
-            ),
-            SolarPanel(
-                "solar",
-                Q_electric_max=5.0,
-                peak_power_kW=5.0,
-                control_step=self.CONTROL_STEP
-            ),
-            HouseholdEnergyConsumers(
-                "hh_consumers",
-                Q_electric_max=8.0,
-                peak_consumption_kW=8.0,
-                control_step=self.CONTROL_STEP
-            ),
-        ]
-
-    def create_rewards(self, infras: List[Infrastructure]) -> List[RewardFunction]:
-        """
-        Factory method to create fresh RewardFunction instances.
-
-        Each call returns NEW independent instances, safe for parallel environments.
-
-        Args:
-            infras: List of Infrastructure instances (from create_infras) to link
-                    rewards that depend on infrastructure state (e.g., EV charger).
-
-        Returns:
-            List of newly created RewardFunction instances.
-        """
-        return [
-            TempReward(weight=1),
-            EconomicReward(infras, weight=1),
-            MinimiseEnergyConsumptionReward(weight=0.2),
-            OperatorEnergyControlReward(infras, weight=1),
-            BatteryTargetReward(weight=1),
-            EVChargingReward(weight=1),
-            EVChargingOnTimeReward(infrastructures=infras, weight=1),
-            ActionSmoothnessReward(weight=0.5),
-        ]
+        if not self.infra_specs:
+            raise RuntimeError(
+                "EnvConfig.create_infras: no infra_specs loaded. "
+                "Infras must be declared in a YAML file referenced by "
+                "the trial config (configs/trial_cfgs/<name>.yaml → infras)."
+            )
+        ctx = self._infra_context()
+        return [Infrastructure.from_dict(spec, ctx) for spec in self.infra_specs]
 
     def __post_init__(self):
         """Lightweight post-init — does NOT eagerly call factory methods.
 
-        Singleton fields (infras, statesources, rewards) are left as None to
+        Singleton fields (infras, statesources) are left as None to
         avoid unnecessary CSV parsing in every Ray worker subprocess that
         imports this module.  Call init_singletons() explicitly in the main
         process where those fields are actually needed.
@@ -158,10 +113,10 @@ class EnvConfig:
         """Initialise the cached singleton component instances.
 
         Call this once in the main process after creating / loading a Config,
-        before accessing self.infras / self.statesources / self.rewards.
+        before accessing self.infras / self.statesources / self.reward_config.rewards.
         Not needed in Ray worker subprocesses — they call the factory methods
-        (create_infras, create_statesources, create_rewards) directly via
-        adv_building_env_creator.
+        (create_infras, create_statesources) directly via adv_building_env_creator.
+        Rewards are populated by ``RewardScheduleManager`` before this is called.
 
         WARNING: Do not pass these singleton instances to parallel environments
         — use the factory methods instead.
@@ -172,8 +127,20 @@ class EnvConfig:
         if self.infras is None:
             self.infras = self.create_infras()
 
-        if self.rewards is None:
-            self.rewards = self.create_rewards(self.infras)
+    def _log_label(self) -> str:
+        return "EnvConfig"
 
-# default/config instance
-config = EnvConfig()
+    def log_values(self) -> None:
+        """Log config values, showing component names instead of object repr."""
+
+        lines = [
+            f"  EPISODE_LENGTH = {self.EPISODE_LENGTH}",
+            f"  CONTROL_STEP = {self.CONTROL_STEP}",
+            f"  ACTION_HISTORY_LENGTH = {self.ACTION_HISTORY_LENGTH}",
+            f"  allow_early_termination = {self.allow_early_termination}",
+            f"  hst_env_wrapper_enabled = {self.hst_env_wrapper_enabled}",
+            f"  hst_env_wrapper_hst_len = {self.hst_env_wrapper_hst_len}",
+        ]
+        logger.info("%s:\n%s", self._log_label(), "\n".join(lines))
+
+        self.reward_config.log_values()
