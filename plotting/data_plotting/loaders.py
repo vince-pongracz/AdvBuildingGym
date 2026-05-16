@@ -3,8 +3,8 @@
 Two loading strategies:
 
 1. **Year-partitioned files** (weather, price, household consumption):
-   ``load_day_csv`` / ``load_days`` locate the correct ``{year}`` file and
-   extract a single calendar day.
+   ``load_days`` reads each ``{year}`` file exactly once and groups rows
+   by calendar date, returning a per-day slice for every requested date.
 
 2. **Profile files** (desired temperature, EV schedule):
    ``load_profile_csv`` / ``load_profiles`` load standalone single-day
@@ -17,7 +17,6 @@ used as the common x-axis across all day-data plots.
 from __future__ import annotations
 
 import logging
-import re
 from datetime import date, datetime
 from pathlib import Path
 
@@ -43,43 +42,43 @@ def _is_future(d: datetime) -> bool:
     return d.date() > date.today()
 
 
-def load_day_csv(
-    directory: Path,
-    file_pattern: str,
-    timestamp_col: str,
-    date: datetime,
-) -> pd.DataFrame:
-    """Load CSV data for a single calendar day.
-
-    Returns an empty DataFrame if the file does not exist or contains no
-    data for the requested day.
-    """
-    year = date.year
-    filename = file_pattern.format(year=year)
-    filepath = directory / filename
-    if not filepath.exists():
-        logger.warning("File not found: %s", filepath)
-        return pd.DataFrame()
-
+def _read_year_csv(filepath: Path, timestamp_col: str) -> pd.DataFrame:
+    """Read a year CSV once and normalise tz-aware timestamps to naive."""
     df = pd.read_csv(filepath, parse_dates=[timestamp_col])
     if df[timestamp_col].dt.tz is not None:
         df[timestamp_col] = df[timestamp_col].dt.tz_localize(None)
+    return df
 
-    day_start = pd.Timestamp(date)
-    day_end = day_start + pd.Timedelta(days=1)
-    mask = (df[timestamp_col] >= day_start) & (df[timestamp_col] < day_end)
-    day_df = df.loc[mask].copy()
 
-    if day_df.empty:
-        if _WARN_FUTURE_DATA or not _is_future(date):
-            logger.warning("No data for %s in %s", date.date(), filepath)
-        return pd.DataFrame()
+def _slice_days(
+    df: pd.DataFrame,
+    timestamp_col: str,
+    dates: list[datetime],
+    filepath: Path,
+) -> dict[str, pd.DataFrame]:
+    """Slice a year DataFrame into per-day frames keyed by ISO date string.
 
-    day_df["minutes"] = (
-        (day_df[timestamp_col] - day_start).dt.total_seconds() / 60.0
-    ).astype(np.float32)
+    Groups rows by calendar date once, so emitting N day-slices costs a
+    single linear pass over the year instead of N full scans.
+    """
+    date_keys = df[timestamp_col].dt.normalize()
+    # {Timestamp(YYYY-MM-DD): ndarray of positional indices}
+    indices = date_keys.groupby(date_keys).indices
 
-    return day_df
+    out: dict[str, pd.DataFrame] = {}
+    for d in dates:
+        day_start = pd.Timestamp(d.year, d.month, d.day)
+        idx = indices.get(day_start)
+        if idx is None or len(idx) == 0:
+            if _WARN_FUTURE_DATA or not _is_future(d):
+                logger.warning("No data for %s in %s", d.date(), filepath)
+            continue
+        day_df = df.iloc[idx].copy()
+        day_df["minutes"] = (
+            (day_df[timestamp_col] - day_start).dt.total_seconds() / 60.0
+        ).astype(np.float32)
+        out[str(d.date())] = day_df
+    return out
 
 
 def _available_years(
@@ -104,12 +103,15 @@ def load_days(
 ) -> dict[str, pd.DataFrame]:
     """Load CSV data for multiple days. Returns ``{date_label: DataFrame}``.
 
-    Pre-checks which year files exist so that missing years produce a
-    single warning instead of one per day.
+    Reads each ``{year}`` file exactly once and groups its rows by date,
+    so total parse cost is O(years) instead of O(days).
     """
-    requested_years = {d.year for d in dates}
-    available = _available_years(directory, file_pattern, requested_years)
-    missing = sorted(requested_years - available)
+    by_year: dict[int, list[datetime]] = {}
+    for d in dates:
+        by_year.setdefault(d.year, []).append(d)
+
+    available = _available_years(directory, file_pattern, set(by_year))
+    missing = sorted(set(by_year) - available)
     if missing:
         logger.warning(
             "Skipping years with no data file in %s (pattern %s): %s",
@@ -117,12 +119,12 @@ def load_days(
         )
 
     result: dict[str, pd.DataFrame] = {}
-    for date in dates:
-        if date.year not in available:
+    for year in sorted(by_year):
+        if year not in available:
             continue
-        df = load_day_csv(directory, file_pattern, timestamp_col, date)
-        if not df.empty:
-            result[str(date.date())] = df
+        filepath = directory / file_pattern.format(year=year)
+        df = _read_year_csv(filepath, timestamp_col)
+        result.update(_slice_days(df, timestamp_col, by_year[year], filepath))
     return result
 
 
@@ -163,24 +165,27 @@ def load_syn_cfg_days(
     """Load every discoverable ``*_syn_cfg_*.csv`` for the given dates.
 
     Returns ``{cfg_name: {date_label: DataFrame}}``. Empty when no
-    synthesised siblings exist in *directory*.
+    synthesised siblings exist in *directory*. Each per-year file is
+    parsed once per cfg variant.
     """
-    requested_years = {d.year for d in dates}
-    cfg_files = discover_syn_cfg_files(directory, file_pattern, requested_years)
+    by_year: dict[int, list[datetime]] = {}
+    for d in dates:
+        by_year.setdefault(d.year, []).append(d)
+
+    cfg_files = discover_syn_cfg_files(directory, file_pattern, set(by_year))
     if not cfg_files:
         return {}
 
-    # Per-cfg file_pattern reuses load_day_csv so day-slicing logic is shared.
     result: dict[str, dict[str, pd.DataFrame]] = {}
     for cfg_name, year_paths in sorted(cfg_files.items()):
         frames: dict[str, pd.DataFrame] = {}
-        for d in dates:
-            path = year_paths.get(d.year)
-            if path is None:
+        for year in sorted(year_paths):
+            year_dates = by_year.get(year)
+            if not year_dates:
                 continue
-            df = load_day_csv(path.parent, path.name, timestamp_col, d)
-            if not df.empty:
-                frames[str(d.date())] = df
+            filepath = year_paths[year]
+            df = _read_year_csv(filepath, timestamp_col)
+            frames.update(_slice_days(df, timestamp_col, year_dates, filepath))
         if frames:
             result[cfg_name] = frames
     return result

@@ -80,15 +80,6 @@ class WeatherDataSource(StateSource):
                         )
                     self.ts[col] = self.ts[col].fillna(0)
 
-        if "sun_shine" not in self.ts.columns and "direct_sun_shine" in self.ts.columns:
-            if self.is_new_data_source:
-                logger.warning(
-                    "WeatherDataSource '%s': 'sun_shine' column missing, "
-                    "falling back to 'direct_sun_shine' — check preprocessing.",
-                    self.name,
-                )
-            self.ts["sun_shine"] = self.ts["direct_sun_shine"]
-
         # Normalise raw columns and derive scale factors so downstream
         # components can convert between raw and normalised values.
         # cols = { raw_col: (norm_col, scale_attr) }
@@ -105,6 +96,17 @@ class WeatherDataSource(StateSource):
                 if scale_attr is not None:
                     setattr(self, scale_attr, scale_factor)
 
+        # Day-of-year normalised to [0, 1] per row. Divisor is the year length
+        # (366 in leap years) so 1 January → ~0 and 31 December → ~1.
+        if "timestamp" in self.ts.columns:
+            ts_parsed = pd.to_datetime(self.ts["timestamp"], utc=True, errors="coerce")
+            year_length = np.where(ts_parsed.dt.is_leap_year, 366.0, 365.0)
+            self.ts["s_date"] = ((ts_parsed.dt.dayofyear - 1) / year_length).astype(np.float32)
+        else:
+            if self.is_new_data_source:
+                logger.warning("WeatherDataSource '%s': no 'timestamp' column — s_date set to 0.", self.name)
+            self.ts["s_date"] = np.float32(0.0)
+
 
     def setup_spaces(self,
                     state_spaces: OrderedDict,
@@ -117,6 +119,11 @@ class WeatherDataSource(StateSource):
             state_spaces["s_solar_irradiance_norm"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
         if "s_avg_wind_speed_norm" not in state_spaces.keys():
             state_spaces["s_avg_wind_speed_norm"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
+        # Day-of-year of the current row, normalised to [0, 1]. Effectively
+        # constant across an episode (one day) but recomputed each step so
+        # episodes crossing midnight stay consistent with the underlying row.
+        if "s_date" not in state_spaces.keys():
+            state_spaces["s_date"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
 
         # Raw scale factors — set once when data is loaded, not every step.
         # The policy can use these to reconstruct physical units from
@@ -155,11 +162,12 @@ class WeatherDataSource(StateSource):
         states["s_temp_out_norm"][0] = np.float32(temp_out_norm)
         states["s_solar_irradiance_norm"][0] = np.float32(solar_irradiance_norm)
         states["s_avg_wind_speed_norm"][0] = np.float32(avg_wind_speed_norm)
+        states["s_date"][0] = np.float32(row.get("s_date", 0.0))
 
         # Raw scale factors — constant within an episode, change only when
         # a new data variant is loaded (via _post_load_data_processing).
-        states["ctxt_temp_abs_max"][0] = np.float32(self.temp_abs_max)
-        states["ctxt_wind_speed_abs_max"][0] = np.float32(self.wind_speed_abs_max)
+        states["ctxt_temp_abs_max"][0] = np.float32(self.temp_abs_max) # type: ignore
+        states["ctxt_wind_speed_abs_max"][0] = np.float32(self.wind_speed_abs_max) # type: ignore
         states["ctxt_solar_irradiance_max"][0] = np.float32(self.sun_shine_abs_max)
 
     def get_raw_values(self) -> dict[str, float]:

@@ -189,12 +189,17 @@ def synthesize_file(
             after.min(), after.mean(), after.max(),
         )
 
-    # Solar irradiance is physically zero outside daylight; Gaussian noise
-    # plus shifts can leak positive values into the night band. Force any
-    # sun_shine component to 0.0 between 22:00 and 05:00 (timestamp hour)
-    # before the additive `sun_shine` reconstruction below.
+    # Solar irradiance is physically zero outside daylight; Gaussian noise plus
+    # shifts can leak positive values into the night band. Zero any irradiance
+    # column between 22:00 and 05:00 (timestamp hour).
+    # Schema across sources (after the DWD `GS_10` rename):
+    #   - DWD    : `sun_shine` (global, W/m²) + `diff_sun_shine` (diffuse-only).
+    #   - Zenodo : `sun_shine` only (no diffuse channel in WPuQ).
+    # `sun_shine` is noised independently by its own syn_cfg block — no
+    # reconstruction step. `diff_sun_shine` is a diagnostic-only column and is
+    # noised independently for DWD.
     # TODO noprio VP 2026.05.03. : Add smarter filtering for sun_shine zero radiance
-    sun_cols_present = [c for c in ("direct_sun_shine", "diff_sun_shine", "sun_shine") if c in df.columns]
+    sun_cols_present = [c for c in ("sun_shine", "diff_sun_shine") if c in df.columns]
     if sun_cols_present and "timestamp" in df.columns:
         hour = pd.to_datetime(df["timestamp"], utc=True, errors="coerce").dt.hour
         night_mask = ((hour >= 22) | (hour < 5)).fillna(False)
@@ -206,30 +211,6 @@ def synthesize_file(
                 "  sun night-mask: zeroed %d rows (22:00–05:00) across %s",
                 int(night_mask.sum()), sun_cols_present,
             )
-
-    # Reconstruct `sun_shine` from its noised components so the additive
-    # identity holds in the output CSV (no independent `sun_shine` noise draw).
-    #   - DWD     : `sun_shine = direct_sun_shine + diff_sun_shine`
-    #               (mirrors NaN handling from dwd_preprocess.py — partial sum
-    #               kept; NaN only if both components are NaN).
-    #   - Zenodo  : `sun_shine = direct_sun_shine` (alias preserved; no diffuse
-    #               channel in the source).
-    if "sun_shine" in df.columns and "direct_sun_shine" in df.columns:
-        direct = df["direct_sun_shine"]
-        if "diff_sun_shine" in df.columns:
-            diff = df["diff_sun_shine"]
-            summed = direct.fillna(0) + diff.fillna(0)
-            summed[direct.isna() & diff.isna()] = np.nan
-            df["sun_shine"] = summed
-            source = "direct_sun_shine + diff_sun_shine"
-        else:
-            df["sun_shine"] = direct
-            source = "direct_sun_shine (Zenodo alias)"
-        logger.info(
-            "  sun_shine: recomputed as %s (min=%.4f, mean=%.4f, max=%.4f)",
-            source,
-            df["sun_shine"].min(), df["sun_shine"].mean(), df["sun_shine"].max(),
-        )
 
     df.to_csv(output_path, index=False)
     logger.info("Saved %d synthesised records to %s", len(df), output_path)

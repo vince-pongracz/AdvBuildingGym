@@ -50,9 +50,12 @@ from .common import (
     apply_shared_cli_args,
     days_in_month,
     load_config,
+    load_profiles_from_cfg,
+    resolve_source,
     write_output,
 )
-from .plot_day_data import _build_figures, _load_all_sources
+from .loaders import load_days, load_syn_cfg_days
+from .plot_day_data import _build_figures
 
 logger = logging.getLogger(__name__)
 
@@ -118,32 +121,42 @@ def _compute_y_ranges(
 
     The result is fed to ``_build_figures`` so that the y-axis on every
     per-month and cross-year figure spans the same overall range — making
-    figures from different months/years visually comparable.
+    figures from different months/years visually comparable. Numeric
+    columns are resolved once per source bundle and ``np.isfinite`` is
+    applied once on the concatenated array, avoiding per-frame Python
+    overhead that dominated the per-day path.
     """
     per_col: dict[str, list[np.ndarray]] = {}
 
-    def _ingest(df: pd.DataFrame) -> None:
-        for col in df.columns:
-            if col == "minutes" or not pd.api.types.is_numeric_dtype(df[col]):
-                continue
-            arr = df[col].to_numpy(dtype=float)
-            arr = arr[np.isfinite(arr)]
-            if arr.size:
-                per_col.setdefault(col, []).append(arr)
+    def _ingest(frames: dict[str, pd.DataFrame]) -> None:
+        if not frames:
+            return
+        sample = next(iter(frames.values()))
+        cols = [
+            c for c in sample.columns
+            if c != "minutes" and pd.api.types.is_numeric_dtype(sample[c])
+        ]
+        for col in cols:
+            arrs = [
+                df[col].to_numpy(dtype=float, copy=False)
+                for df in frames.values() if col in df.columns
+            ]
+            if arrs:
+                per_col.setdefault(col, []).extend(arrs)
 
     for name in _DATE_KEYED_SOURCES:
-        for df in (sources.get(name) or {}).values():
-            _ingest(df)
+        _ingest(sources.get(name) or {})
     # Include syn_cfg frames so the shared y-axis encompasses their range too.
     for name in _DATE_KEYED_SYN_SOURCES:
         for cfg_frames in (sources.get(name) or {}).values():
-            for df in cfg_frames.values():
-                _ingest(df)
+            _ingest(cfg_frames)
 
     ranges: dict[str, tuple[float, float]] = {}
     for col, arrs in per_col.items():
         all_vals = np.concatenate(arrs)
-        ranges[col] = (float(all_vals.min()), float(all_vals.max()))
+        all_vals = all_vals[np.isfinite(all_vals)]
+        if all_vals.size:
+            ranges[col] = (float(all_vals.min()), float(all_vals.max()))
     return ranges
 
 
@@ -208,6 +221,37 @@ def run_overview(
         for month in range(1, 13):
             full_dates.extend(days_in_month(year, month))
 
+    # Preload each weather/price dataset once across all combos. With
+    # |weather_keys| × |price_keys| combos, the naive per-combo load would
+    # parse each weather dataset |price_keys|× and each price dataset
+    # |weather_keys|×; caching here cuts that to one load per dataset.
+    # y-ranges are computed at the same time since they depend only on
+    # the dataset, not on which combo it appears in.
+    weather_cache: dict[str, dict[str, dict]] = {}
+    weather_y_ranges: dict[str, dict[str, tuple[float, float]]] = {}
+    for w_key in weather_keys:
+        src = resolve_source(base_cfg["weather"], "weather", key=w_key)
+        w_dir = REPO_ROOT / src["dir"]
+        weather_cache[w_key] = {
+            "weather": load_days(w_dir, src["file_pattern"], src["timestamp_col"], full_dates),
+            "weather_syn": load_syn_cfg_days(w_dir, src["file_pattern"], src["timestamp_col"], full_dates),
+        }
+        weather_y_ranges[w_key] = _compute_y_ranges(weather_cache[w_key])
+
+    price_cache: dict[str, dict[str, dict]] = {}
+    price_y_ranges: dict[str, dict[str, tuple[float, float]]] = {}
+    for p_key in price_keys:
+        src = resolve_source(base_cfg["price"], "price", key=p_key)
+        p_dir = REPO_ROOT / src["dir"]
+        price_cache[p_key] = {
+            "price": load_days(p_dir, src["file_pattern"], src["timestamp_col"], full_dates),
+            "price_syn": load_syn_cfg_days(p_dir, src["file_pattern"], src["timestamp_col"], full_dates),
+        }
+        price_y_ranges[p_key] = _compute_y_ranges(price_cache[p_key])
+
+    # Profile sources are dataset-independent; load once for all combos.
+    profile_sources = load_profiles_from_cfg(base_cfg, full_dates)
+
     for w_key in weather_keys:
         for p_key in price_keys:
             combo_tag = f"{w_key}_{p_key}"
@@ -218,8 +262,13 @@ def run_overview(
             combo_dir = out_root / combo_tag
             logger.info("=== Dataset combo: %s ===", combo_tag)
 
-            all_sources = _load_all_sources(cfg, full_dates)
-            y_ranges = _compute_y_ranges(all_sources)
+            all_sources = {
+                **weather_cache[w_key],
+                **price_cache[p_key],
+                **profile_sources,
+            }
+            # Weather y-ranges and price y-ranges have disjoint column keys.
+            y_ranges = {**weather_y_ranges[w_key], **price_y_ranges[p_key]}
 
             # --- Part 1: per year-month plots ---
             for year in range(start_year, end_year + 1):

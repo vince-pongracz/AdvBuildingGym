@@ -14,12 +14,7 @@ class SolarPanel(Infrastructure):
 
     Solar panels always produce the full power determined by global solar irradiance.
     There is no policy-controlled action — production is purely a function of irradiance
-    (W/m², supplied by ``WeatherDataSource``) and peak power capacity. The actual
-    production is written into ``actions['a_solar']`` as a read-only output for
-    other components to observe.
-
-    Action convention: negative = production (energy to grid).
-    solar_action value: -1 = full peak production, 0 = no production.
+    (W/m², supplied by ``WeatherDataSource``) and peak power capacity.
 
     Irradiance is denormalised from ``s_solar_irradiance_norm ∈ [0, 1]`` using
     the scale factor ``ctxt_solar_irradiance_max`` (W/m²) published by
@@ -48,7 +43,6 @@ class SolarPanel(Infrastructure):
         Args:
             name: Component identifier
             max_power_kW: Peak power output under standard test conditions (STC).
-                ``-1.0`` in ``a_solar`` corresponds to production at this value.
         """
         # NOTE VP 2026.01.24. : Inverter efficiency is not considered,
         # max power means peak output power, produced by the solar panel.
@@ -86,11 +80,10 @@ class SolarPanel(Infrastructure):
 
 
     def exec_action(self, actions: Dict, states: Dict, info=None) -> None:
-        """Compute solar production from irradiance and write it into actions.
+        """Compute solar production from irradiance.
 
         Production is fully determined by solar irradiance — there is no
-        policy-controlled input. The result is written into actions['solar_action']
-        as a read-only output for other components.
+        policy-controlled input.
         """
 
         # Denormalise irradiance: s_solar_irradiance_norm in [0,1], scaled by
@@ -108,13 +101,6 @@ class SolarPanel(Infrastructure):
             self.irradiance_W_m2 * self.panel_area_m2 * self.pv_efficiency / 1000.0
         )
         self.current_production_kW = np.clip(self.current_production_kW, 0.0, self.max_power_kW)
-
-        # Write normalized production as read-only output
-        solar_action = irradiance_norm
-        if "a_solar" not in actions:
-            actions["a_solar"] = np.array([solar_action], dtype=np.float32)
-        else:
-            actions["a_solar"][0] = solar_action
 
     def update_state(self, states: Dict, info=None) -> None:
         """Publish static peak power into the observable state."""

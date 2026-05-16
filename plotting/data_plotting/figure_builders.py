@@ -27,7 +27,7 @@ _WEATHER_COLS = [
     ("temp_amb", "Temperature (\u00b0C)", None),
     ("rel_humidity", "Relative humidity (%)", None),
     ("avg_wind_speed", "Wind speed (m/s)", None),
-    ("sun_shine", "Global irradiance (W/m\u00b2)", "direct_sun_shine"),
+    ("sun_shine", "Global irradiance (W/m\u00b2)", None),
 ]
 
 

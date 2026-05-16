@@ -21,9 +21,7 @@ weather:
       - {type: constant_shift, value: -1.0}                                           # m/s
       - {type: gaussian_noise, std: 0.3, smooth: {kind: moving_average, window: 6}}   # m/s
     clip: {min: 0.0}
-  # sun_shine intentionally absent — synthesize.py reconstructs it from the
-  # noised components: DWD `direct + diff`, Zenodo alias of `direct`.
-  direct_sun_shine:
+  sun_shine:
     transforms:
       - {type: constant_shift, value: -17.0}                                           # W/m²
       - {type: gaussian_noise, std: 50.0, smooth: {kind: moving_average, window: 6}}   # W/m²

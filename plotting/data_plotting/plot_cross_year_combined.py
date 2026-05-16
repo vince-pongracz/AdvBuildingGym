@@ -153,9 +153,8 @@ def _build_combined_weather_figures(
 ) -> list[go.Figure]:
     """Build one figure per weather variable with stat bands from each dataset.
 
-    Resolves columns per-dataset so that equivalent variables with different
-    column names (e.g. DWD ``sun_shine`` vs Zenodo ``direct_sun_shine``) are
-    grouped under the same y-axis label.
+    Resolves columns per-dataset and groups equivalent variables under the
+    same y-axis label across DWD and Zenodo inputs.
     """
     # Resolve columns per dataset: {ds_name: [(col, label), ...]}
     ds_cols: dict[str, list[tuple[str, str]]] = {}
@@ -282,23 +281,36 @@ def _load_multi_datasets(
 # ---------------------------------------------------------------------------
 
 def _aggregate_y_ranges(datasets: dict[str, dict[str, object]]) -> dict[str, tuple[float, float]]:
-    """Compute global (min, max) per numeric column across all loaded datasets."""
+    """Compute global (min, max) per numeric column across all loaded datasets.
+
+    Numeric columns are resolved once per dataset and ``np.isfinite`` is
+    deferred to the per-column concatenated array, avoiding the per-frame
+    Python overhead that dominated the original per-day loop.
+    """
     per_col: dict[str, list[np.ndarray]] = {}
     for frames in datasets.values():
-        for df in frames.values():
-            for col in df.columns:
-                if col == "minutes" or not pd.api.types.is_numeric_dtype(df[col]):
-                    continue
+        if not frames:
+            continue
+        sample = next(iter(frames.values()))
+        cols = [
+            c for c in sample.columns
+            if c != "minutes" and pd.api.types.is_numeric_dtype(sample[c])
+        ]
+        for col in cols:
+            arrs = [
+                df[col].to_numpy(dtype=float, copy=False)
+                for df in frames.values() if col in df.columns
+            ]
+            if arrs:
+                per_col.setdefault(col, []).extend(arrs)
 
-                arr = df[col].to_numpy(dtype=float)
-                arr = arr[np.isfinite(arr)] # Removes nan and similars
-                if arr.size:
-                    per_col.setdefault(col, []).append(arr)
-    # TODO VP 2026.05.03. : This could be performance critical...
-    return {
-        col: (float(np.concatenate(arrs).min()), float(np.concatenate(arrs).max()))
-        for col, arrs in per_col.items()
-    }
+    ranges: dict[str, tuple[float, float]] = {}
+    for col, arrs in per_col.items():
+        all_vals = np.concatenate(arrs)
+        all_vals = all_vals[np.isfinite(all_vals)]
+        if all_vals.size:
+            ranges[col] = (float(all_vals.min()), float(all_vals.max()))
+    return ranges
 
 
 def run_combined(

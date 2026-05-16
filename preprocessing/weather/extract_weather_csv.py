@@ -8,9 +8,9 @@ and saves to CSV.
 Units note (irradiance): the WPuQ/Zenodo ``WEATHER_SOLAR_IRRADIANCE_GLOBAL``
 field is instantaneous global irradiance in W/m² (Schlemminger et al.,
 "Dataset on electrical single-family house and heat pump load profiles in
-Germany", Scientific Data 2022). It is renamed to ``direct_sun_shine`` /
-``sun_shine`` here without any unit conversion; values remain W/m²,
-linearly interpolated onto the 5-min uniform grid.
+Germany", Scientific Data 2022). It is renamed to ``sun_shine`` here without
+any unit conversion; values remain W/m², linearly interpolated onto the
+5-min uniform grid. Zenodo CSVs have no diffuse-component column.
 
 Usage:
     python -m preproc.weather.extract_weather_csv
@@ -52,12 +52,12 @@ logger = logging.getLogger(__name__)
 
 # Rename WPuQ/Zenodo column names to match environment statesource conventions.
 # Note: ``solar_irradiance`` is W/m² (instantaneous global irradiance) in the
-# WPuQ HDF5; renaming to ``direct_sun_shine`` is a column-name alignment only,
+# WPuQ HDF5; renaming to ``sun_shine`` is a column-name alignment only,
 # values remain in W/m². See module docstring.
 COLUMN_RENAMES: dict[str, str] = {
     "temperature": "temp_amb",
     "relative_humidity": "rel_humidity",
-    "solar_irradiance": "direct_sun_shine",
+    "solar_irradiance": "sun_shine",
     "wind_direction": "wind_dir",
     "wind_speed": "avg_wind_speed",
 }
@@ -266,25 +266,18 @@ def extract_weather_data(
         # Rename columns to match environment statesource conventions
         df_merged.rename(columns=COLUMN_RENAMES, inplace=True)
 
-        # Zenodo CSVs have only direct_sun_shine (no diffuse component).
-        # Create sun_shine alias (W/m², instantaneous global irradiance) so
-        # downstream code can use a single column name across DWD and Zenodo
-        # CSVs — both unified on W/m².
-        if "direct_sun_shine" in df_merged.columns and "sun_shine" not in df_merged.columns:
-            df_merged["sun_shine"] = df_merged["direct_sun_shine"]
-
-        # Replace negative sentinel values in irradiance columns with 0
-        # (real irradiance is never negative; some sources use e.g. -999 for missing data)
-        for col in ("sun_shine", "direct_sun_shine"):
-            if col in df_merged.columns:
-                neg_mask = df_merged[col] < 0
-                n_neg = neg_mask.sum()
-                if n_neg > 0:
-                    logger.warning(
-                        "%d negative sentinel values in '%s' replaced with 0",
-                        n_neg, col,
-                    )
-                    df_merged.loc[neg_mask, col] = 0.0
+        # Replace negative sentinel values in irradiance with 0
+        # (real irradiance is never negative; some sources use e.g. -999 for missing data).
+        # Zenodo has no diffuse-only column, only the global `sun_shine`.
+        if "sun_shine" in df_merged.columns:
+            neg_mask = df_merged["sun_shine"] < 0
+            n_neg = int(neg_mask.sum())
+            if n_neg > 0:
+                logger.warning(
+                    "%d negative sentinel values in 'sun_shine' replaced with 0",
+                    n_neg,
+                )
+                df_merged.loc[neg_mask, "sun_shine"] = 0.0
 
         # Drop columns not needed by the environment
         cols_to_drop = [c for c in COLUMNS_TO_DROP if c in df_merged.columns]

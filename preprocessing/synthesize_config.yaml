@@ -12,6 +12,7 @@ syn_cfg_dir: preprocessing/syn_cfgs
 
 # Which syn_cfg_*.yaml files to apply. All listed are run for every input CSV.
 active_configs:
+  - syn_cfg_0
   - syn_cfg_1_neg
   - syn_cfg_1_pos
   - syn_cfg_2_neg

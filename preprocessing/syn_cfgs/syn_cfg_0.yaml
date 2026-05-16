@@ -37,21 +37,13 @@ weather:
     transforms:
       - {type: gaussian_noise, std: 0.3, smooth: {kind: moving_average, window: 6}}   # m/s
     clip: {min: 0.0}
-  # Three irradiance columns coexist on disk:
-  #   - sun_shine        : DWD = direct_sun_shine + diff_sun_shine (combined);
-  #                        Zenodo = alias of direct_sun_shine (no diffuse channel).
-  #                        This is the ONLY column WeatherDataSource consumes
-  #                        (publishes s_solar_irradiance_norm / raw_solar_irradiance).
-  #   - direct_sun_shine : DWD GS_10 (global radiation; "direct" is a legacy
-  #                        misnomer) / Zenodo solar_irradiance. Noised here.
-  #   - diff_sun_shine   : DWD DS_10 (diffuse radiation only). Noised here for
-  #                        DWD CSVs; absent in Zenodo CSVs (skipped).
-  # `direct_sun_shine` and `diff_sun_shine` are noised independently. `sun_shine`
-  # is NOT listed for synthesis: `synthesize.py` reconstructs it after the
-  # column transforms so the additive identity holds in the output CSV:
-  #   - DWD    → sun_shine = direct_sun_shine + diff_sun_shine
-  #   - Zenodo → sun_shine = direct_sun_shine  (alias)
-  direct_sun_shine:
+  # Irradiance columns (W/m², global horizontal):
+  #   - sun_shine      : DWD = GS_10 (global radiation); Zenodo = solar_irradiance.
+  #                      Canonical column consumed by WeatherDataSource
+  #                      (publishes s_solar_irradiance_norm / raw_solar_irradiance).
+  #   - diff_sun_shine : DWD DS_10 (diffuse-only diagnostic). Absent in Zenodo CSVs.
+  # Each column is noised independently; no reconstruction step.
+  sun_shine:
     transforms:
       - {type: gaussian_noise, std: 50.0, smooth: {kind: moving_average, window: 6}}  # W/m²
     clip: {min: 0.0}

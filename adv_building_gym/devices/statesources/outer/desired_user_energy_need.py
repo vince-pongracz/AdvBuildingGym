@@ -54,10 +54,10 @@ class DesiredUserEnergyNeed(StateSource):
                 f"DesiredUserEnergyNeed '{self.name}': CSV '{self.ds_path}' has no "
                 f"'{SOURCE_COLUMN}' column. Found: {list(self.ts.columns)}"
             )
+
         self.ts[NORM_COLUMN], self.consumption_max = normalise_with_scale_factor(self.ts[SOURCE_COLUMN], self.normalise)
 
-    def setup_spaces(self, state_spaces: OrderedDict,
-                    action_spaces: OrderedDict) -> tuple[OrderedDict, OrderedDict]:
+    def setup_spaces(self, state_spaces: OrderedDict, action_spaces: OrderedDict) -> tuple[OrderedDict, OrderedDict]:
         """Setup observation spaces for desired user energy need."""
 
         if "s_desired_energy_need" not in state_spaces.keys():
@@ -71,8 +71,7 @@ class DesiredUserEnergyNeed(StateSource):
         if "raw_sim_hour" not in state_spaces.keys():
             state_spaces["raw_sim_hour"] = Box(low=np.full((1,), 0, dtype=np.float32),
                                             high=np.full((1,), np.inf, dtype=np.float32),
-                                            shape=(1,),
-                                            dtype=np.float32)
+                                            shape=(1,), dtype=np.float32)
 
         return state_spaces, action_spaces
 

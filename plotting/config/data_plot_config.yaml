@@ -9,8 +9,8 @@ weather:
 
   dwd:
     # DWD preprocessed weather data (5-min resolution, per-year files).
-    # Columns: timestamp, avg_wind_speed, wind_dir, direct_sun_shine,
-    #          diff_sun_shine, temp_amb, rel_humidity, sun_shine
+    # Columns: timestamp, avg_wind_speed, wind_dir, sun_shine,
+    #          diff_sun_shine, temp_amb, rel_humidity
     dir: data/weather/dwd/preprocessed
     file_pattern: "{year}_merged_04177.csv"
     timestamp_col: timestamp
@@ -18,7 +18,7 @@ weather:
   zenodo:
     # Zenodo weather dataset (Braunschweig district heating study).
     # Outdoor weather data extracted from HDF5, per-year files.
-    # Columns: timestamp, rel_humidity, direct_sun_shine, temp_amb,
+    # Columns: timestamp, rel_humidity, sun_shine, temp_amb,
     #          wind_dir, avg_wind_speed
     dir: data/weather/zenodo/csvs_weather
     file_pattern: "{year}_weather.csv"

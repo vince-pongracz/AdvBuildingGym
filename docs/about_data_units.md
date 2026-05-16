@@ -14,9 +14,8 @@ Columns in the preprocessed CSV (note: irradiance is already converted from raw 
 | `timestamp` | `MESS_DATUM` | UTC datetime | Measurement time |
 | `avg_wind_speed` | `FF_10` | m/s | 10-min mean wind speed |
 | `wind_dir` | `DD_10` | degrees (°) | 10-min mean wind direction |
-| `direct_sun_shine` | `GS_10` | W/m² | Global shortwave irradiance (converted from J/cm²/10min) |
-| `diff_sun_shine` | `DS_10` | W/m² | Diffuse shortwave irradiance (converted from J/cm²/10min) |
-| `sun_shine` | derived | W/m² | `direct_sun_shine + diff_sun_shine` |
+| `sun_shine` | `GS_10` | W/m² | Global shortwave irradiance (converted from J/cm²/10min) |
+| `diff_sun_shine` | `DS_10` | W/m² | Diffuse-only diagnostic (converted from J/cm²/10min); informational, not consumed by the env |
 | `temp_amb` | `TT_10` | °C | Ambient air temperature at 2 m |
 | `rel_humidity` | `RF_10` | % (0–100) | Relative humidity |
 
@@ -31,7 +30,7 @@ Preprocess: `preprocessing/weather/extract_weather_csv.py` → `data/weather/zen
 | --- | --- | --- |
 | `temperature` | `temp_amb` | °C |
 | `relative_humidity` | `rel_humidity` | % |
-| `solar_irradiance` | `direct_sun_shine` (+ `sun_shine` alias) | W/m² (native) |
+| `solar_irradiance` | `sun_shine` | W/m² (native) |
 | `wind_direction` | `wind_dir` | ° |
 | `wind_speed` | `avg_wind_speed` | m/s |
 
