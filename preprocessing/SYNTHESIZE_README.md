@@ -39,7 +39,26 @@ preprocessing/
 seed: 42                             # base seed; per-(cfg, file) seeds are derived
 syn_cfg_dir: preprocessing/syn_cfgs  # where syn_cfg_*.yaml-s live
 active_configs: [syn_cfg_1_neg, syn_cfg_1_pos, syn_cfg_2_neg, syn_cfg_2_pos, syn_cfg_3_neg, syn_cfg_3_pos]
+
+solar_location:                      # daylight mask for synthetic irradiance
+  latitude: 49.0069                  # DWD station 04177 (Karlsruhe, Rheinstetten)
+  longitude: 8.4037
+  elevation_threshold_deg: 0.0       # 0° = horizon; -0.833° = civil sunrise
+  fallback_tz: Europe/Berlin         # only used for tz-naive timestamps (Zenodo)
 ```
+
+### Daylight mask
+
+After per-column transforms run on a `weather` CSV, `sun_shine` and
+`diff_sun_shine` are forced to `0.0` whenever the sun is below
+`elevation_threshold_deg` for that row's date and location. Sunrise / sunset
+crossings are looked up per unique date via `astral.sun.time_at_elevation`,
+so noise + `constant_shift` cannot leak positive irradiance into the night.
+Timestamp timezone is auto-detected: tz-aware columns (DWD `+00:00`) go
+straight to UTC, tz-naive columns (Zenodo) are localised with `fallback_tz`
+first. Change `latitude`/`longitude` if you synthesise data from another
+station; raise `elevation_threshold_deg` to shrink the daylight window
+(e.g. drop low-sun twilight irradiance).
 
 ## Per-level config (`syn_cfg_*.yaml`)
 

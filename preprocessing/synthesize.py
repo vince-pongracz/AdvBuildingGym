@@ -26,8 +26,15 @@ from typing import Any
 import numpy as np
 import pandas as pd
 import yaml
+from astral import LocationInfo
+from astral.sun import SunDirection, time_at_elevation
 
 logger = logging.getLogger(__name__)
+
+# Irradiance columns the daylight mask zeroes outside the sun-up window.
+# `sun_shine` is the canonical global horizontal irradiance column; DWD also
+# carries `diff_sun_shine` (diffuse-only diagnostic). Both must be zero at night.
+IRRADIANCE_COLUMNS: tuple[str, ...] = ("sun_shine", "diff_sun_shine")
 
 _PREPROC_DIR: Path = Path(__file__).resolve().parent
 DEFAULT_TOP_CONFIG: Path = _PREPROC_DIR / "synthesize_config.yaml"
@@ -153,6 +160,143 @@ def apply_column_pipeline(
 
 
 # ---------------------------------------------------------------------------
+# Daylight mask (sunrise / sunset from `astral`)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class SolarLocation:
+    """Geographic position + sun-up threshold used to zero night-time irradiance.
+
+    `elevation_threshold_deg` defines what counts as "sun shining":
+      -  0.0  : geometric horizon (default).
+      - -0.833: civil sunrise (refraction + solar disc).
+      - +N    : stricter, shrinks the daylight window from both ends.
+    `fallback_tz` is only used for tz-naive timestamp columns (e.g. Zenodo);
+    tz-aware columns (DWD `+00:00`) are converted to UTC directly.
+    """
+
+    latitude: float
+    longitude: float
+    elevation_threshold_deg: float = 0.0
+    fallback_tz: str = "Europe/Berlin"
+
+
+def _load_solar_location(top_cfg: dict[str, Any]) -> SolarLocation:
+    raw = top_cfg.get("solar_location")
+    if not raw:
+        raise ValueError(
+            "Top synthesise config is missing the `solar_location` block "
+            "(latitude / longitude / elevation_threshold_deg / fallback_tz)."
+        )
+    return SolarLocation(
+        latitude=float(raw["latitude"]),
+        longitude=float(raw["longitude"]),
+        elevation_threshold_deg=float(raw.get("elevation_threshold_deg", 0.0)),
+        fallback_tz=str(raw.get("fallback_tz", "Europe/Berlin")),
+    )
+
+
+def _parse_timestamps_to_utc(
+    raw: pd.Series, fallback_tz: str
+) -> tuple[pd.Series, bool]:
+    """Return (UTC tz-aware DatetimeIndex-like Series, was_naive)."""
+    parsed = pd.to_datetime(raw, errors="coerce")
+    was_naive = parsed.dt.tz is None
+    if was_naive:
+        # DST autumn fall-back: a wall-clock instant like 02:30 occurs twice;
+        # `ambiguous=False` picks the post-transition (standard-time) reading.
+        # Those instants are always deep night locally, so the daylight mask is
+        # the same either way. `nonexistent="shift_forward"` handles the spring
+        # forward gap (e.g. 02:30 → 03:30 in March).
+        localised = parsed.dt.tz_localize(
+            fallback_tz, ambiguous=False, nonexistent="shift_forward"
+        )
+        utc = localised.dt.tz_convert("UTC")
+    else:
+        utc = parsed.dt.tz_convert("UTC")
+    return utc, was_naive
+
+
+def _compute_daylight_mask(
+    timestamps_utc: pd.Series, loc: SolarLocation
+) -> pd.Series:
+    """Boolean Series — True where the sun is above the threshold.
+
+    Looks up the sunrise / sunset crossing per unique UTC date (~366/year),
+    not per row, so cost is O(days), not O(samples).
+    """
+    observer = LocationInfo(latitude=loc.latitude, longitude=loc.longitude).observer
+    threshold = loc.elevation_threshold_deg
+
+    mask = pd.Series(False, index=timestamps_utc.index)
+    unique_dates = pd.unique(timestamps_utc.dt.date.dropna())
+
+    for d in unique_dates:
+        try:
+            rise = time_at_elevation(
+                observer, elevation=threshold, date=d, direction=SunDirection.RISING
+            )
+            set_ = time_at_elevation(
+                observer, elevation=threshold, date=d, direction=SunDirection.SETTING
+            )
+        except (ValueError, AttributeError) as exc:
+            # No sun-crossing on this date (polar day / night, or threshold
+            # never reached). Conservative fallback: assume full daylight so
+            # we never silently lose data for a whole day.
+            logger.warning(
+                "Daylight mask: no sun-up window for %s at lat=%.4f, lon=%.4f, "
+                "elevation=%.2f° (%s); leaving the day unmasked.",
+                d, loc.latitude, loc.longitude, threshold, exc,
+            )
+            day_rows = timestamps_utc.dt.date == d
+            mask.loc[day_rows] = True
+            continue
+
+        day_rows = timestamps_utc.dt.date == d
+        ts_day = timestamps_utc[day_rows]
+        mask.loc[day_rows] = (ts_day >= rise) & (ts_day <= set_)
+
+    return mask
+
+
+def _apply_daylight_mask(df: pd.DataFrame, loc: SolarLocation) -> None:
+    """In-place: zero IRRADIANCE_COLUMNS wherever the sun is below the threshold."""
+    irradiance_present = [c for c in IRRADIANCE_COLUMNS if c in df.columns]
+    if not irradiance_present:
+        return
+    if "timestamp" not in df.columns:
+        logger.warning(
+            "Daylight mask skipped: no `timestamp` column (irradiance columns %s "
+            "left as-is).", irradiance_present,
+        )
+        return
+
+    timestamps_utc, was_naive = _parse_timestamps_to_utc(
+        df["timestamp"], fallback_tz=loc.fallback_tz
+    )
+    if was_naive:
+        logger.info(
+            "tz-naive timestamps detected, assuming %s before UTC conversion "
+            "for daylight mask.", loc.fallback_tz,
+        )
+
+    daylight = _compute_daylight_mask(timestamps_utc, loc)
+    night_mask = ~daylight
+    zeroed = 0
+    for col in irradiance_present:
+        valid = night_mask & df[col].notna()
+        df.loc[valid, col] = 0.0
+        zeroed = max(zeroed, int(valid.sum()))
+    logger.info(
+        "  daylight mask: zeroed up to %d rows (sun ≤ %.2f° at lat=%.4f, "
+        "lon=%.4f) across %s",
+        zeroed, loc.elevation_threshold_deg, loc.latitude, loc.longitude,
+        irradiance_present,
+    )
+
+
+# ---------------------------------------------------------------------------
 # File-level synthesis
 # ---------------------------------------------------------------------------
 
@@ -161,6 +305,7 @@ def synthesize_file(
     output_path: Path,
     columns_spec: dict[str, dict[str, Any]],
     rng: np.random.Generator,
+    solar_location: SolarLocation | None = None,
 ) -> pd.DataFrame:
     """Apply per-column transforms to ``input_path`` and write to ``output_path``."""
     df = pd.read_csv(input_path)
@@ -189,28 +334,15 @@ def synthesize_file(
             after.min(), after.mean(), after.max(),
         )
 
-    # Solar irradiance is physically zero outside daylight; Gaussian noise plus
-    # shifts can leak positive values into the night band. Zero any irradiance
-    # column between 22:00 and 05:00 (timestamp hour).
+    # Solar irradiance is physically zero outside daylight; Gaussian noise +
+    # constant_shift can leak positive values into the night band. Zero the
+    # irradiance columns wherever the sun is below the configured elevation
+    # threshold for the row's date and location.
     # Schema across sources (after the DWD `GS_10` rename):
     #   - DWD    : `sun_shine` (global, W/m²) + `diff_sun_shine` (diffuse-only).
     #   - Zenodo : `sun_shine` only (no diffuse channel in WPuQ).
-    # `sun_shine` is noised independently by its own syn_cfg block — no
-    # reconstruction step. `diff_sun_shine` is a diagnostic-only column and is
-    # noised independently for DWD.
-    # TODO noprio VP 2026.05.03. : Add smarter filtering for sun_shine zero radiance
-    sun_cols_present = [c for c in ("sun_shine", "diff_sun_shine") if c in df.columns]
-    if sun_cols_present and "timestamp" in df.columns:
-        hour = pd.to_datetime(df["timestamp"], utc=True, errors="coerce").dt.hour
-        night_mask = ((hour >= 22) | (hour < 5)).fillna(False)
-        if night_mask.any():
-            for col in sun_cols_present:
-                valid = night_mask & df[col].notna()
-                df.loc[valid, col] = 0.0
-            logger.info(
-                "  sun night-mask: zeroed %d rows (22:00–05:00) across %s",
-                int(night_mask.sum()), sun_cols_present,
-            )
+    if solar_location is not None:
+        _apply_daylight_mask(df, solar_location)
 
     df.to_csv(output_path, index=False)
     logger.info("Saved %d synthesised records to %s", len(df), output_path)
@@ -287,6 +419,7 @@ def run_synthesis(
     top = load_top_config(Path(top_cfg_path))
     base_seed = int(top.get("seed", 42))
     syn_cfg_dir = Path(top.get("syn_cfg_dir", DEFAULT_SYN_CFG_DIR))
+    solar_location = _load_solar_location(top)
 
     if not syn_cfg_dir.is_absolute():
         syn_cfg_dir = (_PREPROC_DIR.parent / syn_cfg_dir).resolve()
@@ -316,7 +449,11 @@ def run_synthesis(
                     base_seed + cfg_idx * 10_000 + _DOMAIN_SEED_OFFSET[domain] + stats[domain]
                 )
                 out = _output_path(csv_path, syn_cfg.name)
-                synthesize_file(csv_path, out, columns_spec, rng)
+                # Daylight mask is only meaningful for weather (irradiance columns).
+                # Price / hh_consumption files have no irradiance, so passing None
+                # avoids unnecessary timestamp parsing in the mask helper.
+                file_solar_loc = solar_location if domain == "weather" else None
+                synthesize_file(csv_path, out, columns_spec, rng, file_solar_loc)
                 stats[domain] += 1
 
     logger.info(

@@ -10,6 +10,21 @@
 seed: 42
 syn_cfg_dir: preprocessing/syn_cfgs
 
+# Daylight mask applied after the per-column transforms: irradiance columns
+# (sun_shine, diff_sun_shine) are zeroed wherever the sun is below
+# `elevation_threshold_deg` for the row's date at the given location. Sunrise /
+# sunset crossings are looked up per unique date via `astral.sun.time_at_elevation`.
+# `fallback_tz` is used only for tz-naive timestamps (e.g. Zenodo CSVs);
+# tz-aware timestamps (e.g. DWD `+00:00`) are converted to UTC directly.
+solar_location:
+  # Defaults reflect DWD station 04177 (Rheinstetten).
+  latitude: 49.0069
+  longitude: 8.4037
+  # 0° = geometric horizon. -0.833° matches the civil sunrise definition
+  # (refraction + solar disc). Positive values shrink the daylight window.
+  elevation_threshold_deg: 0.0
+  fallback_tz: Europe/Berlin
+
 # Which syn_cfg_*.yaml files to apply. All listed are run for every input CSV.
 active_configs:
   - syn_cfg_0
