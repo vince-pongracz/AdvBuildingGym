@@ -29,6 +29,7 @@ from typing import Literal
 import yaml
 
 from adv_building_gym.devices.infrastructure.base import Infrastructure
+from adv_building_gym.utils.serialization import from_dict as component_from_dict
 
 logger = logging.getLogger(__name__)
 
@@ -138,7 +139,7 @@ class InfraCombinator:
         cfgs = self._configs[split]
         cfg = cfgs[swap_index % len(cfgs)]
         return [
-            Infrastructure.from_dict(spec, cfg.context)
+            component_from_dict(spec, "infrastructure", cfg.context)
             for spec in cfg.infra_dicts
         ]
 

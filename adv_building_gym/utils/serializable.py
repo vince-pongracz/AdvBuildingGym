@@ -9,7 +9,7 @@ import it without triggering the config package's heavy env_config imports.
 
 import inspect
 import logging
-from abc import ABC, abstractmethod
+from abc import ABC
 from typing import Any, Dict, Type, TypeVar, ClassVar, Set
 
 logger = logging.getLogger(__name__)
@@ -175,21 +175,6 @@ class Serializable(ABC):
             param_name, type(value).__name__
         )
         return None
-
-    @classmethod
-    @abstractmethod
-    def from_dict(cls: Type[T], data: Dict[str, Any], context: Dict[str, Any] | None = None) -> T:
-        """
-        Reconstruct a component from a dictionary.
-
-        Args:
-            data: Dictionary representation of the component
-            context: Optional context containing derived parameters (e.g., building_props)
-
-        Returns:
-            Reconstructed component instance
-        """
-        pass
 
     @classmethod
     def _get_init_args(

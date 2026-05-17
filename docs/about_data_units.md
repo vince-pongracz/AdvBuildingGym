@@ -98,7 +98,7 @@ Files: `data/ev_usage_profiles/ev_*.csv` — sparse rows; populated row = CONNEC
 
 ## 6. Operator energy control (grid limit)
 
-No CSV — set as a constant `max_power_kW` in the env config YAML and published every step. Unit: kW. (`operator_energy_control.py`)
+Either a constant `max_power_kW` from the env config YAML, or — when an `operator_energy_control` variant CSV is supplied (via the data scheduler or `ds_path`) — a sparse step-change profile (`start, max_power_kW`) forward-filled into a per-iteration array and repeated every simulated day; the constructor's `max_power_kW` becomes the pre-first-event fallback. Published every step. Unit: kW. (`operator_energy_control.py`)
 
 ## Summary — runtime keys vs. raw units
 

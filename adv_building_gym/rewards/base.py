@@ -1,8 +1,6 @@
-from typing import Any, ClassVar, Dict, Set, Type, TypeVar
+from typing import ClassVar, Set
 
-from adv_building_gym.utils.serializable import Serializable, ComponentRegistry
-
-T = TypeVar('T', bound='RewardFunction')
+from adv_building_gym.utils.serializable import Serializable
 
 
 class RewardFunction(Serializable):
@@ -59,34 +57,3 @@ class RewardFunction(Serializable):
         (operator over-limit, comfort breach, EV session failure, ...).
         """
         return False
-
-    @classmethod
-    def from_dict(
-        cls: Type[T],
-        data: Dict[str, Any],
-        context: Dict[str, Any] | None = None
-    ) -> T:
-        """
-        Reconstruct a RewardFunction from a dictionary.
-
-        Uses the ComponentRegistry to find the correct class by name,
-        then constructs it with serialized data merged with context.
-
-        Args:
-            data: Dictionary containing 'class' key and constructor parameters
-            context: Optional context with derived parameters (e.g., infrastructures)
-
-        Returns:
-            Reconstructed RewardFunction instance
-        """
-        class_name = data.get('class')
-        if class_name is None:
-            raise ValueError("Missing 'class' key in reward data")
-
-        # Get the actual class from registry
-        reward_class = ComponentRegistry.get('reward', class_name)
-
-        # Build kwargs from data and context
-        kwargs = reward_class._get_init_args(data, context)
-
-        return reward_class(**kwargs)

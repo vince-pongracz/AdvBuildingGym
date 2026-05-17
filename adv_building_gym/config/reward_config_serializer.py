@@ -56,13 +56,13 @@ class RewardConfigSerializer:
             RewardConfig with deserialized reward instances.
         """
         from adv_building_gym.config.reward_config import RewardConfig
-        from adv_building_gym.rewards import RewardFunction
+        from adv_building_gym.utils.serialization import from_dict as component_from_dict
 
         reward_config = RewardConfig()
         if "rewards" in config_dict:
             rewards = []
             for reward_dict in config_dict["rewards"]:
-                reward = RewardFunction.from_dict(reward_dict)
+                reward = component_from_dict(reward_dict, "reward")
                 rewards.append(reward)
             reward_config.rewards = rewards
             reward_config.log_values()

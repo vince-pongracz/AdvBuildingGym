@@ -45,6 +45,9 @@ variable:
     - data/ev_usage_profiles/ev_eval_1.csv
     - data/ev_usage_profiles/ev_eval_2.csv
     - data/ev_usage_profiles/ev_eval_3.csv
+  operator_energy_control:
+    - data/operator_signals/op_eval_night_charge.csv
+    - data/operator_signals/op_eval_two_dip.csv
   desired_temp_in:
     - data/inside_temp/inside_temp_eval_0.csv
     - data/inside_temp/inside_temp_eval_1.csv

@@ -14,6 +14,7 @@ from typing import Literal
 import yaml
 
 from adv_building_gym.devices.statesources.base import StateSource
+from adv_building_gym.utils.serialization import from_dict as component_from_dict
 
 logger = logging.getLogger(__name__)
 
@@ -92,7 +93,7 @@ class StatesourceCombinator:
     def create_statesources(self, swap_index: int, split: Split = "train") -> list[StateSource]:
         cfgs = self._configs[split]
         cfg = cfgs[swap_index % len(cfgs)]
-        return [StateSource.from_dict(spec, cfg.context) for spec in cfg.statesource_dicts]
+        return [component_from_dict(spec, "statesource", cfg.context) for spec in cfg.statesource_dicts]
 
     def advance(self) -> bool:
         if not self.is_enabled() or len(self._configs["train"]) < 2:
