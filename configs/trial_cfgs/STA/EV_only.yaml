@@ -85,12 +85,7 @@ infras:
 - class: LinearEVCharger
   name: ev_charger
   max_power_kW: 7.0
-  max_charging_kW: 7.0
-  charger_efficiency: 0.92
-  discharge_efficiency: 0.92
   v2g_enabled: true
-  history_length: 4
-  target_soc: 0.9
   max_charge_time_hrs: 24.0
   v2g_playroom: 0.1
 - class: SolarPanel

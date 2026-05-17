@@ -17,29 +17,45 @@ _LAST_VIOLATION_KEY = "operator_reward_last_violation_step"
 class OperatorEnergyControlReward(RewardFunction):
     """Reward function for respecting grid operator energy consumption limits.
 
-    Three-zone reward based on consumption ratio (grid_power / operator_limit):
+    Computed from ``ratio = net_power_kW / ctxt_operator_max_power_kW``:
 
-    - Below 90% of limit: full reward (1.0)
-    - 90%-100% of limit: exponential decay from 1.0 towards 0
-      using exp(-5 * (ratio - 0.9) / 0.1), where the scale factor 5
-      gives exp(-5) ~ 0.007 at the limit boundary
-    - Above limit: harsh_penalty (default -4.0), followed by an
-      exponential recovery period of ``recovery_steps`` steps where
-      the reward follows harsh_penalty * exp(-rate * k), decaying
-      from harsh_penalty towards 0.
+    - ``soft_threshold_pct < ratio <= 1.0`` (warning zone):
+      ``exp(-_DECAY_SCALE * (ratio - soft_threshold_pct) / (1 - soft_threshold_pct)) - 1.0``,
+      decaying from 0 towards -1 as consumption approaches the limit
+      (with the default scale of 5, ``exp(-5) ~ 0.007`` so the floor
+      is essentially -1 at the limit boundary).
+    - ``1.0 < ratio <= terminate_threshold_pct`` (over-limit):
+      ``harsh_penalty`` (default -4.0). The step is marked as a
+      violation; on the next ``recovery_steps`` steps the warning-zone
+      reward is overridden by an exponential recovery curve
+      ``harsh_penalty * exp(-rate * k)`` decaying from ``harsh_penalty``
+      towards ~0 (with ``rate = ln(100) / recovery_steps`` so the
+      ceiling reaches ~1% of ``harsh_penalty`` at step ``k = recovery_steps``).
+    - ``ratio > terminate_threshold_pct`` (default 1.1): the episode
+      is ended via the ``should_terminate`` hook (Phase-1 pre-pass in
+      the env). When the env publishes ``allow_early_termination=True``
+      in ``info``, the terminal step pays ``terminate_penalty``
+      (default -100); otherwise the over-limit branch above applies.
+    - ``ratio <= soft_threshold_pct`` (safe zone): reward 0.
 
-    Reads ``net_power_kW`` from the ``info`` dict and the per-episode
-    operator limit from ``ctxt_operator_max_power_kW`` in the state dict
-    (published by the OperatorEnergyControl statesource), so the kW limit
-    has a single source of truth in the env config.
+    This function never emits a positive reward, so ``max_reward_in_step``
+    is 0 -- it acts as a pure penalty in the multi-objective sum.
 
-    Termination is exposed via the ``should_terminate`` ABC hook (Phase-1
-    pre-pass in the env). ``get_reward`` no longer mutates the info dict.
+    The kW limit lives on the ``OperatorEnergyControl`` statesource and is
+    read here via ``ctxt_operator_max_power_kW``; ``net_power_kW`` comes
+    from the env's ``_component_info`` dict. Per-episode counters
+    (``operator_reward_step``, ``operator_reward_last_violation_step``)
+    are stored in ``info`` so they reset automatically at episode
+    boundaries when the env clears ``_component_info``. ``get_reward``
+    writes those two counters but does not mutate any termination flags.
     """
 
     # Scale factor for the exponential decay in the transition zone.
-    # exp(-5) ~ 0.007, so reward nearly reaches 0 right at the limit.
+    # exp(-5) ~ 0.007, so reward nearly reaches -1 right at the limit.
     _DECAY_SCALE: float = 5.0
+
+    # Penalty-only reward: best achievable per step is 0.
+    max_reward_in_step: float = 0.0
 
     def __init__(self,
                 weight: float,
@@ -56,8 +72,9 @@ class OperatorEnergyControlReward(RewardFunction):
             weight: Reward weight (scaling factor).
             name: Reward function name.
             harsh_penalty: Flat penalty when consumption exceeds the operator limit.
-            soft_threshold_pct: Fraction of operator limit below which reward is 1.0
-                (default 0.9 = 90%). Must be in (0, 1).
+            soft_threshold_pct: Fraction of operator limit below which the reward
+                is 0 (default 0.9 = 90%). Above this and up to the limit the
+                reward decays smoothly from 0 to ~-1. Must be in (0, 1).
             recovery_steps: Number of steps after a harsh penalty during which
                 the reward is suppressed and exponentially recovers towards 0
                 before returning to normal (default 3).
@@ -115,50 +132,47 @@ class OperatorEnergyControlReward(RewardFunction):
 
     def get_reward(self, actions, states, info: dict | None = None) -> tuple[float, float]:
         """Calculate reward based on grid power consumption vs operator limit."""
+        max_step = self.weight * self.max_reward_in_step  # always 0.0, kept for clarity
+
         if info is None:
             logger.warning("OperatorEnergyControlReward: info dict is None, returning 0")
-            return 0.0, (self.weight * self.max_reward_in_step)
-
-        # Read and advance per-episode step counter from info dict.
-        # Resets to 0 at episode start because _component_info is cleared.
-        step = info.get(_STEP_KEY, 0) + 1
-        info[_STEP_KEY] = step
-        last_violation_step = info.get(_LAST_VIOLATION_KEY, -self.recovery_steps)
+            return 0.0, max_step
 
         ratio = self._compute_ratio(states, info)
-
-        # No usable operator limit -- skip this reward, don't know what to punish
         if ratio is None:
             logger.error("E usage ratio can't be computed")
             return 0.0, 0.0
 
-        allow_term = info.get("allow_early_termination", False)
-        if allow_term and ratio > self.terminate_threshold_pct:
-            # should_terminate already voted to end the episode in Phase 1;
-            # emit the configured terminal penalty here.  When early
-            # termination is disabled, we fall through to the regular
-            # over-limit branch (harsh_penalty + recovery) below.
-            return float(self.weight * self.terminate_penalty), (self.weight * self.max_reward_in_step)
+        # Advance per-episode step counter (resets each episode when the
+        # env clears _component_info).
+        step = info[_STEP_KEY] = info.get(_STEP_KEY, 0) + 1
 
-        if self.soft_threshold_pct < ratio <= 1.0:
-            # Transition zone: exponential decay from 0.0 towards -1.0
-            t = (ratio - self.soft_threshold_pct) / (1.0 - self.soft_threshold_pct)
-            reward = float(np.exp(-self._DECAY_SCALE * t)) - 1.0
-        else:
-            # Between operator limit and terminate threshold: harsh penalty
-            # and mark violation so the recovery zone applies on subsequent
-            # steps.
+        # Terminal breach -- only paid here when the env honours early
+        # termination. Otherwise fall through to the over-limit branch.
+        if ratio > self.terminate_threshold_pct and info.get("allow_early_termination", False):
+            return float(self.weight * self.terminate_penalty), max_step
+
+        # Over-limit (incl. ratio > terminate_threshold_pct when early
+        # termination is disabled): flat harsh penalty + mark violation.
+        if ratio > 1.0:
             info[_LAST_VIOLATION_KEY] = step
-            return float(self.weight * self.harsh_penalty), (self.weight * self.max_reward_in_step)
+            return float(self.weight * self.harsh_penalty), max_step
 
-        # During recovery: override reward with an exponential curve from
-        # harsh_penalty towards 0.  The agent earns a negative (but shrinking)
-        # reward for recovery_steps steps, then normal rewarding resumes.
-        steps_since_violation = step - last_violation_step
+        # Safe zone.
+        if ratio <= self.soft_threshold_pct:
+            return 0.0, max_step
+
+        # Warning zone (soft_threshold_pct < ratio <= 1.0): smooth decay
+        # 0 -> ~-1, overridden by the recovery curve when we are still
+        # within `recovery_steps` of the last violation.
+        steps_since_violation = step - info.get(_LAST_VIOLATION_KEY, -self.recovery_steps)
         if steps_since_violation <= self.recovery_steps:
-            reward = float(self.harsh_penalty * np.exp(-self._recovery_rate * steps_since_violation))
+            reward = self.harsh_penalty * np.exp(-self._recovery_rate * steps_since_violation)
+        else:
+            t = (ratio - self.soft_threshold_pct) / (1.0 - self.soft_threshold_pct)
+            reward = np.exp(-self._DECAY_SCALE * t) - 1.0
 
-        return float(self.weight * reward), (self.weight * self.max_reward_in_step)
+        return float(self.weight * reward), max_step
 
 
 # Register OperatorEnergyControlReward with the component registry

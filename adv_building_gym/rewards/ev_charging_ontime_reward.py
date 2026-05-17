@@ -84,7 +84,7 @@ class EVChargingOnTimeReward(RewardFunction):
 
         # Read EV charger parameters from info dict (published by LinearEVCharger)
         max_charging_kW = info["ctxt_ev_max_charging_kW"]
-        max_cap_kWh = info["ctxt_ev_max_cap_kWh"]
+        max_cap_kWh = info["ctxt_ev_max_cap_kWh"] or 0.0  # avoid None
         charger_efficiency = info["ctxt_ev_charger_efficiency"]
         max_charge_time_hrs = info["ctxt_ev_max_charge_time_hrs"]
 
@@ -115,10 +115,10 @@ class EVChargingOnTimeReward(RewardFunction):
         # Without this gate the reward rewards inaction (having time left) instead
         # of rewarding charging progress.
         ev_action = float(np.atleast_1d(actions.get("a_lin_ev_charger", [0]))[0])
-        if ev_action < 0.01:
-            reward = 0.0
-
-        return self.weight * reward, max_step
+        if ev_action > 0.0:
+            return self.weight * reward, max_step
+        else:
+            return self.weight * 0.0, max_step
 
 
 # Register EVChargingReward with the component registry

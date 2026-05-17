@@ -105,7 +105,7 @@ infras:
   cut_out_speed: 25.0
 - class: HouseholdEnergyConsumers
   name: hh_consumers
-  peak_consumption_kW: 8.0
+  peak_consumption_kW: 8.0 # TODO VP 2026.05.17.: What does this do?
 
 rewards:
 - class_name: BatteryTargetReward

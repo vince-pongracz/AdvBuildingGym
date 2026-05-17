@@ -29,7 +29,8 @@ class LongTermEconomicReward(RewardFunction):
 
         self.reference_power_kW = float(reference_power_kW)
         self._step = 0
-        self._accumulated_norm_price = 0.0
+        self._accumulated_usage_price_norm = 0.0
+        self._sum_net_power_kW = 0.0
 
     _exclude_params = {"_step_in_window", "_accum"}
 
@@ -43,7 +44,8 @@ class LongTermEconomicReward(RewardFunction):
     
     def on_reset(self, states, info: dict | None = None) -> None:
         self._step = 0
-        self._accumulated_norm_price = 0.0
+        self._accumulated_usage_price_norm = 0.0
+        self._sum_net_power_kW = 0.0
 
     def get_reward(self, actions, states, info: dict | None = None) -> tuple[float, float]:
         if info is None:
@@ -63,10 +65,11 @@ class LongTermEconomicReward(RewardFunction):
             logger.warning("LongTermEconomicReward: missing net_power_kW in info, returning 0")
             return 0.0, 0.0
 
-        current_energy_price = float(states["s_E_price"][0])
-        reference_power_kW = self._resolve_reference_power_kW(states)
-        # NOTE VP 2026.05.07.: how much power do I use from the limit -- the price of it.
-        self._accumulated_norm_price += net_power_kW / reference_power_kW * current_energy_price
+        current_energy_price_norm = float(states["s_E_price"][0])
+        # _accumulated_usage_price_norm: positive -- we produce, we get paid
+        # _accumulated_usage_price_norm: negative -- we consume, we pay
+        self._accumulated_usage_price_norm += net_power_kW * current_energy_price_norm
+        self._sum_net_power_kW += net_power_kW
         # For the early termination scenario -- if the env is configured like that -- 
         # but iter could be fetched from the info dict
         self._step += 1
@@ -79,10 +82,7 @@ class LongTermEconomicReward(RewardFunction):
         if self._step < episode_length and not terminated:
             return 0.0, 0.0
 
-        steps = max(self._step, 1)
-        window_reward = float(np.clip(self._accumulated_norm_price, -float(steps), 0.0))
-
-        return float(self.weight * window_reward), 0.0
+        return float(self.weight * self._accumulated_usage_price_norm), 0.0
 
 
 ComponentRegistry.register('reward', LongTermEconomicReward)
