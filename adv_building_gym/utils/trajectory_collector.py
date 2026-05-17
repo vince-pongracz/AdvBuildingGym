@@ -136,6 +136,8 @@ class TrajectoryCollector:
         reward_rate = achieved_reward / max_achievable if max_achievable > 0 else 0.0
         cum_values = trajectory.get("cum_E_kWh", [])
         final_cum_E = cum_values[-1] if cum_values else 0.0
+        cum_price_values = trajectory.get("cum_price_EUR", [])
+        final_cum_price = cum_price_values[-1] if cum_price_values else 0.0
 
         episode_date = self._initial_info.get("episode_date") if self._initial_info else None
 
@@ -151,6 +153,7 @@ class TrajectoryCollector:
                 "max_achievable_reward": float(max_achievable),
                 "reward_rate": float(reward_rate),
                 "cum_E_kWh": float(final_cum_E),
+                "cum_price_EUR": float(final_cum_price),
             },
             "trajectory": trajectory,
         }

@@ -19,6 +19,7 @@ from adv_building_gym.envs.data_variant import DataVariantProvider
 from adv_building_gym.envs._data_variant_manager import DataVariantManager
 from adv_building_gym.envs._action_history_buffer import ActionHistoryBuffer
 from adv_building_gym.envs._energy_tracker import EnergyTracker
+from adv_building_gym.envs._price_tracker import PriceTracker
 from adv_building_gym.envs._raw_state_collector import RawStateCollector
 
 from adv_building_gym.config.env_config import EnvConfig
@@ -105,6 +106,7 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         )
 
         self._energy_tracker = EnergyTracker(control_step_s=env_config.CONTROL_STEP)
+        self._price_tracker = PriceTracker(control_step_s=env_config.CONTROL_STEP)
         self._raw_state_collector = RawStateCollector()
 
         # Each env instance is a distinct caller in the RngService registry, keyed
@@ -193,6 +195,10 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
     @property
     def cum_E_kWh(self) -> float:
         return self._energy_tracker.cum_E_kWh
+
+    @property
+    def cum_price_EUR(self) -> float:
+        return self._price_tracker.cum_price_EUR
 
     @property
     def episode_count(self) -> int:
@@ -307,6 +313,7 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
     def _reset_internal_state(self) -> None:
         self.iteration = 0
         self._energy_tracker.reset()
+        self._price_tracker.reset()
         self._action_history.clear()
         # Re-zero observation arrays in place (preserves dtype/shape).
         for k, v in self.state.items():
@@ -437,7 +444,17 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
             for infra in self.infras
         }
         total_power_kW, _energy_kWh = self._energy_tracker.add_step_E_contrib(power_breakdown)
+        self._price_tracker.add_step_contrib(power_breakdown, self._current_baseprice_ct_per_kWh())
         return total_power_kW, power_breakdown
+
+    def _current_baseprice_ct_per_kWh(self) -> float | None:
+        # Duck-type to avoid importing EnergyPriceDataSource (circular). The
+        # statesource caches baseprice_raw during update_state each tick.
+        for ds in self.statesources:
+            price = getattr(ds, "baseprice_raw", None)
+            if price is not None:
+                return float(price)
+        return None
 
     def _publish_step_info(
         self,
@@ -510,6 +527,7 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
             "reward_breakdown": reward_breakdown,
             "max_reward_step": max_reward_step,
             "cum_E_kWh": self._energy_tracker.cum_E_kWh,
+            "cum_price_EUR": self._price_tracker.cum_price_EUR,
             "net_power_kW": total_power_kW,
             "power_breakdown": power_breakdown,
             "raw": self._raw_state_collector.collect(self.statesources, self.infras, self.state),

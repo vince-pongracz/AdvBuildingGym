@@ -77,6 +77,7 @@ def _save_episode_metrics_json(
     max_achievable_reward: float,
     reward_rate: float,
     cum_E_kWh: float | None,
+    cum_price_EUR: float | None,
     reward_component_totals: dict[str, float] | None = None,
 ) -> None:
     """Save per-episode metrics as a JSON file.
@@ -89,6 +90,7 @@ def _save_episode_metrics_json(
         max_achievable_reward: Theoretical maximum reward.
         reward_rate: achieved / max ratio.
         cum_E_kWh: Cumulative energy consumption, or None.
+        cum_price_EUR: Cumulative electricity cost (EUR), or None.
         reward_component_totals: Per-component episode reward sums, or None.
     """
     clipped_actions = _extract_clipped_actions(episode)
@@ -100,6 +102,7 @@ def _save_episode_metrics_json(
         "total_reward": float(max_achievable_reward),
         "reward_rate": float(reward_rate),
         "cum_E_kWh": float(cum_E_kWh) if cum_E_kWh is not None else None,
+        "cum_price_EUR": float(cum_price_EUR) if cum_price_EUR is not None else None,
         "reward_breakdown": reward_component_totals if reward_component_totals else None,
         "rewards": episode.get_rewards() if hasattr(episode, "get_rewards") else None,
         "observations": (
@@ -171,6 +174,7 @@ def make_episode_metrics_cb_class(
             # are 0 when the EV is disconnected).
             max_achievable_reward = 0.0
             cum_E_kWh = None
+            cum_price_EUR = None
             episode_count: int | None = None
             reward_component_totals: dict[str, float] = {}
             if hasattr(episode, "get_infos"):
@@ -184,6 +188,7 @@ def make_episode_metrics_cb_class(
                                 reward_component_totals[reward_key] = reward_component_totals.get(reward_key, 0.0) + reward_value
                 if infos and len(infos) > 0 and isinstance(infos[-1], dict):
                     cum_E_kWh = infos[-1].get("cum_E_kWh")
+                    cum_price_EUR = infos[-1].get("cum_price_EUR")
                 # episode_count is published by AdvBuildingGym in the reset info (infos[0]).
                 if infos and isinstance(infos[0], dict):
                     episode_count = infos[0].get("episode_count")
@@ -208,6 +213,12 @@ def make_episode_metrics_cb_class(
                 metrics_logger.log_value("cum_E_kWh", cum_E_kWh, reduce="mean")
                 metrics_logger.log_value("cum_E_kWh_min", cum_E_kWh, reduce="min")
                 metrics_logger.log_value("cum_E_kWh_max", cum_E_kWh, reduce="max")
+
+            # Log cumulative electricity cost (positive = money spent)
+            if cum_price_EUR is not None:
+                metrics_logger.log_value("cum_price_EUR", cum_price_EUR, reduce="mean")
+                metrics_logger.log_value("cum_price_EUR_min", cum_price_EUR, reduce="min")
+                metrics_logger.log_value("cum_price_EUR_max", cum_price_EUR, reduce="max")
 
             # Log per-component reward breakdown for TensorBoard.
             # Appears under env_runners/reward/<name> (training) and
@@ -236,6 +247,7 @@ def make_episode_metrics_cb_class(
                     max_achievable_reward=float(max_achievable_reward),
                     reward_rate=float(reward_rate),
                     cum_E_kWh=cum_E_kWh,
+                    cum_price_EUR=cum_price_EUR,
                     reward_component_totals=reward_component_totals,
                 )
 

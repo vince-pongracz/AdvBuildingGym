@@ -115,6 +115,7 @@ def extract_trajectory_from_infos(
         initial_row = {
             "reward": 0.0,
             "cum_E_kWh": 0.0,
+            "cum_price_EUR": 0.0,
         }
         # Initial state from reset
         if "state" in initial_info and state_keys:
@@ -210,6 +211,9 @@ def extract_trajectory_from_infos(
     # Cumulative energy
     cum_values = [float(row.get("cum_E_kWh", 0.0)) for row in all_rows]
     trajectory["cum_E_kWh"] = cum_values
+
+    # Cumulative electricity cost (EUR). Positive = money spent.
+    trajectory["cum_price_EUR"] = [float(row.get("cum_price_EUR", 0.0)) for row in all_rows]
 
     # Instantaneous net power (kW) in a step = ΔEnergy (kWh) / ΔTime (h)
     trajectory["net_power_kW"] = [float(row.get("net_power_kW", 0.0)) for row in all_rows]

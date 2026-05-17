@@ -92,6 +92,9 @@ class EpisodeData:
     # Cumulative energy per timestep (kWh)
     cum_E_kWh: np.ndarray = field(default_factory=lambda: np.empty(0, dtype=np.float32))
 
+    # Cumulative electricity cost per timestep (EUR, positive = spent)
+    cum_price_EUR: np.ndarray = field(default_factory=lambda: np.empty(0, dtype=np.float32))
+
     # Per-infrastructure power breakdown  {infra_name: 1-D ndarray (kW)}
     power_breakdown: dict[str, np.ndarray] = field(default_factory=dict)
 
@@ -250,6 +253,9 @@ def load_episode(
 
         # Energy
         cum_e = traj["cum_E_kWh"][:] if "cum_E_kWh" in traj else np.zeros_like(steps)
+        cum_price = (
+            traj["cum_price_EUR"][:] if "cum_price_EUR" in traj else np.zeros_like(steps)
+        )
         # ``net_power_kW`` is the current key; older HDF5 files used
         # ``step_power_kW`` for the same quantity.
         if "net_power_kW" in traj:
@@ -292,6 +298,7 @@ def load_episode(
         reward_breakdown=reward_breakdown,
         net_power_kW=power,
         cum_E_kWh=cum_e,
+        cum_price_EUR=cum_price,
         power_breakdown=power_breakdown,
         raw=raw,
         raw_policy_actions=raw_policy_actions,
