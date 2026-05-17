@@ -114,10 +114,15 @@ def adv_building_env_creator(config: dict) -> gymnasium.Env:
         env.log_full_info = True
 
     if env_config.hst_env_wrapper_enabled:
-        env = HistoryWrapper(env, hst_len=env_config.hst_env_wrapper_hst_len)
+        env = HistoryWrapper(
+            env,
+            tracked_keys=env_config.hst_env_wrapper_tracked_keys,
+            offsets=env_config.hst_env_wrapper_offsets,
+        )
         logger.info(
-            "env_creator: HistoryWrapper enabled (hst_len=%d)",
-            env_config.hst_env_wrapper_hst_len,
+            "env_creator: HistoryWrapper enabled (tracked_keys=%s, offsets=%s)",
+            list(env_config.hst_env_wrapper_tracked_keys),
+            list(env_config.hst_env_wrapper_offsets),
         )
 
     if env_config.forecast_env_wrapper_enabled:

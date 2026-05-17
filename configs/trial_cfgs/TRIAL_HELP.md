@@ -182,7 +182,7 @@ sbatch slurm_scripts/slurm_train_ray.sh --trial configs/trial_cfgs/TL/random_all
 
 ---
 
-## `env_meta.hst_env_wrapper` — per-key rolling history
+## `env_meta.hst_env_wrapper` — per-key strided observation history
 
 Optional sub-dict under `env_meta`:
 
@@ -192,15 +192,17 @@ env_meta:
   control_step: 300
   allow_early_termination: false
   hst_env_wrapper:
-    enabled: true     # if false or absent, env is not wrapped
-    hst_len: 288      # buffer length (steps); required when enabled
+    enabled: true                          # if false or absent, env is not wrapped
+    tracked_keys: [s_temp_in_norm, a_hp_prev]
+    offsets: [-1, -2, -4, -12]             # negative = past env steps
 ```
 
-When enabled, `HistoryWrapper` (`adv_building_gym/envs/history_wrapper.py`) wraps
-the env so every `s_*`, `a_*_prev`, and `raw_sim_hour` Dict obs entry is replaced
-with an `(hst_len, *original_shape)` rolling buffer (oldest → newest,
-zero-padded at the head). `ctxt_*` keys pass through unchanged.
+When enabled, `HistoryWrapper` (`adv_building_gym/envs/history_wrapper.py`) adds
+one new `s_hst_<key>` Dict entry per tracked key, with shape
+`(len(offsets), *original_shape)`. Offset `0` (current step) is always prepended;
+the remaining entries must be `< 0` (lag in env steps). Originals pass through
+unchanged. Pre-episode slots stay zero rather than replicating the current
+frame.
 
-Alternative to `training_params.hst.tracked_keys` / `hst.offsets` — the
-`StridedHistoryConnector` is currently hard-disabled in `common_model_config.py`,
-so the two cannot interact today; do not re-enable both for the same keys.
+Listing `a_<x>_prev` keys works: the env publishes them as plain obs entries
+each step.

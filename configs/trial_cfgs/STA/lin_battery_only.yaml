@@ -13,27 +13,14 @@ env_meta:
   allow_early_termination: false
   hst_env_wrapper:
     enabled: true
-    hst_len: 288
-  forecast_env_wrapper:
-    enabled: true
-    forecast_steps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
-
-training_params:
-  common:
-    learning_rate: 0.0003
-    episode_lookback_horizon_steps: 120
-    max_episodes_to_run: 1200
-    clip_actions_to_env_bounds: true
-  ppo:
-    episodes_per_iteration: 10
-    minibatch_size: 64
-    num_epochs: 20
-  sac:
-    episodes_to_keep_in_replay_buffer: 500
-    n_step_return: 6
-    training_intensity: 256
-    learning_starts_after_n_episodes: 50
-  hst:
+    tracked_keys:
+    - s_battery_pct
+    - s_ev_soc
+    - s_temp_in_norm
+    - s_temp_out_norm
+    - s_solar_irradiance_norm
+    - a_hp_prev
+    - a_battery_prev
     offsets:
     - -1
     - -2
@@ -53,14 +40,25 @@ training_params:
     - -120
     - -132
     - -144
-    tracked_keys:
-    - s_battery_pct
-    - s_ev_soc
-    - s_temp_in_norm
-    - s_temp_out_norm
-    - s_solar_irradiance_norm
-    - a_hp_prev
-    - a_battery_prev
+  forecast_env_wrapper:
+    enabled: true
+    forecast_steps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+
+training_params:
+  common:
+    learning_rate: 0.0003
+    episode_lookback_horizon_steps: 120
+    max_episodes_to_run: 1200
+    clip_actions_to_env_bounds: true
+  ppo:
+    episodes_per_iteration: 10
+    minibatch_size: 64
+    num_epochs: 20
+  sac:
+    episodes_to_keep_in_replay_buffer: 500
+    n_step_return: 6
+    training_intensity: 256
+    learning_starts_after_n_episodes: 50
 
 statesources:
 - class: EnergyPriceDataSource

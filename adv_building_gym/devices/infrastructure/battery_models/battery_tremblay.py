@@ -180,14 +180,10 @@ class BatteryTremblay(Infrastructure):
         # States
         if "s_battery_pct" not in state_spaces.keys():
             state_spaces["s_battery_pct"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
-        # Policy-side history of s_battery_pct is assembled by
-        # StridedHistoryConnector; env no longer stores it in obs.
 
         # Raw battery capacity (kWh) — constant hardware parameter.
         if "ctxt_battery_capacity_kWh" not in state_spaces.keys():
-            state_spaces["ctxt_battery_capacity_kWh"] = Box(
-                low=0, high=np.inf, shape=(1,), dtype=np.float32
-            )
+            state_spaces["ctxt_battery_capacity_kWh"] = Box(low=0, high=np.inf, shape=(1,), dtype=np.float32)
 
         return state_spaces, action_spaces
 

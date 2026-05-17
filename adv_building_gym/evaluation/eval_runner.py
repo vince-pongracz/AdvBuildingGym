@@ -156,18 +156,33 @@ def evaluate_model(
 
     if active_config.hst_env_wrapper_enabled:
         from adv_building_gym.envs.history_wrapper import HistoryWrapper
-        base_env = HistoryWrapper(base_env, hst_len=active_config.hst_env_wrapper_hst_len)
+        base_env = HistoryWrapper(
+            base_env,
+            tracked_keys=active_config.hst_env_wrapper_tracked_keys,
+            offsets=active_config.hst_env_wrapper_offsets,
+        )
         logger.info(
-            "eval_runner: HistoryWrapper enabled (hst_len=%d)",
-            active_config.hst_env_wrapper_hst_len,
+            "eval_runner: HistoryWrapper enabled (tracked_keys=%s, offsets=%s)",
+            list(active_config.hst_env_wrapper_tracked_keys),
+            list(active_config.hst_env_wrapper_offsets),
+        )
+
+    if active_config.forecast_env_wrapper_enabled:
+        from adv_building_gym.envs.forecast_wrapper import ForecastWrapper
+        base_env = ForecastWrapper(
+            base_env,
+            forecast_steps=active_config.forecast_env_wrapper_steps,
+        )
+        logger.info(
+            "eval_runner: ForecastWrapper enabled (steps=%s)",
+            list(active_config.forecast_env_wrapper_steps),
         )
 
     env = wrap_action_space(base_env)
 
-    # Mirrors the training-side connector pipeline so the flat obs dim
-    # matches the checkpoint. StridedHistoryConnector is currently disabled
-    # (see common_model_config.py); re-wire build_env_to_module_connectors
-    # from history_connector.py here if HST is reinstated.
+    # Mirrors the training-side connector pipeline so the flat obs dim matches
+    # the checkpoint. With history now handled inside HistoryWrapper, the
+    # pipeline is just FlattenObservations + AddObservationsFromEpisodesToBatch.
     # FlattenObservations needs the input spaces set at construction —
     # recompute_output_observation_space reads them from self, not its args.
     # FlattenObservations rewrites the episode's last obs to a flat tensor;
@@ -182,8 +197,9 @@ def evaluate_model(
     ]
 
     # Run the space compatibility check *after* the pipeline is built so the
-    # model's input dim is compared against the post-connector flat size (e.g.
-    # with StridedHistoryConnector stacking obs history), not the raw env obs.
+    # model's input dim is compared against the post-connector flat size
+    # (which includes the s_hst_<key> entries when HistoryWrapper is enabled),
+    # not the raw env obs.
     check_space_compatibility(rl_module, env, pipeline=pipeline)
 
     episode_stats: list[EpisodeStats] = []
@@ -228,9 +244,9 @@ def evaluate_model(
                 collector.reset()
                 collector.on_reset(reset_info)
 
-            # Persistent episode buffer — ``StridedHistoryConnector`` needs
-            # the full observation/action lookback to materialise ``hst_*``
-            # stacks at decision time.
+            # Persistent episode buffer — the connector pipeline
+            # (FlattenObservations + AddObservationsFromEpisodesToBatch) reads
+            # the most recent obs from the episode each step.
             sa_episode = SingleAgentEpisode(
                 observation_space=base_env.observation_space,
                 action_space=base_env.action_space,

@@ -41,12 +41,15 @@ class EnvConfig(LoggableConfig):
     # toggle between "terminate on hard breach" and "soft, non-terminating".
     allow_early_termination: bool = True
 
-    # Per-key rolling observation history applied as an env wrapper.
-    # When enabled, HistoryWrapper replaces every s_*, a_*_prev, and
-    # raw_sim_hour Dict obs entry with an (hst_len, *original_shape) buffer
-    # (oldest -> newest, zero-padded). See envs/history_wrapper.py.
+    # Per-key strided observation history applied as an env wrapper.
+    # When enabled, HistoryWrapper adds an s_hst_<key> Dict entry with shape
+    # (len(offsets), *original_shape) for every tracked key. Offset 0 (the
+    # current step) is always prepended; remaining offsets must be negative
+    # (lag in env steps). Originals pass through unchanged. See
+    # envs/history_wrapper.py.
     hst_env_wrapper_enabled: bool = False
-    hst_env_wrapper_hst_len: int = 0
+    hst_env_wrapper_tracked_keys: tuple[str, ...] = ()
+    hst_env_wrapper_offsets: tuple[int, ...] = ()
 
     # Forecast wrapper: augments the Dict observation space with s_fc_<var>
     # arrays carrying future values of deterministic CSV-backed statesources
@@ -147,7 +150,8 @@ class EnvConfig(LoggableConfig):
             f"  ACTION_HISTORY_LENGTH = {self.ACTION_HISTORY_LENGTH}",
             f"  allow_early_termination = {self.allow_early_termination}",
             f"  hst_env_wrapper_enabled = {self.hst_env_wrapper_enabled}",
-            f"  hst_env_wrapper_hst_len = {self.hst_env_wrapper_hst_len}",
+            f"  hst_env_wrapper_tracked_keys = {list(self.hst_env_wrapper_tracked_keys)}",
+            f"  hst_env_wrapper_offsets = {list(self.hst_env_wrapper_offsets)}",
             f"  forecast_env_wrapper_enabled = {self.forecast_env_wrapper_enabled}",
             f"  forecast_env_wrapper_steps = {list(self.forecast_env_wrapper_steps)}",
         ]

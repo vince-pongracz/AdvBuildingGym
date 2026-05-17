@@ -57,9 +57,18 @@ class EnvConfigManager:
 
         hst_cfg = env_meta_doc.get("hst_env_wrapper") or {}
         hst_enabled = bool(hst_cfg.get("enabled", False))
-        hst_len = int(hst_cfg.get("hst_len", 0))
-        if hst_enabled and hst_len <= 0:
-            raise ValueError("env_meta.hst_env_wrapper: hst_len must be > 0 when enabled=true")
+        hst_tracked_keys = tuple(str(k) for k in (hst_cfg.get("tracked_keys") or []))
+        raw_offsets = hst_cfg.get("offsets") or []
+        hst_offsets = tuple(int(ofs) for ofs in raw_offsets)
+        if hst_enabled:
+            if not hst_tracked_keys:
+                raise ValueError("env_meta.hst_env_wrapper: tracked_keys must be a non-empty list when enabled=true")
+            if not hst_offsets:
+                raise ValueError("env_meta.hst_env_wrapper: offsets must be a non-empty list when enabled=true")
+            if any(ofs > 0 for ofs in hst_offsets):
+                raise ValueError(
+                    "env_meta.hst_env_wrapper.offsets: all entries must be <= 0 (0 = current step)"
+                )
 
         fcw_cfg = env_meta_doc.get("forecast_env_wrapper") or {}
         forecast_enabled = bool(fcw_cfg.get("enabled", False))
@@ -83,7 +92,8 @@ class EnvConfigManager:
             CONTROL_STEP=control_step,
             allow_early_termination=allow_early_termination,
             hst_env_wrapper_enabled=hst_enabled,
-            hst_env_wrapper_hst_len=hst_len,
+            hst_env_wrapper_tracked_keys=hst_tracked_keys,
+            hst_env_wrapper_offsets=hst_offsets,
             forecast_env_wrapper_enabled=forecast_enabled,
             forecast_env_wrapper_steps=forecast_steps,
             infra_specs=infra_specs,
@@ -124,7 +134,8 @@ class EnvConfigManager:
         if config.hst_env_wrapper_enabled:
             env_meta_doc["hst_env_wrapper"] = {
                 "enabled": True,
-                "hst_len": config.hst_env_wrapper_hst_len,
+                "tracked_keys": list(config.hst_env_wrapper_tracked_keys),
+                "offsets": list(config.hst_env_wrapper_offsets),
             }
         if config.forecast_env_wrapper_enabled:
             env_meta_doc["forecast_env_wrapper"] = {

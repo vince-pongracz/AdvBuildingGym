@@ -120,7 +120,7 @@ class EVChargingReward(RewardFunction):
             return self.weight * self.failure_penalty, max_step
 
         ev_connected = float(states["s_ev_connected"][0])
-        if ev_connected < 0.5:
+        if ev_connected < 0.5: # Not connected: no reward, no max-step (don't inflate reward rate)
             return 0.0, 0.0
 
         current_soc = float(states["s_ev_soc"][0])

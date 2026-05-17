@@ -32,7 +32,6 @@ are the constructor defaults; ranges with terminal/harsh penalties are noted.
 | `EconomicReward`                | [economic_reward.py](economic_reward.py)                               | -1.0 (clipped)                  | +1.0 (clipped)   | 1.0          |
 | `LongTermEconomicReward`        | [long_term_economic_reward.py](long_term_economic_reward.py)           | -`steps` on flush; 0 otherwise  | +`steps`; 0 otherwise | 1.0 (per-step base; flush emits `weight*steps` max) |
 | `MinimiseEnergyConsumptionReward` | [energy_consumption_reward.py](energy_consumption_reward.py)         | -1.0 (clipped)                  | 0.0              | 1.0          |
-| `UserEnergyNeedReward`          | [user_energy_need_reward.py](user_energy_need_reward.py)               | 0.0 (`exp(-shortfall)→0`)       | 1.0              | 1.0          |
 | `OperatorEnergyControlReward`   | [operator_energy_control_reward.py](operator_energy_control_reward.py) | `terminate_penalty` (-100)      | 1.0              | 1.0          |
 | `BatteryTargetReward`           | [battery_target_reward.py](battery_target_reward.py)                   | `max_penalty` (-3.0)            | `in_band_reward` (1.0) | 1.0 (= `in_band_reward`) |
 | `EVChargingReward`              | [ev_charging_reward.py](ev_charging_reward.py)                         | `failure_penalty` / `min_curve_violation_penalty` (-100) | `success_reward` (10.0) on disconnect; 1.0 while connected | 1.0 ⚠️ |
@@ -94,12 +93,6 @@ periods do not inflate the `reward_rate` denominator.
 - **Cap**: `np.clip(..., -1.0, 0.0)`. Returns `0` if either denominator
   or `info` keys are missing/zero.
 - **Range**: `[-1, 0]`.
-
-### UserEnergyNeedReward
-- **Goal**: Match actual energy to `s_desired_energy_need`.
-- **Formula**: `1.0` when meeting/exceeding demand; `exp(-shortfall)`
-  otherwise — penalises only underproduction.
-- **Range**: `[0, 1]`.
 
 ### OperatorEnergyControlReward
 - **Goal**: Keep grid power below operator-specified limit.

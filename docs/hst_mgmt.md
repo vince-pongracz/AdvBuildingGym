@@ -3,11 +3,15 @@
 Summary of a design discussion about exposing temporal history to PPO/SAC
 policies in AdvBuildingGym (Ray RLlib new API stack).
 
-**Status — ACCEPTED and implemented** via
-`adv_building_gym/ray_training/history_connector.py`
-(`StridedHistoryConnector` + `build_env_to_module_connectors`). Env does not longer produce any `hst_*` observations; action history lives in an in-env `deque` consumed by `ActionSmoothnessReward` only. Tracked states and
-history offsets are configured at the `hst:` section of
-`configs/training_param_config.yaml`.
+**Status — SUPERSEDED.** The original design (per-key strided
+`StridedHistoryConnector` + `build_env_to_module_connectors` in
+`adv_building_gym/ray_training/history_connector.py`) has been replaced
+by an in-env Gymnasium wrapper, `adv_building_gym/envs/history_wrapper.py`,
+which adds `s_hst_<key>` Dict entries with the same strided semantics.
+Configuration moved from `training_params.hst.*` to
+`env_meta.hst_env_wrapper.{tracked_keys, offsets}` in trial YAMLs (see
+`configs/trial_cfgs/TRIAL_HELP.md`). The discussion below is preserved
+for historical context.
 
 ---
 

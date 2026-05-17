@@ -132,10 +132,10 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
 
         # For each action key, publish a matching ``<key>_prev`` observation
         # carrying the most recent applied action. Policies that want action
-        # history consume these as plain obs keys (e.g. via
-        # StridedHistoryConnector, which only needs to handle obs keys), so
-        # there is no need to reconstruct per-key actions from the flat
-        # Box stored in episodes by FlattenAction + RescaleAction.
+        # history consume these as plain obs keys (e.g. via the env-side
+        # HistoryWrapper, which only needs to handle obs keys), so there is
+        # no need to reconstruct per-key actions from the flat Box stored in
+        # episodes by FlattenAction + RescaleAction.
         # Link: docs/hst_mgmt.md
         for act_key, act_box in action_space.items():
             observation_space[f"{act_key}_prev"] = spaces.Box(

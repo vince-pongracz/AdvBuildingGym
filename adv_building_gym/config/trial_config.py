@@ -19,7 +19,7 @@ Schema (top-level keys, ordered):
 
     # env topology — inlined
     env_meta:        {EPISODE_LENGTH: 288, control_step: 300, allow_early_termination: false}
-    training_params: {common: {...}, ppo: {...}, sac: {...}, hst: {...}}
+    training_params: {common: {...}, ppo: {...}, sac: {...}}
     statesources:    [<spec>, ...]   # null when statesource_schedule is set
     infras:          [<spec>, ...]   # null when infra_schedule is set
     rewards:         [{class_name, weight, params}, ...]

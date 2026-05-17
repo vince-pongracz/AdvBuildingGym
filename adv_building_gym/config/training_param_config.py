@@ -67,17 +67,6 @@ class TrainingParamConfig(LoggableConfig):
     sac_n_step_return: int = 1
     sac_learning_starts_after_n_episodes: int = 50 # Warm up replay buffer with 50 episodes before learning starts.
 
-    # Per-key strided history (see docs/hst_mgmt.md).
-    # tracked_keys: obs-space keys fed to StridedHistoryConnector; each
-    # tracked key's obs entry is replaced with a stack along the offsets.
-    # For action history, list the "<action_key>_prev" obs entries the env
-    # publishes each step — those are plain obs keys.
-    # offsets: step lags (negative = past). Offset 0 is prepended automatically
-    # so the current step is always the first slice of the stack.
-    # Empty tracked_keys disables the connector (flatten-only pipeline).
-    hst_tracked_keys: list[str] = field(default_factory=list)
-    hst_offsets: list[int] = field(default_factory=list)
-
     _source_file: str | None = field(default=None, repr=False)
 
     @staticmethod
@@ -85,7 +74,7 @@ class TrainingParamConfig(LoggableConfig):
         """Build from an already-parsed dict (mirrors from_yaml's prefix flattening)."""
         tparam_cfg = dict(doc) if doc else {}
         flat: dict = {}
-        for cfg_section in ("common", "ppo", "sac", "hst"):
+        for cfg_section in ("common", "ppo", "sac"):
             section_data = tparam_cfg.pop(cfg_section, {}) or {}
             section_prefix = "" if cfg_section == "common" else f"{cfg_section}_"
             for key, value in section_data.items():

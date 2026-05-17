@@ -1,73 +1,120 @@
-"""HistoryWrapper — per-key rolling history for the Dict observation space.
+"""HistoryWrapper — per-key strided observation history as an env wrapper.
 
-When enabled via env_meta.hst_env_wrapper in the trial config, this wrapper
-replaces each time-varying Dict obs entry (``s_*``, ``a_*_prev``,
-``raw_sim_hour``) with an ``(hst_len, *original_shape)`` rolling buffer.
-Order: oldest -> newest; pre-padded with zeros until the buffer is full.
-``ctxt_*`` keys are episode-static and pass through unchanged.
+For each user-listed Box obs key ``X``, this wrapper adds a new Dict obs
+entry ``s_hst_X`` of shape ``(len(offsets), *X.shape)`` containing ``X`` at
+each requested offset. The original ``X`` entry passes through unchanged
+(mirrors ``ForecastWrapper``'s additive ``s_fc_<var>`` convention).
 
-Alternative to the post-collection StridedHistoryConnector — do not enable
-both for the same keys.
+Pre-episode slots — for which no historical observation exists yet —
+remain zero rather than replicating the current frame. Replicating present
+values into "past" slots would make early-episode inputs indistinguishable
+from a stationary signal; zeros at least encode "no information"
+unambiguously.
+
+Listing ``a_<x>_prev`` keys in ``tracked_keys`` just works: the env
+publishes them as plain obs entries each step.
 """
 
 from __future__ import annotations
 
+import logging
 from collections import OrderedDict
-from typing import Callable, Dict
+from typing import Dict, Iterable, List
 
 import gymnasium
 import numpy as np
 from gymnasium import spaces
 
-
-def default_key_predicate(key: str) -> bool:
-    """Stack keys that vary step-to-step: state signals, action mirrors, sim hour."""
-    return key.startswith("s_") or key.endswith("_prev") or key == "raw_sim_hour"
+logger = logging.getLogger(__name__)
 
 
 class HistoryWrapper(gymnasium.ObservationWrapper):
-    """Rolling per-key observation history (oldest -> newest, zero-padded).
-
-    Args:
-        env: A Gymnasium env whose observation space is a ``spaces.Dict``.
-        hst_len: Buffer length (number of past steps kept per key, inclusive
-            of the current step).
-        key_predicate: Callable ``str -> bool``; returns True for keys to stack.
-            Defaults to :func:`default_key_predicate`.
-    """
+    """Adds ``s_hst_<key>`` Box entries with strided history to a Dict obs space."""
 
     def __init__(
         self,
         env: gymnasium.Env,
-        hst_len: int,
-        key_predicate: Callable[[str], bool] = default_key_predicate,
+        tracked_keys: Iterable[str],
+        offsets: Iterable[int],
     ) -> None:
         super().__init__(env)
-        if hst_len <= 0:
-            raise ValueError(f"HistoryWrapper: hst_len must be > 0, got {hst_len}")
+
         if not isinstance(env.observation_space, spaces.Dict):
             raise TypeError(
                 "HistoryWrapper requires a Dict observation space; got "
                 f"{type(env.observation_space).__name__}"
             )
 
-        self.hst_len = int(hst_len)
-        self._tracked_keys: list[str] = []
-        self._buffers: Dict[str, np.ndarray] = {}
+        # Use exactly the offsets the user supplies — the current frame
+        # (offset 0) is included only if listed explicitly, since the
+        # unwrapped obs already exposes the current value under the
+        # original key. Preserve user order; dedup keeps first.
+        raw_offsets = [int(ofs) for ofs in offsets]
+        if any(ofs > 0 for ofs in raw_offsets):
+            raise ValueError(f"HistoryWrapper: offsets must be <= 0 (0 = current step). Got: {raw_offsets}")
+        seen: set[int] = set()
+        ordered_offsets: List[int] = []
+        for ofs in raw_offsets:
+            if ofs not in seen:
+                seen.add(ofs)
+                ordered_offsets.append(ofs)
+        if not ordered_offsets:
+            raise ValueError("HistoryWrapper: offsets must be a non-empty list of non-positive ints.")
+        self.offsets: tuple[int, ...] = tuple(ordered_offsets)
+        self._max_lookback: int = -min(self.offsets)  # >= 0; 0 means current step only
 
-        new_spaces: "OrderedDict[str, spaces.Space]" = OrderedDict()
-        for key, sub in env.observation_space.spaces.items():
-            if key_predicate(key) and isinstance(sub, spaces.Box):
-                new_shape = (self.hst_len, *sub.shape)
-                low = np.broadcast_to(sub.low, new_shape).astype(sub.dtype, copy=True)
-                high = np.broadcast_to(sub.high, new_shape).astype(sub.dtype, copy=True)
-                new_spaces[key] = spaces.Box(low=low, high=high, shape=new_shape, dtype=sub.dtype)
-                self._tracked_keys.append(key)
-                self._buffers[key] = np.zeros(new_shape, dtype=sub.dtype)
-            else:
-                new_spaces[key] = sub
+        live_spaces = env.observation_space.spaces
+        requested = list(tracked_keys)
+        retained: list[str] = []
+        for key in requested:
+            sub = live_spaces.get(key)
+            if sub is None:
+                logger.warning(
+                    "HistoryWrapper: tracked key '%s' not found in observation "
+                    "space; skipping. Available keys: %s",
+                    key, sorted(live_spaces),
+                )
+                continue
+            if not isinstance(sub, spaces.Box):
+                logger.warning(
+                    "HistoryWrapper: tracked key '%s' is %s, not Box; skipping.",
+                    key, type(sub).__name__,
+                )
+                continue
+            hst_key = f"s_hst_{key}"
+            if hst_key in live_spaces:
+                raise ValueError(
+                    f"HistoryWrapper: target key '{hst_key}' already present in "
+                    "inner observation space — would clash with the wrapper output."
+                )
+            retained.append(key)
+        self._tracked_keys: tuple[str, ...] = tuple(retained)
+
+        # Pre-allocate one rolling buffer per tracked key. Length is
+        # max_lookback + 1 so index -1 is always the current step and
+        # index -1 + offset (for offset in self.offsets) addresses each
+        # requested lag without bounds checks.
+        self._buffers: Dict[str, np.ndarray] = {}
+        new_spaces: "OrderedDict[str, spaces.Space]" = OrderedDict(live_spaces)
+        n_off = len(self.offsets)
+        for key in self._tracked_keys:
+            sub: spaces.Box = live_spaces[key]  # type: ignore[assignment]
+            stacked_shape = (n_off, *sub.shape)
+            low = np.broadcast_to(sub.low, stacked_shape).astype(sub.dtype, copy=True)
+            high = np.broadcast_to(sub.high, stacked_shape).astype(sub.dtype, copy=True)
+            new_spaces[f"s_hst_{key}"] = spaces.Box(
+                low=low, high=high, shape=stacked_shape, dtype=sub.dtype,
+            )
+            buf_shape = (self._max_lookback + 1, *sub.shape)
+            self._buffers[key] = np.zeros(buf_shape, dtype=sub.dtype)
 
         self.observation_space = spaces.Dict(new_spaces)
+
+        if not self._tracked_keys:
+            logger.warning(
+                "HistoryWrapper: no valid tracked keys remain after filtering; "
+                "wrapper is a no-op."
+            )
 
     def reset(self, **kwargs):
         obs, info = self.env.reset(**kwargs)
@@ -78,6 +125,8 @@ class HistoryWrapper(gymnasium.ObservationWrapper):
         return self._build_obs(obs), info
 
     def observation(self, obs):
+        # Step path: roll buffers (oldest dropped), write the new sample
+        # into the last slot, then assemble the stacked s_hst_<key> entries.
         for key in self._tracked_keys:
             buf = self._buffers[key]
             buf[:-1] = buf[1:]
@@ -85,10 +134,10 @@ class HistoryWrapper(gymnasium.ObservationWrapper):
         return self._build_obs(obs)
 
     def _build_obs(self, obs: dict) -> dict:
-        out: Dict[str, np.ndarray] = {}
-        for key, val in obs.items():
-            if key in self._buffers:
-                out[key] = self._buffers[key].copy()
-            else:
-                out[key] = val
+        out = dict(obs)
+        for key in self._tracked_keys:
+            buf = self._buffers[key]
+            # buf[-1] = current; for negative offset o, buf[-1 + o] = lag |o|.
+            frames = [buf[-1 + ofs] for ofs in self.offsets]
+            out[f"s_hst_{key}"] = np.stack(frames, axis=0)
         return out

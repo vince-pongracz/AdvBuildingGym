@@ -46,10 +46,9 @@ def check_space_compatibility(rl_module, env, pipeline: Iterable | None = None) 
         env: Gymnasium environment (possibly wrapped).
         pipeline: Optional env-to-module ConnectorV2 pipeline. When given, the
             env obs is propagated through the pipeline so the check compares
-            the model's input against the post-connector flat size (e.g. with
-            StridedHistoryConnector stacking obs history). Without this the
-            check would compare against the raw env obs and falsely fail on
-            any policy trained with a non-trivial connector pipeline.
+            the model's input against the post-connector flat size. Without
+            this the check would compare against the raw env obs and falsely
+            fail on any policy trained with a non-trivial connector pipeline.
 
     Raises:
         ValueError: If observation or action dimensions differ.
@@ -73,7 +72,7 @@ def check_space_compatibility(rl_module, env, pipeline: Iterable | None = None) 
             f"but the env produces {env_obs_size} features "
             f"(difference: {env_obs_size - model_obs_size}). "
             f"Check whether the config has changed since training "
-            f"(e.g. ACTION_HISTORY_LENGTH, hst_tracked_keys/hst_offsets, "
+            f"(e.g. ACTION_HISTORY_LENGTH, hst_env_wrapper_tracked_keys/offsets, "
             f"added/removed statesources)."
         )
 

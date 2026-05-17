@@ -37,8 +37,7 @@ class BuildingHeatLoss(StateSource):
                 name: str,
                 K: float,
                 mC: float,
-                timestep: float = 300,
-                ds_path: str | None = None) -> None:
+                timestep: float = 300) -> None:
         """
         Initialize BuildingHeatLoss datasource.
 
@@ -47,9 +46,8 @@ class BuildingHeatLoss(StateSource):
             K: Heat transfer coefficient [W/K]
             mC: Building thermal mass [J/K]
             timestep: Time step duration in seconds (default 300s = 5min)
-            ds_path: Optional data file path (not used for this datasource)
         """
-        super().__init__(name, ds_path)
+        super().__init__(name=name)
         self.K = K
         self.mC = mC
         self.timestep = timestep

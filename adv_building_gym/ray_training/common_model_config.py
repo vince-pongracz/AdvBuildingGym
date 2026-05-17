@@ -11,9 +11,9 @@ import logging
 from ray.rllib.algorithms.algorithm_config import AlgorithmConfig
 
 from adv_building_gym.config.env_config import EnvConfig
-# StridedHistoryConnector is currently disabled — see history_connector.py for the
-# implementation, which can be re-wired below if per-key strided observation
-# history is needed again. We use stock FlattenObservations in the meantime.
+# Per-key strided observation history lives in HistoryWrapper (an env wrapper
+# applied in env_creator.py); the env-to-module / learner pipelines only need
+# stock FlattenObservations to flatten the augmented Dict obs.
 from ray.rllib.connectors.env_to_module import FlattenObservations
 
 from adv_building_gym.callbacks import (
@@ -298,10 +298,9 @@ def common_model_setup(
         num_cpus_per_learner=num_cpus_per_learner,
     )
     # Sampling actions (querying the env, using the policy, sample trajectories) -- no GPU needed
-    # StridedHistoryConnector is disabled; the stock FlattenObservations pipeline
-    # only needs the default single-step lookback. To re-enable history stacking,
-    # wire build_env_to_module_connectors back in from history_connector.py and
-    # raise episode_lookback_horizon to cover max(|hst_offsets|).
+    # Per-key history stacking is handled inside HistoryWrapper (env wrapper);
+    # the pipeline here only needs FlattenObservations and the default
+    # episode_lookback_horizon (the wrapper owns its own rolling buffer).
     # PPO validates total_train_batch_size ≈ num_env_runners * rollout_fragment_length
     # (within 10%).  With rollout_fragment_length=EPISODE_LENGTH, we need
     # num_env_runners ≈ ppo_episodes_per_iteration * num_learners.  When the
