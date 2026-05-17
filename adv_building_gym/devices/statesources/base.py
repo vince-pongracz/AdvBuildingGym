@@ -1,92 +1,129 @@
 import logging
-from pathlib import Path
-from typing import Any, ClassVar, Dict, Set, Type, TypeVar
+from typing import ClassVar, Optional, Set
 
 import pandas as pd
 
-from adv_building_gym.utils import EnvSyncInterface
-from adv_building_gym.utils.serializable import Serializable, ComponentRegistry
+from adv_building_gym.utils import EnvSync
+from adv_building_gym.utils.serializable import Serializable
+from adv_building_gym.utils.lifecycle import ReloadObserver
+from .csv_loader import CsvLoader
 
 logger = logging.getLogger(__name__)
 
-# Project root directory (three levels up: base.py -> statesources -> devices -> adv_building_gym -> project root)
-_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 
-T = TypeVar('T', bound='StateSource')
+class StateSource(Serializable):
+    """Base class for data sources in the building environment.
 
+    Composition over inheritance:
+      * Synchronisation state lives in ``self.sync`` (an ``EnvSync`` instance)
+        exposed via pass-through properties (``iteration``, ``row_offset``,
+        ``effective_index``, ``synchronise``).
+      * File-backed time series live in ``self.loader`` (a ``CsvLoader``)
+        when present. Sources that don't load from CSV (e.g.
+        ``OperatorEnergyControl``) leave ``self.loader`` as ``None`` and
+        inherit the base's default ``reload`` which raises ``TypeError``.
 
-class StateSource(EnvSyncInterface, Serializable):
-    """Base class for data sources in the building environment."""
+    Pass-through properties ``ts`` / ``ds_path`` / ``is_new_data_source`` keep
+    subclass call sites (``self.ts``, ``self.is_new_data_source``) unchanged.
+    """
 
     # Parameters derived from context (building_props, control_step)
     _context_params: ClassVar[Set[str]] = {'control_step'}
 
-    # Internal state - never serialize (ts is loaded from ds_path)
-    _exclude_params: ClassVar[Set[str]] = {'iteration', 'row_offset', 'ts', '_last_processed_ds_path'}
+    # Internal state - never serialize
+    _exclude_params: ClassVar[Set[str]] = set()
 
     def __init__(self,
                 name: str,
-                ds_path: str | None = None,
                 control_step: float = 300.0,
                 ) -> None:
         super().__init__()
 
+        self.sync = EnvSync()
         self.name = name
-        self.ds_path = ds_path  # Store original path for serialization
         self.control_step = control_step  # Control timestep in seconds
-        self._last_processed_ds_path: str | None = None  # Tracks which file was last post-processed
-        if ds_path is not None:
-            resolved = Path(ds_path)
-            if not resolved.is_absolute():
-                resolved = _PROJECT_ROOT / resolved
-            """Time series"""
-            self.ts = pd.read_csv(resolved)
-        else:
-            self.ts = None
+        # CSV-backed subclasses assign ``self.loader = CsvLoader(ds_path,
+        # on_reload=self._run_post_load)`` after setting their own attributes.
+        self.loader: Optional[CsvLoader] = None
+
+    # ----- EnvSync pass-throughs (composition) -----
+    @property
+    def iteration(self) -> int:
+        return self.sync.iteration
+
+    @iteration.setter
+    def iteration(self, value: int) -> None:
+        self.sync.iteration = value
+
+    @property
+    def row_offset(self) -> int:
+        return self.sync.row_offset
+
+    @row_offset.setter
+    def row_offset(self, value: int) -> None:
+        self.sync.row_offset = value
+
+    @property
+    def effective_index(self) -> int:
+        return self.sync.effective_index
+
+    def synchronise(self, iteration: int, row_offset: int | None = None) -> None:
+        self.sync.synchronise(iteration, row_offset)
+
+    # ----- CsvLoader pass-throughs (composition; None for non-CSV sources) -----
+    @property
+    def ts(self) -> Optional[pd.DataFrame]:
+        return self.loader.ts if self.loader is not None else None
+
+    @property
+    def ds_path(self) -> Optional[str]:
+        return self.loader.ds_path if self.loader is not None else None
 
     @property
     def is_new_data_source(self) -> bool:
         """True when the current ds_path differs from the last processed one.
 
-        Subclasses can check this in ``_post_load_data_processing`` to decide
-        whether to emit one-time warnings (e.g. NaN validation).  The flag is
-        updated automatically after ``_post_load_data_processing`` returns.
+        Used by subclasses to guard one-time diagnostics (e.g. NaN warnings).
+        Always ``False`` for sources without a loader.
         """
-        return self.ds_path != self._last_processed_ds_path
+        return self.loader.is_new_data_source if self.loader is not None else False
 
     def _post_load_data_processing(self) -> None:
         """Override to re-run post-processing after a new CSV is loaded.
 
-        Called both at the end of __init__ (via subclass constructors) and
-        after reload().  Subclasses that normalise columns, cache scalars, or
-        parse events from the CSV should put that logic here.
-
-        Use ``self.is_new_data_source`` to guard one-time diagnostics
-        (e.g. NaN warnings) so they only fire when the file actually changes.
+        Called from ``_run_post_load`` after any ``ReloadObserver`` notification
+        and after the underlying ``CsvLoader`` has populated ``self.ts``.
+        Subclasses that normalise columns, cache scalars, or parse events from
+        the CSV put that logic here. Use ``self.is_new_data_source`` to gate
+        one-time diagnostics so they fire only when the file actually changes.
         """
 
     def _run_post_load(self) -> None:
-        """Run subclass post-processing and update the data-source tracker."""
+        """Notify reload observers, then run subclass post-processing.
+
+        Wired as the ``on_reload`` callback of the source's ``CsvLoader`` so
+        it fires automatically after every successful read. Any mixin
+        satisfying the ``ReloadObserver`` protocol (i.e. defining
+        ``on_reload``) is notified before subclass post-processing — e.g.
+        ``Forecastable`` drops its cached column views here.
+        """
+        if isinstance(self, ReloadObserver):
+            self.on_reload()
         self._post_load_data_processing()
-        self._last_processed_ds_path = self.ds_path
 
     def reload(self, ds_path: str) -> None:
         """Load a new time-series file without recreating this StateSource.
 
-        Replaces the underlying DataFrame, re-runs subclass post-processing
-        via _post_load(), and resets the iteration counter so the next episode
-        reads from row 0.
-
-        Relative paths are resolved against the project root so that Ray
-        worker processes (whose CWD may differ) can still find the files.
+        Delegates to ``self.loader``. Sources without a loader (e.g.
+        ``OperatorEnergyControl``) raise — they are not file-backed.
         """
-        resolved = Path(ds_path)
-        if not resolved.is_absolute():
-            resolved = _PROJECT_ROOT / resolved
-        self.ds_path = ds_path
-        self.ts = pd.read_csv(resolved)
-        self._run_post_load()
-        logger.debug("StateSource '%s' reloaded from %s", self.name, resolved)
+        if self.loader is None:
+            raise TypeError(
+                f"{type(self).__name__} '{self.name}' is not a file-backed source "
+                "and does not support reload()."
+            )
+        self.loader.reload(ds_path)
+        logger.debug("StateSource '%s' reloaded from %s", self.name, ds_path)
 
     def setup_spaces(self,
                     state_spaces,
@@ -121,34 +158,3 @@ class StateSource(EnvSyncInterface, Serializable):
         Default returns an empty dict.
         """
         return {}
-
-    @classmethod
-    def from_dict(
-        cls: Type[T],
-        data: Dict[str, Any],
-        context: Dict[str, Any] | None = None
-    ) -> T:
-        """
-        Reconstruct a StateSource from a dictionary.
-
-        Uses the ComponentRegistry to find the correct class by name,
-        then constructs it with serialized data merged with context.
-
-        Args:
-            data: Dictionary containing 'class' key and constructor parameters
-            context: Optional context with derived parameters (e.g., K, mC, timestep)
-
-        Returns:
-            Reconstructed StateSource instance
-        """
-        class_name = data.get('class')
-        if class_name is None:
-            raise ValueError("Missing 'class' key in statesource data")
-
-        # Get the actual class from registry
-        source_class = ComponentRegistry.get('statesource', class_name)
-
-        # Build kwargs from data and context
-        kwargs = source_class._get_init_args(data, context)
-
-        return source_class(**kwargs)

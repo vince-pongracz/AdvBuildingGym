@@ -28,10 +28,7 @@
 #SBATCH --tasks-per-node=1
 # TODO VP: set to 32, 38, 16 later -- but adapt Ray to use all possible cpu cores available
 #SBATCH --cpus-per-task=5
-#SBATCH --gres=gpu:4g.20gb:1
-#SBATCH --time=00:30:00
-# Exclude nodes with known GPU issues (add problematic nodes here)
-# // # --exclude=haicn1704,haicn1711
+#SBATCH --time=02:00:00
 #SBATCH --output=slurm_logs/train/slurm-train-ray-%j.out
 #SBATCH --error=slurm_logs/train/slurm-train-ray-%j.err
 #SBATCH --job-name=ray-train-%j
@@ -102,7 +99,7 @@ export TERM=dumb
 export PYTHONUNBUFFERED=1
 
 # Build command: Forward every param as they are
-CMD=(python -u run_train_ray.py "${SCRIPT_ARGS[@]}")
+CMD=(python -u run_train_ray.py --cpu "${SCRIPT_ARGS[@]}")
 
 # Filter for harmless EnvRunner.__del__/sigterm_handler tracebacks Ray prints
 # when env-runner actors are SIGTERM'd at the end of tuner.fit().  Tune kills

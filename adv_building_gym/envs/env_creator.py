@@ -15,6 +15,9 @@ from gymnasium.wrappers import RescaleAction
 from adv_building_gym.rewards import SumRewardAggregator
 
 from .building_adv import AdvBuildingGym
+from .forecast_wrapper import ForecastWrapper
+from .history_wrapper import HistoryWrapper
+from .multi_agent_building import MultiAgentAdvBuildingGym
 from .wrappers import FlattenAction
 
 logger = logging.getLogger(__name__)
@@ -110,4 +113,79 @@ def adv_building_env_creator(config: dict) -> gymnasium.Env:
     if config.get("log_full_info", False):
         env.log_full_info = True
 
+    if env_config.hst_env_wrapper_enabled:
+        env = HistoryWrapper(env, hst_len=env_config.hst_env_wrapper_hst_len)
+        logger.info(
+            "env_creator: HistoryWrapper enabled (hst_len=%d)",
+            env_config.hst_env_wrapper_hst_len,
+        )
+
+    if env_config.forecast_env_wrapper_enabled:
+        env = ForecastWrapper(env, forecast_steps=env_config.forecast_env_wrapper_steps)
+        logger.info(
+            "env_creator: ForecastWrapper enabled (steps=%s)",
+            list(env_config.forecast_env_wrapper_steps),
+        )
+
     return wrap_action_space(env)
+
+
+def adv_building_ma_env_creator(config: dict):
+    """Factory for the per-actuator multi-agent variant.
+
+    Mirrors :func:`adv_building_env_creator` but builds a
+    :class:`MultiAgentAdvBuildingGym` and skips the flat-Box action
+    wrappers — per-agent rescale lives inside the MA wrapper.
+
+    Optional config key:
+        ``reward_partition``: dict[agent_id → list[reward_name]] mapping
+            distributing reward breakdown components per agent. ``None``
+            (default) routes the global aggregated reward to every agent
+            (cooperative MARL).
+    """
+    env_config = config.get("env_config")
+    if env_config is None:
+        raise ValueError(
+            "adv_building_ma_env_creator: 'env_config' missing from creator config."
+        )
+
+    infras = env_config.create_infras()
+    statesources = env_config.create_statesources()
+    reward_manager = config["reward_schedule_manager"]
+    rewards = reward_manager.create_active_rewards()
+
+    worker_index = getattr(config, "worker_index", config.get("worker_index", None))
+    vector_index = getattr(config, "vector_index", config.get("vector_index", None))
+    if worker_index is None or vector_index is None:
+        worker_index = os.getpid()
+        vector_index = next(_env_instance_counter)
+    instance_id = f"AdvBuildingGymMA_w{worker_index}_v{vector_index}"
+
+    env = MultiAgentAdvBuildingGym(
+        infras=infras,
+        statesources=statesources,
+        rewards=rewards,
+        env_config=env_config,
+        data_combinator=config.get("data_combinator"),
+        instance_id=instance_id,
+        reward_partition=config.get("reward_partition"),
+    )
+
+    if config.get("log_full_info", False):
+        env.log_full_info = True
+
+    if env_config.hst_env_wrapper_enabled:
+        # HistoryWrapper targets the single-agent Dict obs space; the
+        # multi-agent variant has a per-agent space and is not supported.
+        raise NotImplementedError(
+            "HistoryWrapper is not supported in the multi-agent env creator."
+        )
+
+    if env_config.forecast_env_wrapper_enabled:
+        raise NotImplementedError(
+            "ForecastWrapper is not supported in the multi-agent env creator."
+        )
+
+    logger.info("ma_env_creator: instance_id=%s agents=%s",
+                instance_id, env.possible_agents)
+    return env

@@ -6,21 +6,26 @@ import numpy as np
 from gymnasium.spaces import Box
 
 from ..base import StateSource
+from ..csv_loader import CsvLoader
+from ..forecastable import Forecastable
 from adv_building_gym.utils.serializable import ComponentRegistry
 from adv_building_gym.utils.rng_service import RngService
 
 logger = logging.getLogger(__name__)
 
-class InsideTemperature(StateSource):
+class InsideTemperature(StateSource, Forecastable):
     """Data source for desired inside temperature setpoint."""
 
     def __init__(self, name: str, ds_path: str | None = None) -> None:
-        super().__init__(name, ds_path)
+        super().__init__(name=name)
         self.desired_temp_in_raw: float = 0.0  # Raw desired temperature (°C)
+        # Cached temp_abs_max from the last update_state call — used by forecast()
+        # since the forecast API has no access to the shared state dict.
+        self._last_temp_abs_max: float = 60.0
 
-        if self.ts is not None:
+        self.loader = CsvLoader(ds_path, on_reload=self._run_post_load)
+        if ds_path is not None:
             logger.info("Use data file: %s", ds_path)
-            self._run_post_load()
 
     def _post_load_data_processing(self) -> None:
         """Detect the raw temperature column after CSV load / reload.
@@ -74,14 +79,17 @@ class InsideTemperature(StateSource):
         # Shared temperature scale published by WeatherDataSource into the state dict.
         # Fallback 60 °C is a safe default when no weather data is loaded.
         temp_abs_max: float = float(states["ctxt_temp_abs_max"][0]) if "ctxt_temp_abs_max" in states else 60.0
+        self._last_temp_abs_max = temp_abs_max if temp_abs_max != 0 else 60.0
 
         # Profile CSVs cover a single day (e.g. 288 rows at 5-min steps).
         # Index by time-of-day so the profile repeats daily regardless of
         # the actual simulation date or row_offset.
-        profile_len = len(self.ts)
-        idx = self.iteration % profile_len
-        row = self.ts.iloc[idx]
-        raw_temp = float(row[self._raw_column])
+        arr = self._forecast_array_cache.get(self._raw_column)
+        if arr is None:
+            arr = self.ts[self._raw_column].to_numpy()
+            self._forecast_array_cache[self._raw_column] = arr
+        idx = self.iteration % arr.shape[0]
+        raw_temp = float(arr[idx])
         self.desired_temp_in_raw = raw_temp
         # Normalise on the same scale as temp_out_norm / temp_in_norm
         desired_temp_in_norm = raw_temp / temp_abs_max if temp_abs_max != 0 else 0.0
@@ -109,6 +117,23 @@ class InsideTemperature(StateSource):
             states["s_temp_in_norm"][0] = np.float32(np.clip(
                 states["s_desired_temp_in_norm"][0] + variance, -1.0, 1.0
             ))
+
+    def forecast_keys(self) -> tuple[str, ...]:
+        return ("s_fc_desired_temp_in_norm",)
+
+    def forecast(self, selected_future_steps: list[int]) -> dict[str, list[float]]:
+        # Profile is single-day and repeats — wrap-around index, not zero-fill,
+        # so Forecastable._csv_forecast (which zero-fills) is not reused here.
+        if self.ts is None:
+            return {"s_fc_desired_temp_in_norm": [0.0] * len(selected_future_steps)}
+        arr = self._forecast_array_cache.get(self._raw_column)
+        if arr is None:
+            arr = self.ts[self._raw_column].to_numpy()
+            self._forecast_array_cache[self._raw_column] = arr
+        scale = self._last_temp_abs_max if self._last_temp_abs_max != 0 else 60.0
+        idxs = (np.asarray(selected_future_steps, dtype=np.int64) + self.iteration) % arr.shape[0]
+        vals = np.clip(arr[idxs] / scale, -1.0, 1.0)
+        return {"s_fc_desired_temp_in_norm": vals.tolist()}
 
     def get_raw_values(self) -> dict[str, float]:
         return {"raw_desired_temp_in": self.desired_temp_in_raw}

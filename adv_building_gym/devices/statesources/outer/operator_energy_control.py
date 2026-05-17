@@ -6,12 +6,13 @@ import numpy as np
 from gymnasium.spaces import Box
 
 from ..base import StateSource
+from ..forecastable import Forecastable
 from adv_building_gym.utils.serializable import ComponentRegistry
 
 logger = logging.getLogger(__name__)
 
 
-class OperatorEnergyControl(StateSource):
+class OperatorEnergyControl(StateSource, Forecastable):
     """Constant grid-operator power limit, configured at construction time.
 
     Publishes a fixed ``max_power_kW`` every step as
@@ -50,6 +51,15 @@ class OperatorEnergyControl(StateSource):
 
     def update_state(self, states, info=None) -> None:
         states["ctxt_operator_max_power_kW"][0] = np.float32(self.max_power_kW)
+
+    def forecast_keys(self) -> tuple[str, ...]:
+        return ("s_fc_operator_max_power_kW",)
+
+    def forecast(self, selected_future_steps: list[int]) -> dict[str, list[float]]:
+        # Constant per-episode limit; future == current value.
+        return {
+            "s_fc_operator_max_power_kW": [float(self.max_power_kW) for _ in selected_future_steps],
+        }
 
 
 # Register OperatorEnergyControl with the component registry

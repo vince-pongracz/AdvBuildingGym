@@ -9,6 +9,7 @@ logger = logging.getLogger(__name__)
 
 from adv_building_gym.devices.infrastructure import Infrastructure
 from adv_building_gym.devices.statesources import StateSource
+from adv_building_gym.utils.serialization import from_dict as component_from_dict
 from adv_building_gym.config.reward_config import RewardConfig
 
 
@@ -47,6 +48,13 @@ class EnvConfig(LoggableConfig):
     hst_env_wrapper_enabled: bool = False
     hst_env_wrapper_hst_len: int = 0
 
+    # Forecast wrapper: augments the Dict observation space with s_fc_<var>
+    # arrays carrying future values of deterministic CSV-backed statesources
+    # at the offsets listed in forecast_env_wrapper_steps (positive ints, in
+    # control-step units). See envs/forecast_wrapper.py.
+    forecast_env_wrapper_enabled: bool = False
+    forecast_env_wrapper_steps: tuple[int, ...] = ()
+
     # Raw component specs as parsed from YAML.  Source of truth for the
     # factory methods below; never reach into hardcoded defaults.
     # Building envelope params (K, mC) live on BuildingHeatLoss directly —
@@ -82,7 +90,7 @@ class EnvConfig(LoggableConfig):
                 "the trial config (configs/trial_cfgs/<name>.yaml → statesources)."
             )
         ctx = self._statesource_context()
-        return [StateSource.from_dict(spec, ctx) for spec in self.statesource_specs]
+        return [component_from_dict(spec, "statesource", ctx) for spec in self.statesource_specs]
 
     def create_infras(self) -> List[Infrastructure]:
         """Deserialise fresh Infrastructure instances from ``infra_specs``.
@@ -98,7 +106,7 @@ class EnvConfig(LoggableConfig):
                 "the trial config (configs/trial_cfgs/<name>.yaml → infras)."
             )
         ctx = self._infra_context()
-        return [Infrastructure.from_dict(spec, ctx) for spec in self.infra_specs]
+        return [component_from_dict(spec, "infrastructure", ctx) for spec in self.infra_specs]
 
     def __post_init__(self):
         """Lightweight post-init — does NOT eagerly call factory methods.
@@ -140,6 +148,8 @@ class EnvConfig(LoggableConfig):
             f"  allow_early_termination = {self.allow_early_termination}",
             f"  hst_env_wrapper_enabled = {self.hst_env_wrapper_enabled}",
             f"  hst_env_wrapper_hst_len = {self.hst_env_wrapper_hst_len}",
+            f"  forecast_env_wrapper_enabled = {self.forecast_env_wrapper_enabled}",
+            f"  forecast_env_wrapper_steps = {list(self.forecast_env_wrapper_steps)}",
         ]
         logger.info("%s:\n%s", self._log_label(), "\n".join(lines))
 

@@ -1,25 +1,28 @@
 import logging
 from collections import OrderedDict
-from typing import Any, ClassVar, Dict, Literal, Set, Type, TypeVar
+from typing import Any, ClassVar, Dict, Literal, Set
 
-from adv_building_gym.utils import EnvSyncInterface
-from adv_building_gym.utils.serializable import Serializable, ComponentRegistry
+from adv_building_gym.utils import EnvSync
+from adv_building_gym.utils.serializable import Serializable
 
 logger = logging.getLogger(__name__)
-
-T = TypeVar('T', bound='Infrastructure')
 
 PowerFlow = Literal["consumer", "generator", "bidirectional"]
 
 
-class Infrastructure(EnvSyncInterface, Serializable):
-    """Base class for infrastructure components in the building environment."""
+class Infrastructure(Serializable):
+    """Base class for infrastructure components in the building environment.
+
+    Composition over inheritance: synchronisation state lives in ``self.sync``
+    (an ``EnvSync`` instance), exposed via pass-through properties so the
+    legacy ``self.iteration`` / ``self.synchronise`` call sites keep working.
+    """
 
     # Parameters derived from context (building_props, control_step)
     _context_params: ClassVar[Set[str]] = set()
 
     # Internal state - never serialize
-    _exclude_params: ClassVar[Set[str]] = {'iteration', 'row_offset'}
+    _exclude_params: ClassVar[Set[str]] = set()
 
     # Class-level declaration of power-flow direction. Every concrete subclass
     # MUST set this; enforced in __init_subclass__. Not an __init__ arg, so it
@@ -37,8 +40,33 @@ class Infrastructure(EnvSyncInterface, Serializable):
     def __init__(self, name: str, max_power_kW: float) -> None:
         super().__init__()
 
+        self.sync = EnvSync()
         self.name = name
         self.max_power_kW = max_power_kW  # ~ rated power capacity
+
+    # ----- EnvSync pass-throughs (composition) -----
+    @property
+    def iteration(self) -> int:
+        return self.sync.iteration
+
+    @iteration.setter
+    def iteration(self, value: int) -> None:
+        self.sync.iteration = value
+
+    @property
+    def row_offset(self) -> int:
+        return self.sync.row_offset
+
+    @row_offset.setter
+    def row_offset(self, value: int) -> None:
+        self.sync.row_offset = value
+
+    @property
+    def effective_index(self) -> int:
+        return self.sync.effective_index
+
+    def synchronise(self, iteration: int, row_offset: int | None = None) -> None:
+        self.sync.synchronise(iteration, row_offset)
 
     @property
     def max_consumption_kW(self) -> float:
@@ -151,33 +179,3 @@ class Infrastructure(EnvSyncInterface, Serializable):
         # Default: return 0 if no action found
         return 0.0, 0.0
 
-    @classmethod
-    def from_dict(
-        cls: Type[T],
-        data: Dict[str, Any],
-        context: Dict[str, Any] | None = None
-    ) -> T:
-        """
-        Reconstruct an Infrastructure from a dictionary.
-
-        Uses the ComponentRegistry to find the correct class by name,
-        then constructs it with serialized data merged with context.
-
-        Args:
-            data: Dictionary containing 'class' key and constructor parameters
-            context: Optional context with derived parameters (e.g., K, mC from building_props)
-
-        Returns:
-            Reconstructed Infrastructure instance
-        """
-        class_name = data.get('class')
-        if class_name is None:
-            raise ValueError("Missing 'class' key in infrastructure data")
-
-        # Get the actual class from registry
-        infra_class = ComponentRegistry.get('infrastructure', class_name)
-
-        # Build kwargs from data and context
-        kwargs = infra_class._get_init_args(data, context)
-
-        return infra_class(**kwargs)

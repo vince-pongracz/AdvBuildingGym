@@ -50,7 +50,7 @@ data_combinator.py:151-167 implements three modes driven by the day: field in th
 "random" → rng.integers(0, max_days) per episode (uses the env's self._rng, so each runner picks a different day even with the same variant).
 "each" → episode_count % max_days (sequential walk through the year).
 date string (e.g. "2025-03-15") → fixed day index every episode.
-The result is a row_offset = day_index * steps_per_day (line 166) which gets fed into every component via sync.synchronise(self.iteration, row_offset) at building_adv.py:411. EnvSyncInterface.effective_index = row_offset + iteration indexes into the CSV.
+The result is a row_offset = day_index * steps_per_day (line 166) which gets fed into every component via sync.synchronise(self.iteration, row_offset) at building_adv.py:411. EnvSync.effective_index = row_offset + iteration indexes into the CSV.
 So: variant = which CSV; day = where in that CSV the episode starts. Independent axes, separately scheduled.
 
 Q2: What if the episode is longer than a day?

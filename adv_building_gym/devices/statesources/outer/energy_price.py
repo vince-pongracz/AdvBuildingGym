@@ -5,30 +5,33 @@ import numpy as np
 from gymnasium.spaces import Box
 
 from ..base import StateSource
+from ..csv_loader import CsvLoader
+from ..forecastable import Forecastable
 from adv_building_gym.utils.serializable import ComponentRegistry
 from adv_building_gym.utils.normalisation import Normalisation, normalise_with_scale_factor
 
 logger = logging.getLogger(__name__)
 
 
-class EnergyPriceDataSource(StateSource):
+class EnergyPriceDataSource(StateSource, Forecastable):
     """Data source for energy pricing information."""
 
     # price_max is derived from data, don't serialize
-    _exclude_params: ClassVar[Set[str]] = {'iteration', 'ts', 'price_max', 'baseprice_raw'}
+    _exclude_params: ClassVar[Set[str]] = {'price_max', 'baseprice_raw'}
 
     def __init__(self, name: str, ds_path: str | None = None,
                 normalise: Normalisation | str | None = Normalisation.ABS_MIN_MAX_SCALING) -> None:
-        super().__init__(name, ds_path)
+        super().__init__(name=name)
 
         self.normalise = Normalisation.init(normalise)
 
         self.price_max: float = 1.0
         # Raw baseprice (ct/kWh) for the current step — updated by update_state.
         self.baseprice_raw: float = 0.0
-        if self.ts is not None:
+
+        self.loader = CsvLoader(ds_path, on_reload=self._run_post_load)
+        if ds_path is not None:
             logger.info("Use data file: %s", ds_path)
-            self._run_post_load()
 
     def _post_load_data_processing(self) -> None:
         """Normalise the baseprice column and cache the raw maximum."""
@@ -95,6 +98,16 @@ class EnergyPriceDataSource(StateSource):
             states["s_E_price_min_norm"][0] = first
             states["s_E_price_max_norm"][0] = first
         self.update_state(states, info)
+
+    def forecast_keys(self) -> tuple[str, ...]:
+        return ("s_fc_E_price",)
+
+    def forecast(self, selected_future_steps: list[int]) -> dict[str, list[float]]:
+        if self.ts is None:
+            return {"s_fc_E_price": [0.0] * len(selected_future_steps)}
+        return {
+            "s_fc_E_price": self._csv_forecast(self.ts, self.effective_index, "E_price_norm", selected_future_steps),
+        }
 
     @property
     def E_price_max_raw(self) -> float:

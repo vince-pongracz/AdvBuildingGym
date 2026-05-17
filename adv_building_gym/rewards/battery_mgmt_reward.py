@@ -18,7 +18,7 @@ class BatteryMgmtReward(RewardFunction):
 
     Shape (only on the terminal step):
         deficit = max(0, episode_start_soc - episode_end_soc)
-        reward  = -clip(deficit / scale, 0, 1)        in [-1, 0]
+        reward  = deficit / scale        in [-x, 0]
     """
 
     def __init__(self,
@@ -40,7 +40,7 @@ class BatteryMgmtReward(RewardFunction):
 
         episode_end_soc = float(states["s_battery_pct"][0])
         deficit = max(0.0, self.episode_start_soc - episode_end_soc)
-        reward = -1.0 * float(np.clip(deficit / self.scale, 0.0, 1.0))
+        reward = -1.0 * float(deficit / self.scale)
         return self.weight * reward, self.weight * self.max_reward_in_step
 
 

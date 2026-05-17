@@ -6,6 +6,8 @@ import numpy as np
 from gymnasium.spaces import Box
 
 from ..base import StateSource
+from ..csv_loader import CsvLoader
+from ..forecastable import Forecastable
 from adv_building_gym.utils.serializable import ComponentRegistry
 from adv_building_gym.utils.normalisation import Normalisation, normalise_with_scale_factor
 
@@ -18,7 +20,7 @@ SOURCE_COLUMN: str = "hh_consumption_kW"
 NORM_COLUMN: str = "desired_energy_need_norm"
 
 
-class DesiredUserEnergyNeed(StateSource):
+class DesiredUserEnergyNeed(StateSource, Forecastable):
     """Data source for desired user energy need information.
 
     When a CSV is provided (via ``ds_path``), reads the ``hh_consumption_kW``
@@ -34,18 +36,19 @@ class DesiredUserEnergyNeed(StateSource):
     """
 
     # consumption_max is derived from data, don't serialize
-    _exclude_params: ClassVar[Set[str]] = {'iteration', 'ts', 'consumption_max'}
+    _exclude_params: ClassVar[Set[str]] = {'consumption_max'}
 
     def __init__(self, name: str, ds_path: str | None = None,
                 normalise: Normalisation | str | None = Normalisation.MIN_MAX_SCALING) -> None:
-        super().__init__(name, ds_path)
+        super().__init__(name=name)
 
         self.normalise = Normalisation.init(normalise)
 
         self.consumption_max: float = 1.0
-        if self.ts is not None:
+
+        self.loader = CsvLoader(ds_path, on_reload=self._run_post_load)
+        if ds_path is not None:
             logger.info("Use data file: %s", ds_path)
-            self._run_post_load()
 
     def _post_load_data_processing(self) -> None:
         """Normalise the hh_consumption_kW column and cache the raw maximum."""
@@ -88,6 +91,16 @@ class DesiredUserEnergyNeed(StateSource):
         states["s_desired_energy_need"][0] = np.float32(desired_energy)
         # Raw maximum consumption (kW) — constant within an episode.
         states["ctxt_hh_consumption_max"][0] = np.float32(self.consumption_max)
+
+    def forecast_keys(self) -> tuple[str, ...]:
+        return ("s_fc_desired_energy_need",)
+
+    def forecast(self, selected_future_steps: list[int]) -> dict[str, list[float]]:
+        if self.ts is None:
+            return {"s_fc_desired_energy_need": [0.0] * len(selected_future_steps)}
+        return {
+            "s_fc_desired_energy_need": self._csv_forecast(self.ts, self.effective_index, NORM_COLUMN, selected_future_steps),
+        }
 
     @property
     def consumption_max_raw(self) -> float:

@@ -1,6 +1,6 @@
 """Utility helpers exposed at the utils package level."""
 
-from .env_sync import EnvSyncInterface
+from .env_sync import EnvSync
 from .json_encoder import CustomJSONEncoder
 from .ray_utils import trial_dirname_creator
 from .resource_check_util import ResourceAllocation, SlurmResources, validate_resource_allocation
@@ -17,7 +17,7 @@ from .space_check import check_space_compatibility
 from .serializable import Serializable, ComponentRegistry
 
 __all__ = [
-    "EnvSyncInterface",
+    "EnvSync",
     "CustomJSONEncoder",
     "trial_dirname_creator",
     "ResourceAllocation",

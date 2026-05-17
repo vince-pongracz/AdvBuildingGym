@@ -61,6 +61,20 @@ class EnvConfigManager:
         if hst_enabled and hst_len <= 0:
             raise ValueError("env_meta.hst_env_wrapper: hst_len must be > 0 when enabled=true")
 
+        fcw_cfg = env_meta_doc.get("forecast_env_wrapper") or {}
+        forecast_enabled = bool(fcw_cfg.get("enabled", False))
+        raw_steps = fcw_cfg.get("forecast_steps", []) or []
+        forecast_steps = tuple(sorted({int(s) for s in raw_steps}))
+        if forecast_enabled:
+            if not forecast_steps:
+                raise ValueError(
+                    "env_meta.forecast_env_wrapper: forecast_steps must be a non-empty list of positive ints when enabled=true"
+                )
+            if forecast_steps[0] < 1:
+                raise ValueError(
+                    "env_meta.forecast_env_wrapper.forecast_steps: all entries must be strictly positive integers"
+                )
+
         infra_specs = list(infras_doc.get("infras", []))
         statesource_specs = list(statesources_doc.get("statesources", []))
 
@@ -70,6 +84,8 @@ class EnvConfigManager:
             allow_early_termination=allow_early_termination,
             hst_env_wrapper_enabled=hst_enabled,
             hst_env_wrapper_hst_len=hst_len,
+            forecast_env_wrapper_enabled=forecast_enabled,
+            forecast_env_wrapper_steps=forecast_steps,
             infra_specs=infra_specs,
             statesource_specs=statesource_specs,
             infras=None,
@@ -109,6 +125,11 @@ class EnvConfigManager:
             env_meta_doc["hst_env_wrapper"] = {
                 "enabled": True,
                 "hst_len": config.hst_env_wrapper_hst_len,
+            }
+        if config.forecast_env_wrapper_enabled:
+            env_meta_doc["forecast_env_wrapper"] = {
+                "enabled": True,
+                "forecast_steps": list(config.forecast_env_wrapper_steps),
             }
 
         for path, doc in (

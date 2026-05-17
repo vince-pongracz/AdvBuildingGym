@@ -7,13 +7,15 @@ import pandas as pd
 from gymnasium.spaces import Box
 
 from ..base import StateSource
+from ..csv_loader import CsvLoader
+from ..forecastable import Forecastable
 from adv_building_gym.utils.serializable import ComponentRegistry
 from adv_building_gym.utils.normalisation import Normalisation, normalise_with_scale_factor
 
 logger = logging.getLogger(__name__)
 
 
-class WeatherDataSource(StateSource):
+class WeatherDataSource(StateSource, Forecastable):
     """WeatherDataSource — exposes ambient temperature, wind speed, and global
     solar irradiance from a preprocessed weather CSV.
 
@@ -32,7 +34,6 @@ class WeatherDataSource(StateSource):
     # normalise is an enum, need special handling for serialization
     _context_params: ClassVar[Set[str]] = {'control_step'}
     _exclude_params: ClassVar[Set[str]] = {
-        'iteration', 'ts',
         'temp_abs_max', 'temp_out_raw',
         'wind_speed_abs_max', 'wind_speed_raw',
         'sun_shine_abs_max', 'sun_shine_raw',
@@ -40,7 +41,7 @@ class WeatherDataSource(StateSource):
 
     def __init__(self, name: str, ds_path: str | None = None,
                 normalise: Normalisation | str | None = Normalisation.ABS_MIN_MAX_SCALING) -> None:
-        super().__init__(name, ds_path)
+        super().__init__(name=name)
 
         self.normalise = Normalisation.init(normalise)  # Store for serialization
         # Raw values for get_raw_values() — updated each step
@@ -52,9 +53,12 @@ class WeatherDataSource(StateSource):
         self.sun_shine_raw: float = 0.0
         self.sun_shine_abs_max: float = 0.0
 
-        if self.ts is not None:
+        # Composition: loader auto-fires _run_post_load after each read.
+        # All subclass attrs that _post_load_data_processing depends on MUST
+        # be set above this line.
+        self.loader = CsvLoader(ds_path, on_reload=self._run_post_load)
+        if ds_path is not None:
             logger.info("Use data file: %s", ds_path)
-            self._run_post_load()
         else:
             logger.debug("No initial data file for '%s', data source will be assigned by DataCombinator", name)
 
@@ -169,6 +173,19 @@ class WeatherDataSource(StateSource):
         states["ctxt_temp_abs_max"][0] = np.float32(self.temp_abs_max) # type: ignore
         states["ctxt_wind_speed_abs_max"][0] = np.float32(self.wind_speed_abs_max) # type: ignore
         states["ctxt_solar_irradiance_max"][0] = np.float32(self.sun_shine_abs_max)
+
+    def forecast_keys(self) -> tuple[str, ...]:
+        return ("s_fc_temp_out_norm", "s_fc_solar_irradiance_norm", "s_fc_avg_wind_speed_norm")
+
+    def forecast(self, selected_future_steps: list[int]) -> dict[str, list[float]]:
+        if self.ts is None:
+            return {k: [0.0] * len(selected_future_steps) for k in self.forecast_keys()}
+        idx = self.effective_index
+        return {
+            "s_fc_temp_out_norm": self._csv_forecast(self.ts, idx, "s_temp_out_norm", selected_future_steps),
+            "s_fc_solar_irradiance_norm": self._csv_forecast(self.ts, idx, "s_solar_irradiance_norm", selected_future_steps),
+            "s_fc_avg_wind_speed_norm": self._csv_forecast(self.ts, idx, "s_avg_wind_speed_norm", selected_future_steps),
+        }
 
     def get_raw_values(self) -> dict[str, float]:
         return {

@@ -10,6 +10,7 @@ from gymnasium.spaces import Box
 from adv_building_gym.utils.constants import SECONDS_PER_HOUR
 
 from ..base import StateSource
+from ..csv_loader import CsvLoader
 from adv_building_gym.utils.serializable import ComponentRegistry
 from ...infrastructure.ev_charger.ev_spec import EvSpec
 
@@ -41,7 +42,7 @@ class EVState(StateSource):
 
     _context_params: ClassVar[Set[str]] = {'control_step'}
     _exclude_params: ClassVar[Set[str]] = {
-        'iteration', 'ts', '_events', '_event_lookup',
+        '_events', '_event_lookup',
         '_ev_connected', '_current_spec',
     }
 
@@ -67,7 +68,7 @@ class EVState(StateSource):
         ds_path: str | None = None,
         control_step: float = 300.0,
     ) -> None:
-        super().__init__(name, ds_path, control_step)
+        super().__init__(name=name, control_step=control_step)
 
         self._ev_connected: bool = False
         self._current_spec: Optional[EvSpec] = None
@@ -77,8 +78,7 @@ class EVState(StateSource):
         # Lookup dict for O(1) access: iteration_index -> (is_connect, ev_spec)
         self._event_lookup: Dict[int, Tuple[bool, Optional[EvSpec]]] = {}
 
-        if self.ts is not None:
-            self._run_post_load()
+        self.loader = CsvLoader(ds_path, on_reload=self._run_post_load)
 
     def _post_load_data_processing(self) -> None:
         """Parse events and reset runtime state after CSV load / reload."""

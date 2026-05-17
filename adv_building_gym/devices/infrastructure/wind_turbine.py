@@ -11,26 +11,22 @@ logger = logging.getLogger(__name__)
 
 
 class WindTurbine(Infrastructure):
-    """Wind turbine infrastructure with policy-controlled curtailment.
+    """Wind turbine infrastructure (uncontrolled generator).
 
     Reads normalised wind speed from the WeatherDataSource
     (``avg_wind_speed_norm`` in states) and converts it to electrical
     power output using a cubic power curve with cut-in/rated/cut-out
-    thresholds.
-
-    The agent controls a continuous curtailment action in [0, 1]:
-    0 = fully curtailed (no power fed in), 1 = full utilisation.
+    thresholds. Production is fully determined by wind speed — there
+    is no policy-controlled input (mirrors the SolarPanel design).
 
     Power curve reference:
     Link: https://en.wikipedia.org/wiki/Wind_turbine_design#Power_curve
-
-    wind_action value: 1 = full rated production, 0 = no production.
     """
 
     POWER_FLOW = "generator"
 
     _exclude_params: ClassVar[Set[str]] = {
-        'iteration', 'wind_speed_raw', 'available_power_kW',
+        'iteration', 'wind_speed_raw',
         'current_production_kW', 'wind_speed_abs_max'
     }
 
@@ -75,21 +71,17 @@ class WindTurbine(Infrastructure):
 
         # State variables
         self.wind_speed_raw = 0.0          # Denormalised wind speed (m/s)
-        self.available_power_kW = 0.0      # Power before curtailment (kW)
-        self.current_production_kW = 0.0   # Power after curtailment (kW)
+        self.current_production_kW = 0.0   # Power produced (kW)
 
     def setup_spaces(self,
                     state_spaces,
                     action_spaces):
-        """Setup action space for wind turbine curtailment.
+        """Setup observation space for wind turbine.
 
-        Wind speed observation is already registered by WeatherDataSource
-        (``avg_wind_speed_norm``).  Only the curtailment action is added here.
+        Wind speed observation is registered by WeatherDataSource
+        (``avg_wind_speed_norm``). No action is added — production is
+        fully determined by wind speed.
         """
-        action_spaces["a_wind_curtailment"] = Box(
-            low=0, high=1, shape=(1,), dtype=np.float32
-        )
-
         # Raw rated power (kW) — static context variable, only
         # changes between episodes if the config is swapped.
         if "ctxt_wind_rated_power_kW" not in state_spaces.keys():
@@ -100,11 +92,10 @@ class WindTurbine(Infrastructure):
         return state_spaces, action_spaces
 
     def exec_action(self, actions: Dict, states: Dict, info=None) -> None:
-        """Compute wind power output and apply curtailment.
+        """Compute wind power output from the current wind speed.
 
         1. Denormalise wind speed from ``avg_wind_speed_norm``.
         2. Apply cubic power curve with cut-in/rated/cut-out thresholds.
-        3. Multiply by the policy's curtailment action.
         """
         # Read normalised wind speed from state
         wind_norm = 0.0
@@ -114,25 +105,10 @@ class WindTurbine(Infrastructure):
         # Denormalise to m/s using scale factor from WeatherDataSource
         self.wind_speed_raw = wind_norm * self.wind_speed_abs_max
 
-        # Compute available power from cubic power curve
+        # Compute power from cubic power curve
         # P ∝ v³ between cut-in and rated speed (Betz's law)
         # Link: https://en.wikipedia.org/wiki/Betz%27s_law
-        self.available_power_kW = self._power_curve(self.wind_speed_raw)
-
-        # Apply curtailment action
-        curtailment = float(np.atleast_1d(actions.get("a_wind_curtailment", np.array([1.0])))[0])
-        curtailment = float(np.clip(curtailment, 0.0, 1.0))
-
-        self.current_production_kW = self.available_power_kW * curtailment
-
-        # Write normalised production as output (1 = full production, 0 = none)
-        wind_action = self.current_production_kW / self.rated_power_kW if self.rated_power_kW > 0 else 0.0
-        wind_action = float(np.clip(wind_action, 0.0, 1.0))
-
-        if "a_wind" not in actions:
-            actions["a_wind"] = np.array([wind_action], dtype=np.float32)
-        else:
-            actions["a_wind"][0] = wind_action
+        self.current_production_kW = self._power_curve(self.wind_speed_raw)
 
     def _power_curve(self, wind_speed: float) -> float:
         """Compute available power from wind speed using a cubic power curve.
@@ -149,7 +125,7 @@ class WindTurbine(Infrastructure):
             wind_speed: Wind speed in m/s.
 
         Returns:
-            Available power in kW (before curtailment).
+            Power output in kW.
         """
         if wind_speed < self.cut_in_speed:
             return 0.0
@@ -174,7 +150,6 @@ class WindTurbine(Infrastructure):
     def reset(self, states: Dict, info=None) -> None:
         """Clear per-episode wind/production readouts."""
         self.wind_speed_raw = 0.0
-        self.available_power_kW = 0.0
         self.current_production_kW = 0.0
         super().reset(states, info)
 
@@ -187,7 +162,6 @@ class WindTurbine(Infrastructure):
     def get_raw_values(self) -> dict[str, float]:
         return {
             "raw_wind_speed": self.wind_speed_raw,
-            "raw_wind_available_kW": self.available_power_kW,
             "raw_wind_production_kW": self.current_production_kW,
         }
 

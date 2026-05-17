@@ -6,9 +6,10 @@
 
 from abc import ABC
 
-class EnvSyncInterface(ABC):
+class EnvSync(ABC):
     """Interface for synchronizing devices in the environment."""
     def __init__(self):
+        super().__init__()
         self.iteration = 0
         self.row_offset = 0
 

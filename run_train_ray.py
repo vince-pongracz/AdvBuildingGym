@@ -85,6 +85,10 @@ def _parse_cli_args() -> argparse.Namespace:
         "--trial", type=str, required=True,
         help="Path to trial config YAML (e.g. configs/trial_cfgs/trial_cfg_1.yaml)",
     )
+    parser.add_argument(
+        "--cpu", action="store_true",
+        help="Smoke-test mode: bypass the GPU requirement and run learner on CPU.",
+    )
     return parser.parse_args()
 
 
@@ -113,30 +117,38 @@ def _trial_to_args_namespace(trial: TrialConfig) -> Namespace:
 # Ray initialisation
 # ---------------------------------------------------------------------------
 
-def _init_ray(seed: int) -> SlurmResources:
+def _init_ray(seed: int, cpu_only: bool = False) -> SlurmResources:
     """Resolve SLURM resources, init Ray, and bring up the RngService actor."""
     slurm_cpus = os.environ.get("SLURM_CPUS_PER_TASK")
     cpus = int(slurm_cpus) if slurm_cpus and slurm_cpus.isdigit() else 2
 
-    cuda_visible = os.environ.get("CUDA_VISIBLE_DEVICES")
-    if cuda_visible:
-        gpus = len([x for x in cuda_visible.split(",") if x.strip() != ""])
-        if not torch.cuda.is_available():
+    if cpu_only:
+        gpus = 0
+        logger.warning("CPU-only smoke-test mode: running learner on CPU (--cpu).")
+    else:
+        cuda_visible = os.environ.get("CUDA_VISIBLE_DEVICES")
+        if cuda_visible:
+            gpus = len([x for x in cuda_visible.split(",") if x.strip() != ""])
+            if not torch.cuda.is_available():
+                logger.error(
+                    "SLURM allocated GPUs (CUDA_VISIBLE_DEVICES=%s) but PyTorch "
+                    "cannot access CUDA. Check driver/CUDA toolkit setup.",
+                    cuda_visible,
+                )
+                sys.exit(1)
+        else:
             logger.error(
-                "SLURM allocated GPUs (CUDA_VISIBLE_DEVICES=%s) but PyTorch "
-                "cannot access CUDA. Check driver/CUDA toolkit setup.",
-                cuda_visible,
+                "No GPU allocated (CUDA_VISIBLE_DEVICES is not set). "
+                "Training requires a GPU — submit with --gres=gpu:1, "
+                "or pass --cpu for a CPU-only smoke test.",
             )
             sys.exit(1)
-    else:
-        logger.error(
-            "No GPU allocated (CUDA_VISIBLE_DEVICES is not set). "
-            "Training requires a GPU — submit with --gres=gpu:1.",
-        )
-        sys.exit(1)
 
     slurm_resources = SlurmResources(num_cpus=cpus, num_gpus=gpus)
-    logger.info("Training on device: cuda (%d GPU(s) from SLURM)", slurm_resources.num_gpus)
+    logger.info(
+        "Training on device: %s (%d GPU(s))",
+        "cpu" if gpus == 0 else "cuda", slurm_resources.num_gpus,
+    )
 
     logger.info(
         "Initializing Ray with cpus=%s gpus=%s (from SLURM/CUDA env)",
@@ -387,7 +399,7 @@ def main():
     args = _trial_to_args_namespace(trial)
     args.metric = metric  # banner uses the resolved metric
 
-    slurm_resources = _init_ray(trial.seed)
+    slurm_resources = _init_ray(trial.seed, cpu_only=cli_args.cpu)
 
     exec_date_dt = datetime.datetime.now()
     exec_date = exec_date_dt.strftime("%Y%m%d_%H%M%S")
