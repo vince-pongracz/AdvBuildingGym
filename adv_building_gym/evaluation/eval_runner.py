@@ -32,6 +32,7 @@ from adv_building_gym.ray_training.rl_module_inference import (
 from adv_building_gym.utils import TrajectoryCollector, check_space_compatibility
 
 from .results import EpisodeStats, EvalResults
+from .utils import copy_rl_module, copy_trial_yaml, write_provenance
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +56,7 @@ def evaluate_model(
     stochastic: bool = False,
     run_stamp: str | None = None,
     subdir: str | None = None,
+    trial_yaml_path: str | Path | None = None,
 ) -> EvalResults:
     """Evaluate a Ray/RLlib trained model on AdvBuildingGym.
 
@@ -89,11 +91,19 @@ def evaluate_model(
     # multiple per-config eval passes, and a `subdir` to nest each pass under
     # its own directory.
     if run_stamp is None:
-        run_stamp = datetime.datetime.now().strftime("%Y%m%d_%H%M") + "_eval"
+        run_stamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S") + "_eval"
+        if stochastic:
+            run_stamp += "_stoch"
     output_dir = os.path.join(output_dir, run_stamp)
     if subdir:
         output_dir = os.path.join(output_dir, subdir)
     os.makedirs(output_dir, exist_ok=True)
+
+    copy_trial_yaml(trial_yaml_path, Path(output_dir))
+    write_provenance(
+        Path(output_dir), trial_yaml_path,
+        repo_dir=Path(__file__).resolve().parent,
+    )
 
     logger.info("=" * 70)
     logger.info("Starting Ray model evaluation")
@@ -125,6 +135,10 @@ def evaluate_model(
     # Load RLModule from checkpoint
     logger.info("Loading algorithm from checkpoint...")
     rl_module = load_rl_module(checkpoint_path)
+
+    if save_results:
+        copy_rl_module(Path(checkpoint_path), Path(output_dir))
+        logger.info("Copied RLModule files to output directory for provenance.")
     
     # TODO VP 2026.03.16. : Partially resolved -- Train long term -- for 7 days, for 30 days, for 365 days -- episodes
     # --> Eval long term as well. Not only single day optimisation, long term optimisation learnt

@@ -112,9 +112,23 @@ def make_eval_state_action_cb_class(
                     for dim, scalar in enumerate(arr.flat):
                         ep_data[f"action/{act_key}_{dim}"].append(float(scalar))
 
-                # Instantaneous net power (kW)
+                # Instantaneous net power (kW) + per-component breakdown
                 if "net_power_kW" in info:
                     ep_data["power/net_kW"].append(float(info["net_power_kW"]))
+                for comp_name, comp_power in info.get("power_breakdown", {}).items():
+                    # power_breakdown values are (production_kW, consumption_kW) tuples;
+                    # net = production - consumption (see envs/_energy_tracker.py).
+                    if isinstance(comp_power, tuple):
+                        net_power = float(comp_power[0]) - float(comp_power[1])
+                    else:
+                        net_power = float(comp_power)
+                    ep_data[f"power/{comp_name}_kW"].append(net_power)
+
+                # Total step reward + per-component breakdown
+                if "reward" in info:
+                    ep_data["reward/total"].append(float(info["reward"]))
+                for rew_name, rew_val in info.get("reward_breakdown", {}).items():
+                    ep_data[f"reward/{rew_name}"].append(float(rew_val))
 
             _episode_buffer.append(dict(ep_data))
 

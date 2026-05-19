@@ -41,8 +41,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--trial", type=str, required=True,
         help="Path to trial config YAML (e.g. configs/trial_cfgs/trial_cfg_1.yaml). "
-             "For eval, the trial's reward_schedule should point at the eval rewards "
-             "and data_schedule (if set) at the held-out eval data.",
+            "For eval, the trial's reward_schedule should point at the eval rewards "
+            "and data_schedule (if set) at the held-out eval data.",
     )
     parser.add_argument(
         "--checkpoint", type=str, default=None,
@@ -57,8 +57,7 @@ def parse_args() -> argparse.Namespace:
         help="Directory to save evaluation results",
     )
     parser.add_argument(
-        "--no-save", action="store_true",
-        help="Don't save results to file",
+        "--no-save", action="store_true", help="Don't save results to file",
     )
     parser.add_argument(
         "--data-mode", type=str, default=None,
@@ -80,7 +79,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--stochastic", action="store_true", default=False,
         help="Sample actions from the squashed-Gaussian policy instead of "
-             "taking tanh(mean). Per-episode torch RNG is seeded from the trial seed.",
+            "taking tanh(mean). Per-episode torch RNG is seeded from the trial seed.",
     )
     args = parser.parse_args()
 
@@ -202,7 +201,9 @@ def main() -> None:
         n_iters = 1
 
     # Shared timestamp so per-config dirs sit under one parent run dir.
-    run_stamp = datetime.datetime.now().strftime("%Y%m%d_%H%M") + "_eval"
+    run_stamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S") + "_eval"
+    if args.stochastic:
+        run_stamp += "_stoch"
 
     try:
         all_results = []
@@ -242,6 +243,7 @@ def main() -> None:
                 stochastic=args.stochastic,
                 run_stamp=run_stamp,
                 subdir=subdir,
+                trial_yaml_path=trial.source_path,
             )
             all_results.append((subdir, results))
             logger.info("Evaluation pass %d/%d completed.", idx + 1, n_iters)

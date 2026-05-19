@@ -28,7 +28,7 @@
 #SBATCH --tasks-per-node=1
 # TODO VP: set to 32, 38, 16 later -- but adapt Ray to use all possible cpu cores available
 #SBATCH --cpus-per-task=5
-#SBATCH --time=02:00:00
+#SBATCH --time=24:00:00
 #SBATCH --output=slurm_logs/train/slurm-train-ray-%j.out
 #SBATCH --error=slurm_logs/train/slurm-train-ray-%j.err
 #SBATCH --job-name=ray-train-%j
