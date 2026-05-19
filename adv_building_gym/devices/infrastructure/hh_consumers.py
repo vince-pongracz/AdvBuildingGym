@@ -109,7 +109,8 @@ class HouseholdEnergyConsumers(Infrastructure):
         Simple stepped profile matching DesiredUserEnergyNeed's synthetic
         pattern, with added Gaussian noise for realism.
         """
-        sim_hour = float(states.get("raw_sim_hour", np.array([12.0]))[0]) % 24
+        # s_sim_hour is published by the env in [0, 1] (hour-of-day / 24).
+        sim_hour = float(states.get("s_sim_hour", np.zeros(1, dtype=np.float32))[0]) * 24.0
 
         if sim_hour < 6:
             base = 0.2   # Low demand during night

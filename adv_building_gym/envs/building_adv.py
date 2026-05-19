@@ -44,7 +44,7 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
 
     Data contract — observation vs. info
         1. ``self.state`` / ``observation_space`` — policy-visible normalised
-           values (``s_*`` / ``ctxt_*`` / ``raw_sim_hour``).
+           values (``s_*`` / ``ctxt_*``).
         2. ``self._component_info`` — shared inter-component dict for raw
            physical values (``net_power_kW``, EV schedule, action history).
         3. step/reset ``info`` — diagnostics for callbacks and logging
@@ -149,12 +149,11 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         for ds in self.statesources:
             ds.setup_spaces(observation_space, action_space)
 
-        self.reward_functors = rewards
+        # Env-owned hour-of-day signal in [0, 1] (sim_hour mod 24 / 24).
+        # No component owns it because it depends only on iteration × control_step.
+        observation_space["s_sim_hour"] = spaces.Box(low=0.0, high=1.0, shape=(1,), dtype=np.float32)
 
-        # sim_hour: hour of day (0–24) derived from the current step
-        # within the episode.  Used by statesource synthetic profiles
-        # and SolarPanel for time-of-day logic.
-        observation_space["raw_sim_hour"] = spaces.Box(low=0.0, high=24.0, shape=(1,), dtype=np.float32)
+        self.reward_functors = rewards
 
         # NOTE VP 2026.05.04.: Tracks actions from the last ACTION_HISTORY_LENGTH steps
         self._action_history = ActionHistoryBuffer(
@@ -312,6 +311,7 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
 
     def _reset_internal_state(self) -> None:
         self.iteration = 0
+        self.sim_hour = 0
         self._energy_tracker.reset()
         self._price_tracker.reset()
         self._action_history.clear()
@@ -321,8 +321,7 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
                 self.state[k] = np.zeros(v.shape, dtype=np.float32)
             else:
                 logger.debug("Unidentified type: %s", type(v))
-        # sim_hour starts at midnight.
-        self.state["raw_sim_hour"][0] = np.float32(0.0)
+
         self._component_info.clear()
 
     def _sync_components(self, row_offset: int) -> None:
@@ -355,7 +354,7 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
 
     def _get_observation(self) -> dict:
         # Start with the current env state so statesources have access to
-        # bookkeeping keys such as "iteration" and "raw_sim_hour" during reset.
+        # bookkeeping keys such as "iteration" during reset.
         state = OrderedDict(self.state) if isinstance(self.state, OrderedDict) else OrderedDict()
         for ds in self.statesources:
             ds.update_state(states=state, info=self._component_info)
@@ -423,9 +422,9 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         # Previously synchronise was called AFTER update_state, causing exogenous
         # datasources (price, weather, EV schedule) to lag 2 iterations behind.
         self.iteration += 1
-        self.state["raw_sim_hour"][0] = np.float32(
-            (self.iteration * self.env_config.CONTROL_STEP) / SECONDS_PER_HOUR
-        )
+        self.sim_hour = self.iteration * self.env_config.CONTROL_STEP / SECONDS_PER_HOUR
+        self.state["s_sim_hour"][0] = np.float32((self.sim_hour % 24.0) / 24.0)
+
         for sync in self.infras + self.statesources:
             sync.synchronise(self.iteration)
 

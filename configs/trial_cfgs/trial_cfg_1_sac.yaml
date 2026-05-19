@@ -32,14 +32,7 @@ env_meta:
     - -24
     - -36
     - -48
-    - -60
-    - -72
-    - -84
-    - -96
-    - -108
-    - -120
-    - -132
-    - -144
+
   forecast_env_wrapper:
     enabled: true
     forecast_steps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
@@ -56,8 +49,8 @@ training_params:
     num_epochs: 20
   sac:
     episodes_to_keep_in_replay_buffer: 500
-    n_step_return: 6
-    training_intensity: 256
+    n_step_return: 3
+    training_intensity: 128
     learning_starts_after_n_episodes: 50
 statesources:
 - class: EnergyPriceDataSource

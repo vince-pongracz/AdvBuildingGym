@@ -57,8 +57,8 @@ training_params:
   sac:
     replay_batch_size: 256
     episodes_to_keep_in_replay_buffer: 500
-    training_intensity: 256
-    n_step_return: 6
+    training_intensity: 128
+    n_step_return: 3
     learning_starts_after_n_episodes: 50
 statesources:
 - class: EnergyPriceDataSource

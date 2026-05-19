@@ -102,7 +102,7 @@ Either a constant `max_power_kW` from the env config YAML, or — when an `opera
 
 ## Summary — runtime keys vs. raw units
 
-### Policy-visible observations (`s_*`, `raw_sim_hour`)
+### Policy-visible observations (`s_*`)
 
 | Key | Unit at exposure |
 | --- | --- |
@@ -111,7 +111,7 @@ Either a constant `max_power_kW` from the env config YAML, or — when an `opera
 | `s_avg_wind_speed_norm` | normalised [0,1], scale = `ctxt_wind_speed_abs_max` (m/s) |
 | `s_E_price` | normalised [-1,1], scale = `ctxt_E_price_max` (ct/kWh) |
 | `s_temp_in_norm` | normalised (÷ `ctxt_temp_abs_max`, °C) |
-| `raw_sim_hour` | hours (0–24) |
+| `s_sim_hour` | normalised hour-of-day, (sim_hour mod 24) / 24, range [0, 1] |
 
 ### Context / scale factors (`ctxt_*`, static within an episode)
 

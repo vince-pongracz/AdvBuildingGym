@@ -8,7 +8,7 @@ states:
   # Keys listed here are skipped; in addition any key starting with
   # ``ctxt_`` (static physical context) is automatically excluded.
   skip_keys:
-    - raw_sim_hour
+    - s_sim_hour
 
   # Groups of state keys that share a single plot.
   # Each entry is a list of keys rendered together.

@@ -118,14 +118,7 @@ env_meta:
     - -24
     - -36
     - -48
-    - -60
-    - -72
-    - -84
-    - -96
-    - -108
-    - -120
-    - -132
-    - -144
+
   forecast_env_wrapper:
     enabled: true
     forecast_steps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
@@ -150,8 +143,8 @@ training_params:
     episodes_to_keep_in_replay_buffer: 500 # ≈ 500 * EPISODE_LENGTH transitions
     # UTD = training_intensity / replay_batch_size. 256/256 = 1.0 (vanilla SAC).
     # Without this RLlib falls back to round-robin (UTD ≈ 0.001) → no real learning.
-    n_step_return: 6 # 6-step is biased under non-stationary rewards / curricula
-    training_intensity: 256
+    n_step_return: 3 # 6-step is biased under non-stationary rewards / curricula
+    training_intensity: 128
     learning_starts_after_n_episodes: 50
 
 data_schedule:

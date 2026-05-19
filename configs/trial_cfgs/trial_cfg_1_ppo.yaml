@@ -145,16 +145,6 @@ training_params:
     minibatch_size: 64
     num_epochs: 20
 
-  # SAC-specific (off-policy)
-  sac:
-    replay_batch_size: 256 # aka train_batch_size_per_learner; standard SAC
-    episodes_to_keep_in_replay_buffer: 500 # ≈ 500 * EPISODE_LENGTH transitions
-    # UTD = training_intensity / replay_batch_size. 256/256 = 1.0 (vanilla SAC).
-    # Without this RLlib falls back to round-robin (UTD ≈ 0.001) → no real learning.
-    training_intensity: 256
-    n_step_return: 6 # 6-step is biased under non-stationary rewards / curricula
-    learning_starts_after_n_episodes: 50
-
 data_schedule:
   train: configs/schedules/data/train.yaml
   eval: configs/schedules/data/eval.yaml

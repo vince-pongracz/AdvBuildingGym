@@ -141,12 +141,6 @@ class WeatherDataSource(StateSource, Forecastable):
         if "ctxt_solar_irradiance_max" not in state_spaces.keys():
             state_spaces["ctxt_solar_irradiance_max"] = Box(low=0, high=np.inf, shape=(1,), dtype=np.float32)
 
-        if "raw_sim_hour" not in state_spaces.keys():
-            state_spaces["raw_sim_hour"] = Box(low=np.full((1,), 0, dtype=np.float32),
-                                            high=np.full((1,), np.inf, dtype=np.float32),
-                                            shape=(1,), dtype=np.float32)
-
-
         return state_spaces, action_spaces
 
     def update_state(self, states, info=None) -> None:

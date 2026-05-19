@@ -172,8 +172,7 @@ class OperatorEnergyControl(StateSource, Forecastable):
                     action_spaces: OrderedDict) -> tuple[OrderedDict, OrderedDict]:
         if "ctxt_operator_max_power_kW" not in state_spaces:
             state_spaces["ctxt_operator_max_power_kW"] = Box(low=0, high=np.inf, shape=(1,), dtype=np.float32)
-        if "raw_sim_hour" not in state_spaces:
-            state_spaces["raw_sim_hour"] = Box(low=0, high=np.inf, shape=(1,), dtype=np.float32)
+
         return state_spaces, action_spaces
 
     def update_state(self, states, info=None) -> None:
