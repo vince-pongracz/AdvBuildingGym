@@ -10,6 +10,7 @@ import logging
 
 import numpy as np
 import torch
+from ray.rllib.core.columns import Columns
 from ray.rllib.core.rl_module.rl_module import RLModule
 
 logger = logging.getLogger(__name__)
@@ -40,12 +41,13 @@ def infer_action(
     flat_obs: np.ndarray,
     stochastic: bool = False,
     generator: torch.Generator | None = None,
-) -> np.ndarray:
+    state_in: dict | None = None,
+) -> tuple[np.ndarray, dict]:
     """Run forward inference on a single observation.
 
     Builds a batched tensor, calls ``_forward_inference``, and handles
-    both ``action_dist_inputs`` (SAC/PPO squashed-Gaussian) and direct
-    ``actions`` outputs.
+    ``action_dist_inputs`` (SAC/PPO squashed-Gaussian), direct ``actions``
+    outputs (DreamerV3), and recurrent state threading (DreamerV3's RSSM).
     Link: https://docs.ray.io/en/latest/rllib/package_ref/rl_modules.html
 
     Args:
@@ -58,19 +60,31 @@ def infer_action(
         generator: Optional ``torch.Generator`` controlling ``eps`` so
             stochastic eval is reproducible. Ignored when
             ``stochastic=False`` or when the module returns ``actions`` directly.
+        state_in: Recurrent state dict produced by a previous call's
+            ``state_out`` (or by ``rl_module.get_initial_state()`` at the
+            start of an episode). Pass ``{}`` for stateless modules.
 
     Returns:
-        Action as a numpy array (or scalar wrapped in 0-d array).
+        Tuple of (action, state_out). ``action`` is a numpy array (or
+        Python scalar for 0-d outputs). ``state_out`` is ``{}`` for
+        stateless modules.
     """
-    batch = {
-        "obs": torch.as_tensor(flat_obs, dtype=torch.float32).unsqueeze(0),
+    batch: dict = {
+        Columns.OBS: torch.as_tensor(flat_obs, dtype=torch.float32).unsqueeze(0),
     }
+    if state_in:
+        # RLlib convention: STATE_IN is a (possibly nested) dict of tensors
+        # already batched along axis 0. Callers must add the batch dim
+        # before passing it in. ``get_initial_state()`` returns unbatched
+        # tensors; eval_runner is responsible for unsqueeze(0).
+        batch[Columns.STATE_IN] = state_in
+
     with torch.no_grad():
         output = rl_module._forward_inference(batch)  # type: ignore[attr-defined]
 
         # SAC / PPO continuous: action_dist_inputs = [mean, log_std].
-        if "action_dist_inputs" in output:
-            dist_inputs = output["action_dist_inputs"].squeeze(0)
+        if Columns.ACTION_DIST_INPUTS in output:
+            dist_inputs = output[Columns.ACTION_DIST_INPUTS].squeeze(0)
             action_dim = dist_inputs.shape[-1] // 2
             action_mean = dist_inputs[:action_dim]
             if stochastic:
@@ -86,9 +100,12 @@ def infer_action(
             else:
                 raw_action = torch.tanh(action_mean).numpy()
         else:
-            raw_action = output["actions"].squeeze(0).numpy()
+            # DreamerV3 returns sampled actions directly under Columns.ACTIONS.
+            raw_action = output[Columns.ACTIONS].squeeze(0).numpy()
 
         if isinstance(raw_action, np.ndarray) and raw_action.ndim == 0:
             raw_action = raw_action.item()
 
-    return raw_action
+        state_out = output.get(Columns.STATE_OUT, {}) or {}
+
+    return raw_action, state_out

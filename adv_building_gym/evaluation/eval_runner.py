@@ -41,6 +41,23 @@ def _timeout_handler(signum, frame):
     raise TimeoutError("Evaluation timed out")
 
 
+def _batch_state(state):
+    """Add a leading batch dim to every tensor in a (nested) state dict.
+
+    ``RLModule.get_initial_state()`` returns unbatched tensors; the
+    inference forward pass expects a batch dimension. Non-tensor leaves
+    (e.g. numpy arrays from stateless modules' empty dict) are returned
+    unchanged.
+    """
+    if isinstance(state, dict):
+        return {k: _batch_state(v) for k, v in state.items()}
+    if isinstance(state, (list, tuple)):
+        return type(state)(_batch_state(v) for v in state)
+    if isinstance(state, torch.Tensor):
+        return state.unsqueeze(0)
+    return state
+
+
 def evaluate_model(
     checkpoint_path: str,
     active_config: EnvConfig,
@@ -100,10 +117,7 @@ def evaluate_model(
     os.makedirs(output_dir, exist_ok=True)
 
     copy_trial_yaml(trial_yaml_path, Path(output_dir))
-    write_provenance(
-        Path(output_dir), trial_yaml_path,
-        repo_dir=Path(__file__).resolve().parent,
-    )
+    write_provenance(Path(output_dir), trial_yaml_path, repo_dir=Path(__file__).resolve().parent)
 
     logger.info("=" * 70)
     logger.info("Starting Ray model evaluation")
@@ -114,9 +128,7 @@ def evaluate_model(
     logger.info("  Output: %s", output_dir)
     logger.info(
         "  Action mode: %s",
-        "stochastic (squashed-Gaussian sample)"
-        if stochastic
-        else "deterministic (tanh(mean))",
+        "stochastic (squashed-Gaussian sample)" if stochastic else "deterministic (tanh(mean))",
     )
     logger.info("=" * 70)
 
@@ -267,6 +279,13 @@ def evaluate_model(
                 observations=[obs],
             )
 
+            # Initial recurrent state for stateful modules (e.g. DreamerV3's
+            # RSSM). For stateless PPO/SAC this returns {} and is a no-op.
+            # get_initial_state() yields unbatched tensors; add the batch dim
+            # before handing them to the RLModule.
+            initial_state = rl_module.get_initial_state() or {}
+            state_in = _batch_state(initial_state)
+
             while not done and episode_length < MAX_STEPS_PER_EPISODE:
                 batch: dict = {}
                 for connector in pipeline:
@@ -280,11 +299,12 @@ def evaluate_model(
                 # ``add_batch_item`` stores: {Columns.OBS: {ep_id: [flat_obs]}}.
                 obs_column = batch[Columns.OBS]
                 flat_obs = next(iter(obs_column.values()))[-1]
-                raw_action = infer_action(
+                raw_action, state_in = infer_action(
                     rl_module,
                     flat_obs,
                     stochastic=stochastic,
                     generator=action_generator,
+                    state_in=state_in,
                 )
 
                 next_obs, reward, terminated, truncated, step_info = env.step(raw_action)

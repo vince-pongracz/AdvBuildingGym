@@ -9,7 +9,7 @@ Schema (top-level keys, ordered):
     trial_name: <str>
 
     # run control
-    algorithm: ppo|sac
+    algorithm: ppo|sac|dreamerv3
     seed: 42
     metric: episode_return_mean | achieved_reward | reward_rate
     checkpoint_frequency_episodes: 20
@@ -138,8 +138,8 @@ class TrialConfig:
                 raise ValueError(f"Trial config {label} missing required key '{key}'")
 
         run = {**_RUN_DEFAULTS, **{k: v for k, v in trial_dict.items() if k in _RUN_DEFAULTS}}
-        if run["algorithm"] not in ("ppo", "sac"):
-            raise ValueError(f"Trial config {label}: algorithm must be 'ppo' or 'sac', got '{run['algorithm']}'")
+        if run["algorithm"] not in ("ppo", "sac", "dreamerv3"):
+            raise ValueError(f"Trial config {label}: algorithm must be 'ppo', 'sac', or 'dreamerv3', got '{run['algorithm']}'")
 
         trial_seed: int = int(trial_dict["seed"])
         overrides = run["overrides"] or {}

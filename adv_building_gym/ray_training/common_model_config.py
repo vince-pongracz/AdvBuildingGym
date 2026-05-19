@@ -307,7 +307,10 @@ def common_model_setup(
     # SLURM-derived num_env_runners exceeds that, drop it down so episodes are
     # not over-collected on each iteration (the surplus CPUs go unused).
     is_ppo = type(config).__name__ == "PPOConfig"
-    train_batch = getattr(config, "train_batch_size_per_learner", None)
+    # Accessing train_batch_size_per_learner on non-PPO configs (e.g. DreamerV3)
+    # can raise inside RLlib when train_batch_size is unset — only read it
+    # when we actually need it for PPO's env-runner sizing heuristic.
+    train_batch = getattr(config, "train_batch_size_per_learner", None) if is_ppo else None
     if is_ppo and train_batch:
         total_batch = train_batch * num_learners
         target_env_runners = max(1, total_batch // env_config.EPISODE_LENGTH)

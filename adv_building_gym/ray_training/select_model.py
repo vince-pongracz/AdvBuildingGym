@@ -10,6 +10,7 @@ from pathlib import Path
 
 from ray.rllib.algorithms.ppo import PPOConfig
 from ray.rllib.algorithms.sac import SACConfig
+from ray.rllib.algorithms.dreamerv3 import DreamerV3Config
 # NOTE: TD3 was removed from RLlib in v2.7 (moved to rllib_contrib, then discontinued Nov 2024).
 # Use SAC instead - similar off-policy algorithm with entropy regularization.
 from ray.rllib.core.rl_module.default_model_config import DefaultModelConfig
@@ -36,7 +37,7 @@ def select_model(
     configuration (environment, resources, callbacks, etc.).
 
     Args:
-        algorithm: RL algorithm to use ("ppo" or "sac")
+        algorithm: RL algorithm to use ("ppo", "sac", or "dreamerv3")
         episode_length: Episode length in timesteps
         training_config: Optional TrainingConfig with learning rate and batch
             size.  When *None* the bundled ``training_config.yaml`` is loaded.
@@ -125,28 +126,51 @@ def select_model(
             # "normal expects all elements of std >= 0.0".
             grad_clip=1.0,  # RLlib default: None
         )
-    # NOTE VP 2026.02.11. : Maybe add DreamerV3 -- but in that case drop the forecasting states
-    # DreamerV3 paper link: https://arxiv.org/pdf/2301.04104
+    elif algorithm == "dreamerv3":
+        config = DreamerV3Config()
+        # DreamerV3 is model-based off-policy: episodes are stored in a replay
+        # buffer, the recurrent world model (RSSM) is fit on sampled sequences
+        # of length batch_length_T, and actor/critic are trained on imagined
+        # rollouts of length horizon_H produced inside the world model.
+        # training_ratio is the UTD analogue (replayed env steps per sampled
+        # env step). DreamerV3 ships its own torch RLModule, so the shared
+        # DefaultModelConfig block below is skipped for this algorithm.
+        # Link: https://arxiv.org/pdf/2301.04104
+        config.training(
+            model_size=training_config.dreamerv3_model_size,
+            training_ratio=training_config.dreamerv3_training_ratio,
+            batch_size_B=training_config.dreamerv3_batch_size_B,
+            batch_length_T=training_config.dreamerv3_batch_length_T,
+            horizon_H=training_config.dreamerv3_horizon_H,
+            world_model_lr=training_config.dreamerv3_world_model_lr,
+            actor_lr=training_config.dreamerv3_actor_lr,
+            critic_lr=training_config.dreamerv3_critic_lr,
+            replay_buffer_config={
+                "type": "EpisodeReplayBuffer",
+                "capacity": episode_length * training_config.dreamerv3_episodes_to_keep_in_replay_buffer,
+            },
+        )
     else:
-        raise ValueError(f"Unknown algorithm: {algorithm}. Supported: ppo, sac")
+        raise ValueError(f"Unknown algorithm: {algorithm}. Supported: ppo, sac, dreamerv3")
 
-    # Common configuration for all algorithms
-    # Network architecture: same for fair comparison across algorithms
-    # TODO VP 2026.01.12. : look up rl_module config options, define own model -- in model_backbone module (?)
-    config.rl_module(
-        # Use new API to avoid RLModule(config=RLModuleConfig) deprecation warning
-        # TODO VP 2026.01.12. : Use transformer model for better learning, it is a time series after all -- but does it really matter here?
-        model_config=DefaultModelConfig(
-            fcnet_activation='tanh', # RLlib default: tanh
-            # NOTE VP 2026.03.10. : What is the NN structure which is needed to learn this task complexity?
-            fcnet_hiddens=[256, 256],  # RLlib default: [256, 256]
-            # [256, 256, 256]
-            # Use LSTM to exploit temporal dependencies
-            # use_lstm=True,
-            # lstm_cell_size=5,
-            # lstm_use_prev_action=True,
-            # lstm_use_prev_reward=False,
-        ),
-    )
+    # Common configuration for PPO/SAC. DreamerV3 ships its own RLModule and
+    # ignores DefaultModelConfig.
+    if algorithm in ("ppo", "sac"):
+        # TODO VP 2026.01.12. : look up rl_module config options, define own model -- in model_backbone module (?)
+        config.rl_module(
+            # Use new API to avoid RLModule(config=RLModuleConfig) deprecation warning
+            # TODO VP 2026.01.12. : Use transformer model for better learning, it is a time series after all -- but does it really matter here?
+            model_config=DefaultModelConfig(
+                fcnet_activation='tanh', # RLlib default: tanh
+                # NOTE VP 2026.03.10. : What is the NN structure which is needed to learn this task complexity?
+                fcnet_hiddens=[256, 256],  # RLlib default: [256, 256]
+                # [256, 256, 256]
+                # Use LSTM to exploit temporal dependencies
+                # use_lstm=True,
+                # lstm_cell_size=5,
+                # lstm_use_prev_action=True,
+                # lstm_use_prev_reward=False,
+            ),
+        )
 
     return config

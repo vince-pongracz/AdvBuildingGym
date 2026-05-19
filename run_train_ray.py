@@ -207,8 +207,9 @@ def _checkpoint_iterations(trial: TrialConfig) -> int:
 
     train_batch_size_per_learner drives the timesteps RLlib processes per
     iteration but means different things per algorithm:
-      PPO — ppo_episodes_per_iteration * EPISODE_LENGTH (on-policy batch)
-      SAC — sac_replay_batch_size (off-policy replay sample)
+      PPO       — ppo_episodes_per_iteration * EPISODE_LENGTH (on-policy batch)
+      SAC       — sac_replay_batch_size (off-policy replay sample)
+      DreamerV3 — batch_size_B * batch_length_T (world-model training batch)
     """
     timesteps_per_episode = trial.env_config.EPISODE_LENGTH
     timesteps_per_iteration = 0.0
@@ -217,6 +218,11 @@ def _checkpoint_iterations(trial: TrialConfig) -> int:
         timesteps_per_iteration = trial.training_param_config.ppo_episodes_per_iteration * trial.env_config.EPISODE_LENGTH
     if trial.algorithm == "sac":
         timesteps_per_iteration = trial.training_param_config.sac_replay_batch_size
+    if trial.algorithm == "dreamerv3":
+        timesteps_per_iteration = (
+            trial.training_param_config.dreamerv3_batch_size_B
+            * trial.training_param_config.dreamerv3_batch_length_T
+        )
 
     if timesteps_per_iteration != 0.0:
         iters = max(1, int(
@@ -256,6 +262,16 @@ def _build_progress_reporter(algorithm: str) -> CLIReporter:
             "learners/default_policy/actor_loss": "PiLoss",
             "learners/default_policy/alpha_value": "Alpha",
             "learners/default_policy/td_error_mean": "TDErr",
+        }
+    elif algorithm == "dreamerv3":
+        # TODO VP: Verify these metric paths against an actual DreamerV3
+        # result.json (per memory feedback_rllib_new_api_stack.md). DreamerV3
+        # learner logs world-model / actor / critic losses with names that
+        # depend on the installed Ray version.
+        algo_cols = {
+            "learners/default_policy/WORLD_MODEL_total_loss": "WMLoss",
+            "learners/default_policy/ACTOR_loss": "PiLoss",
+            "learners/default_policy/CRITIC_L_total": "VfLoss",
         }
     else:
         algo_cols = {}

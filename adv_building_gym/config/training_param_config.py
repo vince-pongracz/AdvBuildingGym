@@ -67,6 +67,22 @@ class TrainingParamConfig(LoggableConfig):
     sac_n_step_return: int = 1
     sac_learning_starts_after_n_episodes: int = 50 # Warm up replay buffer with 50 episodes before learning starts.
 
+    # DreamerV3 (model-based, off-policy via world-model imagination rollouts).
+    # World model is trained on sequences of length batch_length_T sampled from
+    # the episode replay buffer; actor/critic are trained on imagined rollouts
+    # of length horizon_H. training_ratio is the UTD analogue (replayed env
+    # steps per sampled env step).
+    # Link: https://arxiv.org/pdf/2301.04104
+    dreamerv3_model_size: str = "XS"  # one of "XS", "S", "M", "L", "XL"
+    dreamerv3_batch_size_B: int = 16  # RLlib default
+    dreamerv3_batch_length_T: int = 64  # RLlib default
+    dreamerv3_training_ratio: float = 1024.0  # RLlib default
+    dreamerv3_horizon_H: int = 15  # imagination horizon. RLlib default
+    dreamerv3_episodes_to_keep_in_replay_buffer: int = 500
+    dreamerv3_world_model_lr: float = 1e-4  # RLlib default
+    dreamerv3_actor_lr: float = 3e-5  # RLlib default
+    dreamerv3_critic_lr: float = 3e-5  # RLlib default
+
     _source_file: str | None = field(default=None, repr=False)
 
     @staticmethod
@@ -74,7 +90,7 @@ class TrainingParamConfig(LoggableConfig):
         """Build from an already-parsed dict (mirrors from_yaml's prefix flattening)."""
         tparam_cfg = dict(doc) if doc else {}
         flat: dict = {}
-        for cfg_section in ("common", "ppo", "sac"):
+        for cfg_section in ("common", "ppo", "sac", "dreamerv3"):
             section_data = tparam_cfg.pop(cfg_section, {}) or {}
             section_prefix = "" if cfg_section == "common" else f"{cfg_section}_"
             for key, value in section_data.items():
