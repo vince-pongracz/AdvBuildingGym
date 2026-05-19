@@ -299,8 +299,12 @@ def _build_tuner(trial: TrialConfig, metric: str, param_space, run_name, storage
     }
     progress_reporter = _build_progress_reporter(trial.algorithm)
 
+    # Ray's algorithm registry is case-sensitive: "PPO"/"SAC" are all-caps,
+    # but DreamerV3 is mixed-case — see ray.rllib.algorithms.registry.
+    trainable_name = {"ppo": "PPO", "sac": "SAC", "dreamerv3": "DreamerV3"}[trial.algorithm]
+
     return tune.Tuner(
-        trial.algorithm.upper(),
+        trainable_name,
         param_space=param_space,
         tune_config=tune.TuneConfig(
             reuse_actors=True,

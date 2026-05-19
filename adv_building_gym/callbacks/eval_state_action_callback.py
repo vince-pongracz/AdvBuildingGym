@@ -55,10 +55,17 @@ def make_eval_state_action_cb_class(
     if exec_date is None:
         exec_date = datetime.datetime.now()
 
+    # Suffix the run dir with SLURM_JOB_ID (or PID when not under SLURM) so
+    # multiple sbatches that start within the same wall-clock second don't
+    # collide on `eval_trajectories/<exec_date>/iter_NNN/` and clobber each
+    # other's tfevents files in TensorBoard.
+    job_suffix = os.environ.get("SLURM_JOB_ID") or f"pid{os.getpid()}"
+    run_dir_name = f"{exec_date.strftime('%Y%m%d_%H%M%S')}__{job_suffix}"
+
     # Resolve to absolute path at factory time so that file writes land in
     # the correct location regardless of process cwd (Ray Tune changes the
     # Trainable actor's cwd to the trial log directory).
-    tb_log_dir = os.path.join(os.path.abspath(metrics_base_dir), "eval_trajectories", exec_date.strftime("%Y%m%d_%H%M%S"))
+    tb_log_dir = os.path.join(os.path.abspath(metrics_base_dir), "eval_trajectories", run_dir_name)
 
     # Closure state shared across all callback instances on this worker.
     # Safe because eval runs on a single EnvRunner sequentially

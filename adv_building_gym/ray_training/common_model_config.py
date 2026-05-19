@@ -349,6 +349,7 @@ def common_model_setup(
     # would crash, so TUNE_DISABLE_STRICT_METRIC_CHECKING must be set in the
     # driver process (run_train_ray.py).
     config.evaluation(
+        # evaluation_num_env_runners=1, # not important for now
         evaluation_interval=10,  # RLlib default: None
         evaluation_duration_unit="episodes",  # RLlib default
         evaluation_duration=2,  # RLlib default: 10

@@ -12,8 +12,9 @@ logger = logging.getLogger(__name__)
 class EconomicReward(RewardFunction):
     """Economic-based reward function.
 
-    Action convention: positive ``net_power_kW`` means drawing from the
-    grid (consumption); negative means feeding into the grid (export).
+    Sign convention (canonical, set by ``EnergyTracker``): positive
+    ``net_power_kW`` means EXPORT (feeding into the grid); negative means
+    IMPORT (drawing from the grid).
 
     Reward sign matrix (``E_price`` ∈ [-1, 1] after ABS_MIN_MAX scaling of
     ``baseprice``, which may itself be negative on spot markets):
@@ -22,6 +23,11 @@ class EconomicReward(RewardFunction):
         consume at negative price → positive reward (paid to consume)
         export  at positive price → positive reward (income)
         export  at negative price → negative reward (must pay to dump)
+
+    Formula: ``net_power_kW * E_price / reference_power_kW`` (no leading
+    minus). Under the canonical sign convention this matches the matrix
+    above directly: ``+net · +price = +`` (export earnings),
+    ``-net · +price = -`` (consumption cost).
 
     Normalisation prefers ``ctxt_operator_max_power_kW`` (published every
     step by ``OperatorEnergyControl``) so the reward magnitude tracks the
@@ -74,10 +80,12 @@ class EconomicReward(RewardFunction):
             return 0.0, max_reward_per_step
 
         reference_power_kW = self._resolve_reference_power_kW(states)
-        # Negative sign: consumption → negative reward (cost); production → positive reward (income)
-        # net_power_kW -- total consumption
-        # TODO VP 2026.05.05.: Check again
-        raw = -net_power_kW * current_energy_price / reference_power_kW
+        # Canonical convention: net_power_kW > 0 means EXPORT, < 0 means
+        # CONSUMPTION. Multiplying by the (signed) price gives the
+        # sign matrix described in the class docstring:
+        #   export at positive price → +reward (income)
+        #   consume at positive price → -reward (cost)
+        raw = net_power_kW * current_energy_price / reference_power_kW
 
         reward_economic = float(np.clip(raw, -1.0, 1.0))
         return float(self.weight * reward_economic), max_reward_per_step

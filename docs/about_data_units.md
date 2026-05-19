@@ -134,7 +134,7 @@ Either a constant `max_power_kW` from the env config YAML, or — when an `opera
 | `raw_solar_irradiance` | W/m² |
 | `raw_E_price` | ct/kWh |
 | `raw_desired_temp_in` | °C |
-| `net_power_kW`, `power_breakdown[*]` | kW (signed: + consume / − export) |
+| `net_power_kW`, `power_breakdown[*]` | kW (signed, canonical convention from `EnergyTracker`: **+ export / − consume**, i.e. `productions - consumptions`) |
 | `cum_E_kWh` | kWh |
 | `ev_schedule_max_cap_kWh` | kWh |
 | `ev_schedule_max_charging_kW` | kW |

@@ -1,0 +1,190 @@
+trial_name: trial_1_sac_lb_variant
+algorithm: sac
+seed: 42
+metric: episode_return_mean
+checkpoint_frequency_episodes: 20
+log_trajectories: false
+num_envs: 1
+grad_train: false
+
+env_meta:
+  EPISODE_LENGTH: 288
+  control_step: 300
+  allow_early_termination: false
+  hst_env_wrapper:
+    enabled: true
+    tracked_keys:
+    - s_battery_pct
+    - s_ev_soc
+    - s_temp_in_norm
+    - s_temp_out_norm
+    - s_solar_irradiance_norm
+    - a_hp_prev
+    - a_battery_prev
+    offsets:
+    - -1
+    - -2
+    - -3
+    - -4
+    - -6
+    - -12
+    - -18
+    - -24
+    - -36
+    - -48
+    - -60
+    - -72
+    - -84
+    - -96
+    - -108
+    - -120
+    - -132
+    - -144
+  forecast_env_wrapper:
+    enabled: true
+    forecast_steps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+
+training_params:
+  common:
+    learning_rate: 0.0003
+    episode_lookback_horizon_steps: 120
+    max_episodes_to_run: 3500
+    clip_actions_to_env_bounds: true
+  ppo:
+    episodes_per_iteration: 10
+    minibatch_size: 64
+    num_epochs: 20
+  sac:
+    replay_batch_size: 1024
+    episodes_to_keep_in_replay_buffer: 500
+    training_intensity: 256
+    n_step_return: 6
+    learning_starts_after_n_episodes: 50
+statesources:
+- class: EnergyPriceDataSource
+  name: E_price
+  normalise: abs_min_max
+- class: WeatherDataSource
+  name: weather
+  normalise: abs_min_max
+- class: InsideTemperature
+  name: desired_temp_in
+- class: DesiredUserEnergyNeed
+  name: user_energy_need
+- class: BuildingHeatLoss
+  name: building_heat_loss
+  K: 20
+  mC: 300
+- class: EVState
+  name: ev_schedule
+- class: OperatorEnergyControl
+  name: operator_energy_control
+  max_power_kW: 20.0
+
+infras:
+- class: HP
+  name: HP
+  max_power_kW: 5.0
+  cop_heat: 3.0
+  cop_cool: 2.5
+- class: BatteryTremblay
+  name: battery
+  max_power_kW: 19.0
+  cell_capacity_Ah: 3.5
+  max_charge_amps: 48.0
+  max_charge_voltage: 420.0
+  start_soc_percentage: 0.3
+  max_charge_rate: 1.5
+  history_length: 4
+  E0: 3.2
+  K: 0.009
+  A: 0.468
+  B: 3.529
+  R_cell: 0.01
+  n_series: 125
+  n_parallel: 10
+  charge_efficiency: 0.95
+  discharge_efficiency: 0.95
+  soc_min: 0.1
+  soc_max: 0.95
+- class: LinearEVCharger
+  name: ev_charger
+  max_power_kW: 7.0
+  v2g_enabled: true
+  max_charge_time_hrs: 24.0
+  v2g_playroom: 0.1
+- class: SolarPanel
+  name: solar
+  max_power_kW: 5.0
+  pv_efficiency: 0.22
+  panel_area_m2: 10
+- class: WindTurbine
+  name: wind_turbine
+  max_power_kW: 5.0
+  rated_power_kW: 5.0
+  cut_in_speed: 3.0
+  rated_speed: 12.0
+  cut_out_speed: 25.0
+- class: HouseholdEnergyConsumers
+  name: hh_consumers
+  peak_consumption_kW: 8.0
+
+rewards:
+- class_name: TempRewardV0
+  weight: 1.0
+  params: {}
+- class_name: LongTermEconomicRewardV0
+  weight: 1.0
+  params:
+    reference_power_kW: 22.0
+- class_name: MinimiseEnergyConsumptionRewardV0
+  weight: 1.0
+  params: {}
+- class_name: OperatorEnergyControlRewardV0
+  weight: 1.0
+  params:
+    harsh_penalty: -4.0
+    soft_threshold_pct: 0.9
+    recovery_steps: 3
+- class_name: BatteryTargetRewardV0
+  weight: 1.0
+  params:
+    min_pct: 0.15
+    max_pct: 0.95
+- class_name: BatteryMgmtRewardV0
+  weight: 1.0
+  params:
+    scale: 0.5
+- class_name: EVChargingRewardV0
+  weight: 1.0
+  params:
+    diff_threshold: 0.02
+    soc_diff_multiplier: 5.0
+    disconnect_soc_tolerance: 0.05
+- class_name: EVChargingOnTimeRewardV0
+  weight: 1.0
+  params: {}
+- class_name: ActionSmoothnessRewardV0
+  weight: 1.0
+  params:
+    n_steps: 16
+    mode: weighted
+    freq_exponent: 1.0
+infra_schedule: null
+
+statesource_schedule: null
+
+reward_schedule: null
+
+data_schedule:
+  train: configs/schedules/data/train.yaml
+  eval: configs/schedules/data/eval.yaml
+
+exploration_reset:
+  enabled: false
+  trigger: on_reward_swap
+  ppo_entropy_coeff: 0.05
+  ppo_entropy_baseline: 0.0
+  sac_alpha: 0.5
+  decay_iterations: 50
+  lr_multiplier: 1.5

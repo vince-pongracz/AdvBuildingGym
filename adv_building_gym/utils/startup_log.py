@@ -97,12 +97,12 @@ def _section_tensorboard(
         f"    ./start_tensorboard.sh {eval_trajectories_root}",
     ]
     if exec_date is not None:
-        # Matches the directory created in make_eval_state_action_cb_class
-        # (ep_metrics/eval_trajectories/<YYYYmmdd_HHMMSS>/) using the same
-        # exec_date stamp this run uses end-to-end.
-        run_eval_trajectories_path = os.path.join(
-            eval_trajectories_root, exec_date.strftime("%Y%m%d_%H%M%S"),
-        )
+        # Matches make_eval_state_action_cb_class: dir is
+        # ep_metrics/eval_trajectories/<YYYYmmdd_HHMMSS>__<SLURM_JOB_ID|pidNNN>/
+        # so that concurrent sbatches starting in the same second don't collide.
+        job_suffix = os.environ.get("SLURM_JOB_ID") or f"pid{os.getpid()}"
+        run_dir_name = f"{exec_date.strftime('%Y%m%d_%H%M%S')}_{job_suffix}"
+        run_eval_trajectories_path = os.path.join(eval_trajectories_root, run_dir_name)
         body.extend([
             "",
             "  Eval trajectories (this run only):",

@@ -15,15 +15,19 @@ _LAST_VIOLATION_KEY = "operator_reward_last_violation_step"
 
 
 class OperatorEnergyControlReward(RewardFunction):
-    """Reward function for respecting grid operator energy consumption limits.
+    """Reward function for respecting a symmetric grid-operator power limit.
 
-    Computed from ``ratio = net_power_kW / ctxt_operator_max_power_kW``:
+    The grid connection limit applies in BOTH directions: excessive draw
+    AND excessive feed-in are punished equally. The decision variable is
+    ``ratio = |net_power_kW| / ctxt_operator_max_power_kW`` (canonical
+    sign convention from ``EnergyTracker``: ``net > 0`` = export, ``< 0``
+    = consumption).
 
     - ``soft_threshold_pct < ratio <= 1.0`` (warning zone):
       ``exp(-_DECAY_SCALE * (ratio - soft_threshold_pct) / (1 - soft_threshold_pct)) - 1.0``,
-      decaying from 0 towards -1 as consumption approaches the limit
-      (with the default scale of 5, ``exp(-5) ~ 0.007`` so the floor
-      is essentially -1 at the limit boundary).
+      decaying from 0 towards -1 as |net| approaches the limit (with the
+      default scale of 5, ``exp(-5) ~ 0.007`` so the floor is essentially
+      -1 at the limit boundary).
     - ``1.0 < ratio <= terminate_threshold_pct`` (over-limit):
       ``harsh_penalty`` (default -4.0). The step is marked as a
       violation; on the next ``recovery_steps`` steps the warning-zone
@@ -99,9 +103,12 @@ class OperatorEnergyControlReward(RewardFunction):
 
     @staticmethod
     def _compute_ratio(states, info) -> float | None:
-        """Net-power-to-operator-limit ratio, or None when limit is unavailable.
+        """|net|-to-operator-limit ratio, or None when limit is unavailable.
 
-        Centralised so should_terminate and get_reward never disagree.
+        The limit is symmetric (grid connection contract), so we use the
+        magnitude of ``net_power_kW`` — both excess consumption and excess
+        export are equally penalised. Centralised so ``should_terminate``
+        and ``get_reward`` never disagree.
         """
         ctxt = states.get("ctxt_operator_max_power_kW")
         if ctxt is None:
@@ -110,7 +117,7 @@ class OperatorEnergyControlReward(RewardFunction):
         if operator_limit_kW <= 0:
             return None
         net_power_kW = float(info.get("net_power_kW", 0.0))
-        return net_power_kW / operator_limit_kW
+        return abs(net_power_kW) / operator_limit_kW
 
     def should_terminate(self, actions, states, info: dict | None = None) -> bool:
         if info is None:
