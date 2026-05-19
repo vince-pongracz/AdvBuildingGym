@@ -56,9 +56,9 @@ training_params:
     num_epochs: 20
   sac:
     replay_batch_size: 256
-    training_intensity: 128
+    training_intensity: 256
     episodes_to_keep_in_replay_buffer: 1200
-    n_step_return: 3
+    n_step_return: 1
     learning_starts_after_n_episodes: 50
 
 statesources:

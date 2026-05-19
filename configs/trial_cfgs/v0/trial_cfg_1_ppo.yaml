@@ -136,7 +136,7 @@ training_params:
   common:
     learning_rate: 3.0e-4
     episode_lookback_horizon_steps: 120 # 5min steps, 12 steps = 1h --> 120 steps = 10h
-    max_episodes_to_run: 3500
+    max_episodes_to_run: 4000
     clip_actions_to_env_bounds: True
 
   # PPO-specific (on-policy)

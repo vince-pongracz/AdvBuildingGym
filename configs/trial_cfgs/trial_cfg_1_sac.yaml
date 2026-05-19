@@ -41,7 +41,7 @@ training_params:
   common:
     learning_rate: 0.0003
     episode_lookback_horizon_steps: 120
-    max_episodes_to_run: 3500
+    max_episodes_to_run: 4000
     clip_actions_to_env_bounds: true
   ppo:
     episodes_per_iteration: 10
