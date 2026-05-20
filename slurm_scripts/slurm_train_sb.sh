@@ -1,19 +1,24 @@
 #!/usr/bin/env bash
 # Author: Vince Pongracz
 # Maintainer: uchwd@student.kit.edu
-# Created: 2026-01-03 | Version: 1.0
-# Description: Submit a SLURM job that runs `run_train_sb.py` using Stable Baselines3
+# Created: 2026-01-03 | Version: 2.0
+# Description: Submit a SLURM job that runs `run_train_sb.py` (Stable-Baselines3)
 
 # -----------------------------------------------------------------------------
 # Usage:
-#   sbatch slurm_script/slurm_train_sb.sh [ALGORITHM] [NUM_ENVS] [TIMESTEPS] [SEED] [CONFIG_NAME]
+#   sbatch slurm_scripts/slurm_train_sb.sh [OPTIONS]
 #
-# Example:
-#   sbatch slurm_script/slurm_train_sb.sh ppo 4 1000000 42 default_config
+# Forwarded directly to run_train_sb.py. Single required option:
+#   --trial PATH      Path to trial config YAML (REQUIRED)
+#   --cpu             Optional: skip the GPU requirement (CPU smoke test);
+#                     useful when allocating a CPU-only SLURM job.
 #
-# Default values are set for all arguments so you can submit the job without
-# positional arguments. The script activates the project's Python virtualenv
-# (relative path) and runs the training script while logging SLURM and GPU info.
+# All run parameters (algorithm, seed, episodes, metric, checkpoint cadence,
+# num_envs, schedules) live inside the trial YAML — see configs/trial_cfgs/*.yaml.
+#
+# Examples:
+#   sbatch slurm_scripts/slurm_train_sb.sh --trial configs/trial_cfgs/trial_cfg_1_sac.yaml
+#   sbatch --time=02:00:00 slurm_scripts/slurm_train_sb.sh --trial configs/trial_cfgs/trial_cfg_1_ppo.yaml
 # -----------------------------------------------------------------------------
 
 # Link to SLURM params: https://www.nhr.kit.edu/userdocs/haicore/batch/
@@ -21,19 +26,22 @@
 #SBATCH --partition=normal
 #SBATCH --nodes=1
 #SBATCH --tasks-per-node=1
+# SB3 runs the learner in the driver process — no separate Ray actors —
+# so we only need: 1 driver/learner CPU + 1 CPU per SubprocVecEnv worker
+# + 1 small eval (in-process DummyVecEnv). 4 CPUs covers num_envs=1..3
+# comfortably; bump --cpus-per-task on the sbatch line for larger num_envs.
 #SBATCH --cpus-per-task=4
-#SBATCH --gres=gpu:full:1
-#SBATCH --time=00:15:00
+#SBATCH --gres=gpu:4g.20gb:1
+#SBATCH --time=00:30:00
 #SBATCH --output=slurm_logs/train/slurm-train-sb-%j.out
 #SBATCH --error=slurm_logs/train/slurm-train-sb-%j.err
 #SBATCH --job-name=sb-train-%j
 
 set -euo pipefail
 
-# Activate virtual environment (adjust path if your env is located elsewhere)
+# Activate the project's Python virtualenv.
 PYTHON_ENV="../adv_env"
 if [ -d "$PYTHON_ENV" ]; then
-  # Prefer absolute path activation inside SLURM jobs
   source "${PYTHON_ENV}/bin/activate"
   echo "=== Python and pip versions ==="
   python --version
@@ -42,62 +50,78 @@ else
   echo "[WARN] Python environment not found at ${PYTHON_ENV}; continuing without activation"
 fi
 
-# Parse positional arguments (defaults mirror run_train_sb.py)
-ALGORITHM=${1:-ppo}
-NUM_ENVS=${2:-4}
-TIMESTEPS=${3:-1000000}
-SEED=${4:-42}
-CONFIG_NAME=${5:-}
+# All arguments are forwarded directly to run_train_sb.py which owns the
+# CLI (--trial, --cpu) — defaults live in the trial YAML.
+SCRIPT_ARGS=("$@")
 
-echo "=== Starting Stable Baselines3 training job ==="
-echo "  Algorithm : $ALGORITHM"
-echo "  Num envs  : $NUM_ENVS"
-echo "  Timesteps : $TIMESTEPS"
-echo "  Seed      : $SEED"
-if [ -n "$CONFIG_NAME" ]; then
-  echo "  Config    : $CONFIG_NAME"
-fi
+echo "=== Starting Stable-Baselines3 training job ==="
+echo "  Args: ${SCRIPT_ARGS[*]:-(none, run_train_sb.py will fail without --trial)}"
 
 echo "=== SLURM Resource Info ==="
-echo "SLURM_CPUS_PER_TASK : ${SLURM_CPUS_PER_TASK:-}"
-echo "Node                : $(hostname)"
+echo "SLURM_CPUS_PER_TASK  : ${SLURM_CPUS_PER_TASK:-}"
+echo "Node                 : $(hostname)"
 echo "CUDA_VISIBLE_DEVICES : ${CUDA_VISIBLE_DEVICES:-}"
 
-# Unset LD_LIBRARY_PATH to avoid conflicts at torch / cuDNN (cuDNN mismatch occurred in earlier tests)
-unset LD_LIBRARY_PATH
+# Fix cuDNN version mismatch on the cluster: pip nvidia-cudnn-cu12 ships
+# cuDNN 9.10.2 but system CUDA 12.4 has 9.5.1. Prepend the pip-installed
+# cuDNN + torch lib dirs so the linker finds them first. Do NOT remove
+# system CUDA paths — they provide libcuda.so (driver stub). Same fix as
+# slurm_train_ray.sh.
+echo "=== LD_LIBRARY_PATH (before) ==="
+echo "${LD_LIBRARY_PATH:-<not set>}"
+
+NVIDIA_CUDNN_LIB=$(python -c "import nvidia.cudnn; import os; print(os.path.join(nvidia.cudnn.__path__[0], 'lib'))" 2>/dev/null || echo "")
+PYTORCH_LIB=$(python -c "import torch; print(torch.__path__[0] + '/lib')" 2>/dev/null || echo "")
+PREPEND=""
+for p in "$NVIDIA_CUDNN_LIB" "$PYTORCH_LIB"; do
+  [ -n "$p" ] && [ -d "$p" ] && PREPEND="${PREPEND:+${PREPEND}:}${p}"
+done
+if [ -n "$PREPEND" ]; then
+  export LD_LIBRARY_PATH="${PREPEND}:${LD_LIBRARY_PATH:-}"
+  echo "=== LD_LIBRARY_PATH (nvidia+pytorch prepended) ==="
+  echo "${LD_LIBRARY_PATH}"
+fi
+
+# CUDA initialization workarounds for HPC clusters.
+export CUDA_MODULE_LOADING=LAZY          # Delay CUDA init, helps with driver flakiness
+export CUDA_DEVICE_ORDER=PCI_BUS_ID      # Consistent GPU ordering with nvidia-smi
+export TORCH_CUDA_ARCH_LIST="8.0"        # A100 compute capability, skip auto-detection
 
 echo "=== GPU Info (nvidia-smi) ==="
 nvidia-smi || true
 
 echo "=== Python / CUDA Info ==="
-python - <<'PY'
-import torch, sys
-print('Python executable :', sys.executable)
-print('Python version    :', sys.version.splitlines()[0])
-print('CUDA available    :', torch.cuda.is_available())
-if torch.cuda.is_available():
-    print('Device name       :', torch.cuda.get_device_name(0))
-    print('CUDA version (torch):', torch.version.cuda)
-    print('CUDNN version     :', torch.backends.cudnn.version())
-PY
+python slurm_scripts/util/print_env_info.py
 
-# Build command
-CMD=(python run_train_sb.py --algorithm "$ALGORITHM" --num-envs "$NUM_ENVS" --timesteps "$TIMESTEPS" --seed "$SEED")
-if [ -n "$CONFIG_NAME" ]; then
-  CMD+=(--config_name "$CONFIG_NAME")
-fi
+# Force unbuffered Python output for immediate log visibility.
+export PYTHONUNBUFFERED=1
+
+CMD=(python -u run_train_sb.py "${SCRIPT_ARGS[@]}")
 
 echo "======"
 echo "Running: ${CMD[*]}"
+
+set +e
 "${CMD[@]}"
+TRAIN_EC=$?
+set -e
+
+if [ "${TRAIN_EC}" -ne 0 ]; then
+  echo "Training failed with exit code ${TRAIN_EC}"
+  exit "${TRAIN_EC}"
+fi
 
 echo "Training completed successfully."
 
 # -------------------------------------------------------------------------------
 # Notes:
 # - Make the script executable:
-#     chmod +x slurm_script/slurm_train_sb.sh
-# - Submit with:
-#     sbatch slurm_script/slurm_train_sb.sh [ALGORITHM] [NUM_ENVS] [TIMESTEPS] [SEED] [CONFIG_NAME]
-# - Output and error logs will be written to `slurm_logs/train/`.
+#     chmod +x slurm_scripts/slurm_train_sb.sh
+# - Submit (GPU):
+#     sbatch slurm_scripts/slurm_train_sb.sh --trial configs/trial_cfgs/trial_cfg_1_sac.yaml
+# - For trials with num_envs > 3, pass extra CPUs:
+#     sbatch --cpus-per-task=8 slurm_scripts/slurm_train_sb.sh --trial <path>
+# - For a CPU-only smoke test (no GPU), strip the gres line at submission:
+#     sbatch --gres=NONE slurm_scripts/slurm_train_sb.sh --cpu --trial <path>
+# - Output and error logs are written to slurm_logs/train/.
 # -------------------------------------------------------------------------------
