@@ -60,6 +60,7 @@ def make_eval_state_action_cb_class(
     # collide on `eval_trajectories/<exec_date>/iter_NNN/` and clobber each
     # other's tfevents files in TensorBoard.
     job_suffix = os.environ.get("SLURM_JOB_ID") or f"pid{os.getpid()}"
+    # TODO VP 2026.05.20.: If no jobs are running -- remove a _ from the fileaname
     run_dir_name = f"{exec_date.strftime('%Y%m%d_%H%M%S')}__{job_suffix}"
 
     # Resolve to absolute path at factory time so that file writes land in

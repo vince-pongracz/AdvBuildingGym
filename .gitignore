@@ -75,4 +75,7 @@ data/quality_reports/data_quality_summary.csv
 **/meeting_notes.md
 **/models/**
 
+# Diagnostic files about experiment runs, notes, etc..
 status.txt
+disk_usage.txt
+note.txt
