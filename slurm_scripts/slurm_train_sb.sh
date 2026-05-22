@@ -91,12 +91,19 @@ echo "=== GPU Info (nvidia-smi) ==="
 nvidia-smi || true
 
 echo "=== Python / CUDA Info ==="
-python slurm_scripts/util/print_env_info.py
+python "${SLURM_SUBMIT_DIR:-$PWD}/slurm_scripts/util/print_env_info.py"
 
 # Force unbuffered Python output for immediate log visibility.
 export PYTHONUNBUFFERED=1
 
-CMD=(python -u run_train_sb.py "${SCRIPT_ARGS[@]}")
+# Snapshot mode: when SNAPSHOT_DIR is set by tools/snapshot/submit_snapshot.py,
+# extract the snapshot zip on demand, cd into the per-run dir, and run the
+# snapshotted entry script instead of the live repo's copy.
+ENTRY_SCRIPT_BASENAME="run_train_sb.py"
+# shellcheck source=util/snapshot_mode.sh
+source "${SLURM_SUBMIT_DIR:-$PWD}/slurm_scripts/util/snapshot_mode.sh"
+
+CMD=(python -u "${ENTRY_SCRIPT}" "${SCRIPT_ARGS[@]}")
 
 echo "======"
 echo "Running: ${CMD[*]}"

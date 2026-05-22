@@ -79,3 +79,9 @@ data/quality_reports/data_quality_summary.csv
 status.txt
 disk_usage.txt
 note.txt
+
+# Snapshot bundles produced by tools/snapshot/. Each snapshot dir contains
+# the immutable snapshot.zip + manifest.json plus its per-run outputs.
+# The README at the root of snapshots/ is the only tracked file in there.
+snapshots/*
+!snapshots/snapshots.md

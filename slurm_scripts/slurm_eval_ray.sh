@@ -54,7 +54,7 @@ echo "SLURM_CPUS_PER_TASK : ${SLURM_CPUS_PER_TASK:-}"
 echo "Node                : $(hostname)"
 
 echo "=== Python Info ==="
-python slurm_scripts/util/print_env_info.py
+python "${SLURM_SUBMIT_DIR:-$PWD}/slurm_scripts/util/print_env_info.py"
 
 # Disable ANSI color codes and log deduplication in Ray logs
 export RAY_COLOR_PREFIX=0
@@ -63,8 +63,15 @@ export TERM=dumb
 export PYTHONUNBUFFERED=1
 export RAY_SCHEDULER_EVENTS=0
 
+# Snapshot mode: when SNAPSHOT_DIR is set by tools/snapshot/submit_snapshot.py,
+# extract the snapshot zip on demand, cd into the per-run dir, and run the
+# snapshotted entry script instead of the live repo's copy.
+ENTRY_SCRIPT_BASENAME="run_eval_ray.py"
+# shellcheck source=util/snapshot_mode.sh
+source "${SLURM_SUBMIT_DIR:-$PWD}/slurm_scripts/util/snapshot_mode.sh"
+
 # Forward all arguments directly to run_eval_ray.py
-CMD=(python -u run_eval_ray.py "$@")
+CMD=(python -u "${ENTRY_SCRIPT}" "$@")
 
 echo "======"
 echo "Running: ${CMD[*]}"

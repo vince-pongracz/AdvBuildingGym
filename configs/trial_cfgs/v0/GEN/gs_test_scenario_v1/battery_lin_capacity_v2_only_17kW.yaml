@@ -130,6 +130,11 @@ infra_schedule:
     - configs/infra_cfgs/GEN/battery_lin_capacity_v2/battery_lin_cap_eval_1.yaml
     - configs/infra_cfgs/GEN/battery_lin_capacity_v2/battery_lin_cap_eval_2.yaml
     - configs/infra_cfgs/GEN/battery_lin_capacity_v2/battery_lin_cap_eval_3.yaml
+    - configs/infra_cfgs/GEN/battery_lin_capacity_v2/battery_lin_cap_1.yaml
+    - configs/infra_cfgs/GEN/battery_lin_capacity_v2/battery_lin_cap_2.yaml
+    - configs/infra_cfgs/GEN/battery_lin_capacity_v2/battery_lin_cap_3.yaml
+    - configs/infra_cfgs/GEN/battery_lin_capacity_v2/battery_lin_cap_4.yaml
+    - configs/infra_cfgs/GEN/battery_lin_capacity_v2/battery_lin_cap_5.yaml
 
 statesource_schedule: null
 

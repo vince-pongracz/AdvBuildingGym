@@ -104,7 +104,7 @@ class TrainingParamConfig(LoggableConfig):
             flat["seed"] = default_seed
         config = TrainingParamConfig(**flat)
         config._source_file = source_label
-        config.log_values()
+        # config.log_values()  # Uncomment if log_values is a method
         return config
 
     @staticmethod

@@ -50,6 +50,14 @@ else
   echo "[WARN] Python environment not found at ${PYTHON_ENV}; continuing without activation"
 fi
 
+# Snapshot mode: when SNAPSHOT_DIR is set by tools/snapshot/submit_snapshot.py,
+# extract the snapshot zip on demand, cd into the per-run dir, and run the
+# snapshotted entry script instead of the live repo's copy. See the shared
+# helper for the full setup.
+ENTRY_SCRIPT_BASENAME="run_train_ray.py"
+# shellcheck source=util/snapshot_mode.sh
+source "${SLURM_SUBMIT_DIR:-$PWD}/slurm_scripts/util/snapshot_mode.sh"
+
 # All arguments are forwarded directly to run_train_ray.py which owns the
 # defaults (algorithm, episodes, seed, metric, etc.) via argparse.
 SCRIPT_ARGS=("$@")
@@ -92,7 +100,7 @@ echo "=== GPU Info (nvidia-smi) ==="
 nvidia-smi || true
 
 echo "=== Python / CUDA Info ==="
-python slurm_scripts/util/print_env_info.py
+python "${SLURM_SUBMIT_DIR:-$PWD}/slurm_scripts/util/print_env_info.py"
 
 # Disable ANSI color codes and log deduplication in Ray logs
 export RAY_COLOR_PREFIX=0
@@ -101,8 +109,10 @@ export TERM=dumb
 # Force unbuffered Python output for immediate log visibility
 export PYTHONUNBUFFERED=1
 
-# Build command: Forward every param as they are
-CMD=(python -u run_train_ray.py "${SCRIPT_ARGS[@]}")
+# Build command: Forward every param as they are. ENTRY_SCRIPT is either
+# run_train_ray.py (legacy live-repo mode) or an absolute path inside the
+# snapshot's code/ dir (snapshot mode).
+CMD=(python -u "${ENTRY_SCRIPT}" "${SCRIPT_ARGS[@]}")
 
 # Filter for harmless EnvRunner.__del__/sigterm_handler tracebacks Ray prints
 # when env-runner actors are SIGTERM'd at the end of tuner.fit().  Tune kills

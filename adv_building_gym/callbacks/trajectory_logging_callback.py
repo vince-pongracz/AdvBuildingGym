@@ -86,10 +86,7 @@ def make_trajectory_logging_cb_class(
                 initial_info = infos[0] if infos else None
                 step_infos = infos[1:] if len(infos) > 1 else infos
 
-                trajectory = extract_trajectory_from_infos(
-                    step_infos,
-                    initial_info=initial_info,
-                )
+                trajectory = extract_trajectory_from_infos(step_infos, initial_info=initial_info)
 
                 # Add raw policy actions as columnar data
                 if raw_actions is not None and len(raw_actions) > 0:
@@ -131,6 +128,7 @@ def make_trajectory_logging_cb_class(
                     "episode_date": initial_info.get("episode_date") if initial_info else None,
                     "summary": {
                         "achieved_reward": ep_achieved_reward,
+                        "episode_return": ep_achieved_reward,
                         "max_achievable_reward": float(max_achievable_reward),
                         "reward_rate": float(reward_rate),
                         "cum_E_kWh": float(cum_E_kWh) if cum_E_kWh is not None else None,
@@ -138,9 +136,7 @@ def make_trajectory_logging_cb_class(
                     "trajectory": trajectory,
                 }
 
-                ep_metrics_dir = (
-                    f"{_metrics_base_dir}/{_exec_date.strftime('%Y%m%d_%H%M%S')}"
-                )
+                ep_metrics_dir = (f"{_metrics_base_dir}/{_exec_date.strftime('%Y%m%d_%H%M%S')}")
                 os.makedirs(ep_metrics_dir, exist_ok=True)
                 jsons_dir = f"{ep_metrics_dir}/jsons"
                 os.makedirs(jsons_dir, exist_ok=True)
