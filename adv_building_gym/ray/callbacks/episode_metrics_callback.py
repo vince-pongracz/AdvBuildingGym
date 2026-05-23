@@ -23,6 +23,12 @@ from adv_building_gym._common.json_encoder import CustomJSONEncoder
 
 logger = logging.getLogger(__name__)
 
+# Within-iter aggregation window for callback-emitted metrics. Combined with
+# clear_on_reduce=True this makes each TB scalar equal the arithmetic
+# mean/min/max over the episodes that ended in the current iter, with no
+# cross-iter blending. See _swap_trigger.py for the invariant chain.
+_WITHIN_ITER_WINDOW = 10_000
+
 
 def _extract_clipped_actions(episode: SingleAgentEpisode) -> list | None:
     """Extract clipped actions from episode info dicts.
@@ -198,33 +204,50 @@ def make_episode_metrics_cb_class(
                 if max_achievable_reward > 0 else 0.0
             )
 
-            # Register custom metrics with RLlib's metrics system
-            # These appear in results under "env_runners/achieved_reward_mean" etc.
-            metrics_logger.log_value("achieved_reward", episode_return, reduce="mean")
-            metrics_logger.log_value("achieved_reward_min", episode_return, reduce="min")
-            metrics_logger.log_value("achieved_reward_max", episode_return, reduce="max")
+            # Register custom metrics with RLlib's metrics system.
+            # Every call passes window=_WITHIN_ITER_WINDOW + clear_on_reduce=True
+            # so each iter's TB scalar is the per-iter arithmetic mean/min/max,
+            # not RLlib's default EMA(alpha=0.01) (mean) / lifetime extreme
+            # (min/max). Aligns with iter-aligned scheduler swaps so reported
+            # values never blend across regimes.
+            metrics_logger.log_value("achieved_reward", episode_return, reduce="mean",
+                                     window=_WITHIN_ITER_WINDOW, clear_on_reduce=True)
+            metrics_logger.log_value("achieved_reward_min", episode_return, reduce="min",
+                                     window=_WITHIN_ITER_WINDOW, clear_on_reduce=True)
+            metrics_logger.log_value("achieved_reward_max", episode_return, reduce="max",
+                                     window=_WITHIN_ITER_WINDOW, clear_on_reduce=True)
 
-            metrics_logger.log_value("reward_rate", reward_rate, reduce="mean")
-            metrics_logger.log_value("reward_rate_min", reward_rate, reduce="min")
-            metrics_logger.log_value("reward_rate_max", reward_rate, reduce="max")
+            metrics_logger.log_value("reward_rate", reward_rate, reduce="mean",
+                                     window=_WITHIN_ITER_WINDOW, clear_on_reduce=True)
+            metrics_logger.log_value("reward_rate_min", reward_rate, reduce="min",
+                                     window=_WITHIN_ITER_WINDOW, clear_on_reduce=True)
+            metrics_logger.log_value("reward_rate_max", reward_rate, reduce="max",
+                                     window=_WITHIN_ITER_WINDOW, clear_on_reduce=True)
 
             # Log cumulative energy consumption
             if cum_E_kWh is not None:
-                metrics_logger.log_value("cum_E_kWh", cum_E_kWh, reduce="mean")
-                metrics_logger.log_value("cum_E_kWh_min", cum_E_kWh, reduce="min")
-                metrics_logger.log_value("cum_E_kWh_max", cum_E_kWh, reduce="max")
+                metrics_logger.log_value("cum_E_kWh", cum_E_kWh, reduce="mean",
+                                         window=_WITHIN_ITER_WINDOW, clear_on_reduce=True)
+                metrics_logger.log_value("cum_E_kWh_min", cum_E_kWh, reduce="min",
+                                         window=_WITHIN_ITER_WINDOW, clear_on_reduce=True)
+                metrics_logger.log_value("cum_E_kWh_max", cum_E_kWh, reduce="max",
+                                         window=_WITHIN_ITER_WINDOW, clear_on_reduce=True)
 
             # Log cumulative electricity cost (positive = money spent)
             if cum_price_EUR is not None:
-                metrics_logger.log_value("cum_price_EUR", cum_price_EUR, reduce="mean")
-                metrics_logger.log_value("cum_price_EUR_min", cum_price_EUR, reduce="min")
-                metrics_logger.log_value("cum_price_EUR_max", cum_price_EUR, reduce="max")
+                metrics_logger.log_value("cum_price_EUR", cum_price_EUR, reduce="mean",
+                                         window=_WITHIN_ITER_WINDOW, clear_on_reduce=True)
+                metrics_logger.log_value("cum_price_EUR_min", cum_price_EUR, reduce="min",
+                                         window=_WITHIN_ITER_WINDOW, clear_on_reduce=True)
+                metrics_logger.log_value("cum_price_EUR_max", cum_price_EUR, reduce="max",
+                                         window=_WITHIN_ITER_WINDOW, clear_on_reduce=True)
 
             # Log per-component reward breakdown for TensorBoard.
             # Appears under env_runners/reward/<name> (training) and
             # evaluation/env_runners/reward/<name> (eval).
             for reward_key, comp_total in reward_component_totals.items():
-                metrics_logger.log_value(f"reward/{reward_key}", comp_total, reduce="mean")
+                metrics_logger.log_value(f"reward/{reward_key}", comp_total, reduce="mean",
+                                         window=_WITHIN_ITER_WINDOW, clear_on_reduce=True)
 
             episode_id: str = episode.id_[:6]
             episode_num_str = str(episode_count) if episode_count is not None else "?"

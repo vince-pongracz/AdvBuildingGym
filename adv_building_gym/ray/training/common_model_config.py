@@ -279,7 +279,7 @@ def common_model_setup(
     )
     config.reporting(
         keep_per_episode_custom_metrics=True,  # RLlib default: False
-        metrics_num_episodes_for_smoothing=25,  # RLlib default: 100
+        metrics_num_episodes_for_smoothing=20,  # RLlib default: 100
     )
     config.framework(
         framework="torch",  # RLlib default
@@ -350,9 +350,9 @@ def common_model_setup(
     # driver process (run_train_ray.py).
     config.evaluation(
         # evaluation_num_env_runners=1, # not important for now
-        evaluation_interval=10,  # RLlib default: None
+        evaluation_interval=2,  # RLlib default: None
         evaluation_duration_unit="episodes",  # RLlib default
-        evaluation_duration=2,  # RLlib default: 10
+        evaluation_duration=10,  # RLlib default: 10
         evaluation_parallel_to_training=False,  # RLlib default
         evaluation_config=AlgorithmConfig.overrides(env_config=eval_env_config),
     )

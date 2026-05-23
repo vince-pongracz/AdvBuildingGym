@@ -37,7 +37,7 @@ class DataCombinator:
 
     scenarios: list[dict[str, str]] = field(default_factory=list)
     variable: dict[str, list[str]] = field(default_factory=dict)
-    swap_every_n_episodes: int = 20
+    swap_every_n_episodes: int = 5
     mode: Literal["cycle", "random"] = "cycle"
     day: str = "random"
     seed: int = 42

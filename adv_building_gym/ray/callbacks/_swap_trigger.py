@@ -9,6 +9,31 @@ each callback file stays focused on what to push, not when to push it.
 
 Episode count is sourced from ``result["env_runners"]["num_episodes_lifetime"]``
 (the same key ``run_train_ray.py`` uses for its stop criterion).
+
+Invariant — iter-aligned, regime-pure metrics
+---------------------------------------------
+The gate is only ever invoked from ``on_train_result``, so every schedule
+swap lands on an iteration boundary. Together with two cooperating choices
+elsewhere, this gives the property that each reported TB scalar reflects
+exactly one regime (no cross-regime blending in dashboards):
+
+1. ``rollout_fragment_length == EPISODE_LENGTH`` in
+   ``ray/training/common_model_config.py`` — every iter contains only
+   complete episodes (no episode straddles an iter boundary).
+2. ``window=_WITHIN_ITER_WINDOW, clear_on_reduce=True`` on every
+   ``metrics_logger.log_value(...)`` in ``ray/callbacks/episode_metrics_callback.py``
+   — every iter's TB scalar resets at the iter boundary.
+
+If you change any of these three pieces, audit the others — they form one
+contract and silently break each other if edited in isolation.
+
+RLlib's built-in ``EPISODE_RETURN_*`` keys (under ``env_runners/`` and
+``evaluation/env_runners/``) are intentionally left on the standard
+windowed aggregation, with a small ``metrics_num_episodes_for_smoothing``
+so the window only marginally crosses iter boundaries. Checkpoint
+selection (``checkpoint_score_attribute``) targets
+``evaluation/env_runners/episode_return_mean`` and benefits from this
+mild smoothing.
 """
 
 from __future__ import annotations
