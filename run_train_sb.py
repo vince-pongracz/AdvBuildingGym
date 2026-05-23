@@ -11,7 +11,7 @@ The same trial YAML drives both drivers. SB3-side notes:
 * GPU is required by default; pass ``--cpu`` for a CPU-only smoke test
   (mirrors the Ray driver's behaviour).
 * ``training_param_config`` (PPO / SAC sections) maps to SB3 hyperparams
-  in ``adv_building_gym_sb/sb_training/select_model.py``; some Ray-only
+  in ``adv_building_gym.sb/sb_training/select_model.py``; some Ray-only
   knobs (e.g. ``sac_n_step_return``) emit a warning and fall through to
   the SB3 default.
 * All four schedules (data / reward / infra / statesource) are
@@ -32,11 +32,13 @@ from pathlib import Path
 
 import torch
 
-from adv_building_gym import TrialConfig
-from adv_building_gym.utils import CustomJSONEncoder, RngService, setup_warning_filters
-from adv_building_gym.utils.startup_log import log_startup_banner
+from adv_building_gym.config.trial_config import TrialConfig
+from adv_building_gym._common.json_encoder import CustomJSONEncoder
+from adv_building_gym._common.rng_service import RngService
+from adv_building_gym._common.warning_filters import setup_warning_filters
+from adv_building_gym._common.startup_log import log_startup_banner
 
-from adv_building_gym_sb.sb_training import sb_common_model_setup, sb_select_model
+from adv_building_gym.sb.training import sb_common_model_setup, sb_select_model
 
 logging.basicConfig(
     level=logging.INFO,

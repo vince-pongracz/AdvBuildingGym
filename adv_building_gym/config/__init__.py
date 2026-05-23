@@ -1,25 +1,10 @@
-"""Configuration module for AdvBuildingGym.
+"""Config subpackage marker.
 
-This module provides configuration data structures and serialization utilities.
-
+Submodules are imported explicitly (no eager re-exports). Layout:
+- ``config.trial_config`` — orchestrator (TrialConfig)
+- ``config.env/``         — env topology + infra/statesource schedules
+- ``config.data/``         — data scenario selection + DataCombinator
+- ``config.rewards/``     — reward composition + curriculum
+- ``config.training/``    — training hyperparameters + exploration reset
+- ``config.utils/``       — cross-axis dataclass logging mixin
 """
-
-from .env_config import EnvConfig
-from .reward_config import RewardConfig
-from .env_config_manager import EnvConfigManager
-from .reward_schedule_manager import RewardScheduleManager
-from .reward_config_serializer import RewardConfigSerializer
-from .training_param_config import TrainingParamConfig
-from .data_config import load_data_combinator_config
-from .trial_config import TrialConfig
-
-__all__ = [
-    "EnvConfig",
-    "RewardConfig",
-    "EnvConfigManager",
-    "RewardScheduleManager",
-    "RewardConfigSerializer",
-    "TrainingParamConfig",
-    "TrialConfig",
-    "load_data_combinator_config",
-]

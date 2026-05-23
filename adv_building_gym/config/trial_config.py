@@ -46,18 +46,18 @@ from typing import Any, Optional
 
 import yaml
 
-from adv_building_gym.config.data_config import load_data_combinator_config
-from adv_building_gym.config.env_config import EnvConfig
-from adv_building_gym.config.env_config_manager import EnvConfigManager
-from adv_building_gym.config.exploration_reset import ExplorationResetConfig
-from adv_building_gym.config.reward_schedule_manager import (
+from adv_building_gym.config.data.data_config import load_data_combinator_config
+from adv_building_gym.config.env.env_config import EnvConfig
+from adv_building_gym.config.env.env_config_manager import EnvConfigManager
+from adv_building_gym.config.training.exploration_reset import ExplorationResetConfig
+from adv_building_gym.config.rewards.reward_schedule_manager import (
     RewardScheduleManager,
     RewardScheduleMode,
 )
-from adv_building_gym.config.training_param_config import TrainingParamConfig
-from adv_building_gym.data_combinator import DataCombinator
-from adv_building_gym.infra_combinator import InfraCombinator
-from adv_building_gym.statesource_combinator import StatesourceCombinator
+from adv_building_gym.config.training.training_param_config import TrainingParamConfig
+from adv_building_gym.config.data.data_combinator import DataCombinator
+from adv_building_gym.config.env.infra_combinator import InfraCombinator
+from adv_building_gym.config.env.statesource_combinator import StatesourceCombinator
 
 logger = logging.getLogger(__name__)
 

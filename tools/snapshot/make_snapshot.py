@@ -42,7 +42,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from adv_building_gym import TrialConfig  # noqa: E402  (path setup above)
+from adv_building_gym.config.trial_config import TrialConfig  # noqa: E402  (path setup above)
 
 logger = logging.getLogger("make_snapshot")
 

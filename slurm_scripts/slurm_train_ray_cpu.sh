@@ -6,7 +6,7 @@
 
 # -----------------------------------------------------------------------------
 # Usage:
-#   sbatch slurm_scripts/slurm_train_ray.sh [OPTIONS]
+#   sbatch slurm_scripts/slurm_train_ray_cpu.sh [OPTIONS]
 #
 # Forwarded directly to run_train_ray.py. Single required option:
 #   --trial PATH              Path to trial config YAML (REQUIRED)
@@ -15,7 +15,7 @@
 # schedules) live inside the trial YAML — see configs/trial_cfgs/*.yaml.
 #
 # Examples:
-#   sbatch slurm_scripts/slurm_train_ray.sh --trial configs/trial_cfgs/trial_cfg_1.yaml
+#   sbatch slurm_scripts/slurm_train_ray_cpu.sh --trial configs/trial_cfgs/trial_cfg_1_sac.yaml
 #
 # The script activates the project's Python virtualenv and runs the training
 # script while logging SLURM and GPU info.
@@ -26,7 +26,6 @@
 #SBATCH --partition=normal
 #SBATCH --nodes=1
 #SBATCH --tasks-per-node=1
-# TODO VP: set to 32, 38, 16 later -- but adapt Ray to use all possible cpu cores available
 #SBATCH --cpus-per-task=5
 #SBATCH --time=24:00:00
 #SBATCH --output=slurm_logs/train/slurm-train-ray-%j.out
@@ -130,8 +129,8 @@ echo "Training completed successfully."
 # -------------------------------------------------------------------------------
 # Notes:
 # - Make the script executable:
-#     chmod +x slurm_scripts/slurm_train_ray.sh
+#     chmod +x slurm_scripts/slurm_train_ray_cpu.sh
 # - Submit:
-#     sbatch slurm_scripts/slurm_train_ray.sh --trial configs/trial_cfgs/trial_cfg_1.yaml
+#     sbatch slurm_scripts/slurm_train_ray_cpu.sh --trial configs/trial_cfgs/trial_cfg_1_sac.yaml
 # - Output and error logs will be written to `slurm_logs/train/`.
 # -------------------------------------------------------------------------------

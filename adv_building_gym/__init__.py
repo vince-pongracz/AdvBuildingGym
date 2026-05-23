@@ -1,27 +1,19 @@
+"""AdvBuildingGym — Gymnasium-compatible building energy control environment.
 
-from .envs import AdvBuildingGym
-from .controllers import FuzzyController, MPCController, PIController, PIDController
-from .config import EnvConfig, EnvConfigManager, TrialConfig
-from .data_combinator import DataCombinator
-from .callbacks import (
-    make_episode_metrics_cb_class,
-    make_trajectory_logging_cb_class,
-)
-from .evaluation import evaluate_model, EvalResults
+Top-level package marker. Subpackages must be imported explicitly:
 
-# Exported components of the adv_building_gym package
-__all__ = [
-    "AdvBuildingGym",
-    "EnvConfig",
-    "EnvConfigManager",
-    "TrialConfig",
-    "FuzzyController",
-    "MPCController",
-    "PIController",
-    "PIDController",
-    "make_episode_metrics_cb_class",
-    "make_trajectory_logging_cb_class",
-    "DataCombinator",
-    "evaluate_model",
-    "EvalResults",
-]
+    from adv_building_gym.config.trial_config import TrialConfig
+    from adv_building_gym.core.env import AdvBuildingGym
+    from adv_building_gym.ray.evaluation import evaluate_model
+
+Layering (each layer's external deps obvious from its name):
+- ``core/``        — gymnasium + numpy + pandas (env, wrappers)
+- ``components/``  — env plugins (infrastructure, statesources, rewards) + registry
+- ``config/``      — YAML loaders + dataclasses + combinators
+- ``ray/``         — Ray RLlib adapter (env_creator, ma_env, training, callbacks, evaluation, utils)
+- ``sb/``          — Stable-Baselines3 adapter
+- ``controllers/`` — Pyomo / scipy baseline controllers
+- ``_common/``     — cross-layer utilities (rng_service, normalisation, …)
+"""
+
+__version__ = "0.1.0"
