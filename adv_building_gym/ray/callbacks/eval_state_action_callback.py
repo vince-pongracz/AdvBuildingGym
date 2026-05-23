@@ -38,6 +38,7 @@ logger = logging.getLogger(__name__)
 def make_eval_state_action_cb_class(
     metrics_base_dir: str = "ep_metrics",
     exec_date: datetime.datetime | None = None,
+    trial_name: str | None = None,
 ) -> Type["EvalStateActionCallback"]:
     """Factory that returns a configured EvalStateActionCallback class.
 
@@ -67,6 +68,14 @@ def make_eval_state_action_cb_class(
     # the correct location regardless of process cwd (Ray Tune changes the
     # Trainable actor's cwd to the trial log directory).
     tb_log_dir = os.path.join(os.path.abspath(metrics_base_dir), "eval_trajectories", run_dir_name)
+
+    # Sanitised trial-name suffix for per-iter sub-runs so the TB run list
+    # shows which trial config produced each curve.
+    if trial_name:
+        import re as _re
+        _trial_suffix = (_re.sub(r"[^A-Za-z0-9._-]+", "_", trial_name).strip("_") or "trial")
+    else:
+        _trial_suffix = ""
 
     # Closure state shared across all callback instances on this worker.
     # Safe because eval runs on a single EnvRunner sequentially
@@ -169,7 +178,7 @@ def make_eval_state_action_cb_class(
 
             # Write to a TensorBoard sub-run named by training iteration.
             # TensorBoard overlays sub-runs with the same tag in one chart.
-            run_name = f"iter_{training_iter:06d}"
+            run_name = f"iter_{training_iter:06d}_{_trial_suffix}"
             run_dir = os.path.join(tb_log_dir, run_name)
             with SummaryWriter(log_dir=run_dir) as writer:
                 for key, vals in summarised.items():

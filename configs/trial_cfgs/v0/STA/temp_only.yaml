@@ -27,19 +27,7 @@ env_meta:
     - -3
     - -4
     - -6
-    - -12
-    - -18
-    - -24
-    - -36
-    - -48
-    - -60
-    - -72
-    - -84
-    - -96
-    - -108
-    - -120
-    - -132
-    - -144
+
   forecast_env_wrapper:
     enabled: true
     forecast_steps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
@@ -48,7 +36,7 @@ training_params:
   common:
     learning_rate: 0.0003
     episode_lookback_horizon_steps: 120
-    max_episodes_to_run: 1200
+    max_episodes_to_run: 7000
     clip_actions_to_env_bounds: true
   ppo:
     episodes_per_iteration: 10

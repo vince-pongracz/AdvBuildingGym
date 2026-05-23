@@ -63,6 +63,7 @@ def register_callbacks(
     statesource_combinator: StatesourceCombinator | None = None,
     exploration_reset: ExplorationResetConfig | None = None,
     exec_date: datetime.datetime | None = None,
+    trial_name: str | None = None,
 ) -> None:
     """Register episode-metric, trajectory, and scheduling callbacks on *config*.
 
@@ -97,6 +98,7 @@ def register_callbacks(
     eval_state_action_class = make_eval_state_action_cb_class(
         metrics_base_dir=metrics_base_dir,
         exec_date=exec_date,
+        trial_name=trial_name,
     )
 
     callback_classes = [episode_metrics_class, eval_state_action_class]
@@ -193,6 +195,7 @@ def common_model_setup(
     statesource_combinator: StatesourceCombinator | None = None,
     exploration_reset: ExplorationResetConfig | None = None,
     exec_date: datetime.datetime | None = None,
+    trial_name: str | None = None,
 ):
     """
     Apply common RLlib configuration to an algorithm config.
@@ -377,6 +380,7 @@ def common_model_setup(
         statesource_combinator=statesource_combinator,
         exploration_reset=exploration_reset,
         exec_date=exec_date,
+        trial_name=trial_name,
     )
 
     # Validate resource allocation against SLURM constraints

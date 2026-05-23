@@ -32,7 +32,7 @@ from adv_building_gym.ray.training import common_model_setup, select_model
 from adv_building_gym._common.json_encoder import CustomJSONEncoder
 from adv_building_gym._common.rng_service import RngService
 from adv_building_gym._common.resource_check_util import SlurmResources
-from adv_building_gym.ray.utils.ray_utils import trial_dirname_creator
+from adv_building_gym.ray.utils.ray_utils import make_trial_dirname_creator
 from adv_building_gym._common.startup_log import log_startup_banner
 
 logging.basicConfig(
@@ -191,6 +191,7 @@ def _build_algo_config(args, trial: TrialConfig, slurm_resources, exec_date_dt):
         statesource_combinator=trial.statesource_combinator,
         exploration_reset=trial.exploration_reset,
         exec_date=exec_date_dt,
+        trial_name=trial.trial_name,
     )
     param_space = algo_config.to_dict()
 
@@ -289,7 +290,7 @@ def _build_progress_reporter(algorithm: str) -> CLIReporter:
     )
 
 
-def _build_tuner(trial: TrialConfig, metric: str, param_space, run_name, storage_path, checkpoint_freq_iterations):
+def _build_tuner(trial: TrialConfig, metric: str, param_space, run_name, storage_path, checkpoint_freq_iterations, trial_name: str | None = None):
     """Build the ``tune.Tuner`` for the chosen algorithm."""
     stop_criteria = {
         # New API stack: lifetime episodes (1 episode = 1 day at 5-min control step).
@@ -313,7 +314,7 @@ def _build_tuner(trial: TrialConfig, metric: str, param_space, run_name, storage
             #   - "reward_rate"     (custom: achieved/max possible reward)
             metric=metric,
             mode="max",
-            trial_dirname_creator=trial_dirname_creator,
+            trial_dirname_creator=make_trial_dirname_creator(trial_name),
         ),
         run_config=tune.RunConfig(
             name=run_name,
@@ -439,6 +440,7 @@ def main():
     checkpoint_freq_iterations = _checkpoint_iterations(trial)
     tuner = _build_tuner(
         trial, metric, algo_cfg_param_space, run_name, storage_path, checkpoint_freq_iterations,
+        trial_name=trial.trial_name,
     )
 
     experiment_path = os.path.join(storage_path, run_name)
