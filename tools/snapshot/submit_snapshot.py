@@ -43,7 +43,7 @@ if str(REPO_ROOT) not in sys.path:
 
 from tools.snapshot.make_snapshot import make_snapshot  # noqa: E402
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("submit_snapshot")
 
 
 # Mapping from --kind to (slurm wrapper basename, entry-point .py inside snapshot).

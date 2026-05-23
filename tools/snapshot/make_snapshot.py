@@ -44,7 +44,7 @@ if str(REPO_ROOT) not in sys.path:
 
 from adv_building_gym import TrialConfig  # noqa: E402  (path setup above)
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("make_snapshot")
 
 
 # ---------------------------------------------------------------------------

@@ -1,4 +1,4 @@
-trial_name: sta_lin_battery_only
+trial_name: sta_lin_battery_EV
 algorithm: sac
 seed: 42
 metric: episode_return_mean
@@ -70,6 +70,12 @@ statesources:
   max_power_kW: 20.0
 
 infras:
+- class: LinearEVCharger
+  name: ev_charger
+  max_power_kW: 15.0
+  v2g_enabled: true
+  max_charge_time_hrs: 24.0
+  v2g_playroom: 0.1
 - class: BatteryLinear
   name: battery
   max_power_kW: 10.0
@@ -111,6 +117,15 @@ rewards:
     soft_threshold_pct: 0.9
     recovery_steps: 3
 - class_name: LongTermEconomicRewardV0
+  weight: 1.0
+  params: {}
+- class_name: EVChargingRewardV0
+  weight: 1.0
+  params:
+    diff_threshold: 0.02
+    soc_diff_multiplier: 5.0
+    disconnect_soc_tolerance: 0.05
+- class_name: EVChargingOnTimeRewardV0
   weight: 1.0
   params: {}
 - class_name: ActionSmoothnessRewardV0

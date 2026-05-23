@@ -46,6 +46,11 @@ ENTRY_SCRIPT_BASENAME="rl_ma_train.py"
 # shellcheck source=util/snapshot_mode.sh
 source "${SLURM_SUBMIT_DIR:-$PWD}/slurm_scripts/util/snapshot_mode.sh"
 
+# Start the per-minute scratch-disk usage sampler. Writes scratch_usage.log
+# next to slurm.err in snapshot mode, or to ${SLURM_SUBMIT_DIR} in legacy mode.
+# shellcheck source=util/scratch_monitor.sh
+source "${SLURM_SUBMIT_DIR:-$PWD}/slurm_scripts/util/scratch_monitor.sh"
+
 SCRIPT_ARGS=("$@")
 
 echo "=== Starting multi-agent Ray training job ==="
