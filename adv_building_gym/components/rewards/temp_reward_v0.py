@@ -13,11 +13,10 @@ class TempRewardV0(RewardFunction):
 
     Shape: ``2 * exp(-|1.4 * d|) - 1`` where ``d = |T_in - T_set|`` in °C
     (recovered from the normalised state via ``ctxt_temp_abs_max``,
-    falling back to 60 °C).
+    falling back to 60 °C) -- if we are close to setpoint.
 
-    Range: ``(-1, 1]`` — peaks at ``+1`` when ``d = 0`` and asymptotes to
-    ``-1`` for large deviations. No wrong-direction penalty, no
-    termination logic.
+    Range: ``(-1, 1]`` — peaks at ``+1`` when ``d = 0`` and decreases linear towards
+    ``-1`` as ``d`` increases, reaching -1 at around 40 °C diff.
     """
 
     def __init__(self, weight: float, name: str = "temp_reward_v0") -> None:
@@ -35,7 +34,15 @@ class TempRewardV0(RewardFunction):
 
     def get_reward(self, actions, states, info: dict | None = None) -> tuple[float, float]:
         d_celsius = self._diff_celsius(states)
-        reward = self.exp_scale * float(np.exp(-abs(self.x_scale * d_celsius))) - 1.0
+        
+        reward_precision_driver = self.exp_scale * float(np.exp(-abs(self.x_scale * d_celsius))) - 1.0
+        reward_precision_driver = np.clip(reward_precision_driver, 0.0, 1.0)
+        
+        reward_slow_driver = -d_celsius / 40.0
+        reward_slow_driver = np.clip(reward_slow_driver, -1.0, 0.0)
+        
+        reward = reward_precision_driver + reward_slow_driver
+        reward = float(np.clip(reward, -1.0, 1.0))
         return self.weight * reward, self.weight * self.max_reward_in_step
 
 
