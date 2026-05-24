@@ -28,7 +28,7 @@ class TempRewardV0(RewardFunction):
     def _diff_celsius(states) -> float:
         actual_temp = float(states["s_temp_in_norm"][0])
         desired_temp = float(states["s_desired_temp_in_norm"][0])
-        diff_norm = abs(actual_temp - desired_temp)
+        diff_norm = actual_temp - desired_temp
         temp_abs_max = float(states["ctxt_temp_abs_max"][0]) if "ctxt_temp_abs_max" in states else 60.0
         return diff_norm * temp_abs_max
 
@@ -36,9 +36,15 @@ class TempRewardV0(RewardFunction):
         d_celsius = self._diff_celsius(states)
         
         reward_precision_driver = self.exp_scale * float(np.exp(-abs(self.x_scale * d_celsius))) - 1.0
+        x_nullpoint_pos = -1.0 / self.x_scale * np.log(1.0 / self.exp_scale)
         reward_precision_driver = np.clip(reward_precision_driver, 0.0, 1.0)
         
-        reward_slow_driver = -d_celsius / 40.0
+        reward_slow_driver = 0.0
+        THRESHOLD_SLOW_DRIVER = 40.0 - x_nullpoint_pos # At around 40 °C diff, the reward for slow driver reaches -1.0, and is 0 at 0 °C diff.
+        if d_celsius > 0.0:
+            reward_slow_driver = (-d_celsius - x_nullpoint_pos) / THRESHOLD_SLOW_DRIVER
+        else:
+            reward_slow_driver = (-d_celsius + x_nullpoint_pos) / THRESHOLD_SLOW_DRIVER
         reward_slow_driver = np.clip(reward_slow_driver, -1.0, 0.0)
         
         reward = reward_precision_driver + reward_slow_driver
