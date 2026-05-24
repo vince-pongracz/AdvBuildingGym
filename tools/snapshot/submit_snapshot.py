@@ -29,11 +29,14 @@ from __future__ import annotations
 
 import argparse
 import datetime
+import fcntl
 import logging
 import os
 import re
+import shutil
 import subprocess
 import sys
+import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -67,6 +70,7 @@ class SubmissionPlan:
     entry_script: str           # basename relative to <snapshot>/code/
     trial_path_in_snap: str     # relative to <snapshot>/code/
     extra_args: list[str]
+    seed_override: int | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -107,6 +111,62 @@ def _find_latest_train_checkpoint(snapshot_dir: Path) -> str | None:
 
 
 # ---------------------------------------------------------------------------
+# Seed-override helpers
+# ---------------------------------------------------------------------------
+
+def _extract_snapshot_if_needed(snapshot_dir: Path) -> None:
+    """Eagerly extract snapshot.zip → <snapshot>/code/ if not already done.
+
+    Mirrors slurm_scripts/util/snapshot_mode.sh's lazy extraction. We need
+    code/configs/ on disk at submit time when --seed is given so we can copy
+    it into the per-run dir. Uses the same flock as snapshot_mode.sh so
+    concurrent submitters don't race.
+    """
+    code_dir = snapshot_dir / "code"
+    if code_dir.exists():
+        return
+    zip_path = snapshot_dir / "snapshot.zip"
+    if not zip_path.exists():
+        raise FileNotFoundError(f"snapshot.zip missing from {snapshot_dir}")
+    lock_path = snapshot_dir / ".code.lock"
+    with lock_path.open("w") as lock_file:
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+        if not code_dir.exists():
+            logger.info("Extracting snapshot.zip into %s/", code_dir)
+            with zipfile.ZipFile(zip_path) as zf:
+                zf.extractall(code_dir)
+
+
+_TOP_LEVEL_SEED_REGEX = re.compile(r"^seed:\s*-?\d+(?P<trail>\s*#.*)?$", re.MULTILINE)
+
+
+def _rewrite_top_level_seed(trial_yaml_path: Path, new_seed: int) -> None:
+    """Rewrite the top-level ``seed:`` value in a trial YAML in place.
+
+    Matches a single line at indent 0 of the form ``seed: <int>`` (allowing a
+    trailing comment). The trailing comment, if any, is preserved verbatim.
+    Raises if zero or multiple matches are found so we never silently change
+    the wrong scalar — nested ``seed:`` keys (e.g. ``data_combinator.seed``)
+    live at non-zero indent and won't match this MULTILINE start-of-line
+    pattern.
+    """
+    text = trial_yaml_path.read_text(encoding="utf-8")
+    matches = _TOP_LEVEL_SEED_REGEX.findall(text)
+    if len(matches) != 1:
+        raise ValueError(
+            f"Expected exactly one top-level `seed:` line in {trial_yaml_path}; "
+            f"found {len(matches)}."
+        )
+
+    def _replace(m: re.Match) -> str:
+        trail = m.group("trail") or ""
+        return f"seed: {new_seed}{trail}"
+
+    new_text = _TOP_LEVEL_SEED_REGEX.sub(_replace, text, count=1)
+    trial_yaml_path.write_text(new_text, encoding="utf-8")
+
+
+# ---------------------------------------------------------------------------
 # Plan construction
 # ---------------------------------------------------------------------------
 
@@ -116,6 +176,8 @@ def _build_plan(
     kind: str,
     extra_args: list[str],
     checkpoint_override: str | None,
+    seed_override: int | None = None,
+    dry_run: bool = False,
 ) -> SubmissionPlan:
     if kind not in KIND_SPECS:
         raise ValueError(f"Unknown --kind {kind!r}; valid: {sorted(KIND_SPECS)}")
@@ -137,15 +199,43 @@ def _build_plan(
 
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     run_id = f"{kind.replace('-', '_')}_{timestamp}"
+    if seed_override is not None:
+        run_id = f"{run_id}_seed{seed_override}"
     run_dir = snapshot_dir / "runs" / run_id
 
     args = list(extra_args)
+    effective_trial_path = trial_abs_in_snap
+
+    # --seed: pre-create the run dir with a copied configs/ tree and rewrite
+    # the seed in the per-run copy. The original snapshot stays untouched so
+    # multiple seeds can fan out from one snapshot in isolated run dirs.
+    # source_trial_path is repo-relative (e.g. "configs/trial_cfgs/.../x.yaml");
+    # the copytree puts it under <run_dir>/configs/trial_cfgs/.../x.yaml.
+    if seed_override is not None:
+        trial_rel_to_configs = Path(trial_path_in_snap).relative_to("configs")
+        effective_trial_path = run_dir / "configs" / trial_rel_to_configs
+        if dry_run:
+            logger.info(
+                "[dry-run] would extract snapshot, copy configs/ into %s, "
+                "and rewrite seed → %d in %s",
+                run_dir, seed_override, effective_trial_path,
+            )
+        else:
+            _extract_snapshot_if_needed(snapshot_dir)
+            run_dir.mkdir(parents=True, exist_ok=False)
+            shutil.copytree(snapshot_dir / "code" / "configs", run_dir / "configs")
+            _rewrite_top_level_seed(effective_trial_path, seed_override)
+            logger.info(
+                "Seed override applied: %s (rewrote %s)",
+                seed_override, effective_trial_path,
+            )
 
     # If the user didn't supply --trial in pass-through args, inject the
-    # snapshot-internal trial path so the entry script always reads the
-    # frozen YAML (never the live repo's copy).
+    # snapshot-internal trial path (or the per-run copy when --seed is set)
+    # so the entry script always reads the frozen YAML (never the live repo's
+    # copy).
     if "--trial" not in args:
-        args = ["--trial", str(trial_abs_in_snap), *args]
+        args = ["--trial", str(effective_trial_path), *args]
 
     # For eval re-runs without --checkpoint, auto-discover the latest
     # training checkpoint inside this snapshot. resolve_checkpoint_path()
@@ -170,6 +260,7 @@ def _build_plan(
         entry_script=entry_script,
         trial_path_in_snap=trial_path_in_snap,
         extra_args=args,
+        seed_override=seed_override,
     )
 
 
@@ -267,6 +358,14 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Eval-only: explicit checkpoint path. Bypasses snapshot-internal auto-discovery.",
     )
     parser.add_argument(
+        "--seed", type=int, default=None,
+        help="Override the trial YAML's top-level seed for this run. Copies "
+            "configs/ into the run dir, rewrites the seed in the copy, and "
+            "appends _seed{N} to the run id. Original snapshot is untouched, "
+            "so multiple seeds can fan out from a single snapshot in isolated "
+            "run dirs.",
+    )
+    parser.add_argument(
         "--note", default=None,
         help="Snapshot creation only: free-text note stored in manifest.json.",
     )
@@ -297,6 +396,16 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = _parse_args(argv)
 
+    # --seed rewrites the per-run trial YAML copy and points --trial at it.
+    # A pass-through --trial would bypass the rewrite, so the seed override
+    # would silently do nothing — reject up front instead.
+    if args.seed is not None and "--trial" in args.pass_through:
+        logger.error(
+            "--seed cannot be combined with a pass-through --trial; "
+            "--seed rewrites the snapshot's trial YAML and must own the --trial flag."
+        )
+        return 1
+
     # Phase 1: snapshot resolution.
     if args.trial:
         if args.dry_run:
@@ -320,6 +429,8 @@ def main(argv: list[str] | None = None) -> int:
         # short-circuit with a minimal stand-in.
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         run_id = f"{args.kind.replace('-', '_')}_{timestamp}"
+        if args.seed is not None:
+            run_id = f"{run_id}_seed{args.seed}"
         wrapper_basename, entry_script = KIND_SPECS[args.kind]
         trial_abs = Path(args.trial).resolve()
         trial_rel = (
@@ -328,16 +439,25 @@ def main(argv: list[str] | None = None) -> int:
         )
         # Mirror the real flow: --trial points at the absolute path inside the
         # would-be snapshot's code/ dir, because the wrapper cd's into runs/.
-        trial_abs_in_snap = snapshot_dir / "code" / trial_rel
+        # When --seed is set, it would instead point at the per-run copy
+        # under <run_dir>/configs/. Dry-run only previews the path — no
+        # extraction, no copy, no rewrite.
+        run_dir = snapshot_dir / "runs" / run_id
+        if args.seed is not None:
+            trial_rel_to_configs = Path(trial_rel).relative_to("configs")
+            effective_trial_path = run_dir / "configs" / trial_rel_to_configs
+        else:
+            effective_trial_path = snapshot_dir / "code" / trial_rel
         plan = SubmissionPlan(
             snapshot_dir=snapshot_dir,
             run_id=run_id,
-            run_dir=snapshot_dir / "runs" / run_id,
+            run_dir=run_dir,
             kind=args.kind,
             wrapper_path=REPO_ROOT / "slurm_scripts" / wrapper_basename,
             entry_script=entry_script,
             trial_path_in_snap=trial_rel,
-            extra_args=["--trial", str(trial_abs_in_snap), *args.pass_through],
+            extra_args=["--trial", str(effective_trial_path), *args.pass_through],
+            seed_override=args.seed,
         )
     else:
         try:
@@ -346,11 +466,17 @@ def main(argv: list[str] | None = None) -> int:
                 kind=args.kind,
                 extra_args=args.pass_through,
                 checkpoint_override=args.checkpoint,
+                seed_override=args.seed,
+                dry_run=args.dry_run,
             )
         except Exception as exc:
             logger.error("Could not build submission plan: %s", exc)
             return 1
-        plan.run_dir.mkdir(parents=True, exist_ok=False)
+        # _build_plan already created the run dir when --seed is set (to
+        # land the configs copytree). Otherwise create it here. Dry-run
+        # never touches disk.
+        if not args.dry_run and plan.seed_override is None:
+            plan.run_dir.mkdir(parents=True, exist_ok=False)
 
     # Phase 3: sbatch.
     extra_sbatch = _shlex_split(args.sbatch)
@@ -364,6 +490,8 @@ def main(argv: list[str] | None = None) -> int:
     logger.info("  wrapper      : %s", plan.wrapper_path)
     logger.info("  entry script : %s", plan.entry_script)
     logger.info("  trial path   : %s (inside snapshot)", plan.trial_path_in_snap)
+    if plan.seed_override is not None:
+        logger.info("  seed override: %d", plan.seed_override)
     logger.info("  pass-through : %s", " ".join(plan.extra_args) or "(none)")
 
     if args.dry_run:

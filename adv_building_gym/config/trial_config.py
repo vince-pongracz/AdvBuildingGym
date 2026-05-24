@@ -185,9 +185,7 @@ class TrialConfig:
             split = "train" if is_training else "eval"
             data_schedule_path = data_schedule.get(split)
             if not data_schedule_path:
-                raise ValueError(
-                    f"Trial config {label}: data_schedule.{split} not set"
-                )
+                raise ValueError(f"Trial config {label}: data_schedule.{split} not set")
             data_combinator = load_data_combinator_config(
                 cfg_yaml_path=data_schedule_path, default_seed=trial_seed,
             )

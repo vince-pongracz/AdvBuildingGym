@@ -66,7 +66,18 @@ if [ -n "${SNAPSHOT_DIR:-}" ]; then
   #   * data/     -> live repo's CSV data        (intentionally shared)
   # Outputs (models/, ep_metrics/, eval_results/, result_*.json) are created
   # as real directories under RUN_DIR by the entry script.
-  ln -sfn "${SNAPSHOT_DIR}/code/configs" configs
+  #
+  # submit_snapshot.py's --seed override pre-populates configs/ as a REAL
+  # copy of the snapshot's configs tree (so the trial YAML's seed can be
+  # rewritten per-run without mutating the snapshot). Skip the symlink in
+  # that case so we don't clobber the per-run copy.
+  if [ -L configs ] || [ ! -e configs ]; then
+    ln -sfn "${SNAPSHOT_DIR}/code/configs" configs
+    _configs_origin="$(readlink configs)"
+  else
+    _configs_origin="(real dir, preserved for seed override)"
+  fi
+
   if [ -n "${LIVE_REPO_ROOT:-}" ] && [ -d "${LIVE_REPO_ROOT}/data" ]; then
     ln -sfn "${LIVE_REPO_ROOT}/data" data
   else
@@ -82,7 +93,7 @@ if [ -n "${SNAPSHOT_DIR:-}" ]; then
   echo "  RUN_DIR (CWD)       : ${RUN_DIR}"
   echo "  ENTRY_SCRIPT        : ${ENTRY_SCRIPT}"
   echo "  PYTHONPATH          : ${PYTHONPATH}"
-  echo "  configs/         -> $(readlink configs)"
+  echo "  configs/         -> ${_configs_origin}"
   echo "  data/            -> $(readlink data 2>/dev/null || echo '(not linked)')"
   echo "  code/data/       -> $(readlink "${SNAPSHOT_DIR}/code/data" 2>/dev/null || echo '(not linked)')"
 else

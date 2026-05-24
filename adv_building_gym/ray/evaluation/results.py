@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class EpisodeStats:
+class EpisodeStat:
     """Metrics collected for a single evaluation episode."""
 
     episode: int
@@ -29,6 +29,8 @@ class EpisodeStats:
     max_achievable_reward: float
     reward_rate: float
     seed: int
+    cum_E_kWh: float = 0.0
+    cum_price_EUR: float = 0.0
     data_variant: dict[str, str] | None = None
     episode_date: str | None = None
 
@@ -41,6 +43,8 @@ class EpisodeStats:
             "achieved_reward": self.achieved_reward,
             "max_achievable_reward": self.max_achievable_reward,
             "reward_rate": self.reward_rate,
+            "cum_E_kWh": self.cum_E_kWh,
+            "cum_price_EUR": self.cum_price_EUR,
             "seed": self.seed,
         }
         if self.data_variant is not None:
@@ -58,7 +62,7 @@ class EvalResults:
     ``EpisodeStats`` together with run metadata.
     """
 
-    episodes: list[EpisodeStats]
+    episodes: list[EpisodeStat]
     checkpoint_path: str
     trial_name: str
     algorithm: str | None
@@ -78,7 +82,7 @@ class EvalResults:
     @classmethod
     def from_episodes(
         cls,
-        episodes: list[EpisodeStats],
+        episodes: list[EpisodeStat],
         checkpoint_path: str,
         trial_name: str,
         algorithm: str | None,

@@ -32,7 +32,7 @@ from adv_building_gym.ray.training.rl_module_inference import (
 from adv_building_gym.ray.utils.trajectory_collector import TrajectoryCollector
 from adv_building_gym._common.space_check import check_space_compatibility
 
-from .results import EpisodeStats, EvalResults
+from .results import EpisodeStat, EvalResults
 from .utils import copy_rl_module, copy_trial_yaml, write_provenance
 
 logger = logging.getLogger(__name__)
@@ -134,7 +134,7 @@ def evaluate_model(
     logger.info("=" * 70)
 
     # Initialize Ray with minimal resources for CPU-only inference.
-    # The [32,32,32] policy network runs fast enough on CPU.
+    # The [256, 256] policy network runs fast enough on CPU.
     if not ray.is_initialized():
         # Silence Ray's future warning about overriding accelerator env var
         os.environ.setdefault("RAY_ACCEL_ENV_VAR_OVERRIDE_ON_ZERO", "0")
@@ -229,7 +229,7 @@ def evaluate_model(
     # not the raw env obs.
     check_space_compatibility(rl_module, env, pipeline=pipeline)
 
-    episode_stats: list[EpisodeStats] = []
+    episode_stats: list[EpisodeStat] = []
     start_time = time.time()
 
     # Set up timeout
@@ -258,9 +258,7 @@ def evaluate_model(
             ep_data_variant = reset_info.get("data_variant")
             ep_episode_date = reset_info.get("episode_date")
             if ep_data_variant:
-                logger.info(
-                    "  Variant: %s | Date: %s", ep_data_variant, ep_episode_date,
-                )
+                logger.info("  Variant: %s | Date: %s", ep_data_variant, ep_episode_date)
             done = False
             episode_reward = 0.0
             episode_length = 0
@@ -286,6 +284,7 @@ def evaluate_model(
             # before handing them to the RLModule.
             initial_state = rl_module.get_initial_state() or {}
             state_in = _batch_state(initial_state)
+            step_info = {}
 
             while not done and episode_length < MAX_STEPS_PER_EPISODE:
                 batch: dict = {}
@@ -352,7 +351,7 @@ def evaluate_model(
                 else 0.0
             )
 
-            ep_stats = EpisodeStats(
+            ep_stat = EpisodeStat(
                 episode=episode_num,
                 length=episode_length,
                 total_reward=float(episode_reward),
@@ -360,6 +359,8 @@ def evaluate_model(
                 max_achievable_reward=float(max_achievable_reward),
                 reward_rate=float(reward_rate),
                 seed=episode_seed,
+                cum_E_kWh=float(step_info.get("cum_E_kWh", 0.0)),
+                cum_price_EUR=float(step_info.get("cum_price_EUR", 0.0)),
                 data_variant=ep_data_variant,
                 episode_date=ep_episode_date,
             )
@@ -383,7 +384,7 @@ def evaluate_model(
                 hdf5_path = os.path.join(output_dir, "trajectories.hdf5")
                 collector.save_hdf5(hdf5_path, episode_id=str(episode_num))
 
-            episode_stats.append(ep_stats)
+            episode_stats.append(ep_stat)
 
             logger.info("  Length: %d", episode_length)
             logger.info("  Total Reward: %.2f", episode_reward)
