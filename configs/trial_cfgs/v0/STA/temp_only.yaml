@@ -72,7 +72,7 @@ statesources:
 infras:
 - class: HP
   name: HP
-  max_power_kW: 5.0
+  max_power_kW: 1.0
   cop_heat: 3.0
   cop_cool: 2.5
 - class: SolarPanel
