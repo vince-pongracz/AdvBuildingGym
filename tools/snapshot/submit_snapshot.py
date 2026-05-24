@@ -188,8 +188,10 @@ def _build_sbatch_cmd(
     extra_sbatch_args: list[str],
     dry_run: bool,
 ) -> list[str]:
-    out_file = plan.run_dir / "slurm.out"
-    err_file = plan.run_dir / "slurm.err"
+    # %j is expanded by sbatch to the assigned job id, so the files land as
+    # slurm_<jobid>.{out,err} — easy to correlate with `squeue` / `sacct`.
+    out_file = plan.run_dir / "slurm_%j.out"
+    err_file = plan.run_dir / "slurm_%j.err"
 
     # --export with embedded commas/spaces is tricky; sbatch accepts a single
     # comma-separated string. None of our values contain commas because they

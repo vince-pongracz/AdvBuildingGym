@@ -59,9 +59,9 @@ ENTRY_SCRIPT_BASENAME="run_train_ray.py"
 source "${SLURM_SUBMIT_DIR:-$PWD}/slurm_scripts/util/snapshot_mode.sh"
 
 # Start the per-minute scratch-disk usage sampler. Writes scratch_usage.log
-# next to slurm.err in snapshot mode, or to ${SLURM_SUBMIT_DIR} in legacy
-# mode. Helper disowns itself so the `wait` later in this script does not
-# block on the sampling loop.
+# into the snapshot run dir (alongside slurm_<jobid>.{out,err}) in snapshot
+# mode, or to ${SLURM_SUBMIT_DIR} in legacy mode. Helper disowns itself so
+# the `wait` later in this script does not block on the sampling loop.
 # shellcheck source=util/scratch_monitor.sh
 source "${SLURM_SUBMIT_DIR:-$PWD}/slurm_scripts/util/scratch_monitor.sh"
 

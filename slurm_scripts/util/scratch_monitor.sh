@@ -13,7 +13,7 @@
 #     object_spilling/ subdirs (this is "what your training writes")
 #   * df -h of the node-wide /scratch (this is "global / shared")
 # to scratch_usage.log placed:
-#   * snapshot mode  : ${RUN_DIR}/scratch_usage.log   (next to slurm.err)
+#   * snapshot mode  : ${RUN_DIR}/scratch_usage.log   (alongside slurm_<jobid>.{out,err})
 #   * legacy mode    : ${SLURM_SUBMIT_DIR}/scratch_usage-${SLURM_JOB_ID}.log
 #
 # Opt-out by exporting SCRATCH_MONITOR_DISABLE=1 before sbatch.
@@ -31,9 +31,10 @@ fi
 
 SCRATCH_MONITOR_INTERVAL="${SCRATCH_MONITOR_INTERVAL:-300}"
 
-# Log path: prefer the snapshot run dir (so it sits next to slurm.err for
-# runs launched via tools/snapshot/submit_snapshot.py), fall back to the
-# submit dir with a job-id suffix to avoid clobbering across runs.
+# Log path: prefer the snapshot run dir (so it sits alongside the
+# slurm_<jobid>.{out,err} files written by tools/snapshot/submit_snapshot.py),
+# fall back to the submit dir with a job-id suffix to avoid clobbering across
+# runs.
 if [ -n "${RUN_DIR:-}" ]; then
   _scratch_monitor_log="${RUN_DIR}/scratch_usage.log"
 else

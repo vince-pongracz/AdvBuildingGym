@@ -20,8 +20,8 @@ snapshots/<YYYYMMDD_HHMMSS>_<trial_name>/
 │                         #   on later runs. Never edited.
 └── runs/
     └── <kind>_<YYYYMMDD_HHMMSS>/
-        ├── slurm.out
-        ├── slurm.err
+        ├── slurm_<jobid>.out
+        ├── slurm_<jobid>.err
         ├── models/       # Ray checkpoints (train)
         ├── ep_metrics/   # per-episode metrics + tensorboard
         ├── eval_results/ # eval JSON/CSV/HDF5/plots
