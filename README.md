@@ -119,7 +119,7 @@ An old paper about reward shaping and construction: https://link.springer.com/ar
 
 <!-- TODO VP: add it to the repo setup description... -->
 
-TODO VP: Show expert trajectories to the policies, which work fine -- Programming using expert knowledge -- difficulty -- multi dim trajectories, hard to really give expert trajectories.
+TODO VP: Show expert trajectories to the policies, which work fine -- Programming using expert knowledge -- difficulty -- multi dim trajectories, hard to really give expert trajectories over the whole system (for temp control it is easy, but for battery and EV control..?)
 
 TODO VP: Idea 2. The "Mixture of Experts" or Hierarchical Approach
 You can have a single agent that switches between different policies based on the state.

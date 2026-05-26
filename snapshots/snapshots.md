@@ -56,11 +56,47 @@ python -m tools.snapshot.submit_snapshot \
 # 4. Snapshot only (no submission). Prints the new snapshot dir on stdout.
 python -m tools.snapshot.make_snapshot \
     --trial configs/trial_cfgs/trial_cfg_1_sac.yaml --note "baseline"
+
+# 5. Fan out multiple seeds from a single snapshot. Each run gets its own
+#    isolated dir; the original snapshot and live-repo YAML stay untouched.
+python -m tools.snapshot.submit_snapshot --snapshot snapshots/<existing>/ --kind train --seed 123
+python -m tools.snapshot.submit_snapshot --snapshot snapshots/<existing>/ --kind train --seed 456
+python -m tools.snapshot.submit_snapshot --snapshot snapshots/<existing>/ --kind eval  --seed 999 -- --episodes 10
 ```
 
 `--kind` ∈ `{train, eval, train-ma, train-sb}` selects the SLURM wrapper.
 Anything after `--` is forwarded verbatim to the entry script
 (`run_train_ray.py`, `run_eval_ray.py`, `rl_ma_train.py`, `run_train_sb.py`).
+
+### `--seed N` — per-run seed override
+
+`trial.seed` is the only knob that varies which days/variants the
+`DataCombinator` samples and the stochastic streams used during training
+(PyTorch, Ray init, `RngService`, replay shuffle). Without this flag, two
+runs from the same snapshot evaluate on the exact same episode dates and
+train along identical trajectories.
+
+`--seed N` lets you fan out multiple runs from a single snapshot without
+re-snapshotting and without mutating the live-repo trial YAML:
+
+1. The run id is suffixed with `_seed{N}` (e.g. `train_20260524_185655_seed123`)
+   so per-seed runs never collide.
+2. The snapshot's `configs/` tree is **copied** (not symlinked) into the
+   run dir.
+3. The top-level `seed:` line in the copied trial YAML is rewritten to `N`
+   via a line-level regex — trailing comments are preserved verbatim, and
+   nested seeds (e.g. `data_combinator.seed`) are untouched.
+4. `--trial` is pointed at the per-run copy, so the entry script loads the
+   rewritten YAML.
+
+The original `<snapshot>/code/configs/<trial>.yaml` and the live-repo
+`configs/<trial>.yaml` are untouched. `snapshot_mode.sh` detects the
+pre-existing real `configs/` directory and skips the symlink it would
+normally create.
+
+**Conflict guard:** `--seed N` cannot be combined with a pass-through
+`--trial` (the override would silently bypass the rewritten copy). The
+submitter rejects that combination up front.
 
 ## How it works
 

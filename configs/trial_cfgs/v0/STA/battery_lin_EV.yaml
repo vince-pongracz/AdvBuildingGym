@@ -134,6 +134,7 @@ rewards:
     n_steps: 16
     mode: weighted
     freq_exponent: 1.0
+
 infra_schedule: null
 
 statesource_schedule: null

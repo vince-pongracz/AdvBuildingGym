@@ -95,13 +95,6 @@ rewards:
 - class_name: TempRewardV0
   weight: 1.0
   params: {}
-- class_name: LongTermEconomicRewardV0
-  weight: 1.0
-  params:
-    reference_power_kW: 22.0
-- class_name: MinimiseEnergyConsumptionRewardV0
-  weight: 1.0
-  params: {}
 - class_name: OperatorEnergyControlRewardV0
   weight: 1.0
   params:
