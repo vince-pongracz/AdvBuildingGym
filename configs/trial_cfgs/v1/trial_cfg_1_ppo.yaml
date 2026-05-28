@@ -2,13 +2,13 @@
 # Pass to run_train_ray.py / run_eval_ray.py via:
 #     python run_train_ray.py --trial configs/trial_cfgs/trial_cfg_1.yaml
 
-trial_name: trial_1_sac_default
+trial_name: trial_1_ppo_default
 
 # --- algorithm & run control ---
-algorithm: sac                 # ppo | sac
+algorithm: ppo                 # ppo | sac
 seed: 42                       # overrides training_params.seed
 metric: episode_return_mean    # reward_rate | achieved_reward | episode_return_mean
-checkpoint_frequency_episodes: 10
+checkpoint_frequency_episodes: 20
 log_trajectories: false
 num_envs: 1
 grad_train: false              # if true, the reward schedule mode is honoured;
@@ -43,7 +43,7 @@ infras:
   soc_max: 0.95
 - class: LinearEVCharger
   name: ev_charger
-  max_power_kW: 11.0
+  max_power_kW: 22.0
   v2g_enabled: true
   max_charge_time_hrs: 24.0
   v2g_playroom: 0.1
@@ -118,7 +118,14 @@ env_meta:
     - -24
     - -36
     - -48
-
+    - -60
+    - -72
+    - -84
+    - -96
+    - -108
+    - -120
+    - -132
+    - -144
   forecast_env_wrapper:
     enabled: true
     forecast_steps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
@@ -129,7 +136,7 @@ training_params:
   common:
     learning_rate: 3.0e-4
     episode_lookback_horizon_steps: 120 # 5min steps, 12 steps = 1h --> 120 steps = 10h
-    max_episodes_to_run: 3000
+    max_episodes_to_run: 7000
     clip_actions_to_env_bounds: True
 
   # PPO-specific (on-policy)
@@ -137,15 +144,6 @@ training_params:
     episodes_per_iteration: 10
     minibatch_size: 64
     num_epochs: 20
-
-  # SAC-specific (off-policy)
-  sac:
-    episodes_to_keep_in_replay_buffer: 500 # ≈ 500 * EPISODE_LENGTH transitions
-    # UTD = training_intensity / replay_batch_size. 256/256 = 1.0 (vanilla SAC).
-    # Without this RLlib falls back to round-robin (UTD ≈ 0.001) → no real learning.
-    n_step_return: 3 # 6-step is biased under non-stationary rewards / curricula
-    training_intensity: 128
-    learning_starts_after_n_episodes: 50
 
 data_schedule:
   train: configs/schedules/data/train.yaml
@@ -213,14 +211,4 @@ rewards:
       freq_exponent: 1.0
 
 reward_schedule: null
-infra_schedule: null
-statesource_schedule: null
-
-exploration_reset:
-  enabled: false
-  trigger: on_reward_swap        # off | on_reward_swap | on_infra_swap | on_statesource_swap | on_reward_and_infra | all
-  ppo_entropy_coeff: 0.05
-  ppo_entropy_baseline: 0.0
-  sac_alpha: 0.5
-  decay_iterations: 50           # half of swap_every_n_episodes
-  lr_multiplier: 1.5
+infra_schedule:  null            # or configs/schedules/infra/train.yaml

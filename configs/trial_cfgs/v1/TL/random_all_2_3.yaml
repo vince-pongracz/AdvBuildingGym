@@ -1,11 +1,11 @@
-trial_name: trial_1_sac_lb_variant
+trial_name: tl_random_all_2_3
 algorithm: sac
 seed: 42
 metric: episode_return_mean
-checkpoint_frequency_episodes: 20
+checkpoint_frequency_episodes: 10
 log_trajectories: false
 num_envs: 1
-grad_train: false
+grad_train: true
 
 env_meta:
   EPISODE_LENGTH: 288
@@ -55,10 +55,9 @@ training_params:
     minibatch_size: 64
     num_epochs: 20
   sac:
-    replay_batch_size: 1024
     episodes_to_keep_in_replay_buffer: 500
-    training_intensity: 128
     n_step_return: 3
+    training_intensity: 128
     learning_starts_after_n_episodes: 50
 statesources:
 - class: EnergyPriceDataSource
@@ -109,7 +108,7 @@ infras:
   soc_max: 0.95
 - class: LinearEVCharger
   name: ev_charger
-  max_power_kW: 7.0
+  max_power_kW: 22.0
   v2g_enabled: true
   max_charge_time_hrs: 24.0
   v2g_playroom: 0.1
@@ -185,14 +184,18 @@ infra_schedule: null
 
 statesource_schedule: null
 
-reward_schedule: null
+reward_schedule:
+  mode: random
+  swap_every_n_episodes: 100
+  random_active_count: 3
+  random_swap_count: 2
 
 data_schedule:
   train: configs/schedules/data/train.yaml
   eval: configs/schedules/data/eval.yaml
 
 exploration_reset:
-  enabled: false
+  enabled: true
   trigger: on_reward_swap
   ppo_entropy_coeff: 0.05
   ppo_entropy_baseline: 0.0

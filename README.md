@@ -322,13 +322,6 @@ New idea for my thesis:
 - predict actions and states for N steps (model based RL) -- MPC and Monte Carlo sims would be something like this
 See into the future for statesources where it's possible.
 
-TODO VP 2026.01.20. : Add forecasting window (and thus MPC) for the states and the
-actions as well in the config, generally window size is 0.
-Allow it only for the forecasted desired states -- not for the actual system states
-Handle if no more forecasting is available (csv ended and similar scenarios)
-Add this as a Wrapper on the env...
-So the wrapper extends the observations with the forecasting data
-
 #### Real building implementation of a deep reinforcement learning controller to enhance energy efficiency and indoor temperature control
 
 Link: https://www.sciencedirect.com/science/article/pii/S0306261924008304?via%3Dihub
@@ -339,7 +332,10 @@ Goal was: beat the RBCs -- rule based controllers
 "Resistance-Capacitance (RC) model calibrated with real building data" -- exactly what Gökhan's paper was about.
 In the papaer: comparison of RBCs, PI, MPC and DRL controllers
 
-
+TODO VP:
+Typical wallbox powers -- AC: 7-22 kW
+- single phase: 3.7 kW, 7.4 kW
+- 3 phase: 11 kW, 22 kW -- quite rare
 
 #### State of the Art of Machine Learning Models in Energy Systems, a Systematic Review
 

@@ -1,11 +1,11 @@
-trial_name: tl_random_all_2_4
+trial_name: tl_random_all_1_3
 algorithm: sac
 seed: 42
 metric: episode_return_mean
-checkpoint_frequency_episodes: 20
+checkpoint_frequency_episodes: 10
 log_trajectories: false
 num_envs: 1
-grad_train: true # TODO noprio VP 2026.05.13.: Remove this flag as it's controlled by the reward schedule configuration
+grad_train: true
 
 env_meta:
   EPISODE_LENGTH: 288
@@ -55,11 +55,11 @@ training_params:
     minibatch_size: 64
     num_epochs: 20
   sac:
-    replay_batch_size: 256
-    training_intensity: 128
     episodes_to_keep_in_replay_buffer: 500
     n_step_return: 3
+    training_intensity: 128
     learning_starts_after_n_episodes: 50
+
 statesources:
 - class: EnergyPriceDataSource
   name: E_price
@@ -109,7 +109,7 @@ infras:
   soc_max: 0.95
 - class: LinearEVCharger
   name: ev_charger
-  max_power_kW: 7.0
+  max_power_kW: 22.0
   v2g_enabled: true
   max_charge_time_hrs: 24.0
   v2g_playroom: 0.1
@@ -188,8 +188,8 @@ statesource_schedule: null
 reward_schedule:
   mode: random
   swap_every_n_episodes: 100
-  random_active_count: 4
-  random_swap_count: 2
+  random_active_count: 3
+  random_swap_count: 1
 
 data_schedule:
   train: configs/schedules/data/train.yaml

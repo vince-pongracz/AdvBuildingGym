@@ -1,14 +1,14 @@
-trial_name: tl_gradual_all
+trial_name: trial_1_sac_7day_ep
 algorithm: sac
 seed: 42
 metric: episode_return_mean
 checkpoint_frequency_episodes: 10
 log_trajectories: false
 num_envs: 1
-grad_train: true
+grad_train: false
 
 env_meta:
-  EPISODE_LENGTH: 288
+  EPISODE_LENGTH: 2016 # 7 day long episodes
   control_step: 300
   allow_early_termination: false
   hst_env_wrapper:
@@ -48,17 +48,16 @@ training_params:
   common:
     learning_rate: 0.0003
     episode_lookback_horizon_steps: 120
-    max_episodes_to_run: 7000
+    max_episodes_to_run: 1500
     clip_actions_to_env_bounds: true
   ppo:
     episodes_per_iteration: 10
     minibatch_size: 64
     num_epochs: 20
   sac:
-    replay_batch_size: 256
     episodes_to_keep_in_replay_buffer: 500
-    training_intensity: 128
     n_step_return: 3
+    training_intensity: 128
     learning_starts_after_n_episodes: 50
 statesources:
 - class: EnergyPriceDataSource
@@ -109,7 +108,7 @@ infras:
   soc_max: 0.95
 - class: LinearEVCharger
   name: ev_charger
-  max_power_kW: 7.0
+  max_power_kW: 22.0
   v2g_enabled: true
   max_charge_time_hrs: 24.0
   v2g_playroom: 0.1
@@ -185,27 +184,14 @@ infra_schedule: null
 
 statesource_schedule: null
 
-reward_schedule:
-  mode: gradual_add
-  swap_every_n_episodes: 100
-  reward_order:
-  - name: TempReward
-  - name: LongTermEconomicReward
-  - name: OperatorEnergyControlReward
-  - composite:
-    - name: BatteryTargetReward
-    - name: BatteryMgmtReward
-  - composite:
-    - name: EVChargingReward
-    - name: EVChargingOnTimeReward
-  - name: MinimiseEnergyConsumptionReward
+reward_schedule: null
 
 data_schedule:
   train: configs/schedules/data/train.yaml
   eval: configs/schedules/data/eval.yaml
 
 exploration_reset:
-  enabled: true
+  enabled: false
   trigger: on_reward_swap
   ppo_entropy_coeff: 0.05
   ppo_entropy_baseline: 0.0

@@ -52,6 +52,14 @@ statesources:
 - class: EnergyPriceDataSource
   name: E_price
   normalise: abs_min_max
+  # max_calc_mode options:
+  #   mean              - mean of raw baseprice over the loaded series
+  #   median            - median of raw baseprice
+  #   percentile        - quantile of raw baseprice at `percentile` (e.g. 0.75)
+  #   mean_above_median - mean of raw baseprice values strictly above the median
+  dynamic_max_price_calc: true
+  max_calc_mode: mean
+  percentile: 0.75  # consulted only when max_calc_mode == "percentile"
 - class: WeatherDataSource
   name: weather
   normalise: abs_min_max

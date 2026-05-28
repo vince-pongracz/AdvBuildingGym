@@ -1,11 +1,11 @@
-trial_name: trial_1_sac_default
+trial_name: dirichlet_1
 algorithm: sac
 seed: 42
 metric: episode_return_mean
-checkpoint_frequency_episodes: 20
+checkpoint_frequency_episodes: 10
 log_trajectories: false
 num_envs: 1
-grad_train: false
+grad_train: true
 
 env_meta:
   EPISODE_LENGTH: 288
@@ -32,7 +32,14 @@ env_meta:
     - -24
     - -36
     - -48
-
+    - -60
+    - -72
+    - -84
+    - -96
+    - -108
+    - -120
+    - -132
+    - -144
   forecast_env_wrapper:
     enabled: true
     forecast_steps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
@@ -101,7 +108,7 @@ infras:
   soc_max: 0.95
 - class: LinearEVCharger
   name: ev_charger
-  max_power_kW: 7.0
+  max_power_kW: 22.0
   v2g_enabled: true
   max_charge_time_hrs: 24.0
   v2g_playroom: 0.1
@@ -177,9 +184,41 @@ infra_schedule: null
 
 statesource_schedule: null
 
-reward_schedule: null
+reward_schedule:
+  mode: dirichlet
+  swap_every_n_episodes: 100
+  rejection_sampling: true
+  start_weights: uniform
+  first_swap_after_n_episodes: 100
+  on_rewards:
+  - name: TempReward
+    w_low: 0.8
+  - name: LongTermEconomicReward
+    w_low: 0.2
+  - name: MinimiseEnergyConsumptionReward
+    w_low: 0.1
+  - name: OperatorEnergyControlReward
+    w_low: 0.2
+  - name: BatteryTargetReward
+    w_low: 0.5
+  - name: BatteryMgmtReward
+    w_low: 0.6
+  - name: EVChargingReward
+    w_low: 0.5
+  - name: EVChargingOnTimeReward
+    w_low: 0.5
+  - name: ActionSmoothnessReward
+    w_low: 0.3
 
 data_schedule:
   train: configs/schedules/data/train.yaml
   eval: configs/schedules/data/eval.yaml
 
+exploration_reset:
+  enabled: true
+  trigger: on_reward_swap
+  ppo_entropy_coeff: 0.05
+  ppo_entropy_baseline: 0.0
+  sac_alpha: 0.5
+  decay_iterations: 50
+  lr_multiplier: 1.5

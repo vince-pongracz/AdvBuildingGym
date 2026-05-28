@@ -1,5 +1,5 @@
-trial_name: trial_1_dreamerv3_default
-algorithm: dreamerv3
+trial_name: trial_1_sac_lb_variant
+algorithm: sac
 seed: 42
 metric: episode_return_mean
 checkpoint_frequency_episodes: 20
@@ -50,17 +50,16 @@ training_params:
     episode_lookback_horizon_steps: 120
     max_episodes_to_run: 7000
     clip_actions_to_env_bounds: true
-  dreamerv3:
-    model_size: "XS"
-    batch_size_B: 16
-    batch_length_T: 64
-    training_ratio: 1024.0
-    horizon_H: 15
+  ppo:
+    episodes_per_iteration: 10
+    minibatch_size: 64
+    num_epochs: 20
+  sac:
+    replay_batch_size: 1024
     episodes_to_keep_in_replay_buffer: 500
-    world_model_lr: 1.0e-4
-    actor_lr: 3.0e-5
-    critic_lr: 3.0e-5
-
+    training_intensity: 128
+    n_step_return: 3
+    learning_starts_after_n_episodes: 50
 statesources:
 - class: EnergyPriceDataSource
   name: E_price
@@ -110,7 +109,7 @@ infras:
   soc_max: 0.95
 - class: LinearEVCharger
   name: ev_charger
-  max_power_kW: 7.0
+  max_power_kW: 22.0
   v2g_enabled: true
   max_charge_time_hrs: 24.0
   v2g_playroom: 0.1
@@ -191,3 +190,12 @@ reward_schedule: null
 data_schedule:
   train: configs/schedules/data/train.yaml
   eval: configs/schedules/data/eval.yaml
+
+exploration_reset:
+  enabled: false
+  trigger: on_reward_swap
+  ppo_entropy_coeff: 0.05
+  ppo_entropy_baseline: 0.0
+  sac_alpha: 0.5
+  decay_iterations: 50
+  lr_multiplier: 1.5

@@ -70,10 +70,19 @@ class LongTermEconomicRewardV0(RewardFunction):
             return 0.0, 0.0
 
         current_energy_price_norm = float(states["s_E_price"][0])
+        # Rescale the price by the data-driven denominator so per-step values
+        # span more of [-1, 1]; ctxt is 1.0 (no-op) when EnergyPriceDataSource's
+        # dynamic_max_price_calc is disabled.
+        dynamic_max = states.get("ctxt_E_price_dynamic_max")
+        dynamic_max_ep = states.get("ctxt_E_price_dynamic_max_ep")
+        dyn_max = float(dynamic_max[0]) if dynamic_max is not None else 1.0
+        dyn_max_ep = float(dynamic_max_ep[0]) if dynamic_max_ep is not None else 1.0
+        price_signal = current_energy_price_norm / (dyn_max * 0.7 + dyn_max_ep * 0.3)
+
         op_max_kW = self._resolve_reference_power_kW(states)
 
         # Canonical: net > 0 means export, net < 0 means consumption.
-        per_step = float(np.clip(net_power_kW * current_energy_price_norm / op_max_kW, -1.0, 1.0))
+        per_step = float(np.clip(net_power_kW * price_signal / op_max_kW, -1.0, 1.0))
         self._accumulated_norm += per_step
         self._step += 1
 

@@ -1,11 +1,11 @@
-trial_name: tl_random_all_1_3
+trial_name: trial_1_sac_default
 algorithm: sac
 seed: 42
 metric: episode_return_mean
-checkpoint_frequency_episodes: 10
+checkpoint_frequency_episodes: 20
 log_trajectories: false
 num_envs: 1
-grad_train: true
+grad_train: false
 
 env_meta:
   EPISODE_LENGTH: 288
@@ -32,14 +32,7 @@ env_meta:
     - -24
     - -36
     - -48
-    - -60
-    - -72
-    - -84
-    - -96
-    - -108
-    - -120
-    - -132
-    - -144
+
   forecast_env_wrapper:
     enabled: true
     forecast_steps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
@@ -59,7 +52,6 @@ training_params:
     n_step_return: 3
     training_intensity: 128
     learning_starts_after_n_episodes: 50
-
 statesources:
 - class: EnergyPriceDataSource
   name: E_price
@@ -109,7 +101,7 @@ infras:
   soc_max: 0.95
 - class: LinearEVCharger
   name: ev_charger
-  max_power_kW: 7.0
+  max_power_kW: 22.0
   v2g_enabled: true
   max_charge_time_hrs: 24.0
   v2g_playroom: 0.1
@@ -185,21 +177,9 @@ infra_schedule: null
 
 statesource_schedule: null
 
-reward_schedule:
-  mode: random
-  swap_every_n_episodes: 100
-  random_active_count: 3
-  random_swap_count: 1
+reward_schedule: null
 
 data_schedule:
   train: configs/schedules/data/train.yaml
   eval: configs/schedules/data/eval.yaml
 
-exploration_reset:
-  enabled: true
-  trigger: on_reward_swap
-  ppo_entropy_coeff: 0.05
-  ppo_entropy_baseline: 0.0
-  sac_alpha: 0.5
-  decay_iterations: 50
-  lr_multiplier: 1.5

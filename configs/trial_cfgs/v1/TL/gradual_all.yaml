@@ -1,11 +1,11 @@
-trial_name: sta_EV_only
+trial_name: tl_gradual_all
 algorithm: sac
 seed: 42
 metric: episode_return_mean
 checkpoint_frequency_episodes: 10
 log_trajectories: false
 num_envs: 1
-grad_train: false
+grad_train: true
 
 env_meta:
   EPISODE_LENGTH: 288
@@ -55,11 +55,11 @@ training_params:
     minibatch_size: 64
     num_epochs: 20
   sac:
+    replay_batch_size: 256
     episodes_to_keep_in_replay_buffer: 500
-    n_step_return: 3
     training_intensity: 128
+    n_step_return: 3
     learning_starts_after_n_episodes: 50
-
 statesources:
 - class: EnergyPriceDataSource
   name: E_price
@@ -82,9 +82,34 @@ statesources:
   max_power_kW: 20.0
 
 infras:
+- class: HP
+  name: HP
+  max_power_kW: 1.0
+  cop_heat: 3.0
+  cop_cool: 2.5
+- class: BatteryTremblay
+  name: battery
+  max_power_kW: 19.0
+  cell_capacity_Ah: 3.5
+  max_charge_amps: 48.0
+  max_charge_voltage: 420.0
+  start_soc_percentage: 0.3
+  max_charge_rate: 1.5
+  history_length: 4
+  E0: 3.2
+  K: 0.009
+  A: 0.468
+  B: 3.529
+  R_cell: 0.01
+  n_series: 125
+  n_parallel: 10
+  charge_efficiency: 0.95
+  discharge_efficiency: 0.95
+  soc_min: 0.1
+  soc_max: 0.95
 - class: LinearEVCharger
   name: ev_charger
-  max_power_kW: 7.0
+  max_power_kW: 22.0
   v2g_enabled: true
   max_charge_time_hrs: 24.0
   v2g_playroom: 0.1
@@ -92,7 +117,7 @@ infras:
   name: solar
   max_power_kW: 5.0
   pv_efficiency: 0.22
-  panel_area_m2: 50
+  panel_area_m2: 10
 - class: WindTurbine
   name: wind_turbine
   max_power_kW: 5.0
@@ -105,26 +130,50 @@ infras:
   peak_consumption_kW: 8.0
 
 rewards:
+- class_name: TempReward
+  weight: 1.0
+  params:
+    zero_reward_diff_celsius: 0.5
+    wrong_direction_penalty: -1.0
+    terminate_diff_celsius: 3.5
+    terminate_penalty: -100.0
+- class_name: LongTermEconomicReward
+  weight: 1.0
+  params:
+    reference_power_kW: 22.0
+- class_name: MinimiseEnergyConsumptionReward
+  weight: 1.0
+  params:
+    threshold_kWh: 0.5
+- class_name: OperatorEnergyControlReward
+  weight: 1.0
+  params:
+    harsh_penalty: -4.0
+    soft_threshold_pct: 0.9
+    recovery_steps: 3
+    terminate_threshold_pct: 1.1
+    terminate_penalty: -10
+- class_name: BatteryTargetReward
+  weight: 1.0
+  params:
+    min_pct: 0.15
+    max_pct: 0.95
+- class_name: BatteryMgmtReward
+  weight: 1.0
+  params:
+    scale: 0.5
 - class_name: EVChargingReward
   weight: 1.0
   params:
     diff_threshold: 0.02
     soc_diff_multiplier: 5.0
     disconnect_soc_tolerance: 0.05
-    success_reward: 10.0
-    failure_penalty: -100.0
-    min_curve_violation_penalty: -100.0
+    success_reward: 1.0
+    failure_penalty: -10.0
+    min_curve_violation_penalty: -10.0
 - class_name: EVChargingOnTimeReward
   weight: 1.0
   params: {}
-- class_name: OperatorEnergyControlReward
-  weight: 0.1
-  params:
-    harsh_penalty: -2.0
-    soft_threshold_pct: 0.9
-    recovery_steps: 3
-    terminate_threshold_pct: 1.1
-    terminate_penalty: -100.0
 - class_name: ActionSmoothnessReward
   weight: 1.0
   params:
@@ -136,8 +185,30 @@ infra_schedule: null
 
 statesource_schedule: null
 
-reward_schedule: null
+reward_schedule:
+  mode: gradual_add
+  swap_every_n_episodes: 100
+  reward_order:
+  - name: TempReward
+  - name: LongTermEconomicReward
+  - name: OperatorEnergyControlReward
+  - composite:
+    - name: BatteryTargetReward
+    - name: BatteryMgmtReward
+  - composite:
+    - name: EVChargingReward
+    - name: EVChargingOnTimeReward
+  - name: MinimiseEnergyConsumptionReward
+
 data_schedule:
   train: configs/schedules/data/train.yaml
   eval: configs/schedules/data/eval.yaml
 
+exploration_reset:
+  enabled: true
+  trigger: on_reward_swap
+  ppo_entropy_coeff: 0.05
+  ppo_entropy_baseline: 0.0
+  sac_alpha: 0.5
+  decay_iterations: 50
+  lr_multiplier: 1.5

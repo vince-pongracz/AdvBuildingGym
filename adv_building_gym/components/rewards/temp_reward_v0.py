@@ -42,9 +42,9 @@ class TempRewardV0(RewardFunction):
         reward_slow_driver = 0.0
         THRESHOLD_SLOW_DRIVER = 40.0 - x_nullpoint_pos # At around 40 °C diff, the reward for slow driver reaches -1.0, and is 0 at 0 °C diff.
         if d_celsius > 0.0:
-            reward_slow_driver = (-d_celsius - x_nullpoint_pos) / THRESHOLD_SLOW_DRIVER
+            reward_slow_driver = -(d_celsius - x_nullpoint_pos) / THRESHOLD_SLOW_DRIVER
         else:
-            reward_slow_driver = (-d_celsius + x_nullpoint_pos) / THRESHOLD_SLOW_DRIVER
+            reward_slow_driver = (d_celsius + x_nullpoint_pos) / THRESHOLD_SLOW_DRIVER
         reward_slow_driver = np.clip(reward_slow_driver, -1.0, 0.0)
         
         reward = reward_precision_driver + reward_slow_driver

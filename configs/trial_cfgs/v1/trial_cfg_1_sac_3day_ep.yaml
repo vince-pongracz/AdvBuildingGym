@@ -1,4 +1,4 @@
-trial_name: gen_building_changes
+trial_name: trial_1_sac_3day_ep
 algorithm: sac
 seed: 42
 metric: episode_return_mean
@@ -8,7 +8,7 @@ num_envs: 1
 grad_train: false
 
 env_meta:
-  EPISODE_LENGTH: 288
+  EPISODE_LENGTH: 864 # 3day long episode
   control_step: 300
   allow_early_termination: false
   hst_env_wrapper:
@@ -46,9 +46,9 @@ env_meta:
 
 training_params:
   common:
+    max_episodes_to_run: 2000
     learning_rate: 0.0003
     episode_lookback_horizon_steps: 120
-    max_episodes_to_run: 7000
     clip_actions_to_env_bounds: true
   ppo:
     episodes_per_iteration: 10
@@ -60,6 +60,25 @@ training_params:
     training_intensity: 128
     learning_starts_after_n_episodes: 50
 statesources:
+- class: EnergyPriceDataSource
+  name: E_price
+  normalise: abs_min_max
+- class: WeatherDataSource
+  name: weather
+  normalise: abs_min_max
+- class: InsideTemperature
+  name: desired_temp_in
+- class: DesiredUserEnergyNeed
+  name: user_energy_need
+- class: BuildingHeatLoss
+  name: building_heat_loss
+  K: 20
+  mC: 300
+- class: EVState
+  name: ev_schedule
+- class: OperatorEnergyControl
+  name: operator_energy_control
+  max_power_kW: 20.0
 
 infras:
 - class: HP
@@ -89,7 +108,7 @@ infras:
   soc_max: 0.95
 - class: LinearEVCharger
   name: ev_charger
-  max_power_kW: 7.0
+  max_power_kW: 22.0
   v2g_enabled: true
   max_charge_time_hrs: 24.0
   v2g_playroom: 0.1
@@ -108,7 +127,6 @@ infras:
 - class: HouseholdEnergyConsumers
   name: hh_consumers
   peak_consumption_kW: 8.0
-
 rewards:
 - class_name: TempReward
   weight: 1.0
@@ -163,21 +181,7 @@ rewards:
 
 infra_schedule: null
 
-statesource_schedule:
-  mode: cycle
-  swap_every_n_episodes: 150
-  configs:
-    train:
-    - configs/statesource_cfgs/GEN/building/building_1.yaml
-    - configs/statesource_cfgs/GEN/building/building_2.yaml
-    - configs/statesource_cfgs/GEN/building/building_3.yaml
-    - configs/statesource_cfgs/GEN/building/building_4.yaml
-    - configs/statesource_cfgs/GEN/building/building_5.yaml
-    eval:
-    # TODO VP 2026.05.13.: Check these eval configs out, they are just copied.
-    # - configs/statesource_cfgs/GEN/building/building_eval_1.yaml
-    # - configs/statesource_cfgs/GEN/building/building_eval_2.yaml
-    - configs/statesource_cfgs/GEN/building/building_eval_3.yaml
+statesource_schedule: null
 
 reward_schedule: null
 
@@ -186,8 +190,8 @@ data_schedule:
   eval: configs/schedules/data/eval.yaml
 
 exploration_reset:
-  enabled: true
-  trigger: on_statesource_swap
+  enabled: false
+  trigger: on_reward_swap
   ppo_entropy_coeff: 0.05
   ppo_entropy_baseline: 0.0
   sac_alpha: 0.5
