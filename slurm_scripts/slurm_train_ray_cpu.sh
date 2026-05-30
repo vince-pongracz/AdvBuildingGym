@@ -46,6 +46,21 @@ else
   echo "[WARN] Python environment not found at ${PYTHON_ENV}; continuing without activation"
 fi
 
+# Snapshot mode: when SNAPSHOT_DIR is set by tools/snapshot/submit_snapshot.py,
+# extract the snapshot zip on demand, cd into the per-run dir, and run the
+# snapshotted entry script instead of the live repo's copy. See the shared
+# helper for the full setup.
+ENTRY_SCRIPT_BASENAME="run_train_ray.py"
+# shellcheck source=util/snapshot_mode.sh
+source "${SLURM_SUBMIT_DIR:-$PWD}/slurm_scripts/util/snapshot_mode.sh"
+
+# Start the per-minute scratch-disk usage sampler. Writes scratch_usage.log
+# into the snapshot run dir (alongside slurm_<jobid>.{out,err}) in snapshot
+# mode, or to ${SLURM_SUBMIT_DIR} in legacy mode. Helper disowns itself so
+# the `wait` later in this script does not block on the sampling loop.
+# shellcheck source=util/scratch_monitor.sh
+source "${SLURM_SUBMIT_DIR:-$PWD}/slurm_scripts/util/scratch_monitor.sh"
+
 # All arguments are forwarded directly to run_train_ray.py which owns the
 # defaults (algorithm, episodes, seed, metric, etc.) via argparse.
 SCRIPT_ARGS=("$@")
@@ -88,7 +103,7 @@ echo "=== GPU Info (nvidia-smi) ==="
 nvidia-smi || true
 
 echo "=== Python / CUDA Info ==="
-python slurm_scripts/util/print_env_info.py
+python "${SLURM_SUBMIT_DIR:-$PWD}/slurm_scripts/util/print_env_info.py"
 
 # Disable ANSI color codes and log deduplication in Ray logs
 export RAY_COLOR_PREFIX=0
@@ -97,8 +112,11 @@ export TERM=dumb
 # Force unbuffered Python output for immediate log visibility
 export PYTHONUNBUFFERED=1
 
-# Build command: Forward every param as they are
-CMD=(python -u run_train_ray.py --cpu "${SCRIPT_ARGS[@]}")
+# Build command: Forward every param as they are. ENTRY_SCRIPT is either
+# run_train_ray.py (legacy live-repo mode) or an absolute path inside the
+# snapshot's code/ dir (snapshot mode). --cpu is hard-coded here to pin this
+# wrapper to the CPU-only execution path regardless of the entry script.
+CMD=(python -u "${ENTRY_SCRIPT}" --cpu "${SCRIPT_ARGS[@]}")
 
 # Filter for harmless EnvRunner.__del__/sigterm_handler tracebacks Ray prints
 # when env-runner actors are SIGTERM'd at the end of tuner.fit().  Tune kills

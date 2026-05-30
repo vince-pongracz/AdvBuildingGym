@@ -282,7 +282,7 @@ def common_model_setup(
     )
     config.reporting(
         keep_per_episode_custom_metrics=True,  # RLlib default: False
-        metrics_num_episodes_for_smoothing=30,  # RLlib default: 100
+        metrics_num_episodes_for_smoothing=training_config.episode_return_mean_window,  # RLlib default: 100
     )
     config.framework(
         framework="torch",  # RLlib default

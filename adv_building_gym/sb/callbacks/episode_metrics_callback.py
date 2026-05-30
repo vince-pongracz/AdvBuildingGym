@@ -126,19 +126,3 @@ class SBEpisodeMetricsCallback(BaseCallback):
                 ep_str, env_idx, ep_length, episode_return, reward_rate,
                 "%.3f" % cum_E_kWh if cum_E_kWh is not None else "n/a",
             )
-
-    # Exposed so the checkpoint callback can read the most-recent reward_rate
-    # without parsing TensorBoard files.
-    @property
-    def last_reward_rate(self) -> float:
-        try:
-            return float(self.logger.name_to_value.get("rollout/reward_rate_last", -np.inf))
-        except Exception:
-            return float("-inf")
-
-    @property
-    def last_achieved_reward(self) -> float:
-        try:
-            return float(self.logger.name_to_value.get("rollout/achieved_reward_last", -np.inf))
-        except Exception:
-            return float("-inf")

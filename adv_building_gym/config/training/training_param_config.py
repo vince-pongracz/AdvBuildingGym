@@ -56,6 +56,11 @@ class TrainingParamConfig(LoggableConfig):
     # (no remote Learner actor). The driver's CPU then covers both driver and
     # learner duties, freeing one CPU for an extra EnvRunner.
     local_learner: bool = True
+    # Rolling window for `episode_return_mean` smoothing. Used by RLlib's
+    # `metrics_num_episodes_for_smoothing` on the Ray side and by the SB3
+    # best-by-metric checkpoint callback's deque, so both drivers score
+    # mean return over the same number of recent episodes.
+    episode_return_mean_window: int = 30
 
     ppo_episodes_per_iteration: int = 25
     ppo_minibatch_size: int = 128 # Rllib default

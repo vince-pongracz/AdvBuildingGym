@@ -147,11 +147,11 @@ ENERGY_SIGN_CONVENTION_HTML = (
     
     "<b>Sign convention</b><br>"
     "<b>Power (kW):</b><br>"
-    "  - positive = electricity drawn from the grid (consumption)<br>"
-    "  - negative = electricity fed back to the grid (generation / export).<br>"
-    
+    "  - positive = electricity fed back to the grid (generation / export)<br>"
+    "  - negative = electricity drawn from the grid (consumption).<br>"
+
     "<b>Cumulative Energy (kWh):</b> running sum of power over the episode.<br>"
-    "  - positive = more energy consumed than exported so far<br>"
-    "  - negative = more energy exported than consumed so far."
+    "  - positive = more energy exported than consumed so far<br>"
+    "  - negative = more energy consumed than exported so far."
     "</div>"
 )

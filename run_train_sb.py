@@ -110,8 +110,12 @@ def main() -> None:
     # local in-process singleton.
     RngService.initialize(trial.seed)
 
+    # Single exec_date drives both the run-dir name in sb_common_model_setup
+    # AND the eval-trajectories sub-run dir (so the TB layout matches Ray's
+    # exactly). Captured here so log_startup_banner shows the same stamp.
+    exec_date_dt = datetime.datetime.now()
     slurm, paths, train_vec, eval_vec, callback_list = sb_common_model_setup(
-        trial, cpu_only=cli_args.cpu,
+        trial, cpu_only=cli_args.cpu, exec_date=exec_date_dt,
     )
 
     device = "cpu" if slurm.num_gpus == 0 else "cuda"
@@ -143,7 +147,6 @@ def main() -> None:
         trial.metric, trial.num_envs,
     )
 
-    exec_date_dt = datetime.datetime.now()
     log_startup_banner(
         args=_trial_to_args_namespace(trial),
         env_config=trial.env_config,
@@ -154,7 +157,16 @@ def main() -> None:
         slurm_resources=slurm,
         run_name=Path(paths.model_dir).name,
         experiment_path=paths.model_dir,
-        storage_path=paths.model_dir,
+        # SB3 writes TB events under <run>/tb/, not at the run root, so the
+        # "this run only" launch line needs the subdir. The "all runs"
+        # comparison is the parent (= models/<trial>/sb3/<algo>/) so sibling
+        # runs across seeds appear side-by-side in TB.
+        tensorboard_log_path=paths.log_dir,
+        storage_path=str(Path(paths.model_dir).parent),
+        # SBEvalStateActionCallback writes the eval-trajectories sub-runs
+        # under ep_metrics/eval_trajectories/<stamp>_<jobid>/, mirroring
+        # Ray's layout — so the banner block is meaningful now.
+        eval_trajectories_path=os.path.abspath("ep_metrics/eval_trajectories"),
         seed=trial.seed,
         exec_date=exec_date_dt,
     )

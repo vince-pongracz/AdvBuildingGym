@@ -10,6 +10,7 @@ goes through gymnasium's ``get_wrapper_attr`` chain.
 
 from .episode_metrics_callback import SBEpisodeMetricsCallback
 from .best_checkpoint_callback import SBBestCheckpointCallback
+from .eval_state_action_callback import SBEvalStateActionCallback
 from .iter_timing_callback import SBIterTimingCallback, wrap_eval_callback_with_timer
 from .data_schedule_callback import make_data_schedule_callback
 from .reward_switch_callback import make_reward_switch_callback
@@ -19,6 +20,7 @@ from .statesource_schedule_callback import make_statesource_schedule_callback
 __all__ = [
     "SBEpisodeMetricsCallback",
     "SBBestCheckpointCallback",
+    "SBEvalStateActionCallback",
     "SBIterTimingCallback",
     "wrap_eval_callback_with_timer",
     "make_data_schedule_callback",

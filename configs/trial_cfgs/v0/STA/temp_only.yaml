@@ -101,12 +101,13 @@ rewards:
     harsh_penalty: -4.0
     soft_threshold_pct: 0.9
     recovery_steps: 3
-- class_name: ActionSmoothnessRewardV0
-  weight: 1.0
-  params:
-    n_steps: 16
-    mode: weighted
-    freq_exponent: 1.0
+# - class_name: ActionSmoothnessRewardV0
+#   weight: 1.0
+#   params:
+#     n_steps: 16
+#     mode: weighted
+#     freq_exponent: 1.0
+
 infra_schedule: null
 
 statesource_schedule: null

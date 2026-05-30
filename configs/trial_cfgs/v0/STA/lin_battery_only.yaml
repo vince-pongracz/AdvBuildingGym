@@ -121,12 +121,13 @@ rewards:
 - class_name: LongTermEconomicRewardV0
   weight: 1.0
   params: {}
-- class_name: ActionSmoothnessRewardV0
-  weight: 1.0
-  params:
-    n_steps: 16
-    mode: weighted
-    freq_exponent: 1.0
+# - class_name: ActionSmoothnessRewardV0
+#   weight: 1.0
+#   params:
+#     n_steps: 16
+#     mode: weighted
+#     freq_exponent: 1.0
+
 infra_schedule: null
 
 statesource_schedule: null

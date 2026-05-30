@@ -457,6 +457,7 @@ def main():
         storage_path=storage_path,
         seed=trial.seed,
         exec_date=exec_date_dt,
+        eval_trajectories_path=os.path.abspath("ep_metrics/eval_trajectories"),
     )
 
     logger.info("Starting tuner.fit() for: %s", run_name)

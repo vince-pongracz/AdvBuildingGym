@@ -18,9 +18,18 @@ Two modes:
            [--checkpoint <abs path>] \
            [-- --episodes 20 --plot-all]
 
+3. Run a snapshot locally without sbatch (foreground bash exec)::
+
+       python -m tools.snapshot.submit_snapshot \
+           --snapshot snapshots/<existing> \
+           --kind eval \
+           --local \
+           [-- --episodes 20]
+
 Submission injects ``SNAPSHOT_DIR``, ``SNAPSHOT_RUN_ID`` and
-``LIVE_REPO_ROOT`` via ``sbatch --export=``; the snapshot-aware
-wrappers in ``slurm_scripts/`` consume those env vars.
+``LIVE_REPO_ROOT`` via ``sbatch --export=`` (or directly into the
+child env in ``--local`` mode); the snapshot-aware wrappers in
+``slurm_scripts/`` consume those env vars.
 
 Outputs land under ``<snapshot>/runs/<kind>_<timestamp>/``.
 """
@@ -51,10 +60,12 @@ logger = logging.getLogger("submit_snapshot")
 
 # Mapping from --kind to (slurm wrapper basename, entry-point .py inside snapshot).
 KIND_SPECS: dict[str, tuple[str, str]] = {
-    "train":    ("slurm_train_ray.sh", "run_train_ray.py"),
-    "eval":     ("slurm_eval_ray.sh",  "run_eval_ray.py"),
-    "train-ma": ("slurm_train_ma.sh",  "rl_ma_train.py"),
-    "train-sb": ("slurm_train_sb.sh",  "run_train_sb.py"),
+    "train":        ("slurm_train_ray.sh",     "run_train_ray.py"),
+    "train-cpu":    ("slurm_train_ray_cpu.sh", "run_train_ray.py"),
+    "eval":         ("slurm_eval_ray.sh",      "run_eval_ray.py"),
+    "train-ma":     ("slurm_train_ma.sh",      "rl_ma_train.py"),
+    "train-sb":     ("slurm_train_sb.sh",      "run_train_sb.py"),
+    "train-sb-cpu": ("slurm_train_sb_cpu.sh",  "run_train_sb.py"),
 }
 
 
@@ -319,6 +330,40 @@ def _submit(cmd: list[str]) -> str:
     return m.group(1) if m else "?"
 
 
+def _build_local_cmd(plan: SubmissionPlan) -> tuple[list[str], dict[str, str]]:
+    """Build the bash invocation + env overrides for --local mode.
+
+    Mirrors what sbatch --export would have given the wrapper: SNAPSHOT_DIR,
+    SNAPSHOT_RUN_ID, LIVE_REPO_ROOT. The wrapper's #SBATCH directives are
+    ignored by bash, so the script runs inline with whatever resources the
+    current shell has.
+
+    SLURM_SUBMIT_DIR is also set here to REPO_ROOT. sbatch normally exports
+    this automatically (= the dir where sbatch was invoked); the wrappers
+    use ${SLURM_SUBMIT_DIR:-$PWD} to locate sibling helpers like
+    scratch_monitor.sh and print_env_info.py, and the $PWD fallback breaks
+    once snapshot_mode.sh cd's into the run dir. Setting it upfront keeps
+    the wrappers' path resolution consistent across sbatch and --local.
+    """
+    repo_root = str(REPO_ROOT.resolve())
+    env_overrides = {
+        "SNAPSHOT_DIR": str(plan.snapshot_dir.resolve()),
+        "SNAPSHOT_RUN_ID": plan.run_id,
+        "LIVE_REPO_ROOT": repo_root,
+        "SLURM_SUBMIT_DIR": repo_root,
+    }
+    cmd = ["bash", str(plan.wrapper_path), *plan.extra_args]
+    return cmd, env_overrides
+
+
+def _run_local(cmd: list[str], env_overrides: dict[str, str]) -> int:
+    """Exec the wrapper script in the current shell; stdio inherits."""
+    env = os.environ.copy()
+    env.update(env_overrides)
+    proc = subprocess.run(cmd, env=env, check=False)
+    return proc.returncode
+
+
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
@@ -374,8 +419,19 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Snapshot creation only: where to put the new snapshot dir.",
     )
     parser.add_argument(
+        "--local", action="store_true",
+        help="Run the wrapper script directly in this shell instead of "
+            "submitting it via sbatch. Snapshot resolution and run-dir setup "
+            "are still done; SNAPSHOT_DIR / SNAPSHOT_RUN_ID / LIVE_REPO_ROOT "
+            "are exported so the wrapper's snapshot-mode helper still kicks "
+            "in. Stdout/stderr stream straight to the console; the wrapper's "
+            "#SBATCH directives are inert under bash. --sbatch flags are "
+            "ignored in this mode.",
+    )
+    parser.add_argument(
         "--dry-run", action="store_true",
-        help="Print the sbatch command instead of running it.",
+        help="Print the sbatch command (or local bash command with --local) "
+            "instead of running it.",
     )
     # Everything after the first bare `--` becomes pass-through args. argparse
     # already supports REMAINDER, but we use parse_known_args so users don't
@@ -478,9 +534,14 @@ def main(argv: list[str] | None = None) -> int:
         if not args.dry_run and plan.seed_override is None:
             plan.run_dir.mkdir(parents=True, exist_ok=False)
 
-    # Phase 3: sbatch.
-    extra_sbatch = _shlex_split(args.sbatch)
-    cmd = _build_sbatch_cmd(plan, extra_sbatch_args=extra_sbatch, dry_run=args.dry_run)
+    # Phase 3: sbatch — or local bash exec when --local is set.
+    if args.local:
+        if args.sbatch:
+            logger.warning("--sbatch flags are ignored in --local mode: %s", args.sbatch)
+        local_cmd, local_env = _build_local_cmd(plan)
+    else:
+        extra_sbatch = _shlex_split(args.sbatch)
+        cmd = _build_sbatch_cmd(plan, extra_sbatch_args=extra_sbatch, dry_run=args.dry_run)
 
     logger.info("Submission plan:")
     logger.info("  snapshot dir : %s", plan.snapshot_dir)
@@ -493,6 +554,21 @@ def main(argv: list[str] | None = None) -> int:
     if plan.seed_override is not None:
         logger.info("  seed override: %d", plan.seed_override)
     logger.info("  pass-through : %s", " ".join(plan.extra_args) or "(none)")
+    logger.info("  mode         : %s", "local (bash)" if args.local else "sbatch")
+
+    if args.local:
+        if args.dry_run:
+            env_preview = " ".join(f"{k}={v}" for k, v in local_env.items())
+            print(f"{env_preview} {' '.join(local_cmd)}")
+            return 0
+        logger.info("Running locally — output streams to this terminal.")
+        rc = _run_local(local_cmd, local_env)
+        if rc != 0:
+            logger.error("Wrapper script exited with code %d", rc)
+        else:
+            logger.info("Wrapper script completed; outputs under %s", plan.run_dir)
+        print(plan.run_dir)
+        return rc
 
     if args.dry_run:
         print(" ".join(cmd))

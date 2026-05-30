@@ -78,36 +78,39 @@ def _section_invocation(seed: int, trial_path: str | None = None) -> list[Sectio
 
 
 def _section_tensorboard(
-    experiment_path: str,
-    storage_path: str,
-    exec_date: datetime.datetime | None,
+    tensorboard_log_path: str,
+    tensorboard_root: str,
+    *,
+    eval_trajectories_path: str | None = None,
+    exec_date: datetime.datetime | None = None,
 ) -> list[Section]:
-    eval_trajectories_root = os.path.abspath("ep_metrics/eval_trajectories")
     body = [
-        "  Training + eval curves share the same logdir; eval metrics are",
-        "  nested under evaluation/env_runners/ in the TB UI.",
+        "  Training + eval curves share the same logdir.",
         "",
         "  This run only:",
-        f"    ./start_tensorboard.sh {experiment_path}",
+        f"    ./start_tensorboard.sh {tensorboard_log_path}",
         "",
         "  All runs for this algorithm (compare across seeds):",
-        f"    ./start_tensorboard.sh {storage_path}",
-        "",
-        "  Eval trajectories (all runs):",
-        f"    ./start_tensorboard.sh {eval_trajectories_root}",
+        f"    ./start_tensorboard.sh {tensorboard_root}",
     ]
-    if exec_date is not None:
-        # Matches make_eval_state_action_cb_class: dir is
-        # ep_metrics/eval_trajectories/<YYYYmmdd_HHMMSS>__<SLURM_JOB_ID|pidNNN>/
-        # so that concurrent sbatches starting in the same second don't collide.
-        job_suffix = os.environ.get("SLURM_JOB_ID") or f"pid{os.getpid()}"
-        run_dir_name = f"{exec_date.strftime('%Y%m%d_%H%M%S')}_{job_suffix}"
-        run_eval_trajectories_path = os.path.join(eval_trajectories_root, run_dir_name)
+    if eval_trajectories_path is not None:
         body.extend([
             "",
-            "  Eval trajectories (this run only):",
-            f"    ./start_tensorboard.sh {run_eval_trajectories_path}",
+            "  Eval trajectories (all runs):",
+            f"    ./start_tensorboard.sh {eval_trajectories_path}",
         ])
+        if exec_date is not None:
+            # Matches make_eval_state_action_cb_class: dir is
+            # ep_metrics/eval_trajectories/<YYYYmmdd_HHMMSS>_<SLURM_JOB_ID|pidNNN>/
+            # so that concurrent sbatches starting in the same second don't collide.
+            job_suffix = os.environ.get("SLURM_JOB_ID") or f"pid{os.getpid()}"
+            run_dir_name = f"{exec_date.strftime('%Y%m%d_%H%M%S')}_{job_suffix}"
+            run_eval_trajectories_path = os.path.join(eval_trajectories_path, run_dir_name)
+            body.extend([
+                "",
+                "  Eval trajectories (this run only):",
+                f"    ./start_tensorboard.sh {run_eval_trajectories_path}",
+            ])
     return [("TENSORBOARD", body)]
 
 
@@ -289,16 +292,36 @@ def log_startup_banner(
     storage_path: str,
     seed: int,
     exec_date: datetime.datetime | None = None,
+    tensorboard_log_path: str | None = None,
+    eval_trajectories_path: str | None = None,
     write_to_disk: bool = True,
 ) -> None:
     """Log an organised startup banner.
 
     Sections are numbered automatically from their order in the list below;
     reordering or adding sections does not require touching any `[i/N]` label.
+
+    Args:
+        experiment_path: Per-run directory used by the EVAL section to
+            describe checkpoint paths.
+        storage_path: Parent of all runs for this algorithm; shown as the
+            "all runs (compare across seeds)" TB launch target.
+        tensorboard_log_path: TB events root for this run. Defaults to
+            ``experiment_path`` (correct for Ray, which writes events at
+            the run root); SB3 callers pass the ``tb/`` subdir.
+        eval_trajectories_path: Root dir of TB sub-runs written by the
+            Ray-side ``EvalStateActionCallback``. Pass ``None`` (default)
+            to skip the eval-trajectories block — SB3 has no equivalent
+            callback, so leaving it ``None`` keeps the banner honest.
     """
     sections: list[Section] = [
         *_section_invocation(seed, getattr(args, "load_config", None)),
-        *_section_tensorboard(experiment_path, storage_path, exec_date),
+        *_section_tensorboard(
+            tensorboard_log_path or experiment_path,
+            storage_path,
+            eval_trajectories_path=eval_trajectories_path,
+            exec_date=exec_date,
+        ),
         *_section_eval(args, env_config, experiment_path, seed),
         *_section_env_config(env_config, getattr(args, "trial_name", None)),
         *_section_training_setup(

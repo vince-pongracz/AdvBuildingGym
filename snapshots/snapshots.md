@@ -62,11 +62,76 @@ python -m tools.snapshot.make_snapshot \
 python -m tools.snapshot.submit_snapshot --snapshot snapshots/<existing>/ --kind train --seed 123
 python -m tools.snapshot.submit_snapshot --snapshot snapshots/<existing>/ --kind train --seed 456
 python -m tools.snapshot.submit_snapshot --snapshot snapshots/<existing>/ --kind eval  --seed 999 -- --episodes 10
+
+# 6. CPU-only training (no GPU partition request, --cpu pinned by the wrapper).
+#    Useful for smoke tests or when no GPU is allocated.
+python -m tools.snapshot.submit_snapshot --snapshot snapshots/<existing>/ --kind train-cpu
+python -m tools.snapshot.submit_snapshot --snapshot snapshots/<existing>/ --kind train-sb-cpu
+
+# 7. Run a snapshot in the current shell (no sbatch). Stdout/stderr stream
+#    straight to the terminal; the wrapper's #SBATCH directives are inert.
+python -m tools.snapshot.submit_snapshot \
+    --snapshot snapshots/<existing>/ --kind eval --local -- --episodes 5
 ```
 
-`--kind` ∈ `{train, eval, train-ma, train-sb}` selects the SLURM wrapper.
-Anything after `--` is forwarded verbatim to the entry script
-(`run_train_ray.py`, `run_eval_ray.py`, `rl_ma_train.py`, `run_train_sb.py`).
+`--kind` ∈ `{train, train-cpu, eval, train-ma, train-sb, train-sb-cpu}`
+selects the SLURM wrapper. Anything after `--` is forwarded verbatim to
+the entry script (`run_train_ray.py`, `run_eval_ray.py`, `rl_ma_train.py`,
+`run_train_sb.py`).
+
+### CPU-only kinds — `train-cpu` / `train-sb-cpu`
+
+The two `-cpu` kinds point at sibling SLURM wrappers
+(`slurm_train_ray_cpu.sh`, `slurm_train_sb_cpu.sh`) that:
+
+* **Drop** `#SBATCH --gres=gpu:...` so sbatch does not request a GPU.
+* **Set** `--time=24:00:00` (vs. the GPU wrappers' shorter default — CPU
+  runs are slower, so the default needs to be longer to make sense).
+* **Hard-code** `--cpu` on the python invocation, so the entry script
+  always picks the CPU-only execution path regardless of which trial YAML
+  is loaded or what defaults `argparse` would otherwise apply.
+* Are otherwise identical to the GPU wrappers — same snapshot-mode setup,
+  same scratch-monitor sampler, same logs in `slurm_logs/train/` (with
+  `-cpu-` in the filename for easy filtering).
+
+Use these when you want a deterministic CPU baseline, when no GPU is
+available, or when you want to keep a quick smoke-test path that does not
+contend for GPU partition slots.
+
+### `--local` — run in the current shell, no sbatch
+
+`--local` skips `sbatch` entirely and exec's the chosen wrapper script
+directly via `bash` in the current shell. Snapshot resolution, run-dir
+creation, seed override, checkpoint auto-discovery, and trial-path
+injection all behave exactly as in the sbatch flow — only the launch
+boundary changes:
+
+1. `SNAPSHOT_DIR`, `SNAPSHOT_RUN_ID`, `LIVE_REPO_ROOT`, and
+   `SLURM_SUBMIT_DIR` are placed directly into the child env (instead of
+   being passed through `sbatch --export=`), so
+   `slurm_scripts/util/snapshot_mode.sh` still detects snapshot mode and
+   extracts / cd's / symlinks identically. `SLURM_SUBMIT_DIR` is forced
+   to the live repo root so the wrappers' `${SLURM_SUBMIT_DIR:-$PWD}`
+   path resolution for sibling helpers (`scratch_monitor.sh`,
+   `print_env_info.py`, `filter_ray_shutdown_spam.awk`) keeps working
+   after `snapshot_mode.sh` cd's into the run dir — sbatch normally sets
+   this var itself, bash does not, so we mirror sbatch's behaviour.
+2. The wrapper's `#SBATCH` directives are inert under bash, so resource
+   sizing is whatever the current shell has — there is no allocation step.
+3. Stdout / stderr stream straight to the terminal (no `slurm_<jobid>.out/err`
+   files are written), and the submitter returns the wrapper's exit code.
+4. `--sbatch "..."` flags are ignored in this mode (the submitter logs a
+   warning if you supply any).
+
+Use `--local` for quick CPU smoke tests, interactive debugging, or when
+running on a node that does not have a SLURM controller reachable. The
+recommended pairing for a fast non-SLURM iteration is
+`--kind train-cpu --local` or `--kind eval --local`.
+
+**Conflict guard:** `--local` plays nicely with `--seed`, `--checkpoint`,
+`--note`, `--out`, `--dry-run`, and pass-through args. It is mutually
+unhelpful with cluster-only `--sbatch` flags; those are ignored with a
+warning.
 
 ### `--seed N` — per-run seed override
 
@@ -100,13 +165,18 @@ submitter rejects that combination up front.
 
 ## How it works
 
-`tools/snapshot/submit_snapshot.py` invokes `sbatch` with three env vars:
+`tools/snapshot/submit_snapshot.py` invokes `sbatch` (or `bash` under
+`--local`) with three env vars:
 
 | Variable | Purpose |
 |----------|---------|
 | `SNAPSHOT_DIR`    | absolute path of the snapshot dir |
-| `SNAPSHOT_RUN_ID` | unique per-submission id (e.g. `train_20260521_232358`) |
+| `SNAPSHOT_RUN_ID` | unique per-submission id (e.g. `train_20260521_232358`, `train_cpu_20260524_185655`, `train_sb_cpu_20260528_151019_seed42`) |
 | `LIVE_REPO_ROOT`  | absolute path of the live repo (so `plotting/` resolves) |
+
+In sbatch mode they are passed via `sbatch --export=`. In `--local` mode
+they are inserted into the child process's environment directly. From the
+wrapper's perspective the two paths are indistinguishable.
 
 The SLURM wrappers source `slurm_scripts/util/snapshot_mode.sh`. When
 `SNAPSHOT_DIR` is set it:
