@@ -91,7 +91,11 @@ def make_runtime_paths(trial: TrialConfig, run_name: str) -> SBRuntimePaths:
     so downstream tooling (TB launch scripts, checkpoint finders) can
     treat the two frameworks symmetrically.
     """
-    base = Path("models") / trial.trial_name / "sb3" / trial.algorithm / run_name
+    # Resolve to an absolute path so the startup banner emits full paths and
+    # TensorBoard picks up the event files (SB3 nests them under
+    # <log_dir>/<algo>_1/) regardless of the CWD from which
+    # start_tensorboard.sh is launched.
+    base = (Path("models") / trial.trial_name / "sb3" / trial.algorithm / run_name).resolve()
     base.mkdir(parents=True, exist_ok=True)
 
     paths = SBRuntimePaths(

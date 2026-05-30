@@ -183,7 +183,6 @@ automatically by `run_train_ray.py`.
 
 ```yaml
 common:
-  learning_rate: 3.0e-4
   seed: 42
   episode_lookback_horizon_steps: 120   # 10-hour temporal window; auto-raised to max(|hst.offsets|) if smaller
   max_episodes_to_run: 7000

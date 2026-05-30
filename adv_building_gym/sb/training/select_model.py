@@ -8,7 +8,6 @@ Algorithm mapping
 -----------------
 
 PPO (on-policy)
-    * ``learning_rate`` → ``learning_rate``
     * ``ppo_episodes_per_iteration × EPISODE_LENGTH / num_envs`` → ``n_steps``
       (SB3's ``n_steps`` is *per env*, so we divide by the VecEnv width
       to keep the same per-iteration batch as RLlib).
@@ -17,8 +16,6 @@ PPO (on-policy)
     * GAE λ pinned to 0.95 (matches RLlib config).
 
 SAC (off-policy)
-    * ``learning_rate`` → all three of ``learning_rate`` (actor / critic /
-      ent_coef share the same SB3 LR field).
     * ``sac_replay_batch_size`` → ``batch_size``.
     * ``sac_episodes_to_keep_in_replay_buffer × EPISODE_LENGTH`` → ``buffer_size``.
     * ``sac_learning_starts_after_n_episodes × EPISODE_LENGTH`` → ``learning_starts``.
@@ -98,7 +95,6 @@ def sb_select_model(
         "verbose": 1,
         "seed": seed,
         "device": device,
-        "learning_rate": training_config.learning_rate,
         "tensorboard_log": tensorboard_log,
         "policy_kwargs": dict(_DEFAULT_POLICY_KWARGS),
     }
@@ -123,9 +119,9 @@ def sb_select_model(
             gae_lambda=0.95,
         )
         logger.info(
-            "PPO built: n_steps=%d (per env), batch_size=%d, n_epochs=%d, lr=%g",
+            "PPO built: n_steps=%d (per env), batch_size=%d, n_epochs=%d",
             n_steps, training_config.ppo_minibatch_size,
-            training_config.ppo_num_epochs, training_config.learning_rate,
+            training_config.ppo_num_epochs,
         )
         return model
 
@@ -167,9 +163,9 @@ def sb_select_model(
         )
         logger.info(
             "SAC built: batch_size=%d, buffer_size=%d, learning_starts=%d, "
-            "train_freq=1, gradient_steps=%d, lr=%g",
+            "train_freq=1, gradient_steps=%d",
             training_config.sac_replay_batch_size, buffer_size, learning_starts,
-            gradient_steps, training_config.learning_rate,
+            gradient_steps,
         )
         return model
 

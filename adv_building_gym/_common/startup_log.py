@@ -168,21 +168,19 @@ def _section_training_setup(
     tpc = training_param_config
     if args.algorithm == "ppo":
         hyperparams = (
-            f"lr={tpc.learning_rate}  "
             f"episodes_per_iter={tpc.ppo_episodes_per_iteration}  "
             f"minibatch={tpc.ppo_minibatch_size}  "
             f"epochs={tpc.ppo_num_epochs}"
         )
     elif args.algorithm == "sac":
         hyperparams = (
-            f"lr={tpc.learning_rate}  "
             f"replay_batch={tpc.sac_replay_batch_size}  "
             f"days_in_buffer={tpc.sac_episodes_to_keep_in_replay_buffer}  "
             f"train_intensity={tpc.sac_training_intensity}  "
         )
 
     else:
-        hyperparams = f"lr={tpc.learning_rate}"
+        hyperparams = ""
 
     body = [
         f"  Algorithm       : {algo}  (new API stack)",

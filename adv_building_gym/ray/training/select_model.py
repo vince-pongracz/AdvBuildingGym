@@ -63,7 +63,7 @@ def select_model(
         # collected batch).  Smaller than train_batch_size_per_learner.
         ppo_batch_timesteps = training_config.ppo_episodes_per_iteration * episode_length
         config.training(
-            lr=training_config.learning_rate,  # RLlib default: 5e-5
+            # lr left at RLlib default: 5e-5
             train_batch_size_per_learner=ppo_batch_timesteps,  # RLlib default: 4000
             minibatch_size=training_config.ppo_minibatch_size,  # RLlib default: 128
             num_epochs=training_config.ppo_num_epochs,  # RLlib default: 30
@@ -90,12 +90,13 @@ def select_model(
         config.training(
             # NOTE VP 2026.02.11. : Actor critic methods SAC & PPO - blog
             # Link: https://joel-baptista.github.io/phd-weekly-report/posts/ac/
-            # actor_lr=training_config.learning_rate,  # LR of the policy network. RLlib default: 3e-5
-            # critic_lr=training_config.learning_rate,  # LR of the critic network. RLlib default: 3e-4
-            # alpha_lr=training_config.learning_rate,  # Influences weight of entropy -- and thus exploration. RLlib default: 3e-4
+            # actor_lr left at RLlib default 3e-5 (LR of the policy network)
+            # critic_lr left at RLlib default 3e-4 (LR of the critic network)
+            # alpha_lr left at RLlib default 3e-4 (weight of entropy -- exploration)
             # PrioritizedEpisodeReplayBuffer crashes on Ray 2.52.1 with
             # KeyError in sum-tree when priorities degenerate to zero.
             # Use uniform EpisodeReplayBuffer until the bug is fixed upstream.
+            # TODO VP 2026.05.29.: Verkaufspreis >= Kaufpreis / 0,85 -- continue here
             # Link: https://github.com/ray-project/ray/issues/50966
             replay_buffer_config={
                 "type": "EpisodeReplayBuffer",

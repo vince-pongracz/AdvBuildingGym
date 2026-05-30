@@ -46,7 +46,6 @@ env_meta:
 
 training_params:
   common:
-    learning_rate: 0.0003
     episode_lookback_horizon_steps: 120
     max_episodes_to_run: 1200
     clip_actions_to_env_bounds: true

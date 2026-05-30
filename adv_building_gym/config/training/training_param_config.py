@@ -31,7 +31,6 @@ class TrainingParamConfig(LoggableConfig):
     episode boundaries.
 
     Attributes:
-        learning_rate: Learning rate for optimiser(s).
         ppo_episodes_per_iteration: How many full episodes PPO collects
             before one policy update (on-policy batch, in episode units).
         ppo_minibatch_size: SGD mini-batch size within each PPO epoch
@@ -47,7 +46,6 @@ class TrainingParamConfig(LoggableConfig):
             Link: https://arxiv.org/abs/1802.09477
     """
 
-    learning_rate: float = 3e-4
     episode_lookback_horizon_steps: int = 120
     seed: int = 42
     max_episodes_to_run:int = 10000

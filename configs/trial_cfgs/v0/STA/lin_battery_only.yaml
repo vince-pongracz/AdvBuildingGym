@@ -34,7 +34,6 @@ env_meta:
 
 training_params:
   common:
-    learning_rate: 0.0003
     episode_lookback_horizon_steps: 120
     max_episodes_to_run: 7000
     clip_actions_to_env_bounds: true
@@ -120,13 +119,6 @@ rewards:
     recovery_steps: 3
 - class_name: LongTermEconomicRewardV0
   weight: 1.0
-  params: {}
-# - class_name: ActionSmoothnessRewardV0
-#   weight: 1.0
-#   params:
-#     n_steps: 16
-#     mode: weighted
-#     freq_exponent: 1.0
 
 infra_schedule: null
 
