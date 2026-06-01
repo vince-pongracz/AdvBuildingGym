@@ -219,15 +219,11 @@ There is no mechanism to enforce or validate this ordering. A new component that
 
 All components read from and write to a shared `self.state` OrderedDict. There is no ownership model -- any infrastructure or state source can overwrite any key. This makes it difficult to reason about state changes and creates implicit coupling between components that share state keys (e.g., both `HP` and `BuildingHeatLoss` write to `temp_in_norm`).
 
-### 6.3 RngService Singleton
-
-`utils/seed_provider.py:33` implements a singleton pattern with `ClassVar`. The `get()` method auto-initializes if the instance is `None`, which could cause different seeds across Ray workers if they auto-initialize independently.
-
-### 6.4 Config/Component Coupling
+### 6.3 Config/Component Coupling
 
 `env_config.py` imports all concrete infrastructure, statesource, and reward classes at module level (lines 11-21). This means importing the config module forces loading the entire device tree, even if only the dataclass fields are needed. This also causes the circular dependency documented in section 2.3.
 
-### 6.5 No Controller Interface
+### 6.4 No Controller Interface
 
 The four controllers (`PIDController`, `PIController`, `MPCController`, `FuzzyController`) have no shared abstract base class. Each independently implements `predict()` with slightly different signatures and return conventions. Adding a new controller or swapping controllers requires knowledge of each implementation's API quirks.
 

@@ -12,7 +12,6 @@ from adv_building_gym.components.statesources import StateSource
 from adv_building_gym.components.rewards import RewardFunction, RewardAggregator, SumRewardAggregator
 from adv_building_gym.components.infrastructure import Infrastructure
 
-from adv_building_gym._common.rng_service import RngService
 from adv_building_gym._common.warning_filters import setup_warning_filters
 from adv_building_gym._common.constants import SECONDS_PER_HOUR
 from adv_building_gym.core.data_variant import DataVariantProvider
@@ -85,10 +84,10 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
                 to an empty combinator (no per-episode CSV swapping).
             reward_aggregator: Optional aggregation strategy. Defaults to
                 ``SumRewardAggregator`` (matches previous behaviour).
-            instance_id: Caller id for the RngService registry. Each env
-                instance must be unique to keep per-worker seed streams
-                independent. Falls back to ``"AdvBuildingGym"`` for
-                single-env paths.
+            instance_id: Human-readable identifier for this env instance
+                (e.g. ``AdvBuildingGym_w<worker>_v<vector>`` from the
+                env_creator), used for logging. Per-env seeding is handled
+                by ``reset(seed=...)``, not this id.
             render_mode: Gymnasium render mode (currently unused).
         """
 
@@ -109,16 +108,14 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         self._price_tracker = PriceTracker(control_step_s=env_config.CONTROL_STEP)
         self._raw_state_collector = RawStateCollector()
 
-        # Each env instance is a distinct caller in the RngService registry, keyed
-        # by instance_id (worker_index + vector_index passed by env_creator). That
-        # gives every worker its own deterministic seed chain — independent of
-        # which worker's RPC reaches the actor first. Falls back to "AdvBuildingGym"
-        # for single-env paths (eval, tests) where there is no ambiguity.
-        # Gymnasium's reset(seed=...) contract overrides this further down.
-        self._rng_caller_id: str = instance_id or "AdvBuildingGym"
-        self._rng: np.random.Generator = np.random.default_rng(
-            RngService.get().get_random(self._rng_caller_id)
-        )
+        # Provisional generator for the construct→first-reset window only. The
+        # authoritative per-env seed arrives via the first reset(seed=...):
+        # RLlib (config.debugging seed → trial.seed + worker_index) and SB3
+        # (model.set_random_seed → env.seed → seed+i) both override this. All
+        # in-env randomness (variant/day selection, statesource offsets) flows
+        # through self._rng, so it is reproducible per worker once seeded.
+        self.instance_id: str = instance_id or "AdvBuildingGym"
+        self._rng: np.random.Generator = np.random.default_rng()
 
         # Build observation and action spaces from components.
         # Time-varying signals are normalised to small ranges; raw scale
@@ -178,6 +175,18 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         # When True, step()/reset() include a deep copy of the full named state
         # dict in info["state"]. Expensive in memory — enable for evaluation only.
         self.log_full_info: bool = False
+
+        # When True, this env is an evaluation runner. In eval mode every reset()
+        # draws a *fresh random* data variant (overriding the combinator's
+        # episode_count // swap_every_n_episodes cadence) so each episode of an
+        # eval round samples an independent (variant, day) pair — giving broad,
+        # unbiased coverage rather than 5 consecutive episodes on one variant.
+        # Set by the env creators from the eval env-config override.
+        self.eval_mode: bool = False
+
+        # Tracks whether this env has consumed an explicit reset seed yet. Used
+        # by _maybe_reseed to seed the RNG exactly once in eval mode (see there).
+        self._has_seeded: bool = False
 
         lines: list = [
             "AdvBuildingGym created!",
@@ -294,17 +303,36 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         reset per env runner). Subsequent resets must NOT recreate the
         RNG — that would destroy the deterministic sequence.
 
+        Eval-mode exception: RLlib's SingleAgentEnvRunner samples eval by
+        ``num_episodes``, which sets ``_needs_initial_reset=True`` after every
+        eval round and therefore re-hands the env the SAME fixed ``self._seed``
+        at the start of each round (single_agent_env_runner.py: the
+        ``seed=self._seed if self._needs_initial_reset`` reset). Honouring that
+        every round would restart ``self._rng`` from an identical state, so each
+        eval round would replay the exact same (variant, day) sequence. In eval
+        mode we therefore seed ONCE and then ignore further seeds, letting the
+        RNG advance so every eval round samples fresh data. The run stays
+        reproducible across reruns (same first seed → same advancing stream).
+        Training is unaffected — it samples by timesteps and only ever seeds on
+        its first reset. The standalone eval script (run_eval_ray) does not set
+        eval_mode, so its per-episode seeding is preserved.
+
         Note: ``random.seed`` / ``np.random.seed`` (global RNGs) are NOT
-        touched here. Components must use ``self._rng`` or
-        ``RngService.get()`` instead — the global state is shared across
-        Ray workers and would interfere across reset calls.
+        touched here. Components must draw from the env rng instead — it is
+        published on the shared info channel as ``info["_rng"]`` each reset
+        (see ``_populate_initial_observations``) so statesources get the same
+        deterministic, per-worker stream without touching global state.
         """
-        super().reset(seed=seed)
-        if seed is not None:
+        apply_seed = seed is not None and not (self.eval_mode and self._has_seeded)
+        super().reset(seed=seed if apply_seed else None)
+        if apply_seed:
             self._rng = np.random.default_rng(seed)
+            self._has_seeded = True
 
     def _select_variant(self, options: dict | None) -> dict[str, str] | None:
-        variant = self._variant_manager.select_variant(options, self._rng)
+        variant = self._variant_manager.select_variant(
+            options, self._rng, eval_mode=self.eval_mode,
+        )
         if variant is not None:
             self.apply_data_variant(variant)
         return variant
@@ -330,6 +358,10 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
 
     def _populate_initial_observations(self) -> None:
         """Let statesources and infras publish their initial observations."""
+        # Publish the env rng on the shared channel so components that need
+        # per-episode randomness (e.g. InsideTemperature's initial offset) draw
+        # from the same deterministic, per-worker stream as variant/day selection.
+        self._component_info["_rng"] = self._rng
         for ds in self.statesources:
             ds.reset(states=self.state, info=self._component_info)
         for infr in self.infras:
@@ -404,6 +436,7 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
             action, reward, reward_breakdown, max_reward_step,
             total_power_kW, power_breakdown,
         )
+
         return (
             {k: np.array(v, copy=True) for k, v in self.state.items()},
             reward,
@@ -496,6 +529,11 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
         return False
 
     def _compute_rewards(self, action) -> tuple[float, dict[str, float], float]:
+        # Fresh per-step diagnostics channel — reward functions populate it
+        # (e.g. saturation / clip flags) and the EpisodeMetricsCallback sums
+        # each key across the episode for TensorBoard. Cleared here so values
+        # never leak from the previous step's _component_info.
+        self._component_info["reward_diagnostics"] = {}
         return self._reward_aggregator.aggregate(
             self.reward_functors, action, self.state, self._component_info,
         )
@@ -525,6 +563,7 @@ class AdvBuildingGym(gym.Env, DataVariantProvider):
             "reward": reward,
             "reward_breakdown": reward_breakdown,
             "max_reward_step": max_reward_step,
+            "reward_diagnostics": self._component_info.get("reward_diagnostics", {}),
             "cum_E_kWh": self._energy_tracker.cum_E_kWh,
             "cum_price_EUR": self._price_tracker.cum_price_EUR,
             "net_power_kW": total_power_kW,

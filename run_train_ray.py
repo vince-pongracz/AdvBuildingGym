@@ -27,10 +27,9 @@ from ray.tune.registry import register_env
 
 from adv_building_gym.ray.utils.warning_filters import setup_warning_filters
 from adv_building_gym.config.trial_config import TrialConfig
-from adv_building_gym.ray.env_creator import adv_building_env_creator
+from adv_building_gym.ray.env_creator import adv_building_env_creator, merge_env_context
 from adv_building_gym.ray.training import common_model_setup, select_model
 from adv_building_gym._common.json_encoder import CustomJSONEncoder
-from adv_building_gym._common.rng_service import RngService
 from adv_building_gym._common.resource_check_util import SlurmResources
 from adv_building_gym.ray.utils.ray_utils import make_trial_dirname_creator
 from adv_building_gym._common.startup_log import log_startup_banner
@@ -115,8 +114,13 @@ def _trial_to_args_namespace(trial: TrialConfig) -> Namespace:
 # Ray initialisation
 # ---------------------------------------------------------------------------
 
-def _init_ray(seed: int, cpu_only: bool = False) -> SlurmResources:
-    """Resolve SLURM resources, init Ray, and bring up the RngService actor."""
+def _init_ray(cpu_only: bool = False) -> SlurmResources:
+    """Resolve SLURM resources and init Ray.
+
+    Per-env seeding is handled by RLlib (``config.debugging(seed=...)`` →
+    ``trial.seed + worker_index`` applied on each env's first reset), so no
+    central RNG service is needed.
+    """
     slurm_cpus = os.environ.get("SLURM_CPUS_PER_TASK")
     cpus = int(slurm_cpus) if slurm_cpus and slurm_cpus.isdigit() else 2
 
@@ -160,10 +164,6 @@ def _init_ray(seed: int, cpu_only: bool = False) -> SlurmResources:
         logging_level=logging.INFO,
     )
 
-    # Centralised RNG service as a Ray Named Actor. Must be initialised
-    # AFTER ray.init() so the actor can be deployed.
-    RngService.initialize(seed)
-
     return slurm_resources
 
 
@@ -184,7 +184,6 @@ def _build_algo_config(args, trial: TrialConfig, slurm_resources, exec_date_dt):
         slurm_resources=slurm_resources,
         env_config=trial.env_config,
         metrics_base_dir="ep_metrics",
-        data_combinator=trial.data_combinator,
         log_trajectories=trial.log_trajectories,
         reward_schedule_manager=trial.reward_manager,
         infra_combinator=trial.infra_combinator,
@@ -418,7 +417,7 @@ def main():
     args = _trial_to_args_namespace(trial)
     args.metric = metric  # banner uses the resolved metric
 
-    slurm_resources = _init_ray(trial.seed, cpu_only=cli_args.cpu)
+    slurm_resources = _init_ray(cpu_only=cli_args.cpu)
 
     exec_date_dt = datetime.datetime.now()
     exec_date = exec_date_dt.strftime("%Y%m%d_%H%M%S")
@@ -427,13 +426,14 @@ def main():
     os.makedirs(storage_path, exist_ok=True)
 
     env_creator_config = {
+        "seed": trial.seed,
         "env_config": trial.env_config,
         "data_combinator": trial.data_combinator,
         "reward_schedule_manager": trial.reward_manager,
     }
     register_env(
         "AdvBuilding",
-        lambda cfg: adv_building_env_creator({**env_creator_config, **cfg}),
+        lambda cfg: adv_building_env_creator(merge_env_context(env_creator_config, cfg)),
     )
 
     _, algo_cfg_param_space = _build_algo_config(args, trial, slurm_resources, exec_date_dt)

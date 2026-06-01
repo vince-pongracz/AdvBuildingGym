@@ -137,7 +137,7 @@ class BatteryTremblay(Infrastructure):
         self.B = B
         self.R_cell = R_cell
 
-        # Cell configuration (NsNp topology)
+        # Cell configuration (NsNp topology) -- N_series serial, N_parallel parallel circuit of cells
         self.n_series = n_series
         self.n_parallel = n_parallel
 
@@ -178,8 +178,8 @@ class BatteryTremblay(Infrastructure):
             action_spaces["a_battery"] = Box(low=-1, high=1, shape=(1,), dtype=np.float32)
 
         # States
-        if "s_battery_pct" not in state_spaces.keys():
-            state_spaces["s_battery_pct"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
+        if "s_battery_soc" not in state_spaces.keys():
+            state_spaces["s_battery_soc"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
 
         # Raw battery capacity (kWh) — constant hardware parameter.
         if "ctxt_battery_capacity_kWh" not in state_spaces.keys():
@@ -348,7 +348,7 @@ class BatteryTremblay(Infrastructure):
     def update_state(self, states: Dict, info=None) -> None:
         super().update_state(states, info)
         # Ensure float32 dtype for all updates
-        states["s_battery_pct"][0] = np.float32(self.soc)
+        states["s_battery_soc"][0] = np.float32(self.soc)
         states["ctxt_battery_capacity_kWh"][0] = np.float32(self.max_cap_kWh)
 
     def reset(self, states: Dict, info=None) -> None:

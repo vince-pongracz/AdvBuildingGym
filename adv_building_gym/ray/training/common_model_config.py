@@ -17,7 +17,6 @@ from adv_building_gym.config.env.env_config import EnvConfig
 from ray.rllib.connectors.env_to_module import FlattenObservations
 
 from adv_building_gym.ray.callbacks import (
-    create_data_schedule_on_train_result_cb,
     create_infra_schedule_on_train_result_cb,
     create_iter_timing_on_train_result_cb,
     create_reward_switch_on_train_result_cb,
@@ -31,7 +30,6 @@ from adv_building_gym.ray.callbacks.statesource_schedule_callback import (
 from adv_building_gym.config.training.exploration_reset import ExplorationResetConfig
 from adv_building_gym.config.rewards.reward_schedule_manager import RewardScheduleManager, RewardScheduleMode
 from adv_building_gym.config.training.training_param_config import TrainingParamConfig
-from adv_building_gym.config.data.data_combinator import DataCombinator
 from adv_building_gym.config.env.infra_combinator import InfraCombinator
 from adv_building_gym.config.env.statesource_combinator import StatesourceCombinator
 from adv_building_gym._common.resource_check_util import ResourceAllocation, SlurmResources, validate_resource_allocation
@@ -56,7 +54,6 @@ def register_callbacks(
     config: AlgorithmConfig,
     num_env_runners: int,
     metrics_base_dir: str = "ep_metrics",
-    data_combinator: DataCombinator | None = None,
     log_trajectories: bool = False,
     reward_schedule_manager: RewardScheduleManager | None = None,
     infra_combinator: InfraCombinator | None = None,
@@ -72,17 +69,16 @@ def register_callbacks(
     all algorithm-specific settings are already applied before callbacks
     are wired up.
 
+    Data-variant selection is intentionally not a callback here — it is
+    env-side (see :mod:`adv_building_gym.core._data_variant_manager`).
+
     Args:
         config: Algorithm config object to register callbacks on.
         metrics_base_dir: Base directory for episode metrics.
-        data_combinator: DataCombinator for data variant scheduling.
         log_trajectories: Save per-step trajectory JSON during evaluation.
         reward_schedule_manager: Optional reward schedule manager.
         infra_combinator: Optional infrastructure schedule combinator.
     """
-    if data_combinator is None:
-        data_combinator = DataCombinator()
-
     # Create callback classes for episode metrics and (optionally) trajectory logging.
     # Each factory returns a configured RLlibCallback subclass.
     # Link: https://docs.ray.io/en/latest/rllib/rllib-callback.html
@@ -110,19 +106,18 @@ def register_callbacks(
         callback_classes.append(trajectory_class)
         logger.info("Trajectory logging enabled: per-step trajectory JSON will be saved for each episode.")
 
-    # on_train_result callables — both data variant scheduling and reward
-    # switching run at iteration boundaries.  RLlib accepts a single
-    # on_train_result callable, so compose them when both are active.
+    # on_train_result callables run at iteration boundaries. RLlib accepts a
+    # single on_train_result callable, so compose them when several are active.
+    #
+    # NOTE: the data-variant schedule is intentionally NOT wired here. Variant
+    # selection is fully env-side (AdvBuildingGym.reset -> DataVariantManager):
+    # each runner picks its variant from episode_count // swap_every_n_episodes
+    # (training) or a fresh random draw (eval). The old iteration-boundary push
+    # was overwritten by the very next reset(), so it had no effect — see
+    # core/_data_variant_manager.py.
     on_train_result_fns = [
         create_iter_timing_on_train_result_cb(),
-        create_data_schedule_on_train_result_cb(
-            data_combinator, num_env_runners=num_env_runners,
-        ),
     ]
-    logger.info(
-        "DataScheduleCallback: swap_every_n_episodes=%d (num_env_runners=%d), %d variants",
-        data_combinator.swap_every_n_episodes, num_env_runners, len(data_combinator.variants),
-    )
 
     if (reward_schedule_manager is not None
             and reward_schedule_manager.mode is not RewardScheduleMode.OFF):
@@ -188,7 +183,6 @@ def common_model_setup(
     training_config: TrainingParamConfig,
     env_config: EnvConfig,
     metrics_base_dir: str = "ep_metrics",
-    data_combinator: DataCombinator | None = None,
     log_trajectories: bool = False,
     reward_schedule_manager: RewardScheduleManager | None = None,
     infra_combinator: InfraCombinator | None = None,
@@ -218,18 +212,16 @@ def common_model_setup(
         config: Algorithm config object (e.g., PPOConfig instance)
         slurm_resources: SLURM-allocated CPU/GPU resources
         metrics_base_dir: Base directory for episode metrics (default: "ep_metrics")
-        data_combinator: DataCombinator for iteration-aligned variant
-            scheduling via DataScheduleCallback (Approach D1). An empty
-            DataCombinator() acts as a no-op (no variant swapping).
         log_trajectories: When True, save full per-step trajectory JSON
             during evaluation episodes (via episode callback).
+
+    Note:
+        Data-variant selection is env-side (the combinator is wired to the
+        envs by the env creator); there is no data-schedule callback here.
 
     Returns:
         Configured algorithm config
     """
-    if data_combinator is None:
-        data_combinator = DataCombinator()
-
     # Resource allocation:
     # - local_learner=True (default): num_learners=0, Learner runs in the driver
     #   process. Driver's 1 CPU covers both, no separate learner CPU reservation.
@@ -300,6 +292,8 @@ def common_model_setup(
         num_gpus_per_learner=num_gpus_per_learner,
         num_cpus_per_learner=num_cpus_per_learner,
     )
+    
+    config.training(gamma=training_config.gamma) # RLlib default: 0.99
     # Sampling actions (querying the env, using the policy, sample trajectories) -- no GPU needed
     # Per-key history stacking is handled inside HistoryWrapper (env wrapper);
     # the pipeline here only needs FlattenObservations and the default
@@ -344,8 +338,11 @@ def common_model_setup(
     # Evaluation EnvRunners always get log_full_info=True so step() includes
     # a deep copy of named state in info["state"] — needed by the eval
     # trajectory callback (raw + normalised + actions) and trajectory logging.
+    # eval_mode=True makes each eval episode draw a fresh random data variant
+    # (independent (variant, day) per episode) instead of following the
+    # training swap cadence — see core/_data_variant_manager.select_variant.
     # Training EnvRunners are unaffected (no extra memory overhead).
-    eval_env_config = {"log_full_info": True}
+    eval_env_config = {"log_full_info": True, "eval_mode": True}
 
     # evaluation_interval > 1 means the `evaluation/env_runners/` keys are
     # absent from results on non-eval iterations.  Tune's strict metric check
@@ -373,7 +370,6 @@ def common_model_setup(
         config,
         num_env_runners=num_env_runners,
         metrics_base_dir=metrics_base_dir,
-        data_combinator=data_combinator,
         log_trajectories=log_trajectories,
         reward_schedule_manager=reward_schedule_manager,
         infra_combinator=infra_combinator,

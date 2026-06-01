@@ -25,7 +25,7 @@ class BatteryTargetRewardV0(RewardFunction):
         self.max_reward_in_step = 0.0
 
     def get_reward(self, actions, states, info: dict | None = None) -> tuple[float, float]:
-        soc = float(states["s_battery_pct"][0])
+        soc = float(states["s_battery_soc"][0])
 
         if self.min_pct <= soc <= self.max_pct:
             return 0.0, 0.0

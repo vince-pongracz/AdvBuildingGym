@@ -227,27 +227,27 @@ def make_episode_metrics_cb_class(
             # Log cumulative energy consumption
             if cum_E_kWh is not None:
                 metrics_logger.log_value("cum_E_kWh", cum_E_kWh, reduce="mean",
-                                         window=_WITHIN_ITER_WINDOW, clear_on_reduce=True)
+                                        window=_WITHIN_ITER_WINDOW, clear_on_reduce=True)
                 metrics_logger.log_value("cum_E_kWh_min", cum_E_kWh, reduce="min",
-                                         window=_WITHIN_ITER_WINDOW, clear_on_reduce=True)
+                                        window=_WITHIN_ITER_WINDOW, clear_on_reduce=True)
                 metrics_logger.log_value("cum_E_kWh_max", cum_E_kWh, reduce="max",
-                                         window=_WITHIN_ITER_WINDOW, clear_on_reduce=True)
+                                        window=_WITHIN_ITER_WINDOW, clear_on_reduce=True)
 
             # Log cumulative electricity cost (positive = money spent)
             if cum_price_EUR is not None:
                 metrics_logger.log_value("cum_price_EUR", cum_price_EUR, reduce="mean",
-                                         window=_WITHIN_ITER_WINDOW, clear_on_reduce=True)
+                                        window=_WITHIN_ITER_WINDOW, clear_on_reduce=True)
                 metrics_logger.log_value("cum_price_EUR_min", cum_price_EUR, reduce="min",
-                                         window=_WITHIN_ITER_WINDOW, clear_on_reduce=True)
+                                        window=_WITHIN_ITER_WINDOW, clear_on_reduce=True)
                 metrics_logger.log_value("cum_price_EUR_max", cum_price_EUR, reduce="max",
-                                         window=_WITHIN_ITER_WINDOW, clear_on_reduce=True)
+                                        window=_WITHIN_ITER_WINDOW, clear_on_reduce=True)
 
             # Log per-component reward breakdown for TensorBoard.
             # Appears under env_runners/reward/<name> (training) and
             # evaluation/env_runners/reward/<name> (eval).
             for reward_key, comp_total in reward_component_totals.items():
                 metrics_logger.log_value(f"reward/{reward_key}", comp_total, reduce="mean",
-                                         window=_WITHIN_ITER_WINDOW, clear_on_reduce=True)
+                                        window=_WITHIN_ITER_WINDOW, clear_on_reduce=True)
 
             episode_id: str = episode.id_[:6]
             episode_num_str = str(episode_count) if episode_count is not None else "?"

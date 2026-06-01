@@ -31,7 +31,7 @@ class BatteryLinear(Infrastructure):
         Reward-related concepts (the (min_pct, max_pct) operating band, any
         target SoC setpoint) live on the reward side, not on the battery.
         BatteryTargetReward owns ``min_pct`` / ``max_pct`` as constructor
-        arguments and reads ``s_battery_pct`` from the obs.  An alternative
+        arguments and reads ``s_battery_soc`` from the obs.  An alternative
         we considered (Option B) was to drive the band from a CSV schedule —
         each row gives a (min, max) pair, allowing the band to vary over
         time (e.g. wider during the day, narrower overnight).  We chose the
@@ -87,14 +87,14 @@ class BatteryLinear(Infrastructure):
         if "a_battery" not in action_spaces.keys():
             action_spaces["a_battery"] = Box(low=-1, high=1, shape=(1,), dtype=np.float32)
 
-        if "s_battery_pct" not in state_spaces.keys():
-            state_spaces["s_battery_pct"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
+        if "s_battery_soc" not in state_spaces.keys():
+            state_spaces["s_battery_soc"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
 
-        # Raw battery capacity (kWh) — constant hardware parameter.
+        # Raw battery capacity (kWh) and power (kW) — constant hardware parameters
         if "ctxt_battery_capacity_kWh" not in state_spaces.keys():
-            state_spaces["ctxt_battery_capacity_kWh"] = Box(
-                low=0, high=np.inf, shape=(1,), dtype=np.float32
-            )
+            state_spaces["ctxt_battery_capacity_kWh"] = Box(low=0, high=np.inf, shape=(1,), dtype=np.float32)
+        if "ctxt_battery_power_kW" not in state_spaces.keys():
+            state_spaces["ctxt_battery_power_kW"] = Box(low=0, high=np.inf, shape=(1,), dtype=np.float32)
 
         return state_spaces, action_spaces
 
@@ -138,8 +138,9 @@ class BatteryLinear(Infrastructure):
 
     def update_state(self, states: Dict, info=None) -> None:
         super().update_state(states, info)
-        states["s_battery_pct"][0] = np.float32(self.soc)
+        states["s_battery_soc"][0] = np.float32(self.soc)
         states["ctxt_battery_capacity_kWh"][0] = np.float32(self.max_cap_kWh)
+        states["ctxt_battery_power_kW"][0] = np.float32(self.max_power_kW)
 
     def reset(self, states: Dict, info=None) -> None:
         """Re-initialise transient state at the start of every episode.

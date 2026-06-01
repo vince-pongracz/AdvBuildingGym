@@ -13,7 +13,7 @@ states:
   # Groups of state keys that share a single plot.
   # Each entry is a list of keys rendered together.
   grouped_keys:
-    - [s_battery_pct, s_battery_target_pct]
+    - [s_battery_soc, s_battery_target_pct]
     - [s_temp_in_norm, s_desired_temp_in_norm, s_temp_out_norm]
     - [ctxt_ev_schedule_start_soc, ctxt_ev_schedule_target_soc]
     - [s_ev_soc, s_ev_target_soc]

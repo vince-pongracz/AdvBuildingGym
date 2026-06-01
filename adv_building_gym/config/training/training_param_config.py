@@ -49,6 +49,7 @@ class TrainingParamConfig(LoggableConfig):
     episode_lookback_horizon_steps: int = 120
     seed: int = 42
     max_episodes_to_run:int = 10000
+    gamma: float = 0.99
     clip_actions_to_env_bounds: bool = True
     # When True, num_learners=0 → the Learner runs inside the driver process
     # (no remote Learner actor). The driver's CPU then covers both driver and

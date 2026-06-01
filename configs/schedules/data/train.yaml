@@ -7,9 +7,10 @@ shuffle: true
 
 # Variant cycling settings
 swap_every_n_episodes: 5
-# Total episodes (summed across all env_runners) per data variant window.
-# Effective threshold is max(swap_every_n_episodes, num_env_runners); see
-# adv_building_gym/callbacks/_swap_trigger.py.
+# Per-env episode window: each env advances its own variant every N episodes it
+# completes (cycle mode = deterministic episode_count // N; see
+# adv_building_gym/config/data/data_combinator.py). This is env-local — there is
+# no cross-worker callback coordinating data variants.
 
 mode: cycle      # "cycle" (round-robin each variant) or "random" (pick variants randomly)
 day: random      # "random", "each", or a date string like "2025-03-15"

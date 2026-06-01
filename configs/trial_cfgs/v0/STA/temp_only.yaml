@@ -14,7 +14,7 @@ env_meta:
   hst_env_wrapper:
     enabled: true
     tracked_keys:
-    - s_battery_pct
+    - s_battery_soc
     - s_ev_soc
     - s_temp_in_norm
     - s_temp_out_norm
@@ -37,6 +37,7 @@ training_params:
     episode_lookback_horizon_steps: 120
     max_episodes_to_run: 7000
     clip_actions_to_env_bounds: true
+    gamma: 0.99
   ppo:
     episodes_per_iteration: 10
     minibatch_size: 64
@@ -100,12 +101,6 @@ rewards:
     harsh_penalty: -4.0
     soft_threshold_pct: 0.9
     recovery_steps: 3
-# - class_name: ActionSmoothnessRewardV0
-#   weight: 1.0
-#   params:
-#     n_steps: 16
-#     mode: weighted
-#     freq_exponent: 1.0
 
 infra_schedule: null
 

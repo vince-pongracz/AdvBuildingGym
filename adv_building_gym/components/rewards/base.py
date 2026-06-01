@@ -34,6 +34,23 @@ class RewardFunction(Serializable):
             is disconnected).
         """
         raise NotImplementedError()
+    
+    def get_01_reward(self, actions, states, info: dict | None = None) -> tuple[float, float]:
+        """Transform the reward to a 0-1 scale.
+
+        Args:
+            actions: Dictionary of actions taken by the agent.
+            states: Dictionary of current environment states.
+            info: Shared inter-component dict with raw physical values
+                (e.g. net_power_kW, EV charger params). Passed from the
+                environment's ``_component_info``.
+
+        Returns:
+            Tuple of (reward, max_reward_for_this_step).
+            The max reward may be state-dependent (e.g. 0 when the EV
+            is disconnected).
+        """
+        raise NotImplementedError()
 
     def on_reset(self, states, info: dict | None = None) -> None:
         """Called once per episode after the env has populated initial

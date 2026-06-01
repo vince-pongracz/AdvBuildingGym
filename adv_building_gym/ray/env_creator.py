@@ -20,12 +20,35 @@ from adv_building_gym.core.wrappers import FlattenAction, wrap_action_space
 
 logger = logging.getLogger(__name__)
 
-# Per-process counter for the vector_index portion of instance_id. RLlib's new
-# API stack passes a plain dict (not EnvContext) to env_creator, so worker_index
-# and vector_index are unavailable. PID is unique per Ray remote worker; this
-# counter disambiguates multiple envs created within the same process (when
-# num_envs_per_env_runner > 1).
+# Fallback counter for the multi-agent creator when no EnvContext metadata
+# is available (local / eval / test path).
 _env_instance_counter = itertools.count()
+
+
+def merge_env_context(base: dict, cfg):
+    """Merge the static creator config with RLlib's EnvContext WITHOUT
+    dropping its ``worker_index`` / ``vector_index``.
+
+    A plain ``{**base, **cfg}`` returns a bare ``dict`` and silently loses
+    those attributes (they live on EnvContext as attributes, not dict items),
+    which is why the creators previously fell back to per-process counters /
+    ``os.getpid()``.  Re-wrapping into an EnvContext preserves the metadata.
+    """
+    merged = {**base, **cfg}
+    # Deferred import so non-Ray callers (SB driver, tests) don't pull in ray.
+    # TODO VP 2026.05.31.: But what uses the SB driver?
+    from ray.rllib.env.env_context import EnvContext
+    if isinstance(cfg, EnvContext):
+        return EnvContext(
+            merged,
+            worker_index=cfg.worker_index,
+            vector_index=cfg.vector_index,
+            num_workers=cfg.num_workers,
+            remote=cfg.remote,
+            recreated_worker=cfg.recreated_worker,
+        )
+    return merged  # local / eval / test path: plain dict, no metadata
+
 
 def adv_building_env_creator(config: dict) -> gymnasium.Env:
     """Factory function for Ray Tune to create AdvBuildingGym instances.
@@ -70,17 +93,22 @@ def adv_building_env_creator(config: dict) -> gymnasium.Env:
     reward_manager = config["reward_schedule_manager"]
     rewards = reward_manager.create_active_rewards()
 
-    # New-API-stack env_runners pass a plain dict here (no EnvContext), so
-    # worker_index/vector_index aren't available. Use PID + a process-local
-    # counter to give each env instance a globally unique caller_id in the
-    # RngService registry — making per-env seeds reproducible regardless of
-    # RPC arrival order. Prefer EnvContext attrs when present (legacy stack).
-    worker_index = getattr(config, "worker_index", config.get("worker_index", None))
-    vector_index = getattr(config, "vector_index", config.get("vector_index", None))
-    if worker_index is None or vector_index is None:
-        worker_index = os.getpid()
-        vector_index = next(_env_instance_counter)
+    # Real RLlib indices, preserved through merge_env_context() at the
+    # registration site. worker_index: 0 = local runner, 1..N = remote
+    # runners; vector_index = sub-env slot within the worker.
+    worker_index = getattr(config, "worker_index", 0)
+    vector_index = getattr(config, "vector_index", 0)
     instance_id = f"AdvBuildingGym_w{worker_index}_v{vector_index}"
+
+    # DEBUG: confirm the EnvContext metadata actually reaches the creator.
+    # "MISSING" means the indices were dropped before this point (cfg type=dict).
+    logger.info(
+        "env_creator: worker_index=%s vector_index=%s recreated=%s num_workers=%s "
+        "(cfg type=%s) → instance_id=%s",
+        getattr(config, "worker_index", "MISSING"), getattr(config, "vector_index", "MISSING"),
+        getattr(config, "recreated_worker", "?"), getattr(config, "num_workers", "?"),
+        type(config).__name__, instance_id,
+    )
 
     env = AdvBuildingGym(
         infras=infras,
@@ -91,13 +119,25 @@ def adv_building_env_creator(config: dict) -> gymnasium.Env:
         reward_aggregator=SumRewardAggregator(),
         instance_id=instance_id,
     )
+    seed = config.get("seed", 21) + worker_index + 1000 * vector_index  # Derive a unique seed per env instance.
+    env.reset(seed=seed)
+    logger.info("Env: instance_id=%s seed=%s", instance_id, seed)
     
+    # Seed action space if the method exists
+    if hasattr(env.action_space, "seed"):
+        env.action_space.seed(seed)
+    # Seed observation space if the method exists
+    if hasattr(env.observation_space, "seed"):
+        env.observation_space.seed(seed)
+
     logger.info("env_creator: instance_id=%s (config type=%s)",
             instance_id, type(config).__name__)
 
-    # Set by Ray's evaluation env_config — only eval EnvRunners pass this.
+    # Set by Ray's evaluation env_config — only eval EnvRunners pass these.
     if config.get("log_full_info", False):
         env.log_full_info = True
+    if config.get("eval_mode", False):
+        env.eval_mode = True
 
     if env_config.hst_env_wrapper_enabled:
         env = HistoryWrapper(
@@ -145,9 +185,21 @@ def adv_building_ma_env_creator(config: dict):
     reward_manager = config["reward_schedule_manager"]
     rewards = reward_manager.create_active_rewards()
 
+    # DEBUG: confirm the EnvContext metadata actually reaches the creator.
+    # "MISSING" here means the indices were dropped before this point and
+    # the os.getpid() fallback below will fire.
+    logger.info(
+        "ma_env_creator: worker_index=%s vector_index=%s recreated=%s (cfg type=%s)",
+        getattr(config, "worker_index", "MISSING"),
+        getattr(config, "vector_index", "MISSING"),
+        getattr(config, "recreated_worker", "?"),
+        type(config).__name__,
+    )
+
     worker_index = getattr(config, "worker_index", config.get("worker_index", None))
     vector_index = getattr(config, "vector_index", config.get("vector_index", None))
     if worker_index is None or vector_index is None:
+        logger.warning("ma_env_creator: no EnvContext indices — falling back to os.getpid().")
         worker_index = os.getpid()
         vector_index = next(_env_instance_counter)
     instance_id = f"AdvBuildingGymMA_w{worker_index}_v{vector_index}"
@@ -162,20 +214,20 @@ def adv_building_ma_env_creator(config: dict):
         reward_partition=config.get("reward_partition"),
     )
 
+    seed = config.get("seed", 21) + worker_index + 1000 * vector_index  # Unique per-env construction seed.
+    env.reset(seed=seed)
+    logger.info("MA Env: instance_id=%s seed=%s", instance_id, seed)
+
     if config.get("log_full_info", False):
         env.log_full_info = True
 
     if env_config.hst_env_wrapper_enabled:
         # HistoryWrapper targets the single-agent Dict obs space; the
         # multi-agent variant has a per-agent space and is not supported.
-        raise NotImplementedError(
-            "HistoryWrapper is not supported in the multi-agent env creator."
-        )
+        raise NotImplementedError("HistoryWrapper is not supported in the multi-agent env creator.")
 
     if env_config.forecast_env_wrapper_enabled:
-        raise NotImplementedError(
-            "ForecastWrapper is not supported in the multi-agent env creator."
-        )
+        raise NotImplementedError("ForecastWrapper is not supported in the multi-agent env creator.")
 
     logger.info("ma_env_creator: instance_id=%s agents=%s",
                 instance_id, env.possible_agents)

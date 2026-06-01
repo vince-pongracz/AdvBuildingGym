@@ -32,13 +32,13 @@ class BatteryMgmtReward(RewardFunction):
         self.episode_start_soc: float = 0.0
 
     def on_reset(self, states, info: dict | None = None) -> None:
-        self.episode_start_soc = float(states["s_battery_pct"][0])
+        self.episode_start_soc = float(states["s_battery_soc"][0])
 
     def get_reward(self, actions, states, info: dict | None = None) -> tuple[float, float]:
         if info is None or not info.get("terminated", False):
             return 0.0, 0.0
 
-        episode_end_soc = float(states["s_battery_pct"][0])
+        episode_end_soc = float(states["s_battery_soc"][0])
         deficit = max(0.0, self.episode_start_soc - episode_end_soc)
         reward = -1.0 * float(deficit / self.scale)
         return self.weight * reward, self.weight * self.max_reward_in_step

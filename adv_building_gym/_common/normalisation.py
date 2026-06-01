@@ -23,16 +23,16 @@ class Normalisation(Enum):
         return cls(value)
 
 
-def _safe_divide(series: pd.Series, numerator: pd.Series, divisor: float) -> pd.Series:
+def _safe_divide(numerator: pd.Series, divisor: float) -> pd.Series:
     """Divide numerator by divisor, returning zeros and logging if divisor is zero."""
     if divisor != 0:
         return numerator / divisor
     else:
-        logger.warning("Divisor is zero at normalising %s!", series.name)
+        logger.warning("Divisor is zero at normalising %s!", numerator.name)
 
-    if series.notna().any():
-        logger.warning("Series '%s' is constant zero — normalisation returns zeros", series.name)
-    return series * 0.0
+    if numerator.notna().any():
+        logger.warning("Series '%s' is constant zero — normalisation returns zeros", numerator.name)
+    return numerator * 0.0
 
 
 def normalise_with_scale_factor(
@@ -51,16 +51,16 @@ def normalise_with_scale_factor(
     match method:
         case Normalisation.ABS_MIN_MAX_SCALING:
             scale = float(max(abs(series.min()), abs(series.max()))) or 1.0
-            return _safe_divide(series, series, scale), scale
+            return _safe_divide(series, scale), scale
         case Normalisation.MAX_ABS_SCALING:
             scale = float(series.abs().max()) or 1.0
-            return _safe_divide(series, series, scale), scale
+            return _safe_divide(series, scale), scale
         case Normalisation.MIN_MAX_SCALING:
             scale = float(series.max() - series.min()) or 1.0
-            return _safe_divide(series, series - series.min(), scale), scale
+            return _safe_divide(series - series.min(), scale), scale
         case Normalisation.STANDARDISATION:
             scale = float(series.std()) or 1.0
-            return _safe_divide(series, series - series.mean(), scale), scale
+            return _safe_divide(series - series.mean(), scale), scale
         case None:
             return series, 1.0
         case _:

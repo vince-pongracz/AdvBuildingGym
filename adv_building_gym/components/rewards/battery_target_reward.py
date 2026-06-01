@@ -6,7 +6,7 @@ from adv_building_gym.components.registry import ComponentRegistry
 class BatteryTargetReward(RewardFunction):
     """Dead-zone SoC guardrail: 0 inside ``[min_pct, max_pct]``, -1 outside.
 
-    Reads ``s_battery_pct`` from the observation dict. The band is owned
+    Reads ``s_battery_soc`` from the observation dict. The band is owned
     by this reward (constructor args); the battery component is unaware.
     """
 
@@ -31,7 +31,7 @@ class BatteryTargetReward(RewardFunction):
         self.max_reward_in_step = 0.0  # no positive reward, only guardrail penalty
 
     def get_reward(self, actions, states, info: dict | None = None) -> tuple[float, float]:
-        soc = float(states["s_battery_pct"][0])
+        soc = float(states["s_battery_soc"][0])
 
         if self.min_pct <= soc <= self.max_pct:
             return 0.0, 0.0

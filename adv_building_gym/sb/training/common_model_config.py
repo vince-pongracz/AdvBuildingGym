@@ -28,7 +28,6 @@ from adv_building_gym.sb.callbacks import (
     SBEpisodeMetricsCallback,
     SBEvalStateActionCallback,
     SBIterTimingCallback,
-    make_data_schedule_callback,
     make_infra_schedule_callback,
     make_reward_switch_callback,
     make_statesource_schedule_callback,
@@ -133,18 +132,14 @@ def build_callback_list(
         SBEpisodeMetricsCallback(verbose=1),
     ]
 
-    # Data variant scheduling — always-on (empty combinator is a no-op).
-    # Eval VecEnv follows training so the eval signal describes the regime
-    # the policy is currently being trained on. Same for the other three
-    # schedules below.
-    if trial.data_combinator is not None and trial.data_combinator.variants:
-        callbacks.append(
-            make_data_schedule_callback(
-                trial.data_combinator,
-                num_env_runners=num_envs,
-                eval_env=eval_env,
-            )
-        )
+    # Data-variant selection is env-side (AdvBuildingGym.reset ->
+    # DataVariantManager): training envs follow the combinator cadence, eval
+    # envs (role="eval", eval_mode=True) draw a fresh random variant each
+    # episode. The old data-schedule callback push was overwritten by the very
+    # next reset(), so it is intentionally not wired here. The other three
+    # schedules (reward / infra / statesource) below still use callbacks; their
+    # eval VecEnv follows training so the eval signal describes the regime the
+    # policy is currently being trained on.
 
     if (trial.reward_manager is not None
             and trial.reward_manager.mode is not RewardScheduleMode.OFF):

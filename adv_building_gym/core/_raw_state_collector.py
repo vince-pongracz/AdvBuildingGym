@@ -23,16 +23,16 @@ class RawStateCollector:
         state: Dict[str, np.ndarray],
     ) -> Dict[str, float]:
         
-        raw: Dict[str, float] = {}
+        raw_values: Dict[str, float] = {}
         for src in statesources:
-            raw.update(src.get_raw_values())
+            raw_values.update(src.get_raw_values())
         for ifs in infras:
-            raw.update(ifs.get_raw_values())
+            raw_values.update(ifs.get_raw_values())
 
         # ctxt_temp_abs_max is published into ``state`` by WeatherDataSource each
         # step — read from state rather than caching so the scale factor stays
         # correct across statesource hot-swaps.
         temp_abs_max = float(state.get("ctxt_temp_abs_max", np.ones(1, dtype=np.float32))[0])
         temp_in_norm = float(state.get("s_temp_in_norm", np.zeros(1, dtype=np.float32))[0])
-        raw["raw_temp_in"] = temp_in_norm * temp_abs_max
-        return raw
+        raw_values["raw_temp_in"] = temp_in_norm * temp_abs_max
+        return raw_values

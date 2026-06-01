@@ -38,16 +38,23 @@ class DataVariantManager:
         self,
         options: Optional[dict],
         rng: np.random.Generator,
+        eval_mode: bool = False,
     ) -> Optional[dict[str, str]]:
         """Select a data variant for this episode.
 
-        ``options['data_variant']`` (single-env eval / external push)
-        wins over the combinator's own choice.
+        Precedence:
+        1. ``options['data_variant']`` (single-env eval / external push) wins.
+        2. ``eval_mode=True`` draws a fresh *random* variant each episode,
+           overriding the ``episode_count // swap_every_n_episodes`` cadence so
+           every episode of an eval round samples an independent variant.
+        3. Otherwise the combinator's own cadence (cycle / random) applies.
         """
         if options and "data_variant" in options:
             return options["data_variant"]
         if self.data_combinator.variants:
-            return self.data_combinator.get_variant(self.episode_count, rng)
+            return self.data_combinator.get_variant(
+                self.episode_count, rng, force_random=eval_mode,
+            )
         return None
 
     def compute_day_offset(

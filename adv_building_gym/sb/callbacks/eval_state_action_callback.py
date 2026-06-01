@@ -16,15 +16,18 @@ What it produces, mirroring the Ray side ([ray/callbacks/eval_state_action_callb
    - ``eval/cum_price_EUR``
    - ``eval/reward/<component>``
 
-2. Per-iteration TB SUB-RUN at::
+2. Per-episode TB SUB-RUNS, one per eval episode under a shared
+   ``iter_<N>`` group::
 
-      <eval_trajectories_root>/iter_NNNNNN_<trial_suffix>/
+      <eval_trajectories_root>/iter_NNNNNN_<trial_suffix>/ep_<i>/
 
    with tags ``raw/<k>``, ``state/<k>``, ``action/<k>``, ``power/...``,
-   ``reward/...`` — each emitted with ``/mean``, ``/min``, ``/max``
-   reductions across the eval round's episodes, ``global_step`` = env
-   step index within an episode (0…EPISODE_LENGTH-1). Identical on-disk
-   shape to Ray, so ``start_tensorboard.sh`` works for both frameworks.
+   ``reward/...``, ``global_step`` = env step index within an episode
+   (0…EPISODE_LENGTH-1). Sub-runs share tag names so the round's episodes
+   overlay per chart (one line each). No cross-episode averaging: a
+   round's episodes are typically different days / variants, so a per-step
+   mean would smear unrelated trajectories. Identical on-disk shape to
+   Ray, so ``start_tensorboard.sh`` works for both frameworks.
 
 3. ``best/best_model.zip`` saved when ``mean_reward`` improves
    (replaces the stock ``EvalCallback``'s best-model save).
@@ -303,39 +306,33 @@ class SBEvalStateActionCallback(BaseCallback):
         if not ep_buffer:
             return
 
-        all_keys: set[str] = set()
-        for ep in ep_buffer:
-            all_keys.update(ep.keys())
-
-        summarised: dict[str, list[float]] = {}
-        for key in sorted(all_keys):
-            arrays = [ep[key] for ep in ep_buffer if key in ep]
-            if not arrays:
-                continue
-            min_len = min(len(a) for a in arrays)
-            if min_len == 0:
-                continue
-            stacked = np.array([a[:min_len] for a in arrays])
-            summarised[f"{key}/mean"] = np.mean(stacked, axis=0).tolist()
-            summarised[f"{key}/min"] = np.min(stacked, axis=0).tolist()
-            summarised[f"{key}/max"] = np.max(stacked, axis=0).tolist()
-
+        # No cross-episode averaging: a round's episodes are typically
+        # different days / variants, so each episode is written as its own
+        # TensorBoard sub-run (``iter_<N>[_<trial>]/ep_<i>``). Sub-runs share
+        # tag names, so the episodes overlay per chart and the real
+        # per-episode spread is visible. Mirrors the Ray-side callback
+        # (ray/callbacks/eval_state_action_callback.py).
         suffix = f"_{self._trial_suffix}" if self._trial_suffix else ""
-        run_dir = os.path.join(
+        iter_group = os.path.join(
             self._eval_trajectories_root,
             f"iter_{self._eval_round:06d}{suffix}",
         )
-        with SummaryWriter(log_dir=run_dir) as writer:
-            for key, vals in summarised.items():
-                for step_idx, val in enumerate(vals):
-                    writer.add_scalar(key, val, global_step=step_idx)
+
+        num_steps = 0
+        all_tags: set[str] = set()
+        for ep_idx, ep in enumerate(ep_buffer):
+            run_dir = os.path.join(iter_group, f"ep_{ep_idx:02d}")
+            with SummaryWriter(log_dir=run_dir) as writer:
+                for key, series in ep.items():
+                    all_tags.add(key)
+                    num_steps = max(num_steps, len(series))
+                    for step_idx, val in enumerate(series):
+                        writer.add_scalar(key, val, global_step=step_idx)
 
         if self.verbose:
-            num_tags = len(summarised) // 3  # mean/min/max per logical tag
-            num_steps = max((len(values) for values in summarised.values()), default=0)
             logger.info(
-                "Eval trajectory round %d: %d tags x %d steps -> %s",
-                self._eval_round, num_tags, num_steps, run_dir,
+                "Eval trajectory round %d: %d episodes x %d tags x %d steps -> %s",
+                self._eval_round, len(ep_buffer), len(all_tags), num_steps, iter_group,
             )
 
     def _maybe_save_best(self, mean_reward: float) -> None:

@@ -42,3 +42,18 @@ class SumRewardAggregator(RewardAggregator):
             total_reward += reward
             total_max_step += reward_max
         return total_reward, breakdown, total_max_step
+
+class NashRewardAggregator(RewardAggregator):
+    """Nash equilibrium-based aggregator — product of weighted component rewards."""
+
+    def aggregate(self, reward_funcs, actions, states, info):
+        total_reward = 1.0
+        total_max_step = 1.0
+        breakdown: Dict[str, float] = {}
+        for rf in reward_funcs:
+            reward, reward_max = rf.get_01_reward(actions, states, info=info)
+            reward = float(np.asarray(reward).item())
+            breakdown[rf.name] = reward
+            total_reward *= reward
+            total_max_step *= reward_max
+        return total_reward, breakdown, total_max_step

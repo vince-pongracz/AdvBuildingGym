@@ -81,8 +81,12 @@ def make_sb_env_factory(
             instance_id=instance_id,
         )
 
+        # eval_mode makes each eval episode draw a fresh random data variant
+        # (independent (variant, day) per episode) instead of following the
+        # training swap cadence — see core/_data_variant_manager.select_variant.
         if role == "eval":
             env.log_full_info = True
+            env.eval_mode = True
 
         if env_config.hst_env_wrapper_enabled:
             env = HistoryWrapper(

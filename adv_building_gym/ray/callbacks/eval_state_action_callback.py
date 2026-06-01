@@ -5,12 +5,16 @@ Writes per-step eval trajectories to TensorBoard as separate sub-runs
 so they overlay in a single chart:
 - x-axis = episode timestep (0 … EPISODE_LENGTH-1)
 - y-axis = value (raw physical, normalised state, action, power)
-- one coloured line per eval round
+- one coloured line per eval episode
 
-Each eval round summarises its N episodes (``evaluation_duration``)
-across episodes into per-step mean/min/max trajectories
-(``<tag>/mean``, ``<tag>/min``, ``<tag>/max``) before writing.
-Sub-runs are named by training iteration for easy identification.
+Each eval round (``evaluation_duration`` episodes) is written as one
+TensorBoard sub-run *per episode* under a shared ``iter_<N>`` group, so
+the round's episodes overlay in a single chart (one line each). Per-step
+averaging across the round is deliberately NOT done: with ``day="random"``
+(and the training combinator's variant cadence) the episodes land on
+different days / CSV bundles, so a per-step mean would smear unrelated
+trajectories toward zero behind a meaningless min/max band. Filter the
+TensorBoard run list by ``iter_<N>`` to inspect one round's spread.
 
 Point TensorBoard at ``<metrics_base_dir>/eval_trajectories/<exec_date>/``
 to visualise:
@@ -42,9 +46,9 @@ def make_eval_state_action_cb_class(
 ) -> Type["EvalStateActionCallback"]:
     """Factory that returns a configured EvalStateActionCallback class.
 
-    Each eval round (N episodes averaged) is written as a separate
-    TensorBoard sub-run.  All sub-runs share the same tag names, so
-    TensorBoard overlays them in a single chart.
+    Each eval round writes one TensorBoard sub-run per episode under a
+    shared ``iter_<N>`` group.  All sub-runs share the same tag names, so
+    the round's episodes overlay in a single chart (one line per episode).
 
     Args:
         metrics_base_dir: Base directory for output files.
@@ -146,49 +150,55 @@ def make_eval_state_action_cb_class(
                 for rew_name, rew_val in info.get("reward_breakdown", {}).items():
                     ep_data[f"reward/{rew_name}"].append(float(rew_val))
 
+                # Per-step reward diagnostics (0/1 flags) — accumulated below
+                # into a running cumulative sum so the trajectory grows by 1 at
+                # each step the flag fires (final value = episode total count).
+                for diag_name, diag_val in info.get("reward_diagnostics", {}).items():
+                    ep_data[f"reward_diag/{diag_name}"].append(float(diag_val))
+
+            # Turn the reward_diag 0/1 series into per-step cumulative sums so
+            # the eval-round chart shows the count rising step-by-step across
+            # the episode (mean/min/max across episodes computed downstream).
+            for key, series in ep_data.items():
+                if key.startswith("reward_diag/"):
+                    ep_data[key] = np.cumsum(series).tolist()
+
             _episode_buffer.append(dict(ep_data))
 
             # Wait until all episodes in this eval round are collected
             if len(_episode_buffer) < algo_config.evaluation_duration:
                 return
 
-            # --- Eval round complete: average and write ---
+            # --- Eval round complete: write one sub-run per episode ---
+            # No cross-episode averaging: the round's episodes are typically
+            # different days / variants, so each episode is logged as its own
+            # TensorBoard sub-run (``iter_<N>[_<trial>]/ep_<i>``). Sub-runs
+            # share tag names, so the episodes overlay per chart and the real
+            # per-episode spread is visible. Filter the run list by ``iter_<N>``
+            # to isolate a single round.
             _eval_round[0] += 1
             training_iter = _eval_round[0] * algo_config.evaluation_interval
 
-            # Collect all keys across episodes
-            all_keys: set[str] = set()
-            for ep in _episode_buffer:
-                all_keys.update(ep.keys())
+            iter_group = (
+                f"iter_{training_iter:06d}_{_trial_suffix}" if _trial_suffix
+                else f"iter_{training_iter:06d}"
+            )
 
-            # Per-step mean/min/max across episodes — emitted as
-            # <key>/mean, <key>/min, <key>/max so the spread is visible
-            # alongside the central trajectory in TensorBoard.
-            summarised: dict[str, list[float]] = {}
-            for key in sorted(all_keys):
-                arrays = [ep[key] for ep in _episode_buffer if key in ep]
-                if not arrays:
-                    continue
-                min_len = min(len(a) for a in arrays)
-                stacked = np.array([a[:min_len] for a in arrays])
-                summarised[f"{key}/mean"] = np.mean(stacked, axis=0).tolist()
-                summarised[f"{key}/min"] = np.min(stacked, axis=0).tolist()
-                summarised[f"{key}/max"] = np.max(stacked, axis=0).tolist()
+            num_steps = 0
+            all_tags: set[str] = set()
+            for ep_idx, ep in enumerate(_episode_buffer):
+                run_dir = os.path.join(tb_log_dir, iter_group, f"ep_{ep_idx:02d}")
+                with SummaryWriter(log_dir=run_dir) as writer:
+                    for key, series in ep.items():
+                        all_tags.add(key)
+                        num_steps = max(num_steps, len(series))
+                        for step_idx, val in enumerate(series):
+                            writer.add_scalar(key, val, global_step=step_idx)
 
-            # Write to a TensorBoard sub-run named by training iteration.
-            # TensorBoard overlays sub-runs with the same tag in one chart.
-            run_name = f"iter_{training_iter:06d}_{_trial_suffix}"
-            run_dir = os.path.join(tb_log_dir, run_name)
-            with SummaryWriter(log_dir=run_dir) as writer:
-                for key, vals in summarised.items():
-                    for step_idx, val in enumerate(vals):
-                        writer.add_scalar(key, val, global_step=step_idx)
-
-            num_steps = max((len(values) for values in summarised.values()), default=0)
-            num_tags = len(summarised) // 3  # mean/min/max per logical tag
             logger.info(
-                "Eval trajectory round %d (training iter %d): %d tags x %d steps -> %s",
-                _eval_round[0], training_iter, num_tags, num_steps, run_dir,
+                "Eval trajectory round %d (training iter %d): %d episodes x %d tags x %d steps -> %s",
+                _eval_round[0], training_iter, len(_episode_buffer), len(all_tags),
+                num_steps, os.path.join(tb_log_dir, iter_group),
             )
 
             _episode_buffer.clear()

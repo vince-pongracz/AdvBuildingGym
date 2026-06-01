@@ -100,7 +100,7 @@ env_meta:
   hst_env_wrapper:
     enabled: true
     tracked_keys:
-    - s_battery_pct
+    - s_battery_soc
     - s_ev_soc
     - s_temp_in_norm
     - s_temp_out_norm
@@ -137,6 +137,7 @@ training_params:
     episode_lookback_horizon_steps: 120 # 5min steps, 12 steps = 1h --> 120 steps = 10h
     max_episodes_to_run: 7000
     clip_actions_to_env_bounds: True
+    gamma: 0.99
 
   # PPO-specific (on-policy)
   ppo:

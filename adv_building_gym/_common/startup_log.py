@@ -36,29 +36,39 @@ def _header(title: str) -> str:
     return f"{_HORIZONTAL_LINE}\n{title}\n{_HORIZONTAL_LINE}"
 
 
+def _fmt_numeric_params(component: Any) -> str:
+    """Discover numeric constructor params via the component's own to_dict().
+
+    Field names differ across infra/statesource, so rather than hardcode a
+    list we lean on Serializable.to_dict() — it already introspects __init__
+    and drops internal state (`_exclude_params`) and context (`_context_params`),
+    leaving exactly the configured scalars. We then keep only the numeric ones.
+    """
+    to_dict = getattr(component, "to_dict", None)
+    if not callable(to_dict):
+        return ""
+    params = to_dict()
+    fields = [
+        f"{key}={val}"
+        for key, val in params.items()
+        if key != "class" and isinstance(val, (int, float)) and not isinstance(val, bool)
+    ]
+    return "  " + "  ".join(fields) if fields else ""
+
+
 def _fmt_infra(infra: Any) -> str:
     """One-line summary of an Infrastructure component."""
     name = getattr(infra, "name", type(infra).__name__)
     cls = type(infra).__name__
-    fields: list[str] = []
-    for attr in (
-        "max_power_kW", "rated_power_kW", "max_charging_kW",
-        "peak_consumption_kW", "cop_heat", "cop_cool", "capacity_kWh",
-    ):
-        if hasattr(infra, attr):
-            val = getattr(infra, attr)
-            if isinstance(val, (int, float)):
-                fields.append(f"{attr}={val}")
-    tail = "  " + "  ".join(fields) if fields else ""
-    return f"  - {name:<14} [{cls}]{tail}"
+    return f"  - {name:<14} [{cls}]{_fmt_numeric_params(infra)}"
 
 
 def _fmt_statesource(src: Any) -> str:
     name = getattr(src, "name", type(src).__name__)
     cls = type(src).__name__
     ds = getattr(src, "ds_path", None)
-    tail = f"  ds_path={Path(ds).name}" if ds else ""
-    return f"  - {name:<20} [{cls}]{tail}"
+    ds_tail = f"  ds_path={Path(ds).name}" if ds else ""
+    return f"  - {name:<20} [{cls}]{ds_tail}{_fmt_numeric_params(src)}"
 
 
 def _section_invocation(seed: int, trial_path: str | None = None) -> list[Section]:

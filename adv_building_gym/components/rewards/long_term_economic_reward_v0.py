@@ -69,7 +69,8 @@ class LongTermEconomicRewardV0(RewardFunction):
             logger.warning("LongTermEconomicRewardV0: missing net_power_kW in info, returning 0")
             return 0.0, 0.0
 
-        current_energy_price_norm = float(states["s_E_price"][0])
+        current_energy_price_norm = float(states["s_E_price"][0]) 
+        
         # Rescale the price by the data-driven denominator so per-step values
         # span more of [-1, 1]; ctxt is 1.0 (no-op) when EnergyPriceDataSource's
         # dynamic_max_price_calc is disabled.
@@ -77,12 +78,26 @@ class LongTermEconomicRewardV0(RewardFunction):
         dynamic_max_ep = states.get("ctxt_E_price_dynamic_max_ep")
         dyn_max = float(dynamic_max[0]) if dynamic_max is not None else 1.0
         dyn_max_ep = float(dynamic_max_ep[0]) if dynamic_max_ep is not None else 1.0
-        price_signal = current_energy_price_norm / (dyn_max * 0.7 + dyn_max_ep * 0.3)
+        
+        dyn_max_price_divisor = (dyn_max * 0.7 + dyn_max_ep * 0.3)
+        
+        # During the evening peak, the price signal is often very low due to the high max price, 
+        # which makes it hard for the agent to learn. So we scale up the price signal by 2 during this period.
+        # 18:00 to 21:00, when the price is usually high 
+        # --> make it even more higher to discourage consumption during this period.
+        if self._step > 216 and self._step < 252: 
+            current_energy_price_norm *=2
+        
+        if dyn_max_price_divisor != 0:
+            price_signal = current_energy_price_norm / dyn_max_price_divisor
+        else:
+            price_signal = current_energy_price_norm
 
         op_max_kW = self._resolve_reference_power_kW(states)
 
         # Canonical: net > 0 means export, net < 0 means consumption.
-        per_step = float(np.clip(net_power_kW * price_signal / op_max_kW, -1.0, 1.0))
+        # per_step = float(np.clip(net_power_kW * price_signal / op_max_kW, -1.0, 1.0))
+        per_step = float(net_power_kW * price_signal)
         self._accumulated_norm += per_step
         self._step += 1
 
@@ -91,7 +106,8 @@ class LongTermEconomicRewardV0(RewardFunction):
             return 0.0, 0.0
 
         steps_seen = self._step
-        reward = float(np.clip(self._accumulated_norm, -float(steps_seen), float(steps_seen)))
+        # reward = float(np.clip(self._accumulated_norm, -float(steps_seen), float(steps_seen)))
+        reward = self._accumulated_norm
         return float(self.weight * reward), float(self.weight * steps_seen)
 
 

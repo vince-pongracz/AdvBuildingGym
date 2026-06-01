@@ -9,7 +9,6 @@ from ..base import StateSource
 from ..csv_loader import CsvLoader
 from ..forecastable import Forecastable
 from adv_building_gym.components.registry import ComponentRegistry
-from adv_building_gym._common.rng_service import RngService
 
 logger = logging.getLogger(__name__)
 
@@ -105,7 +104,10 @@ class InsideTemperature(StateSource, Forecastable):
             # ⇒ 2/60 ≈ 0.033 normalised units)
             temp_abs_max = float(states["ctxt_temp_abs_max"][0]) if "ctxt_temp_abs_max" in states else 60.0
             max_offset_norm = 2.0 / temp_abs_max if temp_abs_max != 0 else 0.0
-            rng = np.random.default_rng(RngService.get().get_random(self.name))
+            # Draw the offset from the env rng (published on the shared info
+            # channel as "_rng"), so it shares the deterministic, per-worker
+            # stream seeded by reset(seed=...). Fallback only for standalone use.
+            rng = (info.get("_rng") if info else None) or np.random.default_rng()
             variance = rng.uniform(-max_offset_norm, max_offset_norm)
             
             states["s_temp_in_norm"][0] = np.float32(np.clip(

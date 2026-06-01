@@ -34,7 +34,6 @@ import torch
 
 from adv_building_gym.config.trial_config import TrialConfig
 from adv_building_gym._common.json_encoder import CustomJSONEncoder
-from adv_building_gym._common.rng_service import RngService
 from adv_building_gym._common.warning_filters import setup_warning_filters
 from adv_building_gym._common.startup_log import log_startup_banner
 
@@ -104,11 +103,6 @@ def main() -> None:
     # the factory, so this call only seeds the driver-side singletons
     # used by log_startup_banner / introspection.
     trial.env_config.init_singletons()
-
-    # RngService is shared with the env (per-instance caller_id). With
-    # SB3 we never call ``ray.init``, so RngService falls back to a
-    # local in-process singleton.
-    RngService.initialize(trial.seed)
 
     # Single exec_date drives both the run-dir name in sb_common_model_setup
     # AND the eval-trajectories sub-run dir (so the TB layout matches Ray's

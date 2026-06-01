@@ -30,6 +30,7 @@ def resolve_episode_date(
     for src in statesources:
         if src.ts is not None and "start" in src.ts.columns and row_offset < len(src.ts):
             return str(pd.to_datetime(src.ts.iloc[row_offset]["start"]).date())
+
     # Fallback: day-of-year index
     steps_per_day = int(SECONDS_PER_DAY / control_step)
     return f"day-{row_offset // steps_per_day}"

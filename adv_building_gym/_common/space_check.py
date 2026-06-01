@@ -86,6 +86,4 @@ def check_space_compatibility(rl_module, env, pipeline: Iterable | None = None) 
             f"Check whether infrastructure components changed since training."
         )
 
-    logger.info(
-        "Space check OK: obs=%d, act=%d", model_obs_size, model_act_size,
-    )
+    logger.info("Space check OK: obs=%d, act=%d", model_obs_size, model_act_size)

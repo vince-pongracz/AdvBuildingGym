@@ -13,7 +13,7 @@ Layering (each layer's external deps obvious from its name):
 - ``ray/``         — Ray RLlib adapter (env_creator, ma_env, training, callbacks, evaluation, utils)
 - ``sb/``          — Stable-Baselines3 adapter
 - ``controllers/`` — Pyomo / scipy baseline controllers
-- ``_common/``     — cross-layer utilities (rng_service, normalisation, …)
+- ``_common/``     — cross-layer utilities (normalisation, episode_date, …)
 """
 
 __version__ = "0.1.0"

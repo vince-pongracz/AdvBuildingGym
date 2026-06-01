@@ -92,13 +92,20 @@ class DataCombinator:
         return pool
 
     def get_variant(
-        self, episode_count: int, rng: np.random.Generator | None = None
+        self,
+        episode_count: int,
+        rng: np.random.Generator | None = None,
+        force_random: bool = False,
     ) -> dict[str, str]:
         """Return the variant dict for the given episode count.
 
         Args:
             episode_count: Current episode number (used for cycling / random selection).
             rng: Optional NumPy Generator for random mode.
+            force_random: When True, draw a uniformly random variant regardless
+                of ``mode`` (used by evaluation runners so each eval episode
+                samples an independent variant instead of following the
+                ``episode_count // swap_every_n_episodes`` cadence).
 
         Returns:
             A dict mapping source_name -> file path for sources that should be reloaded.
@@ -107,15 +114,18 @@ class DataCombinator:
         pool = self.variants
         if not pool:
             return {}
-        idx = self._variant_pool_index(episode_count, rng)
+        idx = self._variant_pool_index(episode_count, rng, force_random=force_random)
         return pool[idx]
 
     def _variant_pool_index(
-        self, episode_count: int, rng: np.random.Generator | None = None
+        self,
+        episode_count: int,
+        rng: np.random.Generator | None = None,
+        force_random: bool = False,
     ) -> int:
         """Return the pool index for the given episode count."""
         pool = self.variants
-        if self.mode == "random" and rng is not None:
+        if (force_random or self.mode == "random") and rng is not None:
             return int(rng.integers(0, len(pool)))
         return (episode_count // self.swap_every_n_episodes) % len(pool)
 

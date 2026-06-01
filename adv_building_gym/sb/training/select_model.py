@@ -26,8 +26,8 @@ SAC (off-policy)
       ratios in one knob.)
     * ``sac_n_step_return`` is **not honoured** — SB3 SAC has no n-step
       return option in its default ReplayBuffer. A warning is logged.
-    * ``tau`` / ``gamma`` left at SB3 defaults (0.005 / 0.99 — same as
-      the RLlib build).
+    * ``tau`` left at the SB3 default (0.005 — same as the RLlib build);
+      ``gamma`` is taken from ``training_config.gamma`` for parity with Ray.
     * ``gradient_clip`` plumbed through ``policy_kwargs``-equivalent path
       (SB3 doesn't expose a top-level grad-clip for SAC; we use
       ``optimizer_kwargs`` if needed in the future).
@@ -117,6 +117,7 @@ def sb_select_model(
             batch_size=training_config.ppo_minibatch_size,
             n_epochs=training_config.ppo_num_epochs,
             gae_lambda=0.95,
+            gamma=training_config.gamma,  # parity with RLlib config.training(gamma=...)
         )
         logger.info(
             "PPO built: n_steps=%d (per env), batch_size=%d, n_epochs=%d",
@@ -158,7 +159,7 @@ def sb_select_model(
             train_freq=1,
             gradient_steps=gradient_steps,
             tau=0.005,
-            gamma=0.99,
+            gamma=training_config.gamma,  # parity with RLlib config.training(gamma=...)
             ent_coef="auto",
         )
         logger.info(

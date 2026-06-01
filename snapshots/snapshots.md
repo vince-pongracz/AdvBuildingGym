@@ -137,7 +137,8 @@ warning.
 
 `trial.seed` is the only knob that varies which days/variants the
 `DataCombinator` samples and the stochastic streams used during training
-(PyTorch, Ray init, `RngService`, replay shuffle). Without this flag, two
+(PyTorch, Ray/SB3 per-worker env seeding via `reset(seed)`, replay shuffle).
+Without this flag, two
 runs from the same snapshot evaluate on the exact same episode dates and
 train along identical trajectories.
 

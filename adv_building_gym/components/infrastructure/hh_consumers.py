@@ -6,7 +6,6 @@ from gymnasium.spaces import Box
 
 from .base import Infrastructure
 from adv_building_gym.components.registry import ComponentRegistry
-from adv_building_gym._common.rng_service import RngService
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +29,7 @@ class HouseholdEnergyConsumers(Infrastructure):
 
     # Internal state variables — don't serialize
     _exclude_params: ClassVar[Set[str]] = {
-        'iteration', 'consumption_norm', 'current_consumption_kW'
+        'iteration', 'consumption_norm', 'current_consumption_kW', '_rng'
     }
 
     def __init__(self, name: str, peak_consumption_kW: float) -> None:
@@ -47,6 +46,11 @@ class HouseholdEnergyConsumers(Infrastructure):
         # State variables
         self.consumption_norm = 0.0  # Normalized consumption [0, 1]
         self.current_consumption_kW = 0.0  # Actual consumption in kW
+
+        # Per-episode RNG for the synthetic fallback profile; rebound to the
+        # shared env rng (info["_rng"]) on every reset(). Standalone default
+        # until the first reset.
+        self._rng = np.random.default_rng()
 
     def setup_spaces(self,
                     state_spaces,
@@ -101,6 +105,10 @@ class HouseholdEnergyConsumers(Infrastructure):
         """Clear per-episode consumption readouts."""
         self.consumption_norm = 0.0
         self.current_consumption_kW = 0.0
+        # Bind to the env rng published on the shared info channel as "_rng"
+        # so the synthetic fallback noise shares the deterministic, per-worker
+        # stream seeded by reset(seed=...). Fallback only for standalone use.
+        self._rng = (info.get("_rng") if info else None) or np.random.default_rng()
         super().reset(states, info)
 
     def _synthetic_consumption(self, states: Dict) -> float:
@@ -123,8 +131,7 @@ class HouseholdEnergyConsumers(Infrastructure):
         else:
             base = 0.3   # Late evening
 
-        seed = RngService.get().get_random(self.name)
-        noise = np.random.default_rng(seed).normal(loc=0.0, scale=0.05)
+        noise = self._rng.normal(loc=0.0, scale=0.05)
         return float(np.clip(base + noise, 0.0, 1.0))
     
     def get_raw_values(self) -> Dict[str, float]:

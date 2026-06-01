@@ -160,7 +160,7 @@ decaying recovery curve instead of the warning curve.
 File: `battery_target_reward_v0.py`. Pure penalty, per-step range `[-1, 0]`,
 `r_max = 0`.
 
-With SoC `c = s_battery_pct` and band `[min_pct, max_pct]`:
+With SoC `c = s_battery_soc` and band `[min_pct, max_pct]`:
 
 $$
 r =
@@ -178,8 +178,8 @@ File: `battery_mgmt_reward_v0.py`. Sparse; fires only on the terminal step
 (`info["terminated"]`). Per-fire range `[-L, 0]` where `L = episode_length`,
 `r_max = L`. Asymmetric: only ending below the start SoC is penalised.
 
-Capture the start SoC at reset: `c_0 = s_battery_pct`. At the terminal step
-with end SoC `c_T = s_battery_pct` and `scale = σ` (default 1.0):
+Capture the start SoC at reset: `c_0 = s_battery_soc`. At the terminal step
+with end SoC `c_T = s_battery_soc` and `scale = σ` (default 1.0):
 
 $$ \text{deficit} = \max(0,\; c_0 - c_T) $$
 
