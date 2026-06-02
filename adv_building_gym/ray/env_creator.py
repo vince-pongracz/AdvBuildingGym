@@ -220,6 +220,7 @@ def adv_building_ma_env_creator(config: dict):
 
     if config.get("log_full_info", False):
         env.log_full_info = True
+    # TODO VP 2026.05.31.: Add eval mode to MA env and set it here when supported.
 
     if env_config.hst_env_wrapper_enabled:
         # HistoryWrapper targets the single-agent Dict obs space; the

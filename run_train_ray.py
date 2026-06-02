@@ -29,6 +29,7 @@ from adv_building_gym.ray.utils.warning_filters import setup_warning_filters
 from adv_building_gym.config.trial_config import TrialConfig
 from adv_building_gym.ray.env_creator import adv_building_env_creator, merge_env_context
 from adv_building_gym.ray.training import common_model_setup, select_model
+from adv_building_gym.ray.callbacks import EVAL_SCORE_KEY, CHECKPOINT_NUM_TO_KEEP
 from adv_building_gym._common.json_encoder import CustomJSONEncoder
 from adv_building_gym._common.resource_check_util import SlurmResources
 from adv_building_gym.ray.utils.ray_utils import make_trial_dirname_creator
@@ -101,7 +102,8 @@ def _trial_to_args_namespace(trial: TrialConfig) -> Namespace:
         episodes=trial.training_param_config.max_episodes_to_run,
         seed=trial.seed,
         metric=trial.metric,
-        checkpoint_frequency_episodes=trial.checkpoint_frequency_episodes,
+        # Checkpoint cadence is tied to the eval cadence (see _build_tuner).
+        checkpoint_frequency_iterations=trial.training_param_config.evaluation_interval,
         log_trajectories=trial.log_trajectories,
         num_envs=trial.num_envs,
         grad_train=trial.grad_train,
@@ -200,43 +202,6 @@ def _build_algo_config(args, trial: TrialConfig, slurm_resources, exec_date_dt):
     return algo_config, param_space
 
 
-def _checkpoint_iterations(trial: TrialConfig) -> int:
-    """Translate ``checkpoint_frequency_episodes`` into RLlib training iterations.
-
-    train_batch_size_per_learner drives the timesteps RLlib processes per
-    iteration but means different things per algorithm:
-      PPO       — ppo_episodes_per_iteration * EPISODE_LENGTH (on-policy batch)
-      SAC       — sac_replay_batch_size (off-policy replay sample)
-      DreamerV3 — batch_size_B * batch_length_T (world-model training batch)
-    """
-    timesteps_per_episode = trial.env_config.EPISODE_LENGTH
-    timesteps_per_iteration = 0.0
-
-    if trial.algorithm == "ppo":
-        timesteps_per_iteration = trial.training_param_config.ppo_episodes_per_iteration * trial.env_config.EPISODE_LENGTH
-    if trial.algorithm == "sac":
-        timesteps_per_iteration = trial.training_param_config.sac_replay_batch_size
-    if trial.algorithm == "dreamerv3":
-        timesteps_per_iteration = (
-            trial.training_param_config.dreamerv3_batch_size_B
-            * trial.training_param_config.dreamerv3_batch_length_T
-        )
-
-    if timesteps_per_iteration != 0.0:
-        iters = max(1, int(
-            (trial.checkpoint_frequency_episodes * timesteps_per_episode) / timesteps_per_iteration
-        ))
-    else:
-        iters = 10
-    
-    logger.info(
-        "Checkpoint configuration: every %d iterations (~%d episodes), metric=%s",
-        iters, trial.checkpoint_frequency_episodes, trial.metric,
-    )
-
-    return iters
-
-
 # ---------------------------------------------------------------------------
 # Tuner construction
 # ---------------------------------------------------------------------------
@@ -322,8 +287,13 @@ def _build_tuner(trial: TrialConfig, metric: str, param_space, run_name, storage
             checkpoint_config=tune.CheckpointConfig(
                 checkpoint_at_end=True,
                 checkpoint_frequency=checkpoint_freq_iterations,
-                num_to_keep=3,
-                checkpoint_score_attribute=metric,
+                num_to_keep=CHECKPOINT_NUM_TO_KEEP,
+                # NOTE: a slashed key (e.g. "evaluation/env_runners/episode_return_mean")
+                # is silently ignored by Tune's CheckpointManager (its insertion gate
+                # tests membership against the un-flattened result dict) → retention
+                # degrades to keep-most-recent. EVAL_SCORE_KEY is a flat top-level key
+                # published every iteration by the eval-score promote callback.
+                checkpoint_score_attribute=EVAL_SCORE_KEY,
                 checkpoint_score_order="max",
             ),
             progress_reporter=progress_reporter,
@@ -437,9 +407,11 @@ def main():
     )
 
     _, algo_cfg_param_space = _build_algo_config(args, trial, slurm_resources, exec_date_dt)
-    checkpoint_freq_iterations = _checkpoint_iterations(trial)
+    # Tie checkpoint cadence to the eval cadence so every checkpoint lands on a
+    # fresh-eval iteration and can be ranked by eval return (best-N retention).
     tuner = _build_tuner(
-        trial, metric, algo_cfg_param_space, run_name, storage_path, checkpoint_freq_iterations,
+        trial, metric, algo_cfg_param_space, run_name, storage_path,
+        trial.training_param_config.evaluation_interval,
         trial_name=trial.trial_name,
     )
 

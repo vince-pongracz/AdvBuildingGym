@@ -150,6 +150,8 @@ class BatteryTremblay(Infrastructure):
         self.R_pack = (n_series * R_cell) / n_parallel
         # Pack energy capacity in kWh
         self.max_cap_kWh = (self.max_cap_Ah * self.nominal_voltage) / 1000.0
+        # TODO VP 2026.05.31.: Define max_power_kW -- check this battery model again
+        self.max_power_kW = max_charge_voltage * max_charge_amps / 1000.0  # Convert W to kW
 
         # Efficiency parameters
         self.charge_efficiency = charge_efficiency
@@ -184,6 +186,8 @@ class BatteryTremblay(Infrastructure):
         # Raw battery capacity (kWh) — constant hardware parameter.
         if "ctxt_battery_capacity_kWh" not in state_spaces.keys():
             state_spaces["ctxt_battery_capacity_kWh"] = Box(low=0, high=np.inf, shape=(1,), dtype=np.float32)
+        if "ctxt_battery_max_power_kW" not in state_spaces.keys():
+            state_spaces["ctxt_battery_max_power_kW"] = Box(low=0, high=np.inf, shape=(1,), dtype=np.float32)
 
         return state_spaces, action_spaces
 
@@ -350,6 +354,7 @@ class BatteryTremblay(Infrastructure):
         # Ensure float32 dtype for all updates
         states["s_battery_soc"][0] = np.float32(self.soc)
         states["ctxt_battery_capacity_kWh"][0] = np.float32(self.max_cap_kWh)
+        states["ctxt_battery_max_power_kW"][0] = np.float32(self.max_power_kW)
 
     def reset(self, states: Dict, info=None) -> None:
         """Re-initialise transient state at the start of every episode.

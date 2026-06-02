@@ -12,7 +12,8 @@ Schema (top-level keys, ordered):
     algorithm: ppo|sac|dreamerv3
     seed: 42
     metric: episode_return_mean | achieved_reward | reward_rate
-    checkpoint_frequency_episodes: 20
+    # Eval + checkpoint cadence is a single knob: training_params.common.evaluation_interval
+    # (checkpoints are taken on eval iterations; see run_train_ray._build_tuner).
     log_trajectories: false
     num_envs: 1
     grad_train: false
@@ -65,7 +66,6 @@ logger = logging.getLogger(__name__)
 _RUN_DEFAULTS: dict[str, Any] = {
     "algorithm": "ppo",
     "metric": "reward_rate",
-    "checkpoint_frequency_episodes": 20,
     "log_trajectories": False,
     "num_envs": 1,
     "grad_train": False,
@@ -87,7 +87,6 @@ class TrialConfig:
     algorithm: str
     seed: Optional[int]
     metric: str
-    checkpoint_frequency_episodes: int
     log_trajectories: bool
     num_envs: int
     grad_train: bool
@@ -285,7 +284,6 @@ class TrialConfig:
             algorithm=run["algorithm"],
             seed=trial_seed,
             metric=run["metric"],
-            checkpoint_frequency_episodes=int(run["checkpoint_frequency_episodes"]),
             log_trajectories=bool(run["log_trajectories"]),
             num_envs=int(run["num_envs"]),
             grad_train=bool(run["grad_train"]),

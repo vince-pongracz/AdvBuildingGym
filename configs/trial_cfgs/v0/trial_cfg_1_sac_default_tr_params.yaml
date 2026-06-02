@@ -8,7 +8,6 @@ trial_name: trial_1_sac_default
 algorithm: sac                 # ppo | sac
 seed: 42                       # overrides training_params.seed
 metric: episode_return_mean    # reward_rate | achieved_reward | episode_return_mean
-checkpoint_frequency_episodes: 10
 log_trajectories: false
 num_envs: 1
 grad_train: false              # if true, the reward schedule mode is honoured;
@@ -134,6 +133,7 @@ env_meta:
 training_params:
   # Common hyperparameters (shared across all algorithms)
   common:
+    evaluation_interval: 4
     episode_lookback_horizon_steps: 120 # 5min steps, 12 steps = 1h --> 120 steps = 10h
     max_episodes_to_run: 3000
     clip_actions_to_env_bounds: True

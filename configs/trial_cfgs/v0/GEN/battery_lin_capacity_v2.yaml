@@ -2,7 +2,6 @@ trial_name: gen_battery_lin_capacity_v2
 algorithm: sac
 seed: 42
 metric: episode_return_mean
-checkpoint_frequency_episodes: 10
 log_trajectories: false
 num_envs: 1
 grad_train: false

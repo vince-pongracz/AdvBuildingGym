@@ -96,8 +96,8 @@ class LongTermEconomicRewardV0(RewardFunction):
         op_max_kW = self._resolve_reference_power_kW(states)
 
         # Canonical: net > 0 means export, net < 0 means consumption.
-        # per_step = float(np.clip(net_power_kW * price_signal / op_max_kW, -1.0, 1.0))
-        per_step = float(net_power_kW * price_signal)
+        per_step = float(np.clip(net_power_kW * price_signal / op_max_kW, -1.0, 1.0))
+        # per_step = float(net_power_kW * price_signal)
         self._accumulated_norm += per_step
         self._step += 1
 

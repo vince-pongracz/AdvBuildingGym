@@ -79,7 +79,8 @@ def _trial_to_args_namespace(trial: TrialConfig) -> Namespace:
         episodes=trial.training_param_config.max_episodes_to_run,
         seed=trial.seed,
         metric=trial.metric,
-        checkpoint_frequency_episodes=trial.checkpoint_frequency_episodes,
+        # Single cadence knob: eval + checkpoint share training_params.common.evaluation_interval.
+        checkpoint_frequency_iterations=trial.training_param_config.evaluation_interval,
         log_trajectories=trial.log_trajectories,
         num_envs=trial.num_envs,
         grad_train=trial.grad_train,

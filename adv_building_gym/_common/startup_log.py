@@ -198,7 +198,7 @@ def _section_training_setup(
         f"  Episodes        : {args.episodes}",
         f"  Ray resources   : cpus={slurm_resources.num_cpus}  gpus={slurm_resources.num_gpus}",
         f"  Metric          : {args.metric}  (mode=max)",
-        f"  Checkpoint freq : every {args.checkpoint_frequency_episodes} episodes",
+        f"  Checkpoint freq : every {args.checkpoint_frequency_iterations} iterations",
         f"  Trajectories    : {'enabled' if args.log_trajectories else 'disabled'}",
     ]
 

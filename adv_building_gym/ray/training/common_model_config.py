@@ -17,6 +17,8 @@ from adv_building_gym.config.env.env_config import EnvConfig
 from ray.rllib.connectors.env_to_module import FlattenObservations
 
 from adv_building_gym.ray.callbacks import (
+    create_eval_score_promote_on_train_result_cb,
+    create_exploration_monitor_on_train_result_cb,
     create_infra_schedule_on_train_result_cb,
     create_iter_timing_on_train_result_cb,
     create_reward_switch_on_train_result_cb,
@@ -53,6 +55,7 @@ def _compose_on_train_result(*fns):
 def register_callbacks(
     config: AlgorithmConfig,
     num_env_runners: int,
+    checkpoint_interval: int,
     metrics_base_dir: str = "ep_metrics",
     log_trajectories: bool = False,
     reward_schedule_manager: RewardScheduleManager | None = None,
@@ -116,6 +119,14 @@ def register_callbacks(
     # was overwritten by the very next reset(), so it had no effect — see
     # core/_data_variant_manager.py.
     on_train_result_fns = [
+        # Mirror the eval return to a flat top-level result key so Tune's
+        # CheckpointConfig(checkpoint_score_attribute=...) can rank checkpoints
+        # by best eval performance (a slashed key is silently ignored — see
+        # eval_score_callback). Also logs the save/keep/evict decision per
+        # checkpoint. Runs every iteration; carries forward on non-eval iters.
+        create_eval_score_promote_on_train_result_cb(checkpoint_interval=checkpoint_interval),
+        # Warn when SAC's entropy temperature (alpha) collapses → exploration dies.
+        create_exploration_monitor_on_train_result_cb(),
         create_iter_timing_on_train_result_cb(),
     ]
 
@@ -350,7 +361,7 @@ def common_model_setup(
     # driver process (run_train_ray.py).
     config.evaluation(
         # evaluation_num_env_runners=1, # not important for now
-        evaluation_interval=2,  # RLlib default: None
+        evaluation_interval=training_config.evaluation_interval,  # RLlib default: None
         evaluation_duration_unit="episodes",  # RLlib default
         evaluation_duration=10,  # RLlib default: 10
         evaluation_parallel_to_training=False,  # RLlib default
@@ -369,6 +380,7 @@ def common_model_setup(
     register_callbacks(
         config,
         num_env_runners=num_env_runners,
+        checkpoint_interval=training_config.evaluation_interval,
         metrics_base_dir=metrics_base_dir,
         log_trajectories=log_trajectories,
         reward_schedule_manager=reward_schedule_manager,

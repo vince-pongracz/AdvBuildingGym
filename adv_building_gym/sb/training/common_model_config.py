@@ -197,7 +197,7 @@ def build_callback_list(
         SBBestCheckpointCallback(
             checkpoint_dir=paths.checkpoint_dir,
             metric=trial.metric,
-            checkpoint_frequency_episodes=trial.checkpoint_frequency_episodes,
+            checkpoint_frequency_iterations=trial.training_param_config.evaluation_interval,
             episode_return_mean_window=trial.training_param_config.episode_return_mean_window,
             num_to_keep=3,
             verbose=1,
@@ -248,13 +248,20 @@ def sb_common_model_setup(
         trial, num_envs=1, seed=trial.seed + 10_000, role="eval", force_dummy=True,
     )
 
-    # Eval cadence: roughly every ``checkpoint_frequency_episodes`` episodes,
-    # divided by num_envs since eval_freq is per-env (each env runs eval_freq
-    # steps between eval calls — same semantics as SB3's stock EvalCallback).
+    # Eval cadence: every ``evaluation_interval`` episodes (the single shared
+    # cadence knob), matching SBBestCheckpointCallback so each checkpoint lands
+    # on a fresh-eval round. ``eval_freq`` is compared against ``n_calls``, which
+    # SB3 increments once per ``env.step()`` (i.e. once per *vec*-step = one
+    # per-env step). evaluation_interval episodes across all envs complete after
+    # ``evaluation_interval * EPISODE_LENGTH / num_envs`` vec-steps, so convert
+    # episodes -> per-env steps (* EPISODE_LENGTH) and account for the parallel
+    # envs (/ num_envs). Same semantics as SB3's stock EvalCallback, whose docs
+    # likewise advise ``eval_freq // n_envs`` for vectorised envs.
     eval_freq_per_env = max(
         1,
-        (trial.checkpoint_frequency_episodes * trial.env_config.EPISODE_LENGTH)
-        // max(1, trial.num_envs),
+        (trial.training_param_config.evaluation_interval
+         * trial.env_config.EPISODE_LENGTH)
+        // trial.num_envs,
     )
 
     eval_trajectories_root = _resolve_eval_trajectories_root("ep_metrics", exec_date)

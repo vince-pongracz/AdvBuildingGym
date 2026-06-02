@@ -60,6 +60,10 @@ class TrainingParamConfig(LoggableConfig):
     # best-by-metric checkpoint callback's deque, so both drivers score
     # mean return over the same number of recent episodes.
     episode_return_mean_window: int = 30
+    # Evaluation cadence in training iterations (RLlib `evaluation_interval`).
+    # The checkpoint frequency is tied to this so every checkpoint lands on a
+    # fresh-eval iteration and can be ranked by eval return (best-N retention).
+    evaluation_interval: int = 2
 
     ppo_episodes_per_iteration: int = 25
     ppo_minibatch_size: int = 128 # Rllib default

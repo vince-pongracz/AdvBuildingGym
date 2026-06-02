@@ -17,7 +17,7 @@ callback-ordering luck. Doing the bookkeeping locally fixes all three
 metric paths.
 
 Fires on every episode completion but only writes when the new value
-beats the worst kept checkpoint, gated by ``checkpoint_frequency_episodes``
+beats the worst kept checkpoint, gated by ``checkpoint_frequency_iterations``
 so a SAC run with high UTD doesn't drown in disk I/O.
 """
 
@@ -51,9 +51,8 @@ class SBBestCheckpointCallback(BaseCallback):
         metric: One of ``episode_return_mean`` / ``achieved_reward`` /
             ``reward_rate``. Scores are computed from per-env ``infos``
             and ``VecMonitor`` episode dicts seen in ``_on_step``.
-        checkpoint_frequency_episodes: Only consider checkpointing every
-            N episodes (counted across the VecEnv). Mirrors Ray's
-            ``checkpoint_frequency_episodes``.
+        checkpoint_frequency_iterations: Only consider checkpointing every
+            N iterations.
         episode_return_mean_window: Length of the rolling deque used when
             ``metric == "episode_return_mean"``. Sourced from
             ``TrainingParamConfig.episode_return_mean_window`` so it
@@ -66,7 +65,7 @@ class SBBestCheckpointCallback(BaseCallback):
         self,
         checkpoint_dir: str,
         metric: str,
-        checkpoint_frequency_episodes: int = 20,
+        checkpoint_frequency_iterations: int = 1,
         episode_return_mean_window: int = 30,
         num_to_keep: int = 3,
         verbose: int = 1,
@@ -77,7 +76,7 @@ class SBBestCheckpointCallback(BaseCallback):
         self._checkpoint_dir = Path(checkpoint_dir)
         self._checkpoint_dir.mkdir(parents=True, exist_ok=True)
         self._metric = metric
-        self._frequency = max(1, int(checkpoint_frequency_episodes))
+        self._frequency = max(1, int(checkpoint_frequency_iterations))
         self._num_to_keep = max(1, int(num_to_keep))
         # (score, path) pairs — sorted by score ascending so worst is at index 0.
         self._kept: List[tuple[float, Path]] = []

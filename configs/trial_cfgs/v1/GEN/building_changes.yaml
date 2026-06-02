@@ -2,7 +2,6 @@ trial_name: gen_building_changes
 algorithm: sac
 seed: 42
 metric: episode_return_mean
-checkpoint_frequency_episodes: 10
 log_trajectories: false
 num_envs: 1
 grad_train: false
@@ -46,6 +45,7 @@ env_meta:
 
 training_params:
   common:
+    evaluation_interval: 4
     episode_lookback_horizon_steps: 120
     max_episodes_to_run: 7000
     clip_actions_to_env_bounds: true

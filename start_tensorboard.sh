@@ -18,8 +18,22 @@ fi
 LOGDIR="$1"
 shift
 
+# Use the project virtualenv so TensorBoard runs against the matched
+# protobuf/tensorboard pair. Running from the system Python 3.9 user-site
+# install breaks the HParams plugin (MessageToJson got an unexpected keyword
+# argument 'including_default_value_fields' — protobuf>=5 dropped that kwarg).
+VENV="/home/iai/dj0397/adv_env"
+if [ -f "$VENV/bin/activate" ]; then
+    # shellcheck disable=SC1091
+    source "$VENV/bin/activate"
+else
+    echo "ERROR: virtualenv not found at $VENV" >&2
+    exit 1
+fi
+
 echo ""
 echo "Starting TensorBoard with logdir: $LOGDIR"
+echo "Using TensorBoard from: $(command -v tensorboard)"
 
 export TF_CPP_MIN_LOG_LEVEL=3
 export TF_ENABLE_ONEDNN_OPTS=0
