@@ -93,6 +93,7 @@ def select_model(
             # actor_lr left at RLlib default 3e-5 (LR of the policy network)
             # critic_lr left at RLlib default 3e-4 (LR of the critic network)
             # alpha_lr left at RLlib default 3e-4 (weight of entropy -- exploration)
+            alpha_lr = 1e-4,
             # PrioritizedEpisodeReplayBuffer crashes on Ray 2.52.1 with
             # KeyError in sum-tree when priorities degenerate to zero.
             # Use uniform EpisodeReplayBuffer until the bug is fixed upstream.
@@ -105,7 +106,7 @@ def select_model(
             # SAC-specific hyperparameters
             twin_q=True,  # Use twin Q-networks to reduce overestimation bias. RLlib default
             initial_alpha=1.0,  # Initial entropy coefficient (auto-tuned via alpha_lr). RLlib default
-            target_entropy="auto",  # Target entropy for automatic alpha tuning. RLlib default: "auto" = -action_dim
+            target_entropy=0.0,  # Target entropy for automatic alpha tuning. RLlib default: "auto" = -action_dim
             # target_network_update_freq=1,  # Update target networks every step. RLlib default: 0
             n_step=training_config.sac_n_step_return,  # RLlib default: 1
             tau=0.005,  # Soft update coefficient for target networks (at Polyak averaging). RLlib default
@@ -126,7 +127,7 @@ def select_model(
             # per-step rewards in a bounded range (ideally [-1, 1] total).
             # See: slurm job 1624328 — crash at iter 48 with
             # "normal expects all elements of std >= 0.0".
-            grad_clip=1.0,  # RLlib default: None
+            # grad_clip=1.0,  # RLlib default: None
         )
     elif algorithm == "dreamerv3":
         config = DreamerV3Config()
