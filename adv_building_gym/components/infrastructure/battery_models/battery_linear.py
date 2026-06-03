@@ -56,6 +56,7 @@ class BatteryLinear(Infrastructure):
                 history_length: int,
                 soc_min: float,
                 soc_max: float,
+                start_soc_jitter: float = 0.0,
                 ) -> None:
         """Initialize linear battery model.
 
@@ -68,11 +69,18 @@ class BatteryLinear(Infrastructure):
             history_length: Number of past SoC values to track
             soc_min: Hardware minimum SoC (clipping floor)
             soc_max: Hardware maximum SoC (clipping ceiling)
+            start_soc_jitter: Half-width of the uniform per-episode offset
+                applied to the initial SoC for generalisation. 0.0 (default)
+                keeps the deterministic ``start_soc_percentage``.
         """
         super().__init__(name, max_power_kW)
 
+        if start_soc_jitter < 0.0:
+            raise ValueError("start_soc_jitter must be non-negative.")
+
         self.max_cap_kWh = max_cap_kWh
-        self.start_soc_percentage = start_soc_percentage
+        self.start_soc = start_soc_percentage
+        self.start_soc_jitter = start_soc_jitter
         self.soc = start_soc_percentage
         self.control_step = control_step
         self.history_length = history_length
@@ -147,8 +155,19 @@ class BatteryLinear(Infrastructure):
 
         The base implementation only re-emits update_state(), which would
         leave self.soc carrying over from the previous episode.
+
+        When ``start_soc_jitter`` > 0 the initial SoC is perturbed by a
+        uniform offset drawn from the env rng (published on the shared info
+        channel as "_rng") so episodes do not always begin from the same
+        charge level. The rng shares the deterministic, per-worker stream
+        seeded by reset(seed=...); fallback only for standalone use.
         """
-        self.soc = self.start_soc_percentage
+        self.soc = self.start_soc
+        if self.start_soc_jitter > 0.0:
+            rng = (info.get("_rng") if info else None) or np.random.default_rng()
+            self.soc += rng.uniform(-self.start_soc_jitter, self.start_soc_jitter)
+        self.soc = float(np.clip(self.soc, self.soc_min, self.soc_max))
+        
         self.actual_power_kW = 0.0
         super().reset(states, info)
 
