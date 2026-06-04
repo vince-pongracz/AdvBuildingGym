@@ -1,6 +1,6 @@
 import numpy as np
 
-from .base import RewardFunction
+from ..base import RewardFunction
 from adv_building_gym.components.registry import ComponentRegistry
 
 

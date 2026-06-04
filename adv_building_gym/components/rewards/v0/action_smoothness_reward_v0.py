@@ -7,7 +7,7 @@ exposes a ``ActionSmoothnessRewardV0`` entry that can be referenced from
 V0 reward configs without duplicating the spectral-analysis logic.
 """
 
-from .action_smoothness_reward import ActionSmoothnessReward
+from ..v1.action_smoothness_reward import ActionSmoothnessReward
 from adv_building_gym.components.registry import ComponentRegistry
 
 

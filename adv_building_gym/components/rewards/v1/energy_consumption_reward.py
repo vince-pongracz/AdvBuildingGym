@@ -4,7 +4,7 @@ import numpy as np
 
 from adv_building_gym._common.constants import SECONDS_PER_HOUR
 
-from .base import RewardFunction
+from ..base import RewardFunction
 from adv_building_gym.components.registry import ComponentRegistry
 
 logger = logging.getLogger(__name__)
