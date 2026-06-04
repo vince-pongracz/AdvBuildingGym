@@ -81,13 +81,6 @@ class LongTermEconomicRewardV0(RewardFunction):
         
         dyn_max_price_divisor = (dyn_max * 0.7 + dyn_max_ep * 0.3)
         
-        # During the evening peak, the price signal is often very low due to the high max price, 
-        # which makes it hard for the agent to learn. So we scale up the price signal by 2 during this period.
-        # 18:00 to 21:00, when the price is usually high 
-        # --> make it even more higher to discourage consumption during this period.
-        if self._step > 216 and self._step < 252: 
-            current_energy_price_norm *=2
-        
         if dyn_max_price_divisor != 0:
             price_signal = current_energy_price_norm / dyn_max_price_divisor
         else:

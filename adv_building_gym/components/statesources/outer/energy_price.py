@@ -166,6 +166,10 @@ class EnergyPriceDataSource(StateSource, Forecastable):
         self.baseprice_raw = float(row["baseprice"])
 
         states["s_E_price"][0] = np.float32(energy_price)
+        # Evening peak hours (18:00 to 21:00) when the price is usually high
+        # --> make it even more higher to discourage consumption during this period.
+        if self.iteration > 216 and self.iteration < 252: 
+            states["s_E_price"][0] *= 2
         # Raw maximum price (ct/kWh) — constant within an episode, changes
         # only when a new data variant is loaded.
         states["ctxt_E_price_max"][0] = np.float32(self.price_max)

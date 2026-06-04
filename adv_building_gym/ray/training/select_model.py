@@ -93,11 +93,10 @@ def select_model(
             # actor_lr left at RLlib default 3e-5 (LR of the policy network)
             # critic_lr left at RLlib default 3e-4 (LR of the critic network)
             # alpha_lr left at RLlib default 3e-4 (weight of entropy -- exploration)
-            alpha_lr = 1e-4,
+            alpha_lr = 0.0, # Keep it fixed (no auto-tuning)
             # PrioritizedEpisodeReplayBuffer crashes on Ray 2.52.1 with
             # KeyError in sum-tree when priorities degenerate to zero.
             # Use uniform EpisodeReplayBuffer until the bug is fixed upstream.
-            # TODO VP 2026.05.29.: Verkaufspreis >= Kaufpreis / 0,85 -- continue here
             # Link: https://github.com/ray-project/ray/issues/50966
             replay_buffer_config={
                 "type": "EpisodeReplayBuffer",
@@ -105,7 +104,8 @@ def select_model(
             },
             # SAC-specific hyperparameters
             twin_q=True,  # Use twin Q-networks to reduce overestimation bias. RLlib default
-            initial_alpha=1.0,  # Initial entropy coefficient (auto-tuned via alpha_lr). RLlib default
+            # NOTE VP 2026.06.04.: initial_alpha=0.2 is in the SB3 default
+            initial_alpha=0.2,  # Initial entropy coefficient (auto-tuned via alpha_lr). RLlib default
             target_entropy=0.0,  # Target entropy for automatic alpha tuning. RLlib default: "auto" = -action_dim
             # target_network_update_freq=1,  # Update target networks every step. RLlib default: 0
             n_step=training_config.sac_n_step_return,  # RLlib default: 1

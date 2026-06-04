@@ -12,11 +12,13 @@ swap_every_n_episodes: 5
 # adv_building_gym/config/data/data_combinator.py). This is env-local — there is
 # no cross-worker callback coordinating data variants.
 
-mode: cycle      # "cycle" (round-robin each variant) or "random" (pick variants randomly)
+mode: random      # "cycle" (round-robin each variant) or "random" (pick variants randomly)
 day: random      # "random", "each", or a date string like "2025-03-15"
 
 # Years to include in scenario generation
-years: [2020, 2021, 2022, 2023, 2024] # [2018, 2019, 2020, 2021, 2022, 2023, 2024]
+years: [2024]
+# [2020, 2021, 2022, 2023, 2024] 
+# [2018, 2019, 2020, 2021, 2022, 2023, 2024]
 
 # Whether to auto-discover and include augmented data files
 include_synthesized: true
