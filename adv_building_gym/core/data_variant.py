@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 
 
-class DataVariantProvider(ABC):
+class DataVariantConsumer(ABC):
     """Interface for environments that support hot-swapping datasource CSV files."""
 
     @abstractmethod

@@ -28,7 +28,7 @@ from ray.tune.registry import register_env
 from adv_building_gym.ray.utils.warning_filters import setup_warning_filters
 from adv_building_gym.config.trial_config import TrialConfig
 from adv_building_gym.ray.env_creator import adv_building_env_creator, merge_env_context
-from adv_building_gym.ray.training import common_model_setup, select_model
+from adv_building_gym.ray.training import common_model_setup, select_model, resource_setup
 from adv_building_gym.ray.callbacks import EVAL_SCORE_KEY, CHECKPOINT_NUM_TO_KEEP
 from adv_building_gym._common.json_encoder import CustomJSONEncoder
 from adv_building_gym._common.resource_check_util import SlurmResources
@@ -175,15 +175,24 @@ def _init_ray(cpu_only: bool = False) -> SlurmResources:
 
 def _build_algo_config(args, trial: TrialConfig, slurm_resources, exec_date_dt):
     """Assemble the RLlib algorithm config and return ``(algo_config, param_space)``."""
+    # 1. Algorithm-specific config (hyperparameters + RLModule).
     algo_config = select_model(
         algorithm=trial.algorithm,
         episode_length=trial.env_config.EPISODE_LENGTH,
         training_config=trial.training_param_config,
     )
+    # 2. Resource-dependent config (learner/env-runner resources + count, validation).
+    algo_config = resource_setup(
+        config=algo_config,
+        slurm_resources=slurm_resources,
+        training_config=trial.training_param_config,
+        env_config=trial.env_config,
+    )
+    # 3. Common, algorithm-independent config (env, connectors, eval, logger, callbacks).
+    #    Callbacks read the env-runner count set by resource_setup above.
     algo_config = common_model_setup(
         config=algo_config,
         training_config=trial.training_param_config,
-        slurm_resources=slurm_resources,
         env_config=trial.env_config,
         metrics_base_dir="ep_metrics",
         log_trajectories=trial.log_trajectories,

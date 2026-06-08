@@ -85,3 +85,5 @@ note.txt
 # The README at the root of snapshots/ is the only tracked file in there.
 snapshots/*
 !snapshots/snapshots.md
+
+tests/**

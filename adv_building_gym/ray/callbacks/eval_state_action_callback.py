@@ -153,6 +153,7 @@ def make_eval_state_action_cb_class(
                 # Per-step reward diagnostics (0/1 flags) — accumulated below
                 # into a running cumulative sum so the trajectory grows by 1 at
                 # each step the flag fires (final value = episode total count).
+                # TODO VP 2026.06.08.: How does this work..?
                 for diag_name, diag_val in info.get("reward_diagnostics", {}).items():
                     ep_data[f"reward_diag/{diag_name}"].append(float(diag_val))
 

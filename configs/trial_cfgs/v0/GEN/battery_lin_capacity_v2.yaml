@@ -11,7 +11,7 @@ env_meta:
   control_step: 300
   allow_early_termination: false
   hst_env_wrapper:
-    enabled: true
+    enabled: false
     tracked_keys:
     - s_battery_soc
     - s_ev_soc
@@ -24,14 +24,7 @@ env_meta:
     - -1
     - -2
     - -3
-    - -4
-    - -6
-    - -12
-    - -18
-    - -24
-    - -36
-    - -48
-    - -60
+    - -4    
 
   forecast_env_wrapper:
     enabled: true

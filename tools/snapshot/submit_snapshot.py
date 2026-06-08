@@ -284,6 +284,42 @@ def _shlex_split(s: str) -> list[str]:
     return shlex.split(s) if s else []
 
 
+# Matches a #SBATCH time directive in a wrapper script: --time=X, --time X, -t X.
+_WRAPPER_TIME_REGEX = re.compile(
+    r"^#SBATCH\s+(?:--time(?:=|\s+)|-t\s+)(?P<time>\S+)", re.MULTILINE
+)
+
+
+def _resolve_time_limit(extra_sbatch_args: list[str], wrapper_path: Path) -> str:
+    """Return the effective sbatch wall-clock limit for this submission.
+
+    CLI --sbatch flags override the wrapper's #SBATCH directive (matching how
+    sbatch itself resolves precedence), so a --time/-t in extra_sbatch_args
+    wins; otherwise fall back to the wrapper's #SBATCH --time=. Returns
+    "unknown" if neither specifies one.
+    """
+    # Walk the CLI args; the last --time/-t wins (later flags override earlier).
+    resolved: str | None = None
+    i = 0
+    while i < len(extra_sbatch_args):
+        arg = extra_sbatch_args[i]
+        if arg.startswith("--time="):
+            resolved = arg.split("=", 1)[1]
+        elif arg in ("--time", "-t") and i + 1 < len(extra_sbatch_args):
+            resolved = extra_sbatch_args[i + 1]
+            i += 1
+        i += 1
+    if resolved is not None:
+        return resolved
+
+    try:
+        text = wrapper_path.read_text(encoding="utf-8")
+    except OSError:
+        return "unknown"
+    m = _WRAPPER_TIME_REGEX.search(text)
+    return m.group("time") if m else "unknown"
+
+
 def _build_sbatch_cmd(
     plan: SubmissionPlan,
     *,
@@ -575,7 +611,19 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     job_id = _submit(cmd)
+    # Persist the job id inside the run dir so the run can later be cancelled
+    # (`scancel $(cat <run_dir>/slurm_job_id)`) without grepping squeue/sacct.
+    # The second line records the effective wall-clock limit for reference.
+    time_limit = _resolve_time_limit(extra_sbatch, plan.wrapper_path)
+    job_id_file = plan.run_dir / "slurm_job_id"
+    job_id_file.write_text(
+        f"Slurm job ID: {job_id}\nTime limit: {time_limit}\n", encoding="utf-8"
+    )
     logger.info("Submitted job %s — outputs will appear under %s", job_id, plan.run_dir)
+    logger.info(
+        "  job id recorded in %s (stop with: scancel %s); time limit: %s",
+        job_id_file, job_id, time_limit,
+    )
     print(plan.run_dir)
     return 0
 

@@ -34,7 +34,6 @@ from adv_building_gym.config.rewards.reward_schedule_manager import RewardSchedu
 from adv_building_gym.config.training.training_param_config import TrainingParamConfig
 from adv_building_gym.config.env.infra_combinator import InfraCombinator
 from adv_building_gym.config.env.statesource_combinator import StatesourceCombinator
-from adv_building_gym._common.resource_check_util import ResourceAllocation, SlurmResources, validate_resource_allocation
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +53,6 @@ def _compose_on_train_result(*fns):
 
 def register_callbacks(
     config: AlgorithmConfig,
-    num_env_runners: int,
     checkpoint_interval: int,
     metrics_base_dir: str = "ep_metrics",
     log_trajectories: bool = False,
@@ -67,10 +65,10 @@ def register_callbacks(
 ) -> None:
     """Register episode-metric, trajectory, and scheduling callbacks on *config*.
 
-    Mutates *config* in place via ``config.callbacks()``.  Intended to be
-    called after :func:`common_model_setup` (or at the end of it) so that
-    all algorithm-specific settings are already applied before callbacks
-    are wired up.
+    Mutates *config* in place via ``config.callbacks()``. Must be called after
+    ``resource_setup`` has set the env-runner count, since the schedule callbacks
+    read ``config.num_env_runners`` to floor their swap window (one episode per
+    runner between swaps).
 
     Data-variant selection is intentionally not a callback here — it is
     env-side (see :mod:`adv_building_gym.core._data_variant_manager`).
@@ -82,6 +80,10 @@ def register_callbacks(
         reward_schedule_manager: Optional reward schedule manager.
         infra_combinator: Optional infrastructure schedule combinator.
     """
+    # The env-runner count was set earlier by resource_setup (algorithm-specific).
+    # Read it back here so the swap-gate floor matches the actual sampling topology.
+    num_env_runners = config.num_env_runners
+
     # Create callback classes for episode metrics and (optionally) trajectory logging.
     # Each factory returns a configured RLlibCallback subclass.
     # Link: https://docs.ray.io/en/latest/rllib/rllib-callback.html
@@ -190,7 +192,6 @@ def register_callbacks(
 
 def common_model_setup(
     config: AlgorithmConfig,
-    slurm_resources: SlurmResources,
     training_config: TrainingParamConfig,
     env_config: EnvConfig,
     metrics_base_dir: str = "ep_metrics",
@@ -203,25 +204,27 @@ def common_model_setup(
     trial_name: str | None = None,
 ):
     """
-    Apply common RLlib configuration to an algorithm config.
+    Apply common, algorithm-independent RLlib configuration.
 
-    This function configures settings that are common across all algorithms:
+    Configures the settings shared across all algorithms:
     - API stack (RL module and learner, env runner and connector v2)
     - Environment configuration (retrieves action space from env_creator)
-    - Debugging settings
-    - Reporting settings
-    - Framework configuration
-    - Resource allocation (learners and env runners)
-    - Learner resources
-    - Env runner resources and connectors
+    - Debugging / reporting / framework settings
+    - Sampling config: rollout_fragment_length, episode_lookback_horizon, connectors
     - Evaluation settings
     - Logger configuration
-    - Callbacks (EpisodeMetricsCallback, TrajectoryLoggingCallback)
-    - Resource validation
+    - Callbacks (episode metrics, eval trajectories, optional schedule callbacks)
+
+    Must run AFTER ``resource_setup`` (which sets the learner / env-runner resources
+    and the algorithm-specific ``num_env_runners``): the schedule callbacks read the
+    final ``config.num_env_runners`` to floor their swap window. Resource allocation
+    and validation themselves are intentionally NOT done here — they live in
+    ``resource_setup``.
 
     Args:
         config: Algorithm config object (e.g., PPOConfig instance)
-        slurm_resources: SLURM-allocated CPU/GPU resources
+        training_config: Hyperparameters (seed, gamma, eval interval, ...)
+        env_config: Provides EPISODE_LENGTH for the rollout fragment length.
         metrics_base_dir: Base directory for episode metrics (default: "ep_metrics")
         log_trajectories: When True, save full per-step trajectory JSON
             during evaluation episodes (via episode callback).
@@ -233,36 +236,6 @@ def common_model_setup(
     Returns:
         Configured algorithm config
     """
-    # Resource allocation:
-    # - local_learner=True (default): num_learners=0, Learner runs in the driver
-    #   process. Driver's 1 CPU covers both, no separate learner CPU reservation.
-    # - local_learner=False: one remote Learner per GPU, each with 1 GPU + 1 CPU.
-    # - Env runners: remaining CPUs after learners and driver.
-    local_learner = training_config.local_learner
-    num_cpus_per_env_runner = 1
-    driver_cpus = 1
-
-    if local_learner:
-        num_learners = 0
-        num_gpus_per_learner = 1 if slurm_resources.num_gpus > 0 else 0
-        num_cpus_per_learner = 0
-        learner_total_cpus = 0
-    else:
-        num_learners = max(1, slurm_resources.num_gpus)
-        num_gpus_per_learner = 1 if slurm_resources.num_gpus > 0 else 0
-        num_cpus_per_learner = 1
-        learner_total_cpus = num_learners * num_cpus_per_learner
-
-    remaining_cpus = slurm_resources.num_cpus - learner_total_cpus - driver_cpus
-    num_env_runners = max(1, remaining_cpus // num_cpus_per_env_runner)
-
-    logger.info(
-        "Resource allocation in rllib_config: learners=%d (gpus=%d, cpus=%d each), "
-        "env_runners=%d (cpus=%d each), driver=%d CPU",
-        num_learners, num_gpus_per_learner, num_cpus_per_learner,
-        num_env_runners, num_cpus_per_env_runner, driver_cpus
-    )
-
     # observation_space is intentionally omitted — FlattenObservations transforms
     # it automatically. 
     # action_space is also omitted — the env_creator wraps
@@ -297,44 +270,14 @@ def common_model_setup(
     )
     config.log_gradients = False # RLlib default: False
     # NOTE VP 2026.01.08. : about ray and rllib concept https://docs.ray.io/en/latest/rllib/key-concepts.html
-    # Learning the NN, policy (gradient updates) -- needs GPU
-    config.learners(
-        num_learners=num_learners,
-        num_gpus_per_learner=num_gpus_per_learner,
-        num_cpus_per_learner=num_cpus_per_learner,
-    )
-    
     config.training(gamma=training_config.gamma) # RLlib default: 0.99
-    # Sampling actions (querying the env, using the policy, sample trajectories) -- no GPU needed
-    # Per-key history stacking is handled inside HistoryWrapper (env wrapper);
-    # the pipeline here only needs FlattenObservations and the default
-    # episode_lookback_horizon (the wrapper owns its own rolling buffer).
-    # PPO validates total_train_batch_size ≈ num_env_runners * rollout_fragment_length
-    # (within 10%).  With rollout_fragment_length=EPISODE_LENGTH, we need
-    # num_env_runners ≈ ppo_episodes_per_iteration * num_learners.  When the
-    # SLURM-derived num_env_runners exceeds that, drop it down so episodes are
-    # not over-collected on each iteration (the surplus CPUs go unused).
-    is_ppo = type(config).__name__ == "PPOConfig"
-    # Accessing train_batch_size_per_learner on non-PPO configs (e.g. DreamerV3)
-    # can raise inside RLlib when train_batch_size is unset — only read it
-    # when we actually need it for PPO's env-runner sizing heuristic.
-    train_batch = getattr(config, "train_batch_size_per_learner", None) if is_ppo else None
-    if is_ppo and train_batch:
-        total_batch = train_batch * num_learners
-        target_env_runners = max(1, total_batch // env_config.EPISODE_LENGTH)
-        if num_env_runners > target_env_runners:
-            logger.warning(
-                "Reducing num_env_runners %d -> %d to match PPO total_train_batch_size=%d "
-                "(per_learner=%d x num_learners=%d) at rollout_fragment_length=%d. "
-                "Surplus CPUs will be left idle.",
-                num_env_runners, target_env_runners, total_batch,
-                train_batch, num_learners, env_config.EPISODE_LENGTH,
-            )
-            num_env_runners = target_env_runners
+    # Sampling actions (querying the env, using the policy, sample trajectories) -- no GPU needed.
+    # Per-key history stacking is handled inside HistoryWrapper (env wrapper); the
+    # pipeline here only needs FlattenObservations. The env-runner *count* and the
+    # learner/env-runner resource shares are set later in resource_setup (they depend
+    # on the SLURM budget and the algorithm); here we only set sampling behaviour.
     config.env_runners(
         rollout_fragment_length=env_config.EPISODE_LENGTH, # Collect complete episodes before returning to learner.
-        num_env_runners=num_env_runners,
-        num_cpus_per_env_runner=num_cpus_per_env_runner,
         episode_lookback_horizon=training_config.episode_lookback_horizon_steps,  # RLlib default: 1
         env_to_module_connector=lambda env, spaces, device: [FlattenObservations()],  # type: ignore
     )
@@ -377,9 +320,10 @@ def common_model_setup(
         ],
     }
 
+    # Callbacks read the env-runner count from the config (set by resource_setup),
+    # so this must run after resource_setup.
     register_callbacks(
         config,
-        num_env_runners=num_env_runners,
         checkpoint_interval=training_config.evaluation_interval,
         metrics_base_dir=metrics_base_dir,
         log_trajectories=log_trajectories,
@@ -390,28 +334,5 @@ def common_model_setup(
         exec_date=exec_date,
         trial_name=trial_name,
     )
-
-    # Validate resource allocation against SLURM constraints
-    driver_cpus = 1
-    learner_total_cpus = num_learners * num_cpus_per_learner
-    total_cpu_usage = driver_cpus + learner_total_cpus + (num_env_runners * num_cpus_per_env_runner)
-    unused_cpus = slurm_resources.num_cpus - total_cpu_usage
-
-    allocation = ResourceAllocation(
-        total_cpu_usage=total_cpu_usage,
-        unused_cpus=unused_cpus,
-        driver_cpus=driver_cpus,
-        num_learners=num_learners,
-        cpus_per_learner=num_cpus_per_learner,
-        learner_total_cpus=learner_total_cpus,
-        actual_env_runners=num_env_runners,
-        cpus_per_env_runner=num_cpus_per_env_runner,
-        slurm_cpus=slurm_resources.num_cpus,
-        slurm_gpus=slurm_resources.num_gpus,
-    )
-
-    # Convert config to dict for validation
-    param_space = config.to_dict()
-    validate_resource_allocation(allocation, param_space)
 
     return config

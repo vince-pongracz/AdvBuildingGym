@@ -14,7 +14,7 @@ from adv_building_gym.components.infrastructure import Infrastructure
 
 from adv_building_gym._common.warning_filters import setup_warning_filters
 from adv_building_gym._common.constants import SECONDS_PER_HOUR
-from adv_building_gym.core.data_variant import DataVariantProvider
+from adv_building_gym.core.data_variant import DataVariantConsumer
 from adv_building_gym.core._data_variant_manager import DataVariantManager
 from adv_building_gym.core._action_history_buffer import ActionHistoryBuffer
 from adv_building_gym.core._energy_tracker import EnergyTracker
@@ -32,7 +32,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-class AdvBuildingGym(gym.Env, DataVariantProvider):
+class AdvBuildingGym(gym.Env, DataVariantConsumer):
     """Modular Gymnasium env for building-energy control.
 
     Composes Infrastructure, StateSource, and RewardFunction components and

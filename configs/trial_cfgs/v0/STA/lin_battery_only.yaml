@@ -47,6 +47,16 @@ training_params:
     n_step_return: 3
     training_intensity: 128
     learning_starts_after_n_episodes: 50
+  dreamerv3:
+    model_size: "XS"
+    batch_size_B: 16
+    batch_length_T: 64
+    training_ratio: 128.0
+    horizon_H: 15
+    episodes_to_keep_in_replay_buffer: 500
+    world_model_lr: 1.0e-4
+    actor_lr: 3.0e-5
+    critic_lr: 3.0e-5
 
 statesources:
 - class: EnergyPriceDataSource
