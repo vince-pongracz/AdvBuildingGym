@@ -11,11 +11,10 @@ PowerFlow = Literal["consumer", "generator", "bidirectional"]
 
 
 class Infrastructure(Serializable):
-    """Base class for infrastructure components in the building environment.
+    """Base infrastructure component.
 
-    Composition over inheritance: synchronisation state lives in ``self.sync``
-    (an ``EnvSync`` instance), exposed via pass-through properties so the
-    legacy ``self.iteration`` / ``self.synchronise`` call sites keep working.
+    Sync state lives in ``self.sync`` (``EnvSync``), exposed via pass-through
+    properties so ``self.iteration`` / ``self.synchronise`` keep working.
     """
 
     # Parameters derived from context (building_props, control_step)
@@ -24,9 +23,8 @@ class Infrastructure(Serializable):
     # Internal state - never serialize
     _exclude_params: ClassVar[Set[str]] = set()
 
-    # Class-level declaration of power-flow direction. Every concrete subclass
-    # MUST set this; enforced in __init_subclass__. Not an __init__ arg, so it
-    # is not serialised into YAML.
+    # Power-flow direction; every subclass MUST set it (enforced in
+    # __init_subclass__). Not an __init__ arg, so not serialised.
     POWER_FLOW: ClassVar[PowerFlow | None] = None
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
@@ -70,20 +68,12 @@ class Infrastructure(Serializable):
 
     @property
     def max_consumption_kW(self) -> float:
-        """Maximum power possibly DRAWN from the grid (kW).
-
-        Derived from POWER_FLOW. Override only when the bound depends on
-        runtime state (e.g., a flag toggling a direction).
-        """
+        """Max power possibly drawn from grid (kW), from POWER_FLOW. Override for runtime-dependent bounds."""
         return self.max_power_kW if self.POWER_FLOW in ("consumer", "bidirectional") else 0.0
 
     @property
     def max_production_kW(self) -> float:
-        """Maximum power possibly EXPORTED to the grid (kW).
-
-        Derived from POWER_FLOW. Override only when the bound depends on
-        runtime state (e.g., a flag toggling a direction).
-        """
+        """Max power possiblyexported to grid (kW), from POWER_FLOW. Override for runtime-dependent bounds."""
         return self.max_power_kW if self.POWER_FLOW in ("generator", "bidirectional") else 0.0
 
     def setup_spaces(self,
@@ -97,47 +87,30 @@ class Infrastructure(Serializable):
         pass
 
     def exec_action(self, actions: Dict, states: Dict, info: dict | None = None) -> None:
-        """Execute action of the infrastructure.
+        """Execute the component's action.
 
-        Args:
-            actions: Action dict keyed by component action name.
-            states: Observable state dict; treat as immutable during action execution.
-            info: Shared dict for inter-component data that is not part of
-                the observation space (e.g., EV schedule parameters).
+        actions: action dict by component name. states: observable state
+        (treat immutable here). info: shared inter-component data (not in obs).
         """
         pass
 
     def update_state(self, states: Dict, info: dict | None = None) -> None:
-        """Update state based on current iteration.
+        """Update observable state (after exec_action; no actions here).
 
-        Subclasses must call ``super().update_state(states, info)`` so
-        that base-class bookkeeping (power bound publication) runs.
-
-        **Note**: Called after ``exec_action`` to update observable states,
-        and only to update them, not to perform actions.
-
-        Args:
-            states: Observable state dict (agent-visible).
-            info: Shared dict for inter-component data that is not part of
-                the observation space.
+        Subclasses must call ``super().update_state(states, info)`` for
+        base bookkeeping (power-bound publication).
         """
         info = self._publish_power_bounds(info)
 
     def reset(self, states: Dict, info: dict | None = None) -> None:
         """Populate initial state at episode start (after data reloads).
 
-        Called once per episode instead of update_state() during reset().
-        The default delegates to update_state(); subclasses can override
-        for reset-specific initialisation.
+        Called once per episode in place of update_state(); default delegates to it.
         """
         self.update_state(states, info)
 
     def _publish_power_bounds(self, info: dict | None = None) -> dict:
-        """Accumulate this component's directional power bounds into *info*.
-
-        Creates a new dict if *info* is ``None`` so the bounds are always
-        available via the returned value.
-        """
+        """Accumulate this component's directional power bounds into *info* (new dict if None)."""
         if info is None:
             info = {}
         info["max_consumption_kW"] = info.get("max_consumption_kW", 0.0) + self.max_consumption_kW
@@ -145,37 +118,11 @@ class Infrastructure(Serializable):
         return info
 
     def get_raw_values(self) -> dict[str, float]:
-        """Return raw (unnormalised) physical values for logging.
-
-        Override in subclasses that track raw values.
-        Default returns an empty dict.
-        """
+        """Raw (unnormalised) physical values for logging; override to populate."""
         return {}
 
-    def get_penalisable_consumption(self, actions: Dict, states: Dict) -> float:
-        """Power (kW) that should count toward the energy consumption penalty.
-
-        Override to exempt necessary consumption (e.g. charging below target
-        SoC) or non-controllable load.  Default: all consumption is penalisable.
-        """
-        E_production, E_consumption = self.get_E(actions)
-        return E_consumption
-
-
     def get_E(self, actions: Dict) -> tuple[float, float]:
-        """Get current electric energy consumption in kW.
-
-        Default implementation: extracts action for this component and scales by max_power_kW.
-        Override in derived classes for more complex calculations.
-
-        Args:
-            actions: Dictionary containing all actions
-
-        Returns:
-            float1 -- production
-            
-            float2 -- consumption
-        """
-        # Default: return 0 if no action found
+        """Electric energy (kW) as (production, consumption). Default 0; override per component."""
+        # default: no action -> no power
         return 0.0, 0.0
 

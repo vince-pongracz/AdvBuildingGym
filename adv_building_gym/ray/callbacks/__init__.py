@@ -1,8 +1,4 @@
-"""
-Callbacks module for RL training.
-
-This module provides callback functions for use with Ray RLlib and Stable Baselines3.
-"""
+"""Ray RLlib training callbacks (factory-based)."""
 
 from .episode_metrics_callback import make_episode_metrics_cb_class
 from .eval_state_action_callback import make_eval_state_action_cb_class

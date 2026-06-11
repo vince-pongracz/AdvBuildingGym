@@ -11,18 +11,11 @@ logger = logging.getLogger(__name__)
 
 
 class HouseholdEnergyConsumers(Infrastructure):
-    """Passive household energy consumer infrastructure.
+    """Passive household consumer (no policy action).
 
-    Reads the normalized consumption signal from the DesiredUserEnergyNeed
-    statesource (``desired_energy_need`` in states) and converts it to a
-    physical kW consumption value.
-
-    There is no policy-controlled action. The actual consumption is written
-    into ``actions['hh_consumption_action']`` as a read-only output so that
-    reward functions can account for it.
-
-    Action convention: positive = consumption from grid.
-    hh_consumption_action value: 0 = no consumption, 1 = peak consumption.
+    Converts the normalised ``desired_energy_need`` signal (from DesiredUserEnergyNeed)
+    to kW and writes it read-only into ``actions['a_hh_consumption']`` (0=none, 1=peak)
+    so rewards can account for it. Positive = consumption from grid.
     """
 
     POWER_FLOW = "consumer"
@@ -33,12 +26,7 @@ class HouseholdEnergyConsumers(Infrastructure):
     }
 
     def __init__(self, name: str, peak_consumption_kW: float) -> None:
-        """Initialize household energy consumers infrastructure.
-
-        Args:
-            name: Component identifier
-            peak_consumption_kW: Peak household consumption in kW
-        """
+        """peak_consumption_kW: peak household consumption (kW)."""
         super().__init__(name, peak_consumption_kW)
 
         self.peak_consumption_kW = peak_consumption_kW
@@ -47,20 +35,14 @@ class HouseholdEnergyConsumers(Infrastructure):
         self.consumption_norm = 0.0  # Normalized consumption [0, 1]
         self.current_consumption_kW = 0.0  # Actual consumption in kW
 
-        # Per-episode RNG for the synthetic fallback profile; rebound to the
-        # shared env rng (info["_rng"]) on every reset(). Standalone default
-        # until the first reset.
+        # Per-episode RNG for the synthetic fallback; rebound to env rng
+        # (info["_rng"]) on reset(). Standalone default until first reset.
         self._rng = np.random.default_rng()
 
     def setup_spaces(self,
                     state_spaces,
                     action_spaces):
-        """Setup observation space for household consumption.
-
-        Household consumers have no policy-controlled action space —
-        consumption is determined by the DesiredUserEnergyNeed statesource.
-        Only state space is registered.
-        """
+        """Register state space only — consumption is set by DesiredUserEnergyNeed, no action."""
         if "s_hh_consumption_norm" not in state_spaces:
             state_spaces["s_hh_consumption_norm"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
         
@@ -70,13 +52,12 @@ class HouseholdEnergyConsumers(Infrastructure):
         return state_spaces, action_spaces
 
     def exec_action(self, actions: Dict, states: Dict, info=None) -> None:
-        """Compute household consumption and write it into actions.
+        """Compute consumption and write it into actions.
 
-        Reads ``desired_energy_need`` from states (set by
-        DesiredUserEnergyNeed statesource). Falls back to a synthetic
-        time-of-day profile when no statesource signal is available.
+        Reads ``s_desired_energy_need`` (DesiredUserEnergyNeed); falls back to a
+        synthetic time-of-day profile if absent.
         """
-        # Read normalized consumption signal from statesource
+        # read normalised consumption signal
         if "s_desired_energy_need" in states:
             self.consumption_norm = float(states["s_desired_energy_need"][0])
         else:
@@ -86,7 +67,7 @@ class HouseholdEnergyConsumers(Infrastructure):
         # Scale normalized signal to physical kW
         self.current_consumption_kW = self.consumption_norm * self.peak_consumption_kW
 
-        # Write normalized consumption as read-only output (positive = consumption)
+        # write normalised consumption as read-only output (positive = consumption)
         # NOTE VP 2026.05.07.: It's not really needed to be an action...
         # it could be a state as well... -- but later if user sets it dynamically?
         # then it's maybe still a state...
@@ -105,18 +86,13 @@ class HouseholdEnergyConsumers(Infrastructure):
         """Clear per-episode consumption readouts."""
         self.consumption_norm = 0.0
         self.current_consumption_kW = 0.0
-        # Bind to the env rng published on the shared info channel as "_rng"
-        # so the synthetic fallback noise shares the deterministic, per-worker
-        # stream seeded by reset(seed=...). Fallback only for standalone use.
+        # Bind to env rng (info["_rng"]) so fallback noise shares the
+        # deterministic per-worker stream; standalone fallback otherwise.
         self._rng = (info.get("_rng") if info else None) or np.random.default_rng()
         super().reset(states, info)
 
     def _synthetic_consumption(self, states: Dict) -> float:
-        """Generate synthetic consumption based on time of day.
-
-        Simple stepped profile matching DesiredUserEnergyNeed's synthetic
-        pattern, with added Gaussian noise for realism.
-        """
+        """Stepped time-of-day profile (matches DesiredUserEnergyNeed) plus Gaussian noise."""
         # s_sim_hour is published by the env in [0, 1] (hour-of-day / 24).
         sim_hour = float(states.get("s_sim_hour", np.zeros(1, dtype=np.float32))[0]) * 24.0
 
@@ -140,15 +116,9 @@ class HouseholdEnergyConsumers(Infrastructure):
         }
 
     def get_E(self, actions: Dict) -> tuple[float, float]:
-        """Get current electric energy consumption from household consumers.
-
-        Sign convention: positive = consumption from grid.
-
-        Returns:
-            Positive value representing energy consumed from the grid (kW).
-        """
+        """Returns (production, consumption); positive consumption drawn from grid (kW)."""
         return 0.0, self.current_consumption_kW
 
 
-# Register HouseholdEnergyConsumers with the component registry
+# register with ComponentRegistry
 ComponentRegistry.register('infrastructure', HouseholdEnergyConsumers)

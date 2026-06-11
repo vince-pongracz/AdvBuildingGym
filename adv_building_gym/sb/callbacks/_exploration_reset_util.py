@@ -51,14 +51,8 @@ _DECAY_STATE_ATTR = "_sb_exploration_reset_decay_state"
 
 
 def _iter_optimizers(model) -> Iterable[tuple[str, th.optim.Optimizer]]:
-    """Yield (name, optimizer) for every optimizer attached to the SB3 model.
-
-    SAC stores actor.optimizer, critic.optimizer, and (when
-    ``ent_coef='auto'``) ent_coef_optimizer. PPO stores
-    ``policy.optimizer`` only. We probe a small list of well-known
-    locations; unknown algorithms fall back to whatever is on
-    ``model.policy.optimizer``.
-    """
+    """Yield (name, optimizer) for each optimizer on the SB3 model
+    (policy / actor / critic / ent_coef as present)."""
     policy = getattr(model, "policy", None)
     if policy is None:
         return
@@ -87,18 +81,12 @@ def _iter_optimizers(model) -> Iterable[tuple[str, th.optim.Optimizer]]:
 def capture_baselines(model) -> None:
     """Snapshot baseline entropy_coeff / log_alpha / per-optimiser LRs.
 
-    Ratchet semantics: an existing baseline is only *lowered* (tightened)
-    — never raised. This preserves the policy's learned focus across
-    multiple swap events; bumps always decay back to the tightest learned
-    value, not to a stale early-training snapshot.
+    Ratchet: existing baselines are only lowered, so bumps decay back to the tightest seen.
     """
     existing: dict = getattr(model, _BASELINES_ATTR, None) or {}
     baselines: dict = {}
 
-    # PPO ent_coef (plain float). SB3 SAC has self.ent_coef as a string
-    # ("auto" or "auto_0.1") at construction but resolves to a tensor
-    # via self.ent_coef_tensor or self.log_ent_coef; we route that
-    # through the log_alpha path below.
+    # PPO ent_coef is a float; SAC's resolves to log_ent_coef, routed through log_alpha below
     ent_coef = getattr(model, "ent_coef", None)
     if isinstance(ent_coef, (int, float)):
         current = float(ent_coef)
@@ -143,12 +131,7 @@ def apply_exploration_level(
     *,
     frac: float,
 ) -> None:
-    """Set entropy / log_alpha / LR to baseline + frac * (boost - baseline).
-
-    frac=1.0 puts the model at the configured boost target;
-    frac=0.0 restores baseline. Intermediate values trace the linear
-    decay envelope.
-    """
+    """Set entropy / log_alpha / LR to baseline + frac*(boost - baseline); frac 1=boost, 0=baseline."""
     frac = max(0.0, min(1.0, float(frac)))
     baselines: dict = getattr(model, _BASELINES_ATTR, None) or {}
 
@@ -165,8 +148,7 @@ def apply_exploration_level(
         base_log = baselines["log_alpha"]
         target_log = math.log(bump_cfg.sac_alpha)
         interp = base_log + frac * (target_log - base_log)
-        # In-place edit of the nn.Parameter so the running graph picks
-        # it up on the next training step.
+        # in-place edit of the nn.Parameter so the next training step picks it up
         with th.no_grad():
             log_ent_coef.data.fill_(float(interp))
 
@@ -181,20 +163,11 @@ def apply_exploration_level(
 
 
 def make_decay_loop(exploration_reset: ExplorationResetConfig, *, event: str):
-    """Return ``(maybe_decay, fire_bump)`` callables.
+    """Return ``(maybe_decay, fire_bump)``.
 
-    ``maybe_decay(model)`` should be invoked every callback tick
-    (``_on_step``); it linearly decays an in-flight bump back to baseline.
-
-    ``fire_bump(model)`` should be invoked by the owning callback right
-    after a successful swap (and only when ``fires_on(event)`` is true).
-    State is stored on the model object via a private attribute, so each
-    callback gets its own decay clock without colliding with siblings.
-
-    Decay length: ``decay_iterations`` callback ticks. With SB3's
-    ``_on_step`` firing every env step that's denser than RLlib's
-    per-iteration ticks; the linear envelope keeps the *integral* of
-    extra exploration matched regardless.
+    ``maybe_decay(model)`` runs every ``_on_step`` and linearly decays an in-flight bump.
+    ``fire_bump(model)`` runs after a swap (when ``fires_on(event)``). State lives on the model
+    so each callback has its own decay clock. Decay length: ``decay_iterations`` ticks.
     """
 
     fires_here = exploration_reset.fires_on(event)
@@ -229,8 +202,7 @@ def make_decay_loop(exploration_reset: ExplorationResetConfig, *, event: str):
     def fire_bump(model) -> None:
         if not fires_here:
             return
-        # Ratchet baselines to the current (possibly more-focused) state
-        # before applying the bump.
+        # ratchet baselines to the current state before the bump
         capture_baselines(model)
         apply_exploration_level(model, exploration_reset, frac=1.0)
         _state(model)[event] = int(getattr(model, "num_timesteps", 0))

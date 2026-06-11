@@ -43,13 +43,8 @@ def _timeout_handler(signum, frame):
 
 
 def _batch_state(state):
-    """Add a leading batch dim to every tensor in a (nested) state dict.
-
-    ``RLModule.get_initial_state()`` returns unbatched tensors; the
-    inference forward pass expects a batch dimension. Non-tensor leaves
-    (e.g. numpy arrays from stateless modules' empty dict) are returned
-    unchanged.
-    """
+    """Add a leading batch dim to every tensor in a (nested) state dict
+    (``get_initial_state()`` is unbatched); non-tensor leaves unchanged."""
     if isinstance(state, dict):
         return {k: _batch_state(v) for k, v in state.items()}
     if isinstance(state, (list, tuple)):
@@ -76,11 +71,11 @@ def evaluate_model(
     subdir: str | None = None,
     trial_yaml_path: str | Path | None = None,
 ) -> EvalResults:
-    """Evaluate a Ray/RLlib trained model on AdvBuildingGym.
+    """Evaluate a Ray/RLlib trained model on AdvBuildingGym (CPU-only inference).
 
-    Uses CPU-only inference to avoid GPU resource over-subscription.
-    Policy weights are loaded directly via ``RLModule.from_checkpoint()``
-    without spawning training actors.
+    Loads policy weights via ``RLModule.from_checkpoint()`` without training actors.
+    ``stochastic`` samples from the squashed-Gaussian policy (per-episode ``seed + ep`` RNG)
+    instead of ``tanh(mean)``. Returns ``EvalResults`` (per-episode stats + summary).
 
     Args:
         checkpoint_path: Absolute path to the Ray checkpoint directory.
@@ -101,13 +96,10 @@ def evaluate_model(
     Returns:
         ``EvalResults`` with per-episode stats and summary.
     """
-    # Load the default YAML training config if the caller didn't pass one —
     # eval MUST use the same hst settings as training or obs dimensions diverge.
 
-    # Create a timestamped subdirectory so successive eval runs never collide.
-    # Caller can supply a fixed `run_stamp` to share one timestamp across
-    # multiple per-config eval passes, and a `subdir` to nest each pass under
-    # its own directory.
+    # timestamped subdir so eval runs don't collide; caller may share a fixed `run_stamp`
+    # across passes and nest each under `subdir`
     if run_stamp is None:
         run_stamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S") + "_eval"
         if stochastic:
@@ -133,8 +125,7 @@ def evaluate_model(
     )
     logger.info("=" * 70)
 
-    # Initialize Ray with minimal resources for CPU-only inference.
-    # The [256, 256] policy network runs fast enough on CPU.
+    # minimal Ray for CPU-only inference ([256, 256] policy is fast on CPU)
     if not ray.is_initialized():
         # Silence Ray's future warning about overriding accelerator env var
         os.environ.setdefault("RAY_ACCEL_ENV_VAR_OVERRIDE_ON_ZERO", "0")
@@ -157,15 +148,12 @@ def evaluate_model(
     # --> Eval long term as well. Not only single day optimisation, long term optimisation learnt
     # On trial level it's already realised, but still have to try and test it
 
-    # Create evaluation environment with action-space wrappers
-    # (FlattenAction + RescaleAction) so the policy's flat [-1, 1] output
-    # is correctly rescaled to each component's real bounds.
+    # eval env with FlattenAction + RescaleAction so the flat [-1,1] policy output
+    # rescales to each component's real bounds.
     logger.info("Creating evaluation environment...")
-    
-    # Built manually (not via adv_building_env_creator) because the factory
-    # reads from the global env_config singleton, but eval uses an explicit
-    # active_config passed by the caller (which may differ, e.g. loaded
-    # from a JSON checkpoint).
+
+    # built manually (not adv_building_env_creator): eval uses the explicit
+    # active_config passed by the caller, not the global singleton
     base_env = AdvBuildingGym(
         infras=active_config.infras,
         statesources=active_config.statesources,
@@ -181,40 +169,35 @@ def evaluate_model(
     # TrajectoryCollector reads spaces from the unwrapped env
     collector = TrajectoryCollector(base_env) if log_trajectories else None
 
-    if active_config.hst_env_wrapper_enabled:
+    if active_config.hst.enabled:
         from adv_building_gym.core.history_wrapper import HistoryWrapper
         base_env = HistoryWrapper(
             base_env,
-            tracked_keys=active_config.hst_env_wrapper_tracked_keys,
-            offsets=active_config.hst_env_wrapper_offsets,
+            tracked_keys=active_config.hst.tracked_keys,
+            offsets=active_config.hst.offsets,
         )
         logger.info(
             "eval_runner: HistoryWrapper enabled (tracked_keys=%s, offsets=%s)",
-            list(active_config.hst_env_wrapper_tracked_keys),
-            list(active_config.hst_env_wrapper_offsets),
+            list(active_config.hst.tracked_keys),
+            list(active_config.hst.offsets),
         )
 
-    if active_config.forecast_env_wrapper_enabled:
+    if active_config.forecast.enabled:
         from adv_building_gym.core.forecast_wrapper import ForecastWrapper
         base_env = ForecastWrapper(
             base_env,
-            forecast_steps=active_config.forecast_env_wrapper_steps,
+            forecast_steps=active_config.forecast.steps,
         )
         logger.info(
             "eval_runner: ForecastWrapper enabled (steps=%s)",
-            list(active_config.forecast_env_wrapper_steps),
+            list(active_config.forecast.steps),
         )
 
     env = wrap_action_space(base_env)
 
-    # Mirrors the training-side connector pipeline so the flat obs dim matches
-    # the checkpoint. With history now handled inside HistoryWrapper, the
-    # pipeline is just FlattenObservations + AddObservationsFromEpisodesToBatch.
-    # FlattenObservations needs the input spaces set at construction —
-    # recompute_output_observation_space reads them from self, not its args.
-    # FlattenObservations rewrites the episode's last obs to a flat tensor;
-    # AddObservationsFromEpisodesToBatch then copies it into batch[OBS] for
-    # the RLModule. Without the latter, batch[OBS] never gets populated.
+    # mirrors the training connector pipeline so the flat obs dim matches the checkpoint:
+    # FlattenObservations (needs input spaces at construction; rewrites the episode's last
+    # obs to a flat tensor) + AddObservationsFromEpisodesToBatch (copies it into batch[OBS]).
     pipeline = [
         FlattenObservations(
             input_observation_space=base_env.observation_space,
@@ -223,10 +206,8 @@ def evaluate_model(
         AddObservationsFromEpisodesToBatch(),
     ]
 
-    # Run the space compatibility check *after* the pipeline is built so the
-    # model's input dim is compared against the post-connector flat size
-    # (which includes the s_hst_<key> entries when HistoryWrapper is enabled),
-    # not the raw env obs.
+    # check spaces after the pipeline is built so the model dim is compared against the
+    # post-connector flat size (incl. s_hst_<key>), not the raw env obs
     check_space_compatibility(rl_module, env, pipeline=pipeline)
 
     episode_stats: list[EpisodeStat] = []
@@ -246,8 +227,7 @@ def evaluate_model(
             episode_seed = seed + ep
             logger.info("Episode %d/%d (seed: %d)", episode_num, num_episodes, episode_seed)
 
-            # Per-episode torch RNG so stochastic action sampling is
-            # reproducible across runs with the same --seed.
+            # per-episode torch RNG so stochastic sampling is reproducible across runs
             action_generator: torch.Generator | None
             if stochastic:
                 action_generator = torch.Generator().manual_seed(episode_seed)
@@ -263,25 +243,20 @@ def evaluate_model(
             episode_reward = 0.0
             episode_length = 0
             episode_rewards: list[float] = []
-            max_achievable_reward = 0.0
 
             if collector is not None:
                 collector.reset()
                 collector.on_reset(reset_info)
 
-            # Persistent episode buffer — the connector pipeline
-            # (FlattenObservations + AddObservationsFromEpisodesToBatch) reads
-            # the most recent obs from the episode each step.
+            # persistent episode buffer; the connector pipeline reads the latest obs each step
             sa_episode = SingleAgentEpisode(
                 observation_space=base_env.observation_space,
                 action_space=base_env.action_space,
                 observations=[obs],
             )
 
-            # Initial recurrent state for stateful modules (e.g. DreamerV3's
-            # RSSM). For stateless PPO/SAC this returns {} and is a no-op.
-            # get_initial_state() yields unbatched tensors; add the batch dim
-            # before handing them to the RLModule.
+            # initial recurrent state ({} for stateless PPO/SAC); get_initial_state()
+            # is unbatched, so add the batch dim
             initial_state = rl_module.get_initial_state() or {}
             state_in = _batch_state(initial_state)
             step_info = {}
@@ -331,7 +306,6 @@ def evaluate_model(
                 episode_reward += reward
                 episode_length += 1
                 episode_rewards.append(reward)
-                max_achievable_reward += step_info.get("max_reward_step", 0.0)
                 obs = next_obs
                 
                 done = terminated or truncated
@@ -345,19 +319,12 @@ def evaluate_model(
                 )
 
             achieved_reward = float(np.sum(episode_rewards))
-            reward_rate = (
-                achieved_reward / max_achievable_reward
-                if max_achievable_reward > 0
-                else 0.0
-            )
 
             ep_stat = EpisodeStat(
                 episode=episode_num,
                 length=episode_length,
                 total_reward=float(episode_reward),
                 achieved_reward=achieved_reward,
-                max_achievable_reward=float(max_achievable_reward),
-                reward_rate=float(reward_rate),
                 seed=episode_seed,
                 cum_E_kWh=float(step_info.get("cum_E_kWh", 0.0)),
                 cum_price_EUR=float(step_info.get("cum_price_EUR", 0.0)),
@@ -389,8 +356,6 @@ def evaluate_model(
             logger.info("  Length: %d", episode_length)
             logger.info("  Total Reward: %.2f", episode_reward)
             logger.info("  Achieved Reward: %.2f", achieved_reward)
-            logger.info("  Max Achievable: %.2f", max_achievable_reward)
-            logger.info("  Reward Rate: %.4f", reward_rate)
             logger.info("  Seed: %d", episode_seed)
 
     except TimeoutError as e:

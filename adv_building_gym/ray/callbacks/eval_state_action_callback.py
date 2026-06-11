@@ -1,5 +1,4 @@
-"""
-Evaluation trajectory logging callback for Ray RLlib training.
+"""Evaluation trajectory logging callback.
 
 Writes per-step eval trajectories to TensorBoard as separate sub-runs
 so they overlay in a single chart:
@@ -44,11 +43,9 @@ def make_eval_state_action_cb_class(
     exec_date: datetime.datetime | None = None,
     trial_name: str | None = None,
 ) -> Type["EvalStateActionCallback"]:
-    """Factory that returns a configured EvalStateActionCallback class.
-
-    Each eval round writes one TensorBoard sub-run per episode under a
-    shared ``iter_<N>`` group.  All sub-runs share the same tag names, so
-    the round's episodes overlay in a single chart (one line per episode).
+    """Factory → configured EvalStateActionCallback class.
+    Each eval round writes one TB
+    sub-run per episode under a shared ``iter_<N>`` group (shared tags → episodes overlay).
 
     Args:
         metrics_base_dir: Base directory for output files.
@@ -60,29 +57,21 @@ def make_eval_state_action_cb_class(
     if exec_date is None:
         exec_date = datetime.datetime.now()
 
-    # Suffix the run dir with SLURM_JOB_ID (or PID when not under SLURM) so
-    # multiple sbatches that start within the same wall-clock second don't
-    # collide on `eval_trajectories/<exec_date>/iter_NNN/` and clobber each
-    # other's tfevents files in TensorBoard.
+    # suffix run dir with SLURM_JOB_ID/PID so same-second sbatches don't clobber tfevents
     job_suffix = os.environ.get("SLURM_JOB_ID") or f"pid{os.getpid()}"
     run_dir_name = f"{exec_date.strftime('%Y%m%d_%H%M%S')}_{job_suffix}"
 
-    # Resolve to absolute path at factory time so that file writes land in
-    # the correct location regardless of process cwd (Ray Tune changes the
-    # Trainable actor's cwd to the trial log directory).
+    # resolve absolute at factory time so writes land correctly regardless of cwd (Ray Tune)
     tb_log_dir = os.path.join(os.path.abspath(metrics_base_dir), "eval_trajectories", run_dir_name)
 
-    # Sanitised trial-name suffix for per-iter sub-runs so the TB run list
-    # shows which trial config produced each curve.
+    # sanitised trial-name suffix so the TB run list shows which trial produced each curve
     if trial_name:
         import re as _re
         _trial_suffix = (_re.sub(r"[^A-Za-z0-9._-]+", "_", trial_name).strip("_") or "trial")
     else:
         _trial_suffix = ""
 
-    # Closure state shared across all callback instances on this worker.
-    # Safe because eval runs on a single EnvRunner sequentially
-    # (evaluation_parallel_to_training=False).
+    # closure state shared across instances on this worker; safe — eval is single-runner sequential
     _episode_buffer: list[dict[str, list[float]]] = []
     _eval_round: list[int] = [0]  # mutable int via list
 
@@ -150,16 +139,13 @@ def make_eval_state_action_cb_class(
                 for rew_name, rew_val in info.get("reward_breakdown", {}).items():
                     ep_data[f"reward/{rew_name}"].append(float(rew_val))
 
-                # Per-step reward diagnostics (0/1 flags) — accumulated below
-                # into a running cumulative sum so the trajectory grows by 1 at
-                # each step the flag fires (final value = episode total count).
+                # per-step reward diagnostics (0/1 flags); accumulated into a cumulative
+                # sum below so the trajectory grows by 1 each step a flag fires
                 # TODO VP 2026.06.08.: How does this work..?
                 for diag_name, diag_val in info.get("reward_diagnostics", {}).items():
                     ep_data[f"reward_diag/{diag_name}"].append(float(diag_val))
 
-            # Turn the reward_diag 0/1 series into per-step cumulative sums so
-            # the eval-round chart shows the count rising step-by-step across
-            # the episode (mean/min/max across episodes computed downstream).
+            # reward_diag 0/1 series → per-step cumulative sums (count rises step-by-step)
             for key, series in ep_data.items():
                 if key.startswith("reward_diag/"):
                     ep_data[key] = np.cumsum(series).tolist()
@@ -170,13 +156,9 @@ def make_eval_state_action_cb_class(
             if len(_episode_buffer) < algo_config.evaluation_duration:
                 return
 
-            # --- Eval round complete: write one sub-run per episode ---
-            # No cross-episode averaging: the round's episodes are typically
-            # different days / variants, so each episode is logged as its own
-            # TensorBoard sub-run (``iter_<N>[_<trial>]/ep_<i>``). Sub-runs
-            # share tag names, so the episodes overlay per chart and the real
-            # per-episode spread is visible. Filter the run list by ``iter_<N>``
-            # to isolate a single round.
+            # --- Eval round complete: one sub-run per episode ---
+            # No cross-episode averaging (different days/variants): each episode is its own
+            # sub-run ``iter_<N>[_<trial>]/ep_<i>`` with shared tags, so they overlay per chart.
             _eval_round[0] += 1
             training_iter = _eval_round[0] * algo_config.evaluation_interval
 

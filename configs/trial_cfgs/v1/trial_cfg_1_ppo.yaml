@@ -7,7 +7,7 @@ trial_name: trial_1_ppo_default
 # --- algorithm & run control ---
 algorithm: ppo                 # ppo | sac
 seed: 42                       # overrides training_params.seed
-metric: episode_return_mean    # reward_rate | achieved_reward | episode_return_mean
+metric: episode_return_mean    # achieved_reward | episode_return_mean
 log_trajectories: false
 num_envs: 1
 grad_train: false              # if true, the reward schedule mode is honoured;
@@ -104,27 +104,12 @@ env_meta:
     - s_temp_in_norm
     - s_temp_out_norm
     - s_solar_irradiance_norm
-    - a_hp_prev
-    - a_battery_prev
     offsets:
     - -1
     - -2
     - -3
     - -4
-    - -6
-    - -12
-    - -18
-    - -24
-    - -36
-    - -48
-    - -60
-    - -72
-    - -84
-    - -96
-    - -108
-    - -120
-    - -132
-    - -144
+
   forecast_env_wrapper:
     enabled: true
     forecast_steps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]

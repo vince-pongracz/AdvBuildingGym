@@ -101,12 +101,9 @@ class EnergyPriceDataSource(StateSource, Forecastable):
         self.dynamic_max_norm = self._compute_dynamic_max_norm(self.ts["baseprice"])
 
     def _compute_dynamic_max_norm(self, baseprice: pd.Series) -> float:
-        """Return the price denominator in s_E_price's normalised frame.
+        """Price denominator in s_E_price's frame (1.0 when disabled/empty → no-op divisor).
 
-        Returns 1.0 when the feature is disabled or the input window is
-        empty, so the consuming reward's division is a no-op. When enabled,
-        picks a statistic over the supplied raw baseprice slice and rescales
-        by price_max so the result lives in the same frame as s_E_price.
+        Picks a statistic over the raw baseprice slice and rescales by price_max.
         """
         if not self.dynamic_max_price_calc or baseprice.empty:
             return 1.0
@@ -134,22 +131,13 @@ class EnergyPriceDataSource(StateSource, Forecastable):
 
         if "s_E_price" not in state_spaces.keys():
             state_spaces["s_E_price"] = Box(low=-1, high=1, shape=(1,), dtype=np.float32)
-        # Running normalised min/max of s_E_price seen so far this episode.
-        # Seeded at reset to the first step's price; expanded by update_state.
-        if "s_E_price_min_norm" not in state_spaces.keys():
-            state_spaces["s_E_price_min_norm"] = Box(low=-1, high=1, shape=(1,), dtype=np.float32)
-        if "s_E_price_max_norm" not in state_spaces.keys():
-            state_spaces["s_E_price_max_norm"] = Box(low=-1, high=1, shape=(1,), dtype=np.float32)
-        # Raw maximum energy price (ct/kWh) — changes only when a new data
-        # variant is loaded.  Allows the policy to reconstruct physical
-        # price from the normalised E_price observation.
+
+        # Max price (ct/kWh) — changes per data variant; reconstruct raw = norm * this.
         if "ctxt_E_price_max" not in state_spaces.keys():
             state_spaces["ctxt_E_price_max"] = Box(low=-np.inf, high=np.inf, shape=(1,), dtype=np.float32)
         if "ctxt_E_price_dynamic_max" not in state_spaces.keys():
             state_spaces["ctxt_E_price_dynamic_max"] = Box(low=-np.inf, high=np.inf, shape=(1,), dtype=np.float32)
-        # Same statistic as ctxt_E_price_dynamic_max, but computed over the
-        # current episode's window [row_offset, row_offset + episode_length].
-        # Constant within an episode, refreshed in reset().
+        # Same statistic, over the episode window [row_offset, +episode_length]; refreshed in reset().
         if "ctxt_E_price_dynamic_max_ep" not in state_spaces.keys():
             state_spaces["ctxt_E_price_dynamic_max_ep"] = Box(low=-np.inf, high=np.inf, shape=(1,), dtype=np.float32)
 
@@ -166,36 +154,19 @@ class EnergyPriceDataSource(StateSource, Forecastable):
         self.baseprice_raw = float(row["baseprice"])
 
         states["s_E_price"][0] = np.float32(energy_price)
-        # Evening peak hours (18:00 to 21:00) when the price is usually high
-        # --> make it even more higher to discourage consumption during this period.
-        if self.iteration > 216 and self.iteration < 252: 
-            states["s_E_price"][0] *= 2
-        # Raw maximum price (ct/kWh) — constant within an episode, changes
-        # only when a new data variant is loaded.
+        # Evening peak (18:00–21:00): boost price to discourage consumption.
+        if self.iteration > 216 and self.iteration < 252:
+            states["s_E_price"][0] = 2 * states["s_E_price"][0]
+        # Max price (ct/kWh) — constant per episode, changes per data variant.
         states["ctxt_E_price_max"][0] = np.float32(self.price_max)
-        # Data-driven price denominator in s_E_price's normalised frame
-        # (1.0 when dynamic_max_price_calc is disabled).
+        # data-driven denominator in s_E_price's frame (1.0 when disabled)
         states["ctxt_E_price_dynamic_max"][0] = np.float32(self.dynamic_max_norm)
-        # Same statistic, but restricted to the current episode's window;
-        # refreshed in reset() since row_offset changes per episode.
+        # same statistic over the episode window; refreshed in reset()
         states["ctxt_E_price_dynamic_max_ep"][0] = np.float32(self.dynamic_max_norm_ep)
 
-        prev_min = float(states["s_E_price_min_norm"][0])
-        prev_max = float(states["s_E_price_max_norm"][0])
-        states["s_E_price_min_norm"][0] = np.float32(min(prev_min, energy_price))
-        states["s_E_price_max_norm"][0] = np.float32(max(prev_max, energy_price))
-
     def reset(self, states, info=None) -> None:
-        # Seed running min/max to the first step's normalised price so that
-        # update_state's min/max accumulation starts from a real value rather
-        # than the zero-initialised state buffer.
         if self.ts is not None:
-            row = self.ts.iloc[min(self.effective_index, len(self.ts) - 1)]
-            first = np.float32(row["E_price_norm"])
-            states["s_E_price_min_norm"][0] = first
-            states["s_E_price_max_norm"][0] = first
-            # Recompute the within-episode dynamic max for the active window.
-            # row_offset is already set on self.sync by the env at this point.
+            # recompute the within-episode dynamic max (row_offset already set by env)
             start = self.row_offset
             end = min(start + self.episode_length, len(self.ts))
             window = self.ts["baseprice"].iloc[start:end]
@@ -229,5 +200,5 @@ class EnergyPriceDataSource(StateSource, Forecastable):
         return super()._get_serialize_value(param_name, value)
 
 
-# Register EnergyPriceDataSource with the component registry
+# register with ComponentRegistry
 ComponentRegistry.register('statesource', EnergyPriceDataSource)

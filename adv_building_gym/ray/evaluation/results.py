@@ -26,8 +26,6 @@ class EpisodeStat:
     length: int
     total_reward: float
     achieved_reward: float
-    max_achievable_reward: float
-    reward_rate: float
     seed: int
     cum_E_kWh: float = 0.0
     cum_price_EUR: float = 0.0
@@ -41,8 +39,6 @@ class EpisodeStat:
             "length": self.length,
             "total_reward": self.total_reward,
             "achieved_reward": self.achieved_reward,
-            "max_achievable_reward": self.max_achievable_reward,
-            "reward_rate": self.reward_rate,
             "cum_E_kWh": self.cum_E_kWh,
             "cum_price_EUR": self.cum_price_EUR,
             "seed": self.seed,
@@ -76,8 +72,6 @@ class EvalResults:
     std_reward: float = 0.0
     min_reward: float = 0.0
     max_reward: float = 0.0
-    mean_reward_rate: float = 0.0
-    std_reward_rate: float = 0.0
 
     @classmethod
     def from_episodes(
@@ -102,13 +96,10 @@ class EvalResults:
         )
         if episodes and error is None:
             rewards = [ep.total_reward for ep in episodes]
-            rates = [ep.reward_rate for ep in episodes]
             result.mean_reward = float(np.mean(rewards))
             result.std_reward = float(np.std(rewards))
             result.min_reward = float(np.min(rewards))
             result.max_reward = float(np.max(rewards))
-            result.mean_reward_rate = float(np.mean(rates))
-            result.std_reward_rate = float(np.std(rates))
         return result
 
     def to_dict(self) -> dict:
@@ -129,8 +120,6 @@ class EvalResults:
                 "std_reward": self.std_reward,
                 "min_reward": self.min_reward,
                 "max_reward": self.max_reward,
-                "mean_reward_rate": self.mean_reward_rate,
-                "std_reward_rate": self.std_reward_rate,
             })
         d["episodes"] = [ep.to_dict() for ep in self.episodes]
         return d
@@ -162,10 +151,6 @@ class EvalResults:
             logger.info(
                 "  Mean Reward: %.2f +/- %.2f",
                 self.mean_reward, self.std_reward,
-            )
-            logger.info(
-                "  Mean Reward Rate: %.4f +/- %.4f",
-                self.mean_reward_rate, self.std_reward_rate,
             )
             logger.info(
                 "  Min/Max Reward: %.2f / %.2f",

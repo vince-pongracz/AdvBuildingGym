@@ -1,39 +1,17 @@
 """Shared swap-trigger primitive for the four scheduler callbacks.
 
-All four schedulers (data / reward / infra / statesource) gate their
-``on_train_result`` work on the same predicate: "have the env_runners
-together produced at least N more episodes since the last swap?"
+All four (data/reward/infra/statesource) gate ``on_train_result`` on one predicate:
+"have the env_runners produced ≥ N more episodes since the last swap?" — sourced from
+``result["env_runners"]["num_episodes_lifetime"]``. This packages that + the first-fire-always rule.
 
-This helper packages that predicate plus the first-fire-always rule so
-each callback file stays focused on what to push, not when to push it.
+Invariant (iter-aligned, regime-pure metrics): the gate fires only from ``on_train_result``,
+so swaps land on iter boundaries. With (1) ``rollout_fragment_length == EPISODE_LENGTH`` and
+(2) ``window=_WITHIN_ITER_WINDOW, clear_on_reduce=True`` on episode metrics, each TB scalar
+reflects exactly one regime. These three form one contract — audit together.
 
-Episode count is sourced from ``result["env_runners"]["num_episodes_lifetime"]``
-(the same key ``run_train_ray.py`` uses for its stop criterion).
-
-Invariant — iter-aligned, regime-pure metrics
----------------------------------------------
-The gate is only ever invoked from ``on_train_result``, so every schedule
-swap lands on an iteration boundary. Together with two cooperating choices
-elsewhere, this gives the property that each reported TB scalar reflects
-exactly one regime (no cross-regime blending in dashboards):
-
-1. ``rollout_fragment_length == EPISODE_LENGTH`` in
-   ``ray/training/common_model_config.py`` — every iter contains only
-   complete episodes (no episode straddles an iter boundary).
-2. ``window=_WITHIN_ITER_WINDOW, clear_on_reduce=True`` on every
-   ``metrics_logger.log_value(...)`` in ``ray/callbacks/episode_metrics_callback.py``
-   — every iter's TB scalar resets at the iter boundary.
-
-If you change any of these three pieces, audit the others — they form one
-contract and silently break each other if edited in isolation.
-
-RLlib's built-in ``EPISODE_RETURN_*`` keys (under ``env_runners/`` and
-``evaluation/env_runners/``) are intentionally left on the standard
-windowed aggregation, with a small ``metrics_num_episodes_for_smoothing``
-so the window only marginally crosses iter boundaries. Checkpoint
-selection (``checkpoint_score_attribute``) targets
-``evaluation/env_runners/episode_return_mean`` and benefits from this
-mild smoothing.
+RLlib's built-in ``EPISODE_RETURN_*`` keys keep standard windowed smoothing (small
+``metrics_num_episodes_for_smoothing``); checkpoint selection targets
+``evaluation/env_runners/episode_return_mean``.
 """
 
 from __future__ import annotations
@@ -56,7 +34,7 @@ class SwapDecision:
 
 
 def make_swap_gate(name: str, configured_n: int, num_env_runners: int) -> Callable[[int, dict], "SwapDecision"]:
-    """Build a swap-trigger closure for a scheduler callback.
+    """Build a swap-trigger closure ``check(iteration, result) -> SwapDecision``.
 
     Args:
         name: Human-readable scheduler name (for log lines).

@@ -21,18 +21,10 @@ NORM_COLUMN: str = "desired_energy_need_norm"
 
 
 class DesiredUserEnergyNeed(StateSource, Forecastable):
-    """Data source for desired user energy need information.
+    """Desired user energy need from the ``hh_consumption_kW`` CSV column.
 
-    When a CSV is provided (via ``ds_path``), reads the ``hh_consumption_kW``
-    column produced by the WPuQ household consumption preprocessing pipeline,
-    normalises it to [0, 1] using min-max scaling, and exposes it as the
-    ``desired_energy_need`` observation.
-
-    state key: desired_energy_need
-    Definition desired_energy_need:
-    - positive: user consumes E.
-    - negative: no meaning
-    - zero: user does not need E.
+    Min-max normalised to [0, 1], exposed as ``s_desired_energy_need``
+    (positive = consuming, 0 = no need; negative is meaningless).
     """
 
     # consumption_max is derived from data, don't serialize
@@ -66,8 +58,7 @@ class DesiredUserEnergyNeed(StateSource, Forecastable):
         if "s_desired_energy_need" not in state_spaces.keys():
             state_spaces["s_desired_energy_need"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
 
-        # Raw maximum household consumption (kW) — changes only when a new
-        # data variant is loaded.
+        # Max household consumption (kW) — changes per data variant.
         if "ctxt_hh_consumption_max" not in state_spaces.keys():
             state_spaces["ctxt_hh_consumption_max"] = Box(low=0, high=np.inf, shape=(1,), dtype=np.float32)
 
@@ -84,7 +75,7 @@ class DesiredUserEnergyNeed(StateSource, Forecastable):
         desired_energy = float(row[NORM_COLUMN])
 
         states["s_desired_energy_need"][0] = np.float32(desired_energy)
-        # Raw maximum consumption (kW) — constant within an episode.
+        # max consumption (kW) — constant per episode
         states["ctxt_hh_consumption_max"][0] = np.float32(self.consumption_max)
 
     def forecast_keys(self) -> tuple[str, ...]:
@@ -109,5 +100,5 @@ class DesiredUserEnergyNeed(StateSource, Forecastable):
         return super()._get_serialize_value(param_name, value)
 
 
-# Register DesiredUserEnergyNeed with the component registry
+# register with ComponentRegistry
 ComponentRegistry.register('statesource', DesiredUserEnergyNeed)

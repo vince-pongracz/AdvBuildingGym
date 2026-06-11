@@ -11,32 +11,18 @@ logger = logging.getLogger(__name__)
 class TempReward(RewardFunction):
     """Temperature comfort reward with a gradient across the full error range.
 
-    Let ``d = |T_in - T_set|`` in °C (recovered from the normalised state
-    via ``ctxt_temp_abs_max``, falling back to 60 °C). The shaped reward
-    is piecewise, continuous at ``d = zero_reward_diff_celsius`` (``d0``):
-
+    Let ``d = |T_in - T_set|`` °C (from normalised state via ``ctxt_temp_abs_max``,
+    default 60). Shaped reward, continuous at ``d = zero_reward_diff_celsius`` (d0):
     - ``d < d0``: concave parabola ``1 - (d / d0)²`` — peaks at +1.0 when
       ``d = 0`` and crosses zero at ``d = d0``.
     - ``d ≥ d0``: linear tail ``-(d - d0)`` — slope -1 °C⁻¹.
 
-    Before the curve is evaluated ``d`` is clamped to
-    ``floor_diff_celsius`` so the linear tail cannot drive arbitrarily
-    large negative rewards (matters mainly when early termination is
-    disabled — otherwise the hard band below fires first).
+    Optional wrong-direction penalty when the HP heats while too hot (or cools while
+    too cold), scaled by ``|a_hp| * min(|°C error|, floor_diff_celsius)``.
 
-    An optional wrong-direction penalty fires when the HP heats while the
-    room is too hot (or cools while too cold), scaled by
-    ``|a_hp| * min(|°C error|, floor_diff_celsius)``. Anchoring on °C
-    keeps the coefficient physically meaningful across different
-    ``temp_abs_max`` values.
-
-    A hard comfort band is enforced via ``should_terminate``: when
-    ``d > terminate_diff_celsius`` the episode is ended (unless the env
-    sets ``info["allow_early_termination"] = False``) and the step
-    returns ``terminate_penalty`` instead of the shaped curve.
-
-    The final reward (shaped curve + wrong-direction term) is capped at
-    +1.0 before the global ``weight`` is applied.
+    Hard band via ``should_terminate``: ``d > terminate_diff_celsius`` ends the episode
+    (unless ``info["allow_early_termination"] = False``) and returns ``terminate_penalty``.
+    Final reward (curve + wrong-direction) is capped at +1 before ``weight``.
     """
 
     def __init__(
@@ -83,15 +69,16 @@ class TempReward(RewardFunction):
     # Termination + reward computation
     # ------------------------------------------------------------------
     @staticmethod
-    def _diff_celsius(states) -> float:
-        actual_temp = float(states["s_temp_in_norm"][0])
-        desired_temp = float(states["s_desired_temp_in_norm"][0])
+    def _diff_celsius(state, next_state) -> float:
+        # Resulting indoor temperature (s') vs the setpoint the agent observed (s).
+        actual_temp = float(next_state["s_temp_in_norm"][0])
+        desired_temp = float(state["s_desired_temp_in_norm"][0])
         diff_norm = abs(actual_temp - desired_temp)
-        temp_abs_max = float(states["ctxt_temp_abs_max"][0]) if "ctxt_temp_abs_max" in states else 60.0
+        temp_abs_max = float(next_state["ctxt_temp_abs_max"][0]) if "ctxt_temp_abs_max" in next_state else 60.0
         return diff_norm * temp_abs_max
 
-    def should_terminate(self, actions, states, info: dict | None = None) -> bool:
-        diff_celsius = self._diff_celsius(states)
+    def should_terminate(self, actions, state, next_state, info: dict | None = None) -> bool:
+        diff_celsius = self._diff_celsius(state, next_state)
         if diff_celsius > self.terminate_diff_celsius:
             logger.info(
                 "[%s] terminal step: |T_in - T_set| = %.2f °C > %.2f °C (step %s)",
@@ -101,41 +88,36 @@ class TempReward(RewardFunction):
             return True
         return False
 
-    def get_reward(self, actions, states, info: dict | None = None) -> tuple[float, float]:
-        actual_temp = float(states["s_temp_in_norm"][0])
-        desired_temp = float(states["s_desired_temp_in_norm"][0])
+    def get_reward(self, actions, state, next_state, info: dict | None = None) -> float:
+        # Resulting temperature (s') against the setpoint the agent observed (s).
+        actual_temp = float(next_state["s_temp_in_norm"][0])
+        desired_temp = float(state["s_desired_temp_in_norm"][0])
         diff_norm = abs(actual_temp - desired_temp)
 
-        # Convert zero-crossing threshold from °C to normalised space.
-        # temp_abs_max is published into the state dict by WeatherDataSource.
-        temp_abs_max: float = float(states["ctxt_temp_abs_max"][0]) if "ctxt_temp_abs_max" in states else 60.0
+        # temp_abs_max (published by WeatherDataSource) to convert °C ↔ normalised.
+        temp_abs_max: float = float(next_state["ctxt_temp_abs_max"][0]) if "ctxt_temp_abs_max" in next_state else 60.0
 
-        # Hard band: should_terminate already voted to end the episode in
-        # Phase 1; emit the configured terminal penalty here. Skipped when
-        # the env disables early termination — the smooth curve below still
-        # provides a strong negative signal at large diffs.
+        # Hard band: should_terminate already voted to end; emit terminal penalty.
+        # Skipped when early termination is disabled (the curve still signals strongly).
         diff_celsius = diff_norm * temp_abs_max
         allow_term = info.get("allow_early_termination", True) if info is not None else True
         if allow_term and diff_celsius > self.terminate_diff_celsius:
-            return self.weight * self.terminate_penalty, self.weight * self.max_reward_in_step
+            return self.weight * self.terminate_penalty
 
-        # Clamp the °C error at floor_diff_celsius so the negative tail of
-        # the reward stays bounded. Without this, large drift (only reachable
-        # when early termination is disabled) produces -d² spikes that can
-        # destabilise SAC gradients.
+        # Clamp °C error to floor_diff_celsius so the negative tail stays bounded
+        # (large drift would otherwise spike -d² and destabilise SAC).
         diff_celsius = min(diff_celsius, self.floor_diff_celsius)
 
         # Smooth comfort curve
         if diff_celsius < self.zero_reward_diff_celsius:
-            # Inside the positive-reward region, the curve is a concave parabola peaking at 1.0 when diff=0.
+            # concave parabola peaking at 1.0 when diff=0
             reward = -self.k * (diff_celsius ** 2) + 1
         else:
             reward = -1.0 * np.abs(diff_celsius) + self.zero_reward_diff_celsius # Linear negative tail beyond zero-reward threshold
 
-        # Wrong-direction penalty: heating when too hot, or cooling when too cold
-        # HP action: negative = cooling, positive = heating
-        # Scaled by |°C error| (clamped to floor_diff_celsius) so the
-        # coefficient has a stable physical meaning across temp_abs_max values.
+        # Wrong-direction penalty: heating when too hot / cooling when too cold
+        # (a_hp: negative=cool, positive=heat). Scaled by |°C error| (clamped) for
+        # a stable meaning across temp_abs_max.
         if "a_hp" in actions:
             hp_action = float(np.atleast_1d(actions["a_hp"])[0])
             energy = abs(hp_action)
@@ -149,8 +131,8 @@ class TempReward(RewardFunction):
                 error_magnitude_celsius = min(abs(temp_error_celsius), self.floor_diff_celsius)
                 reward += self.wrong_direction_penalty * energy * error_magnitude_celsius
 
-        return self.weight * min(reward, 1.0), self.weight * self.max_reward_in_step
+        return self.weight * min(reward, 1.0)
 
 
-# Register TempReward with the component registry
+# register with ComponentRegistry
 ComponentRegistry.register('reward', TempReward)

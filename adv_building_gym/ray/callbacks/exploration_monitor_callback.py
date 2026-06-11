@@ -1,14 +1,7 @@
 """Warn when the SAC entropy temperature (alpha) collapses toward zero.
 
-SAC auto-tunes the entropy coefficient ``alpha`` to hold policy entropy near
-``target_entropy``. If that temperature loop runs away — e.g. under large /
-high-variance returns — ``alpha`` decays to ~0, the entropy bonus vanishes,
-exploration dies, and the policy freezes into a deterministic corner it cannot
-escape. This surfaces that failure in the SLURM logs the moment it happens
-instead of only being visible post-hoc in result.json.
-
-PPO and DreamerV3 have no such key, so the monitor is a no-op when ``alpha`` is
-absent from the result dict.
+If SAC's auto-tuned ``alpha`` runs away to ~0, exploration dies and the policy freezes.
+This surfaces it in the SLURM logs immediately. No-op when ``alpha`` is absent (PPO/DreamerV3).
 """
 
 import logging
@@ -24,13 +17,8 @@ def create_exploration_monitor_on_train_result_cb(
     alpha_path: tuple[str, ...] = ("learners", "default_policy", "alpha_value"),
     warn_threshold: float = ALPHA_COLLAPSE_THRESHOLD,
 ):
-    """Factory returning an ``on_train_result`` callable that warns once when the
-    SAC temperature collapses below ``warn_threshold`` (and once if it recovers).
-
-    Args:
-        alpha_path: Nested path to the temperature value inside the result dict.
-        warn_threshold: alpha below this is considered collapsed.
-    """
+    """Factory → ``on_train_result`` that warns once when SAC alpha collapses below
+    ``warn_threshold`` (and once on recovery)."""
     state = {"collapsed": False}
 
     def on_train_result(*, algorithm, result: dict, **kwargs) -> None:

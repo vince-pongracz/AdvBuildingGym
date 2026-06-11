@@ -1,12 +1,6 @@
-"""Checkpoint discovery utilities for Ray/RLlib trained models.
-
-Provides functions to locate the latest checkpoint directory within the
-models/ tree, plus a high-level resolver used by the evaluation CLI.
-
-Checkpointing is handled by Ray Tune's CheckpointConfig (periodic +
-best-model tracking via checkpoint_score_attribute).  These utilities
-discover checkpoints by the ``rllib_checkpoint.json`` marker that Ray
-writes at each checkpoint root.
+"""Checkpoint discovery for Ray/RLlib models: locate the latest checkpoint in models/
+and a high-level resolver for the eval CLI. Checkpoints are found by the
+``rllib_checkpoint.json`` marker Ray writes at each root.
 """
 
 import logging
@@ -16,12 +10,8 @@ logger = logging.getLogger(__name__)
 
 
 def _find_latest_checkpoint(base_path: str = "models") -> str:
-    """Find the most recent Ray checkpoint by modification time.
-
-    Identifies checkpoint root directories by the presence of
-    ``rllib_checkpoint.json`` (new API stack) or ``.is_checkpoint``
-    (older Ray versions).
-
+    """Most recent Ray checkpoint by mtime, identified by ``rllib_checkpoint.json``
+    (or ``.is_checkpoint`` on older Ray).
     Args:
         base_path: Root directory to search.
 
@@ -34,8 +24,7 @@ def _find_latest_checkpoint(base_path: str = "models") -> str:
     checkpoint_paths = []
 
     for root, _, files in os.walk(base_path):
-        # rllib_checkpoint.json is the authoritative marker written at
-        # the checkpoint root by Ray Tune.
+        # rllib_checkpoint.json is the authoritative marker at the checkpoint root
         is_checkpoint_root = (
             "rllib_checkpoint.json" in files
             or ".is_checkpoint" in files
@@ -66,14 +55,12 @@ def resolve_checkpoint_path(
     models_base: str = "models",
 ) -> str:
     # TODO VP 2026.04.29. : Extend it so, that latest checkpoint within a specific training trial can be found
-    """Resolve a checkpoint path using a two-step fallback strategy.
+    # TODO VP 2026.06.10.: Extend, so it can find the best checkpoint, not only the latest.
+    """Resolve a checkpoint path (always absolute).
 
-    1. If *checkpoint* is provided explicitly, use it directly.
-    2. Otherwise, search ``models_base/{config_name}/ray/{algorithm}`` for
-       the latest checkpoint by mtime.  If the algorithm-specific directory
-       doesn't exist, broaden the search to the entire *models_base* tree.
-
-    The returned path is always absolute.
+    Explicit *checkpoint* is used directly; else searches
+    ``models_base/{config_name}/ray/{algorithm}`` (broadening to ``models_base`` if absent)
+    for the latest by mtime.
 
     Args:
         checkpoint: Explicit checkpoint path, ``"latest"``, or ``None``

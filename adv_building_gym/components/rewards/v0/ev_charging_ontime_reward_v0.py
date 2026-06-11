@@ -32,45 +32,44 @@ class EVChargingOnTimeRewardV0(RewardFunction):
         super().__init__(weight, name)
         self.harsh_penalty = harsh_penalty
 
-    def get_reward(self, actions: Dict, states: Dict, info: dict | None = None) -> tuple[float, float]:
-        ev_connected = states["s_ev_connected"][0]
+    def get_reward(self, actions: Dict, state: Dict, next_state: Dict, info: dict | None = None) -> float:
+        ev_connected = next_state["s_ev_connected"][0]
 
         if ev_connected < 0.5:
-            return 0.0, 0.0
+            return 0.0
 
         if info is None:
             logger.warning("EVChargingOnTimeRewardV0: info dict is None, returning 0")
-            return 0.0, 0.0
+            return 0.0
 
-        max_step = self.weight * self.max_reward_in_step
-        current_soc = states["s_ev_soc"][0]
-        target_soc = states["s_ev_target_soc"][0]
+        current_soc = next_state["s_ev_soc"][0]
+        target_soc = next_state["s_ev_target_soc"][0]
 
         if current_soc >= target_soc:
-            return self.weight * 1.0, max_step
+            return self.weight * 1.0
 
         max_charging_kW = info["ctxt_ev_max_charging_kW"]
         max_cap_kWh = info["ctxt_ev_max_cap_kWh"] or 0.0
         charger_efficiency = info["ctxt_ev_charger_efficiency"]
         max_charge_time_hrs = info["ctxt_ev_max_charge_time_hrs"]
 
-        normalized_time = states["s_ev_charge_to_target_hrs_norm"][0]
+        normalized_time = next_state["s_ev_charge_to_target_hrs_norm"][0]
         remaining_hrs = normalized_time * max_charge_time_hrs
 
         energy_needed = (target_soc - current_soc) * max_cap_kWh
         energy_achievable = max_charging_kW * charger_efficiency * remaining_hrs
 
         if energy_achievable <= 0:
-            return self.weight * self.harsh_penalty, max_step
+            return self.weight * self.harsh_penalty
 
         ratio = energy_needed / energy_achievable
         reward = max(0.0, 1.0 - ratio)
 
         ev_action = float(np.atleast_1d(actions.get("a_lin_ev_charger", [0]))[0])
         if ev_action > 0.0:
-            return self.weight * reward, max_step
+            return self.weight * reward
         else:
-            return self.weight * 0.0, max_step
+            return self.weight * 0.0
 
 
 ComponentRegistry.register('reward', EVChargingOnTimeRewardV0)

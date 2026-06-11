@@ -1,9 +1,5 @@
-"""Common setup helpers for SB3 training.
-
-This module wires together the bits that don't depend on the algorithm
-choice: SLURM-derived resource resolution, eval/train VecEnv construction,
-TensorBoard logger pointing at the right path, and assembling the callback
-list (episode metrics + schedules + checkpoint + EvalCallback).
+"""Algorithm-independent SB3 setup: SLURM resource resolution, train/eval VecEnv construction,
+TensorBoard paths, and the callback list (metrics + schedules + checkpoint + eval).
 """
 
 from __future__ import annotations
@@ -84,16 +80,8 @@ def resolve_sb_resources(*, cpu_only: bool) -> SlurmResources:
 
 
 def make_runtime_paths(trial: TrialConfig, run_name: str) -> SBRuntimePaths:
-    """Build the per-run directory tree under ``models/<trial>/sb3/<algo>/``.
-
-    Mirrors the Ray driver's storage layout (``models/<trial>/ray/<algo>/``)
-    so downstream tooling (TB launch scripts, checkpoint finders) can
-    treat the two frameworks symmetrically.
-    """
-    # Resolve to an absolute path so the startup banner emits full paths and
-    # TensorBoard picks up the event files (SB3 nests them under
-    # <log_dir>/<algo>_1/) regardless of the CWD from which
-    # start_tensorboard.sh is launched.
+    """Per-run directory tree under ``models/<trial>/sb3/<algo>/`` (mirrors the Ray layout)."""
+    # absolute path so the banner emits full paths and TB finds the event files regardless of CWD
     base = (Path("models") / trial.trial_name / "sb3" / trial.algorithm / run_name).resolve()
     base.mkdir(parents=True, exist_ok=True)
 
@@ -118,28 +106,16 @@ def build_callback_list(
     num_envs: int,
     eval_trajectories_root: str,
 ) -> CallbackList:
-    """Assemble all training callbacks in the same order Ray composes them.
-
-    Order matters: episode metrics first (so per-component reward/cost
-    totals are computed before any consumer reads them), then schedule
-    swaps (data → reward → infra → statesource — matches the Ray
-    composition order in ``register_callbacks``), then the best-by-metric
-    checkpoint, then the eval callback (owns best_model.zip save +
-    eval/* scalars + per-iter trajectory sub-run).
-    """
+    """Assemble training callbacks in Ray's composition order: metrics → schedule swaps
+    (reward → infra → statesource) → best-by-metric checkpoint → eval callback."""
     callbacks: List[BaseCallback] = [
         SBIterTimingCallback(verbose=0),
         SBEpisodeMetricsCallback(verbose=1),
     ]
 
-    # Data-variant selection is env-side (AdvBuildingGym.reset ->
-    # DataVariantManager): training envs follow the combinator cadence, eval
-    # envs (role="eval", eval_mode=True) draw a fresh random variant each
-    # episode. The old data-schedule callback push was overwritten by the very
-    # next reset(), so it is intentionally not wired here. The other three
-    # schedules (reward / infra / statesource) below still use callbacks; their
-    # eval VecEnv follows training so the eval signal describes the regime the
-    # policy is currently being trained on.
+    # Data-variant selection is env-side (training follows the combinator cadence, eval draws
+    # a fresh random variant), so no data-schedule callback here. The other three schedules
+    # (reward/infra/statesource) use callbacks; their eval VecEnv follows training.
 
     if (trial.reward_manager is not None
             and trial.reward_manager.mode is not RewardScheduleMode.OFF):
@@ -173,13 +149,9 @@ def build_callback_list(
             )
         )
 
-    # Hand-rolled eval callback — replaces SB3's stock EvalCallback.
-    # Owns the eval loop (so per-step infos are visible without locals()
-    # plumbing), saves `best/best_model.zip` by mean eval reward, emits
-    # the full per-component eval/* scalar set, and writes a per-iter TB
-    # sub-run with raw/state/action/power/reward overlays — full parity
-    # with Ray's EvalStateActionCallback. Wrapped with the iter-timing
-    # helper so timers/eval_s is still recorded.
+    # hand-rolled eval callback (replaces SB3's EvalCallback): owns the eval loop, saves
+    # best_model.zip by mean reward, emits eval/* scalars + per-iter TB sub-run (parity with
+    # Ray's EvalStateActionCallback). Wrapped with the iter-timing helper.
     eval_callback = SBEvalStateActionCallback(
         eval_env=eval_env,
         best_model_save_path=paths.best_dir,
@@ -224,12 +196,8 @@ def sb_common_model_setup(
     cpu_only: bool,
     exec_date: datetime.datetime | None = None,
 ) -> tuple[SlurmResources, SBRuntimePaths, "object", "object", "CallbackList"]:
-    """Top-level setup function used by run_train_sb.py.
-
-    Returns:
-        (slurm_resources, runtime_paths, train_vec_env, eval_vec_env, callback_list)
-        — the model itself is built separately by ``sb_select_model`` so
-        the caller can log resources before allocating GPU memory.
+    """Top-level setup for run_train_sb.py → (slurm, paths, train_vec, eval_vec, callbacks).
+    The model is built separately by ``sb_select_model`` (so resources log before GPU alloc).
     """
     slurm = resolve_sb_resources(cpu_only=cpu_only)
 
@@ -239,8 +207,7 @@ def sb_common_model_setup(
     run_name = f"{trial.algorithm}_seed{trial.seed}_{exec_date_str}"
     paths = make_runtime_paths(trial, run_name)
 
-    # Eval is always single-process (DummyVecEnv) for clean per-episode
-    # accounting and reproducible deterministic rollouts.
+    # eval is single-process (DummyVecEnv) for clean per-episode accounting
     train_vec = build_vec_env(
         trial, num_envs=trial.num_envs, seed=trial.seed, role="train",
     )

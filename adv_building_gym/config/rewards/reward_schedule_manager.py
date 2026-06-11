@@ -73,10 +73,8 @@ def _filter_pool_by_entries(
     *,
     field_label: str,
 ) -> list[dict[str, Any]]:
-    """Project the pool down to *entries*, applying ``w_override`` per entry.
-
-    Keeps the order in which ``entries`` are listed.  Raises if an entry
-    references a name absent from the pool.
+    """Project the pool to *entries* (preserving order), applying ``w_override``.
+    Raises ValueError on unknown name.
     """
     by_name = _spec_by_name(rewards_pool)
     filtered: list[dict[str, Any]] = []
@@ -99,15 +97,10 @@ def _filter_pool_by_entries(
 
 
 class RewardScheduleManager:
-    """Stateful reward schedule service.
+    """Stateful reward schedule service (driver-process only; called from on_train_result).
 
-    Driver-process only — ``advance`` / ``create_active_rewards`` are
-    invoked from the ``on_train_result`` callback so there is no
-    concurrency concern.
-
-    SAC replay-buffer caveat: after a reward swap, old transitions in the
-    buffer carry rewards from the previous reward set.  Keep
-    ``swap_every_n_episodes`` large relative to buffer turnover.
+    SAC caveat: after a swap, old replay transitions keep previous rewards — keep
+    ``swap_every_n_episodes`` large vs buffer turnover.
     """
     # TODO VP 2026.05.11.: Flush half of the replay buffer in case of new objectives?
     # Or just gather some samples without training after a swap, to "prime" the buffer with the new rewards?
@@ -188,8 +181,7 @@ class RewardScheduleManager:
         reward_sch_cfg: dict[str, Any] | None,
         default_seed: int | None,
     ) -> "RewardScheduleManager":
-        """Build a manager from the trial's reward pool + inlined schedule.
-
+        """Build a manager from the trial reward pool + inlined schedule
         Args:
             rewards: trial.rewards — list of {class_name, weight, params}.
             reward_sch_cfg: trial.reward_schedule (None ⇒ mode=off).
@@ -208,10 +200,9 @@ class RewardScheduleManager:
         else:
             raise ValueError("Reward schedule omits 'seed' and no default_seed was supplied")
 
-        # Number of episodes (summed across all env_runners) between
-        # swaps. The scheduler callback clamps this to
-        # max(N, num_env_runners) at registration time. Not meaningful
-        # for OFF / FIX (no swapping happens), so it's optional there.
+        # Number of episodes (across all env_runners) between swaps; 
+        # The scheduler callback clamps to max(N, num_env_runners). 
+        # Optional for OFF/FIX (no swapping).
         static_modes = (RewardScheduleMode.OFF, RewardScheduleMode.FIX)
         if "swap_every_n_episodes" not in cfg:
             if mode not in static_modes:
@@ -317,13 +308,8 @@ class RewardScheduleManager:
         return [self._create_reward_from_spec(s) for s in self._get_active_specs()]
 
     def create_eval_rewards(self) -> list:
-        """Return reward instances for evaluation.
-
-        OFF / FIX -> same set as create_active_rewards().
-        RANDOM / GRAD_ADD / DIRICHLET -> entire reward pool with the
-        original pool weights (ignore swap-time subsampling and sampled
-        Dirichlet weights).
-        """
+        """Reward instances for evaluation. OFF/FIX → create_active_rewards();
+        RANDOM/GRAD_ADD/DIRICHLET → full pool with original weights (ignore swap subsampling)."""
         # TODO VP 2026.05.13.: For the RANDOM, GRAD_ADD, DIRICHLET modes: 
         # filter the pool to the on_rewards/reward_order set (if specified), but ignore the per-swap active subset / weights.
         if self.mode in (RewardScheduleMode.OFF, RewardScheduleMode.FIX):
@@ -379,8 +365,7 @@ class RewardScheduleManager:
 
     def advance(self) -> bool:
         """Advance the schedule by one swap step.
-
-        Returns True iff the active reward set / weights changed.
+        Returns True iff the active set/weights changed.
         """
         old_signature = self._signature()
         self._swap_index += 1

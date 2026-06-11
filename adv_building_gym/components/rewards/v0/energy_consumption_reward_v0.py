@@ -10,24 +10,11 @@ logger = logging.getLogger(__name__)
 class MinimiseEnergyConsumptionRewardV0(RewardFunction):
     """Sparse, episode-aggregated energy throughput reward (V0).
 
-    Per-step value uses the canonical sign convention (``net_power_kW > 0``
-    = export, ``< 0`` = consumption). Consumption produces a negative
-    per-step value (penalty); export produces a positive per-step value
-    (reward):
-
-        ratio    = net_power_kW / op_max_kW
-        per_step = clip(ratio, -1, 1)
-
-    Returns ``(0.0, 0.0)`` every step until the natural end of the
-    episode (``_step == episode_length``) or until ``info["terminated"]``
-    flips True, then flushes:
-
-        reward   = clip(accumulator, -steps_seen, +steps_seen)
-        max_step = steps_seen
-
-    Range at flush: ``[-N, +N]``. ``op_max_kW`` resolves from
-    ``ctxt_operator_max_power_kW`` when present, else the constructor
-    fallback ``reference_power_kW``.
+    Per step (canonical sign: net>0 export, <0 consume): per_step = clip(net_power_kW/op_max_kW, -1, 1)
+    — consume → penalty, export → reward. Returns 0 until episode end
+    (``_step == episode_length``) or ``info["terminated"]``, then flushes
+    clip(accumulator, ±steps_seen).
+    ``op_max_kW`` from ``ctxt_operator_max_power_kW`` if present, else ``reference_power_kW``.
     """
 
     _exclude_params = {"_step", "_accumulated_norm"}
@@ -57,28 +44,27 @@ class MinimiseEnergyConsumptionRewardV0(RewardFunction):
         self._step = 0
         self._accumulated_norm = 0.0
 
-    def get_reward(self, actions, states, info: dict | None = None) -> tuple[float, float]:
+    def get_reward(self, actions, state, next_state, info: dict | None = None) -> float:
         if info is None:
             logger.warning("MinimiseEnergyConsumptionRewardV0: info dict is None, returning 0")
-            return 0.0, 0.0
+            return 0.0
 
         episode_length = info.get("episode_length")
         if episode_length is None:
             logger.warning("MinimiseEnergyConsumptionRewardV0: missing episode_length in info, returning 0")
-            return 0.0, 0.0
+            return 0.0
         episode_length = int(episode_length)
 
         net_power_kW = info.get("net_power_kW")
         if net_power_kW is None:
             logger.warning("MinimiseEnergyConsumptionRewardV0: missing net_power_kW in info, returning 0")
-            return 0.0, 0.0
+            return 0.0
 
-        op_max_kW = self._resolve_reference_power_kW(states)
+        # Operator limit is a static per-episode ctxt; read it from observed s.
+        op_max_kW = self._resolve_reference_power_kW(state)
 
-        # Canonical sign convention (set by EnergyTracker): net_power_kW > 0
-        # means EXPORT, < 0 means CONSUMPTION. So `ratio = net / op_max` is
-        # negative when consuming → negative per-step reward = penalty
-        # (matches the "minimise consumption" intent).
+        # Canonical sign (EnergyTracker): net>0 EXPORT, <0 CONSUME, so ratio is
+        # negative when consuming → penalty (matches "minimise consumption").
         ratio = net_power_kW / op_max_kW
         # per_step_signed = self.export_scale * ratio if ratio > 0.0 else ratio
         per_step = float(np.clip(ratio, -1.0, 1.0))
@@ -87,11 +73,11 @@ class MinimiseEnergyConsumptionRewardV0(RewardFunction):
 
         terminated = bool(info.get("terminated", False))
         if self._step < episode_length and not terminated:
-            return 0.0, 0.0
+            return 0.0
 
         steps_seen = self._step
         reward = float(np.clip(self._accumulated_norm, -float(steps_seen), float(steps_seen)))
-        return float(self.weight * reward), float(self.weight * steps_seen)
+        return float(self.weight * reward)
 
 
 ComponentRegistry.register('reward', MinimiseEnergyConsumptionRewardV0)

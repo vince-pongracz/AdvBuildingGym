@@ -254,7 +254,6 @@ def _build_progress_reporter(algorithm: str) -> CLIReporter:
             "env_runners/num_episodes_lifetime": "Episodes",
             "time_total_s": "Time",
             "evaluation/env_runners/episode_return_mean": "EpReturnMean",
-            "evaluation/env_runners/reward_rate": "RewardRate",
             "evaluation/env_runners/achieved_reward": "AchievedReward",
             **algo_cols,
         },
@@ -284,7 +283,6 @@ def _build_tuner(trial: TrialConfig, metric: str, param_space, run_name, storage
             # Metrics (auto-prefixed with env_runners/):
             #   - "episode_return_mean"  (default RLlib metric)
             #   - "achieved_reward" (custom: sum of rewards per episode)
-            #   - "reward_rate"     (custom: achieved/max possible reward)
             metric=metric,
             mode="max",
             trial_dirname_creator=make_trial_dirname_creator(trial_name),
@@ -335,7 +333,6 @@ def _log_best_result(results, metric: str, storage_path: str) -> None:
             metrics_to_log = {
                 "episode_return_mean": env_runners_metrics.get("episode_return_mean"),
                 "achieved_reward": env_runners_metrics.get("achieved_reward"),
-                "reward_rate": env_runners_metrics.get("reward_rate"),
             }
             metric_key = metric.split("/")[-1]
             opt_value = metrics_to_log.get(metric_key)

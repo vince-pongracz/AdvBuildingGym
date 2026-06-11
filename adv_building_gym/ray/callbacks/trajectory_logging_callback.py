@@ -1,13 +1,6 @@
-"""
-Trajectory logging callback for Ray RLlib evaluation.
-
-Provides TrajectoryLoggingCallback via a factory function that saves
-full per-step trajectory data during evaluation episodes as both
-per-episode JSON files and a single HDF5 file per run. Disabled by
-default; only active when env_runner.config.in_evaluation is True.
-
-See docs/about_traj_hdf5_export.md for the HDF5 file structure.
-Link: https://docs.ray.io/en/latest/rllib/rllib-callback.html
+"""Trajectory logging callback (factory): saves full per-step eval trajectories as
+per-episode JSON + a shared HDF5. Active only when ``in_evaluation``.
+See docs/about_traj_hdf5_export.md; Link: https://docs.ray.io/en/latest/rllib/rllib-callback.html
 """
 
 import os
@@ -31,20 +24,8 @@ def make_trajectory_logging_cb_class(
     metrics_base_dir: str = "ep_metrics",
     exec_date: Optional[datetime.datetime] = None,
 ) -> Type["TrajectoryLoggingCallback"]:
-    """Factory that returns a configured TrajectoryLoggingCallback class.
-
-    The returned class saves full per-step trajectory data during evaluation
-    episodes as per-episode JSON files and appends to a shared HDF5 file
-    (trajectories.hdf5). It is gated by env_runner.config.in_evaluation so
-    no trajectory I/O happens during training.
-
-    Args:
-        metrics_base_dir: Base directory for saving trajectory JSON and HDF5.
-        exec_date: Execution datetime for directory naming. Defaults to now.
-
-    Returns:
-        A configured RLlibCallback subclass (not an instance).
-    """
+    """Factory → configured TrajectoryLoggingCallback class. Saves per-episode eval JSON +
+    appends to trajectories.hdf5; gated by ``in_evaluation`` (no I/O during training)."""
     if exec_date is None:
         exec_date = datetime.datetime.now()
 
@@ -52,13 +33,9 @@ def make_trajectory_logging_cb_class(
     _exec_date = exec_date
 
     class TrajectoryLoggingCallback(RLlibCallback):
-        """Save per-step trajectory as JSON and HDF5 during evaluation episodes.
+        """Save per-step trajectory (JSON + HDF5) during eval episodes.
 
-        Only active when env_runner.config.in_evaluation is True.
-        Requires env.log_full_info = True on evaluation EnvRunners
-        so that info["state"] contains named state variables.
-
-        Registered as part of callbacks_class list in config.callbacks().
+        Active only when ``in_evaluation``; requires ``log_full_info=True`` (info["state"]).
         """
 
         def on_episode_end(
@@ -105,19 +82,9 @@ def make_trajectory_logging_cb_class(
                 # Compute summary statistics
                 ep_length = len(episode)
                 ep_achieved_reward = float(np.sum(episode.get_rewards()))
-                # Sum step-wise max rewards from info dicts (state-dependent)
-                max_achievable_reward = 0.0
                 cum_E_kWh = None
-                for info in step_infos:
-                    if isinstance(info, dict):
-                        max_achievable_reward += info.get("max_reward_step", 0.0)
                 if infos and isinstance(infos[-1], dict):
                     cum_E_kWh = infos[-1].get("cum_E_kWh")
-                reward_rate = (
-                    ep_achieved_reward / max_achievable_reward
-                    if max_achievable_reward > 0
-                    else 0.0
-                )
 
                 traj_dump = {
                     "version": 1,
@@ -129,8 +96,6 @@ def make_trajectory_logging_cb_class(
                     "summary": {
                         "achieved_reward": ep_achieved_reward,
                         "episode_return": ep_achieved_reward,
-                        "max_achievable_reward": float(max_achievable_reward),
-                        "reward_rate": float(reward_rate),
                         "cum_E_kWh": float(cum_E_kWh) if cum_E_kWh is not None else None,
                     },
                     "trajectory": trajectory,

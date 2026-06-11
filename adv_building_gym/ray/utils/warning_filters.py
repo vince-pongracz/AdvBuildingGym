@@ -36,9 +36,7 @@ def setup_warning_filters() -> None:
         category=DeprecationWarning,
     )
 
-    # Repeated "running SAC/PPO on the new API stack" notices from
-    # RLlib algorithm_config.py — the project deliberately uses the new stack
-    # and the message clutters the startup banner (emitted 3x+ per run).
+    # repeated "running on the new API stack" notices (deliberate; clutters the banner)
     warnings.filterwarnings(
         "ignore",
         message=r".*running .* on the new API stack.*",

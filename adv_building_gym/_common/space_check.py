@@ -13,16 +13,11 @@ logger = logging.getLogger(__name__)
 
 
 def _pipeline_output_obs_size(pipeline, input_obs_space, input_action_space) -> int | None:
-    """Propagate the env obs space through the connector pipeline and return the flat output size.
+    """Propagate the env obs space through the connector pipeline → flat output size.
 
-    A connector that does not override ``recompute_output_observation_space``
-    inherits the base implementation which returns ``self.input_observation_space``.
-    For pipeline-internal pieces (e.g. ``AddObservationsFromEpisodesToBatch``)
-    that attribute is never set, so the call returns ``None``. That is a
-    pass-through, not a failure — we keep the current ``obs_sp`` and move on.
-
-    Returns None only if the pipeline is empty (no connectors) so the caller
-    can fall back to the raw env obs dimension.
+    A connector returning ``None`` from ``recompute_output_observation_space`` is a
+    pass-through (keep the current space). Returns None only for an empty pipeline,
+    so the caller can fall back to the raw env obs dim.
     """
     if not pipeline:
         return None
@@ -38,22 +33,12 @@ def _pipeline_output_obs_size(pipeline, input_obs_space, input_action_space) -> 
 
 
 def check_space_compatibility(rl_module, env, pipeline: Iterable | None = None) -> None:
-    """Verify that the model's input/output spaces match the environment.
+    """Verify the model's obs/action spaces match the env; raises ValueError on mismatch.
 
-    Args:
-        rl_module: Loaded RLModule with ``observation_space`` and
-            ``action_space`` attributes.
-        env: Gymnasium environment (possibly wrapped).
-        pipeline: Optional env-to-module ConnectorV2 pipeline. When given, the
-            env obs is propagated through the pipeline so the check compares
-            the model's input against the post-connector flat size. Without
-            this the check would compare against the raw env obs and falsely
-            fail on any policy trained with a non-trivial connector pipeline.
-
-    Raises:
-        ValueError: If observation or action dimensions differ.
+    With a ``pipeline``, env obs is propagated through it so the check compares against the
+    post-connector flat size (else it would falsely fail for non-trivial pipelines).
     """
-    # Model's expected observation size (flat)
+    # Model's expected (flat) observation size
     model_obs_size = int(np.prod(rl_module.observation_space.shape))
 
     env_obs_size: int | None = None
@@ -72,7 +57,7 @@ def check_space_compatibility(rl_module, env, pipeline: Iterable | None = None) 
             f"but the env produces {env_obs_size} features "
             f"(difference: {env_obs_size - model_obs_size}). "
             f"Check whether the config has changed since training "
-            f"(e.g. ACTION_HISTORY_LENGTH, hst_env_wrapper_tracked_keys/offsets, "
+            f"(e.g. ACTION_HISTORY_LENGTH, hst.tracked_keys/offsets, "
             f"added/removed statesources)."
         )
 

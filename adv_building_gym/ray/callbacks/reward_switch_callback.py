@@ -22,7 +22,7 @@ def create_reward_switch_on_train_result_cb(
     num_env_runners: int,
     exploration_reset: ExplorationResetConfig | None = None,
 ):
-    """Factory returning an on_train_result callable.
+    """Factory → on_train_result callable.
 
     Args:
         reward_manager: Stateful manager driving the active subset.

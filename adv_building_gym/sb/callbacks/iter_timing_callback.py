@@ -1,4 +1,4 @@
-"""SB3 iter-timing callback (SB3 equivalent of iter_timing_callback.py).
+"""SB3 iter-timing callback (equivalent of the Ray iter_timing_callback).
 
 SB3 has no per-iteration ``on_train_result`` hook the way RLlib does
 — learning is one long stream of ``model.learn`` with periodic
@@ -72,9 +72,7 @@ class SBIterTimingCallback(BaseCallback):
         self._train_calls = 0
         self._sample_calls = 0
         self._last_step_perf: float | None = None
-        # Stored so we can restore the unwrapped methods on training_end
-        # (not strictly required, but tidy when learn() is invoked
-        # multiple times on the same model in a script).
+        # stored to restore the unwrapped methods on training_end (tidy across multiple learn() calls)
         self._unwrapped_train = None
         self._unwrapped_collect = None
         self._unwrapped_excluded = None
@@ -87,34 +85,21 @@ class SBIterTimingCallback(BaseCallback):
         model = self.model
         self._wrap_train(model)
         self._wrap_collect_rollouts(model)
-        # Critical: the wrapped methods are closures over `self` (this
-        # callback) which transitively reach RewardScheduleManager /
-        # combinators / Infrastructure / StateSource / RewardFunction
-        # instances — all ABCs. SB3's save() cloudpickles model.__dict__
-        # for everything not in _excluded_save_params; cloudpickle hits
-        # an `_abc._abc_data` object and crashes. Exclude the patched
-        # instance attributes so SB3 skips them when saving (the saved
-        # checkpoint then restores model.train / model.collect_rollouts
-        # to the class methods, which is what we want).
+        # the wrapped methods close over `self`, which reaches ABC instances; SB3's
+        # save() cloudpickles model.__dict__ and crashes on `_abc_data`. Exclude the
+        # patched attrs so save skips them (restore falls back to the class methods).
         self._extend_excluded_save_params(model)
         self._last_step_perf = time.perf_counter()
 
     def _extend_excluded_save_params(self, model) -> None:
-        """Make ``model._excluded_save_params`` also exclude our patches.
+        """Extend ``model._excluded_save_params`` to also exclude our patches.
 
-        Capture the *resolved list* (not the bound method) so the
-        replacement closure has no reference back to the model — that
-        keeps the patched ``_excluded_save_params`` itself picklable
-        in case SB3 ever serialises it. Plus we list
-        ``_excluded_save_params`` in the exclusion so SB3 pops it from
-        the data dict before cloudpickle runs.
+        Captures the resolved list (no model reference) so the replacement stays picklable;
+        also excludes ``_excluded_save_params`` itself.
         """
         original = model._excluded_save_params
         base_exclude = list(original())
-        # The three keys we MUST add: our two patched methods plus
-        # this attribute itself (it's now an instance attr because we
-        # rebind it below). Dedupe defensively in case future SB3
-        # versions add them upstream.
+        # add our two patched methods + this attribute itself; dedupe defensively
         extra = ["train", "collect_rollouts", "_excluded_save_params"]
 
         def extended():
@@ -178,15 +163,10 @@ class SBIterTimingCallback(BaseCallback):
     # ------------------------------------------------------------------
 
     def _on_training_end(self) -> None:
-        """Remove instance-attribute patches so the class methods come back.
+        """Delete the instance-attribute patches so the class methods come back.
 
-        Re-assigning ``model.train = self._unwrapped_train`` would just
-        replace one closure-capturing instance attribute with another
-        (bound methods reference their receiver), so the next
-        ``model.save()`` would still hit the cloudpickle ABC error.
-        ``del`` makes attribute access fall through to the class — the
-        clean original implementation — and removes the entry from
-        ``__dict__`` so SB3's save iteration never sees it.
+        Re-assigning would still leave a closure-capturing attr (re-triggering the cloudpickle
+        ABC error); ``del`` falls through to the clean class method and clears ``__dict__``.
         """
         model = self.model
         for attr in ("train", "collect_rollouts", "_excluded_save_params"):
@@ -198,18 +178,8 @@ class SBIterTimingCallback(BaseCallback):
 
 
 def wrap_eval_callback_with_timer(eval_callback) -> None:
-    """Wrap ``EvalCallback._on_step`` so eval duration is recorded.
-
-    EvalCallback._on_step is a no-op on most ticks and only runs the
-    evaluation when ``self.n_calls % self.eval_freq == 0`` — bracketing
-    every tick would flood the Logger with near-zero values. We instead
-    look at ``self.n_calls`` BEFORE calling the underlying method, and
-    only emit ``timers/eval_s`` on ticks that actually trigger an
-    evaluation.
-
-    Operates by rebinding on the instance (idempotent: a second call
-    is a no-op via a marker attribute).
-    """
+    """Wrap ``EvalCallback._on_step`` to record ``timers/eval_s`` only on ticks that actually
+    evaluate (``n_calls % eval_freq == 0``). Rebinds on the instance; idempotent."""
     if getattr(eval_callback, "_iter_timing_wrapped", False):
         return
 
@@ -217,10 +187,7 @@ def wrap_eval_callback_with_timer(eval_callback) -> None:
 
     @wraps(original)
     def timed_on_step(*args, **kwargs):
-        # Read eval_freq (per-env, per SB3 EvalCallback semantics) and
-        # n_calls BEFORE invoking. SB3 increments n_calls inside
-        # BaseCallback.on_step (the public entry) — by the time we're
-        # in _on_step it already reflects this call.
+        # read eval_freq / n_calls before invoking; n_calls already reflects this call
         eval_freq = getattr(eval_callback, "eval_freq", 0)
         n_calls = getattr(eval_callback, "n_calls", 0)
         eval_will_run = eval_freq > 0 and n_calls % eval_freq == 0

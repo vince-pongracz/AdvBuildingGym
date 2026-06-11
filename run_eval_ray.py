@@ -253,11 +253,11 @@ def main() -> None:
 
         if n_iters > 1:
             logger.info("=" * 70)
-            logger.info("Per-config eval summary (mean reward / mean reward_rate):")
+            logger.info("Per-config eval summary (mean reward):")
             for subdir, r in all_results:
                 logger.info(
-                    "  %-40s  mean_reward=%.4f  mean_rate=%.4f",
-                    subdir, r.mean_reward, r.mean_reward_rate,
+                    "  %-40s  mean_reward=%.4f",
+                    subdir, r.mean_reward,
                 )
     except Exception as e:
         logger.error("Evaluation failed: %s", str(e), exc_info=True)

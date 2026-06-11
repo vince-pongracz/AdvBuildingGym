@@ -1,8 +1,5 @@
-"""Per-episode data-variant + day-offset selection extracted from AdvBuildingGym.
-
-The env owns *what* runs each episode; this manager owns the choice of
-*which slice of data* — keeping reset() free of three-way variant logic
-and CSV-row arithmetic.
+"""Per-episode data-variant + day-offset selection, keeping reset() free of
+variant logic and CSV-row arithmetic.
 """
 from __future__ import annotations
 
@@ -42,19 +39,13 @@ class DataVariantManager:
     ) -> Optional[dict[str, str]]:
         """Select a data variant for this episode.
 
-        Precedence:
-        1. ``options['data_variant']`` (single-env eval / external push) wins.
-        2. ``eval_mode=True`` draws a fresh *random* variant each episode,
-           overriding the ``episode_count // swap_every_n_episodes`` cadence so
-           every episode of an eval round samples an independent variant.
-        3. Otherwise the combinator's own cadence (cycle / random) applies.
+        Precedence: ``options['data_variant']`` > ``eval_mode`` (fresh random each
+        episode, overriding cadence) > the combinator's own cadence (cycle/random).
         """
         if options and "data_variant" in options:
             return options["data_variant"]
         if self.data_combinator.variants:
-            return self.data_combinator.get_variant(
-                self.episode_count, rng, force_random=eval_mode,
-            )
+            return self.data_combinator.get_variant(self.episode_count, rng, force_random=eval_mode)
         return None
 
     def compute_day_offset(

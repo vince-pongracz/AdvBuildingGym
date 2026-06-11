@@ -50,13 +50,10 @@ class _ParsedConfig:
 
 
 class InfraCombinator:
-    """Schedule infra YAML files for infrastructure curriculum training.
+    """Schedule infra YAMLs for infrastructure curriculum training.
 
-    Loads two ordered lists of infra YAMLs (``configs/infra_cfgs/**/*.yaml``):
-    one for training (cycled by the swap callback) and one for evaluation
-    (iterated by the eval orchestrator).  Each file declares only the
-    ``infras`` list -- statesources, timing, building envelope, and rewards
-    are managed separately.
+    Two ordered lists of infra-only YAMLs (``configs/infra_cfgs/**/*.yaml``): train (cycled by
+    the swap callback) and eval (iterated by the orchestrator).
 
     Args:
         train_config_paths: Ordered list of infra YAML file paths for training.
@@ -182,7 +179,7 @@ class InfraCombinator:
 
     @classmethod
     def from_dict(cls, raw: dict, control_step: int) -> "InfraCombinator":
-        """Build a combinator from an inlined schedule dict.
+        """Build a combinator from an inlined schedule dict (mode / swap_every_n_episodes / configs.{train,eval}).
 
         Expected layout::
 

@@ -1,9 +1,4 @@
-"""
-Environment creator factory function for Ray RLlib/Tune.
-
-This module provides the factory function used by Ray Tune to create
-AdvBuildingGym environment instances with the configured settings.
-"""
+"""Env creator factory for Ray RLlib/Tune — builds AdvBuildingGym instances per call."""
 
 import itertools
 import logging
@@ -26,14 +21,8 @@ _env_instance_counter = itertools.count()
 
 
 def merge_env_context(base: dict, cfg):
-    """Merge the static creator config with RLlib's EnvContext WITHOUT
-    dropping its ``worker_index`` / ``vector_index``.
-
-    A plain ``{**base, **cfg}`` returns a bare ``dict`` and silently loses
-    those attributes (they live on EnvContext as attributes, not dict items),
-    which is why the creators previously fell back to per-process counters /
-    ``os.getpid()``.  Re-wrapping into an EnvContext preserves the metadata.
-    """
+    """Merge the static config with RLlib's EnvContext, preserving ``worker_index`` /
+    ``vector_index`` (a plain ``{**base, **cfg}`` drops them — they're EnvContext attrs)."""
     merged = {**base, **cfg}
     # Deferred import so non-Ray callers (SB driver, tests) don't pull in ray.
     # TODO VP 2026.05.31.: But what uses the SB driver?
@@ -51,15 +40,9 @@ def merge_env_context(base: dict, cfg):
 
 
 def adv_building_env_creator(config: dict) -> gymnasium.Env:
-    """Factory function for Ray Tune to create AdvBuildingGym instances.
+    """Create a wrapped AdvBuildingGym (flat Box(-1, 1) action space) for Ray Tune.
 
-    This function is registered with Ray Tune and called whenever a new
-    environment instance is needed (e.g., for env runners, evaluation).
-
-    Uses factory methods to create FRESH component instances for each
-    environment.  This ensures parallel env_runners don't share mutable
-    state (iteration counters, internal buffers).
-
+    Builds FRESH components each call so parallel env_runners don't share state.
     Args:
         config: Configuration dict passed by Ray Tune. Required keys:
             - ``env_config``: EnvConfig instance carrying the YAML-loaded
@@ -84,8 +67,7 @@ def adv_building_env_creator(config: dict) -> gymnasium.Env:
             "(e.g. env_creator_config={'env_config': active_config, ...})."
         )
 
-    # Create fresh instances for this environment from the YAML-loaded specs.
-    # Each env gets its own infras/statesources/rewards with independent state.
+    # fresh per-env instances (independent state) from the YAML specs
     infras = env_config.create_infras()
     statesources = env_config.create_statesources()
 
@@ -93,15 +75,13 @@ def adv_building_env_creator(config: dict) -> gymnasium.Env:
     reward_manager = config["reward_schedule_manager"]
     rewards = reward_manager.create_active_rewards()
 
-    # Real RLlib indices, preserved through merge_env_context() at the
-    # registration site. worker_index: 0 = local runner, 1..N = remote
-    # runners; vector_index = sub-env slot within the worker.
+    # RLlib indices (via merge_env_context): worker_index 0=local, 1..N=remote;
+    # vector_index = sub-env slot within the worker
     worker_index = getattr(config, "worker_index", 0)
     vector_index = getattr(config, "vector_index", 0)
     instance_id = f"AdvBuildingGym_w{worker_index}_v{vector_index}"
 
-    # DEBUG: confirm the EnvContext metadata actually reaches the creator.
-    # "MISSING" means the indices were dropped before this point (cfg type=dict).
+    # DEBUG: confirm EnvContext metadata reached here ("MISSING" = dropped earlier)
     logger.info(
         "env_creator: worker_index=%s vector_index=%s recreated=%s num_workers=%s "
         "(cfg type=%s) → instance_id=%s",
@@ -139,40 +119,34 @@ def adv_building_env_creator(config: dict) -> gymnasium.Env:
     if config.get("eval_mode", False):
         env.eval_mode = True
 
-    if env_config.hst_env_wrapper_enabled:
+    if env_config.hst.enabled:
         env = HistoryWrapper(
             env,
-            tracked_keys=env_config.hst_env_wrapper_tracked_keys,
-            offsets=env_config.hst_env_wrapper_offsets,
+            tracked_keys=env_config.hst.tracked_keys,
+            offsets=env_config.hst.offsets,
         )
         logger.info(
             "env_creator: HistoryWrapper enabled (tracked_keys=%s, offsets=%s)",
-            list(env_config.hst_env_wrapper_tracked_keys),
-            list(env_config.hst_env_wrapper_offsets),
+            list(env_config.hst.tracked_keys),
+            list(env_config.hst.offsets),
         )
 
-    if env_config.forecast_env_wrapper_enabled:
-        env = ForecastWrapper(env, forecast_steps=env_config.forecast_env_wrapper_steps)
+    if env_config.forecast.enabled:
+        env = ForecastWrapper(env, forecast_steps=env_config.forecast.steps)
         logger.info(
             "env_creator: ForecastWrapper enabled (steps=%s)",
-            list(env_config.forecast_env_wrapper_steps),
+            list(env_config.forecast.steps),
         )
 
     return wrap_action_space(env)
 
 
 def adv_building_ma_env_creator(config: dict):
-    """Factory for the per-actuator multi-agent variant.
+    """Multi-agent (per-actuator) variant — like :func:`adv_building_env_creator` but builds a
+    :class:`MultiAgentAdvBuildingGym` (rescale lives inside it, no flat-Box wrappers).
 
-    Mirrors :func:`adv_building_env_creator` but builds a
-    :class:`MultiAgentAdvBuildingGym` and skips the flat-Box action
-    wrappers — per-agent rescale lives inside the MA wrapper.
-
-    Optional config key:
-        ``reward_partition``: dict[agent_id → list[reward_name]] mapping
-            distributing reward breakdown components per agent. ``None``
-            (default) routes the global aggregated reward to every agent
-            (cooperative MARL).
+    Optional ``reward_partition`` (dict[agent_id → reward names]) splits reward components per agent;
+    ``None`` routes the global reward to every agent (cooperative MARL).
     """
     env_config = config.get("env_config")
     if env_config is None:
@@ -185,9 +159,7 @@ def adv_building_ma_env_creator(config: dict):
     reward_manager = config["reward_schedule_manager"]
     rewards = reward_manager.create_active_rewards()
 
-    # DEBUG: confirm the EnvContext metadata actually reaches the creator.
-    # "MISSING" here means the indices were dropped before this point and
-    # the os.getpid() fallback below will fire.
+    # DEBUG: confirm EnvContext metadata reached here ("MISSING" → os.getpid() fallback below)
     logger.info(
         "ma_env_creator: worker_index=%s vector_index=%s recreated=%s (cfg type=%s)",
         getattr(config, "worker_index", "MISSING"),
@@ -222,12 +194,11 @@ def adv_building_ma_env_creator(config: dict):
         env.log_full_info = True
     # TODO VP 2026.05.31.: Add eval mode to MA env and set it here when supported.
 
-    if env_config.hst_env_wrapper_enabled:
-        # HistoryWrapper targets the single-agent Dict obs space; the
-        # multi-agent variant has a per-agent space and is not supported.
+    if env_config.hst.enabled:
+        # HistoryWrapper targets the single-agent Dict obs; not supported for the per-agent MA space
         raise NotImplementedError("HistoryWrapper is not supported in the multi-agent env creator.")
 
-    if env_config.forecast_env_wrapper_enabled:
+    if env_config.forecast.enabled:
         raise NotImplementedError("ForecastWrapper is not supported in the multi-agent env creator.")
 
     logger.info("ma_env_creator: instance_id=%s agents=%s",

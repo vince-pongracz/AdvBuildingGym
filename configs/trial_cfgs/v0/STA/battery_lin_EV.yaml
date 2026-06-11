@@ -18,14 +18,11 @@ env_meta:
     - s_temp_in_norm
     - s_temp_out_norm
     - s_solar_irradiance_norm
-    - a_hp_prev
-    - a_battery_prev
     offsets:
     - -1
     - -2
     - -3
     - -4
-    - -6
 
   forecast_env_wrapper:
     enabled: true
@@ -45,7 +42,7 @@ training_params:
   sac:
     episodes_to_keep_in_replay_buffer: 500
     n_step_return: 3
-    training_intensity: 128
+    training_intensity: 32
     learning_starts_after_n_episodes: 50
 
 statesources:

@@ -1,9 +1,4 @@
-"""
-Ray RLlib training utilities module.
-
-This package provides utilities for configuring and training RL algorithms
-with Ray RLlib, including model selection and environment setup.
-"""
+"""Ray RLlib training utilities: model selection, resource/env setup, inference."""
 
 from .common_model_config import common_model_setup, register_callbacks
 from .select_model import select_model

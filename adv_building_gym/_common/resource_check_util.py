@@ -16,13 +16,11 @@ class SlurmResources:
 
 @dataclass
 class ResourceAllocation:
-    """CPU/GPU split derived from the SLURM allocation.
+    """CPU/GPU split from the SLURM allocation.
 
-    ``num_env_runners`` starts as the budget (all CPUs left after the driver and
-    learners) and may be lowered to an algorithm-specific count before validation
-    (see ``resource_setup.resolve_num_env_runners``). Aggregate totals
-    (used vs. unused CPUs) are derived on demand in ``validate_resource_allocation``
-    rather than stored here, so the struct stays a single source of truth.
+    ``num_env_runners`` starts as the budget (CPUs left after driver + learners) and may be
+    lowered to an algorithm-specific count before validation. Aggregate totals are derived in
+    ``validate_resource_allocation``, not stored here.
     """
     num_learners: int
     num_gpus_per_learner: int
@@ -37,16 +35,12 @@ def compute_resource_allocation(
     slurm_resources: SlurmResources,
     local_learner: bool,
 ) -> ResourceAllocation:
-    """Split the SLURM CPU/GPU allocation into learner / driver / env-runner shares.
+    """Split the SLURM allocation into learner / driver / env-runner shares (algorithm-agnostic).
 
-    Purely a function of the hardware budget and ``local_learner`` — deliberately
-    algorithm-agnostic. The returned ``num_env_runners`` is the budget (all remaining
-    CPUs); ``resource_setup`` lowers it to the algorithm-specific count before validation.
-
-    - local_learner=True: num_learners=0, the Learner runs in the driver process
-      (its 1 CPU covers both), no separate learner CPU reservation.
-    - local_learner=False: one remote Learner per GPU, each with 1 GPU + 1 CPU.
-    - Env runners: all remaining CPUs after learners and driver.
+    ``num_env_runners`` is the budget (all remaining CPUs); ``resource_setup`` lowers it later.
+    - local_learner=True: num_learners=0, Learner runs in the driver (no separate CPU).
+    - local_learner=False: one remote Learner per GPU (1 GPU + 1 CPU each).
+    - Env runners: all CPUs left after learners and driver.
     """
     num_cpus_per_env_runner = 1
     driver_cpus = 1
@@ -81,20 +75,11 @@ def validate_resource_allocation(
     slurm_resources: SlurmResources,
     param_space: Dict[str, Any],
 ) -> None:
-    """
-    Validate that a computed resource allocation is within SLURM constraints.
+    """Validate the allocation against SLURM CPU/GPU limits; raises ValueError if exceeded.
 
-    Args:
-        allocation: ResourceAllocation (with the final, possibly algorithm-capped
-            ``num_env_runners``).
-        slurm_resources: SLURM-allocated CPUs/GPUs to validate against.
-        param_space: RLlib param_space dict — used to check the GPU config actually
-            applied to the algorithm config (cross-check against ``config.learners``).
-
-    Raises:
-        ValueError: If allocation exceeds SLURM constraints.
+    ``param_space`` is cross-checked for the applied GPU config.
     """
-    # Derive aggregate CPU usage from the share fields + the final env-runner count.
+    # aggregate CPU usage
     total_cpu_usage = (
         allocation.driver_cpus
         + allocation.learner_total_cpus
@@ -139,9 +124,8 @@ def validate_resource_allocation(
             f"but only {slurm_resources.num_gpus} available."
         )
 
-    # Warn if GPU available but not used. With num_learners=0 (local learner on
-    # driver), num_gpus_per_learner > 0 still claims the GPU for the driver-side
-    # learner, so check that instead of total_gpu_request.
+    # warn if GPU is available but unused; with num_learners=0 the driver-side learner
+    # still claims it via num_gpus_per_learner, so check that, not total_gpu_request
     if slurm_resources.num_gpus > 0 and num_gpus_per_learner == 0:
         logger.warning(
             "GPU available (%d) but no learner configured to use it. "

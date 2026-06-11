@@ -1,9 +1,4 @@
-"""
-Ray RLlib common configuration utilities.
-
-This module provides the common configuration function for RLlib algorithms,
-including environment setup, resource allocation, and callback configuration.
-"""
+"""Ray RLlib common configuration: env setup, resources, and callbacks."""
 
 import datetime
 import logging
@@ -11,9 +6,7 @@ import logging
 from ray.rllib.algorithms.algorithm_config import AlgorithmConfig
 
 from adv_building_gym.config.env.env_config import EnvConfig
-# Per-key strided observation history lives in HistoryWrapper (an env wrapper
-# applied in env_creator.py); the env-to-module / learner pipelines only need
-# stock FlattenObservations to flatten the augmented Dict obs.
+# History stacking is in HistoryWrapper (env wrapper); pipelines only need FlattenObservations.
 from ray.rllib.connectors.env_to_module import FlattenObservations
 
 from adv_building_gym.ray.callbacks import (
@@ -39,12 +32,7 @@ logger = logging.getLogger(__name__)
 
 
 def _compose_on_train_result(*fns):
-    """Compose multiple on_train_result callables into one.
-
-    RLlib's ``config.callbacks()`` accepts a single ``on_train_result``
-    callable.  This helper chains several so that both data scheduling
-    and reward switching can coexist.
-    """
+    """Chain several on_train_result callables into one (RLlib accepts a single callable)."""
     def composed_on_train_result(*, algorithm, result, **kwargs):
         for fn in fns:
             fn(algorithm=algorithm, result=result, **kwargs)
@@ -63,29 +51,15 @@ def register_callbacks(
     exec_date: datetime.datetime | None = None,
     trial_name: str | None = None,
 ) -> None:
-    """Register episode-metric, trajectory, and scheduling callbacks on *config*.
+    """Register episode-metric, trajectory, and scheduling callbacks on *config* (in place).
 
-    Mutates *config* in place via ``config.callbacks()``. Must be called after
-    ``resource_setup`` has set the env-runner count, since the schedule callbacks
-    read ``config.num_env_runners`` to floor their swap window (one episode per
-    runner between swaps).
-
-    Data-variant selection is intentionally not a callback here — it is
-    env-side (see :mod:`adv_building_gym.core._data_variant_manager`).
-
-    Args:
-        config: Algorithm config object to register callbacks on.
-        metrics_base_dir: Base directory for episode metrics.
-        log_trajectories: Save per-step trajectory JSON during evaluation.
-        reward_schedule_manager: Optional reward schedule manager.
-        infra_combinator: Optional infrastructure schedule combinator.
+    Must run after ``resource_setup`` (schedule callbacks read ``config.num_env_runners``
+    to floor their swap window). Data-variant selection is env-side, not a callback here.
     """
-    # The env-runner count was set earlier by resource_setup (algorithm-specific).
-    # Read it back here so the swap-gate floor matches the actual sampling topology.
+    # env-runner count from resource_setup; read back so the swap-gate floor matches sampling
     num_env_runners = config.num_env_runners
 
-    # Create callback classes for episode metrics and (optionally) trajectory logging.
-    # Each factory returns a configured RLlibCallback subclass.
+    # callback classes for episode metrics (+ optional trajectory logging)
     # Link: https://docs.ray.io/en/latest/rllib/rllib-callback.html
     if exec_date is None:
         exec_date = datetime.datetime.now()
@@ -111,21 +85,13 @@ def register_callbacks(
         callback_classes.append(trajectory_class)
         logger.info("Trajectory logging enabled: per-step trajectory JSON will be saved for each episode.")
 
-    # on_train_result callables run at iteration boundaries. RLlib accepts a
-    # single on_train_result callable, so compose them when several are active.
-    #
-    # NOTE: the data-variant schedule is intentionally NOT wired here. Variant
-    # selection is fully env-side (AdvBuildingGym.reset -> DataVariantManager):
-    # each runner picks its variant from episode_count // swap_every_n_episodes
-    # (training) or a fresh random draw (eval). The old iteration-boundary push
-    # was overwritten by the very next reset(), so it had no effect — see
-    # core/_data_variant_manager.py.
+    # on_train_result callables run at iteration boundaries (composed into one).
+    # Data-variant schedule is NOT wired here — selection is env-side
+    # (AdvBuildingGym.reset → DataVariantManager); an iteration-boundary push
+    # was overwritten by the next reset(). See core/_data_variant_manager.py.
     on_train_result_fns = [
-        # Mirror the eval return to a flat top-level result key so Tune's
-        # CheckpointConfig(checkpoint_score_attribute=...) can rank checkpoints
-        # by best eval performance (a slashed key is silently ignored — see
-        # eval_score_callback). Also logs the save/keep/evict decision per
-        # checkpoint. Runs every iteration; carries forward on non-eval iters.
+        # mirror eval return to a flat result key so Tune's checkpoint_score_attribute
+        # can rank checkpoints (slashed keys are ignored); logs save/keep/evict each iter
         create_eval_score_promote_on_train_result_cb(checkpoint_interval=checkpoint_interval),
         # Warn when SAC's entropy temperature (alpha) collapses → exploration dies.
         create_exploration_monitor_on_train_result_cb(),
@@ -185,8 +151,7 @@ def register_callbacks(
         "on_train_result": _compose_on_train_result(*on_train_result_fns),
     }
 
-    # Register all callback classes + optional callable-based callbacks.
-    # RLlib executes subclass callbacks in list order, then callables.
+    # register class callbacks (run in list order) + callable callbacks
     config.callbacks(callbacks_class=callback_classes, **callback_kwargs)
 
 
@@ -203,23 +168,11 @@ def common_model_setup(
     exec_date: datetime.datetime | None = None,
     trial_name: str | None = None,
 ):
-    """
-    Apply common, algorithm-independent RLlib configuration.
+    """Apply common, algorithm-independent RLlib config (API stack, env, debugging/reporting/
+    framework, sampling connectors, evaluation, logger, callbacks).
 
-    Configures the settings shared across all algorithms:
-    - API stack (RL module and learner, env runner and connector v2)
-    - Environment configuration (retrieves action space from env_creator)
-    - Debugging / reporting / framework settings
-    - Sampling config: rollout_fragment_length, episode_lookback_horizon, connectors
-    - Evaluation settings
-    - Logger configuration
-    - Callbacks (episode metrics, eval trajectories, optional schedule callbacks)
-
-    Must run AFTER ``resource_setup`` (which sets the learner / env-runner resources
-    and the algorithm-specific ``num_env_runners``): the schedule callbacks read the
-    final ``config.num_env_runners`` to floor their swap window. Resource allocation
-    and validation themselves are intentionally NOT done here — they live in
-    ``resource_setup``.
+    Must run AFTER ``resource_setup`` (schedule callbacks read the final ``config.num_env_runners``);
+    resource allocation/validation live there, not here. Data-variant selection is env-side.
 
     Args:
         config: Algorithm config object (e.g., PPOConfig instance)
@@ -234,12 +187,10 @@ def common_model_setup(
         envs by the env creator); there is no data-schedule callback here.
 
     Returns:
-        Configured algorithm config
+        Algorithm config
     """
-    # observation_space is intentionally omitted — FlattenObservations transforms
-    # it automatically. 
-    # action_space is also omitted — the env_creator wraps
-    # the env with FlattenAction + RescaleAction so RLlib sees a flat Box(-1, 1).
+    # obs_space omitted (FlattenObservations handles it); action_space omitted
+    # (env_creator's FlattenAction + RescaleAction give RLlib a flat Box(-1, 1)).
     # Link: https://docs.ray.io/en/latest/rllib/env-to-module-connector.html
 
     # TODO VP 2026.03.18. : Check each setting here and at SAC/PPO
@@ -271,37 +222,25 @@ def common_model_setup(
     config.log_gradients = False # RLlib default: False
     # NOTE VP 2026.01.08. : about ray and rllib concept https://docs.ray.io/en/latest/rllib/key-concepts.html
     config.training(gamma=training_config.gamma) # RLlib default: 0.99
-    # Sampling actions (querying the env, using the policy, sample trajectories) -- no GPU needed.
-    # Per-key history stacking is handled inside HistoryWrapper (env wrapper); the
-    # pipeline here only needs FlattenObservations. The env-runner *count* and the
-    # learner/env-runner resource shares are set later in resource_setup (they depend
-    # on the SLURM budget and the algorithm); here we only set sampling behaviour.
+    # Sampling (env queries, policy, trajectories) — no GPU. History stacking is in
+    # HistoryWrapper, so the pipeline only needs FlattenObservations. Env-runner count
+    # and resource shares are set later in resource_setup; here only sampling behaviour.
     config.env_runners(
         rollout_fragment_length=env_config.EPISODE_LENGTH, # Collect complete episodes before returning to learner.
         episode_lookback_horizon=training_config.episode_lookback_horizon_steps,  # RLlib default: 1
         env_to_module_connector=lambda env, spaces, device: [FlattenObservations()],  # type: ignore
     )
-    # Mirror the env-to-module pipeline on the learner side so replayed (SAC)
-    # or on-policy (PPO) batches flatten to the same obs dim.
+    # mirror the env-to-module pipeline on the learner side so batches flatten to the same dim
     config.training(
         learner_connector=lambda obs_sp, act_sp: [FlattenObservations()],  # type: ignore
     )
-    # Evaluation runs the current policy without exploration noise to provide
-    # an unbiased performance signal for model selection (analogous to a
-    # validation set).  It does NOT influence gradient updates.
-    # Evaluation EnvRunners always get log_full_info=True so step() includes
-    # a deep copy of named state in info["state"] — needed by the eval
-    # trajectory callback (raw + normalised + actions) and trajectory logging.
-    # eval_mode=True makes each eval episode draw a fresh random data variant
-    # (independent (variant, day) per episode) instead of following the
-    # training swap cadence — see core/_data_variant_manager.select_variant.
-    # Training EnvRunners are unaffected (no extra memory overhead).
+    # Eval runs the policy without exploration noise (unbiased selection signal; no gradients).
+    # Eval EnvRunners get log_full_info=True (info["state"] for the eval trajectory callback)
+    # and eval_mode=True (each episode draws a fresh random (variant, day)). Training unaffected.
     eval_env_config = {"log_full_info": True, "eval_mode": True}
 
-    # evaluation_interval > 1 means the `evaluation/env_runners/` keys are
-    # absent from results on non-eval iterations.  Tune's strict metric check
-    # would crash, so TUNE_DISABLE_STRICT_METRIC_CHECKING must be set in the
-    # driver process (run_train_ray.py).
+    # evaluation_interval > 1 leaves evaluation/env_runners/ absent on non-eval iters,
+    # so TUNE_DISABLE_STRICT_METRIC_CHECKING must be set in the driver (run_train_ray.py).
     config.evaluation(
         # evaluation_num_env_runners=1, # not important for now
         evaluation_interval=training_config.evaluation_interval,  # RLlib default: None
@@ -320,8 +259,7 @@ def common_model_setup(
         ],
     }
 
-    # Callbacks read the env-runner count from the config (set by resource_setup),
-    # so this must run after resource_setup.
+    # callbacks read num_env_runners (set by resource_setup), so run after it
     register_callbacks(
         config,
         checkpoint_interval=training_config.evaluation_interval,

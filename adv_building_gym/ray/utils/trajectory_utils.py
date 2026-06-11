@@ -60,7 +60,7 @@ def extract_trajectory_from_infos(
     state_keys: list[str] | None = None,
     action_keys: list[str] | None = None,
 ) -> dict:
-    """Convert a list of per-step info dicts into columnar trajectory data.
+    """Convert per-step info dicts into columnar trajectory data (JSON-ready).
 
     Args:
         infos: List of info dicts from AdvBuildingGym.step() calls (length T).

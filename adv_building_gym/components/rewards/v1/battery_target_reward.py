@@ -28,17 +28,16 @@ class BatteryTargetReward(RewardFunction):
 
         self.min_pct = float(min_pct)
         self.max_pct = float(max_pct)
-        self.max_reward_in_step = 0.0  # no positive reward, only guardrail penalty
 
-    def get_reward(self, actions, states, info: dict | None = None) -> tuple[float, float]:
-        soc = float(states["s_battery_soc"][0])
+    def get_reward(self, actions, state, next_state, info: dict | None = None) -> float:
+        soc = float(next_state["s_battery_soc"][0])  # resulting SoC (s')
 
         if self.min_pct <= soc <= self.max_pct:
-            return 0.0, 0.0
+            return 0.0
         else:
             reward = -1.0
 
-        return self.weight * reward, self.weight * self.max_reward_in_step
+        return self.weight * reward
 
 
 ComponentRegistry.register('reward', BatteryTargetReward)

@@ -36,21 +36,14 @@ class TrajectoryCollector:
     """
 
     def __init__(self, env) -> None:
-        """Extract keys from the environment for trajectory extraction.
-
-        Args:
-            env: An AdvBuildingGym instance 
-            (or compatible env with reward_funcs and Dict action_space).
-        """
-
-        # Extract state and action key names from env spaces
+        """Extract state/action/reward keys from ``env`` (AdvBuildingGym or compatible)."""
+        # state/action key names from env spaces
         self.state_keys: list[str] | None = None
         if hasattr(env, "observation_space") and hasattr(env.observation_space, "spaces"):
             self.state_keys = list(env.observation_space.spaces.keys())
 
         self.action_keys: list[str] | None = None
-        # The native Dict action space lives on the unwrapped AdvBuildingGym;
-        # wrappers (FlattenAction, RescaleAction) may hide it.
+        # native Dict action space is on the unwrapped env (wrappers may hide it)
         action_space = getattr(env, "action_space", None)
         if hasattr(action_space, "spaces"):
             self.action_keys = list(action_space.spaces.keys())
@@ -97,11 +90,7 @@ class TrajectoryCollector:
         self._metadata = metadata
 
     def to_dict(self) -> dict:
-        """Build the full trajectory dict ready for JSON serialization.
-
-        Calls extract_trajectory_from_infos() on accumulated infos,
-        adds raw policy actions, metadata, and summary statistics.
-        """
+        """Build the full trajectory dict (extract_trajectory_from_infos + raw actions, metadata, summary)."""
         trajectory = extract_trajectory_from_infos(
             self._step_infos,
             initial_info=self._initial_info,
@@ -124,16 +113,10 @@ class TrajectoryCollector:
                     values.append(float(act.flat[d]))
                 trajectory[col] = values
 
-        # Compute summary using step-wise max rewards from info dicts
+        # Compute summary from the per-step trajectory
         rewards = trajectory.get("reward", [])
         achieved_reward = sum(rewards)
         ep_length = len(self._step_infos)
-        max_achievable = sum(
-            info.get("max_reward_step", 0.0)
-            for info in self._step_infos
-            if isinstance(info, dict)
-        )
-        reward_rate = achieved_reward / max_achievable if max_achievable > 0 else 0.0
         cum_values = trajectory.get("cum_E_kWh", [])
         final_cum_E = cum_values[-1] if cum_values else 0.0
         cum_price_values = trajectory.get("cum_price_EUR", [])
@@ -150,8 +133,6 @@ class TrajectoryCollector:
             "metadata": self._metadata or {},
             "summary": {
                 "achieved_reward": float(achieved_reward),
-                "max_achievable_reward": float(max_achievable),
-                "reward_rate": float(reward_rate),
                 "cum_E_kWh": float(final_cum_E),
                 "cum_price_EUR": float(final_cum_price),
             },
@@ -168,13 +149,7 @@ class TrajectoryCollector:
         logger.info("Trajectory saved to %s", filepath)
 
     def save_hdf5(self, hdf5_path: str, episode_id: str | None = None) -> None:
-        """Append this episode's trajectory to an HDF5 file.
-
-        Args:
-            hdf5_path: Path to the HDF5 file (created if absent).
-            episode_id: Group name in the HDF5 file. Defaults to
-                ``self._episode_id`` set via ``on_episode_end()``.
-        """
+        """Append this episode's trajectory to an HDF5 file (``episode_id`` defaults to ``self._episode_id``)."""
         ep_id = str(episode_id if episode_id is not None else self._episode_id)
         os.makedirs(os.path.dirname(hdf5_path) or ".", exist_ok=True)
         data = self.to_dict()

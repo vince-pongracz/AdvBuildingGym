@@ -13,11 +13,8 @@ KJ_PER_KWH: int = 3600
 # kW -> W
 W_PER_KW: float = 1000.0
 
-# Dynamical slowdown applied to the 1R1C building thermal update.
-# Inherited from the LLEC parent project; multiplies dT/dt in both the
-# HP and heat-loss paths so that YAML envelope parameters (K [W/K] in
-# the tens, mC [J/K] in the hundreds) produce realistic, hour-scale
-# thermal time constants instead of the seconds-scale dynamics that
-# strict SI would imply for those magnitudes.
+# Dynamical slowdown on the 1R1C thermal update (HP + heat-loss paths). From the LLEC
+# parent project; gives hour-scale time constants from tens-K / hundreds-mC YAML params
+# instead of the seconds-scale strict-SI dynamics.
 # Reference: KIT-IAI/LLECBuildingGym base_building_gym.py::update_Tin.
 SLOWDOWN_TERM: float = 0.001

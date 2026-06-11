@@ -1,18 +1,9 @@
 """HistoryWrapper — per-key strided observation history as an env wrapper.
 
-For each user-listed Box obs key ``X``, this wrapper adds a new Dict obs
-entry ``s_hst_X`` of shape ``(len(offsets), *X.shape)`` containing ``X`` at
-each requested offset. The original ``X`` entry passes through unchanged
-(mirrors ``ForecastWrapper``'s additive ``s_fc_<var>`` convention).
-
-Pre-episode slots — for which no historical observation exists yet —
-remain zero rather than replicating the current frame. Replicating present
-values into "past" slots would make early-episode inputs indistinguishable
-from a stationary signal; zeros at least encode "no information"
-unambiguously.
-
-Listing ``a_<x>_prev`` keys in ``tracked_keys`` just works: the env
-publishes them as plain obs entries each step.
+For each tracked Box key ``X``, adds ``s_hst_X`` of shape ``(len(offsets), *X.shape)``
+holding ``X`` at each offset; the original ``X`` passes through (like ForecastWrapper's
+additive ``s_fc_<var>``). Pre-episode slots stay zero (encode "no information") rather
+than replicating the current frame. ``a_<x>_prev`` keys work too — the env publishes them as obs.
 """
 
 from __future__ import annotations
@@ -45,10 +36,8 @@ class HistoryWrapper(gymnasium.ObservationWrapper):
                 f"{type(env.observation_space).__name__}"
             )
 
-        # Use exactly the offsets the user supplies — the current frame
-        # (offset 0) is included only if listed explicitly, since the
-        # unwrapped obs already exposes the current value under the
-        # original key. Preserve user order; dedup keeps first.
+        # Use exactly the supplied offsets (offset 0 only if listed; the original
+        # key already exposes the current value). Preserve order, dedup keeps first.
         raw_offsets = [int(ofs) for ofs in offsets]
         if any(ofs > 0 for ofs in raw_offsets):
             raise ValueError(f"HistoryWrapper: offsets must be <= 0 (0 = current step). Got: {raw_offsets}")
@@ -90,10 +79,8 @@ class HistoryWrapper(gymnasium.ObservationWrapper):
             retained.append(key)
         self._tracked_keys: tuple[str, ...] = tuple(retained)
 
-        # Pre-allocate one rolling buffer per tracked key. Length is
-        # max_lookback + 1 so index -1 is always the current step and
-        # index -1 + offset (for offset in self.offsets) addresses each
-        # requested lag without bounds checks.
+        # one rolling buffer per key, length max_lookback+1 so index -1 = current
+        # and -1+offset addresses each lag without bounds checks
         self._buffers: Dict[str, np.ndarray] = {}
         new_spaces: "OrderedDict[str, spaces.Space]" = OrderedDict(live_spaces)
         n_off = len(self.offsets)
@@ -125,8 +112,7 @@ class HistoryWrapper(gymnasium.ObservationWrapper):
         return self._build_obs(obs), info
 
     def observation(self, obs):
-        # Step path: roll buffers (oldest dropped), write the new sample
-        # into the last slot, then assemble the stacked s_hst_<key> entries.
+        # roll buffers (drop oldest), write new sample to last slot, then assemble s_hst_<key>
         for key in self._tracked_keys:
             buf = self._buffers[key]
             buf[:-1] = buf[1:]

@@ -476,7 +476,7 @@ tune.Tuner(
 
 1. Run `python run_train_ray.py --algorithm pid --episodes 35` and verify:
    - No crashes during rollout
-   - Episode metrics logged (reward_rate, achieved_reward, cum_E_kWh)
+   - Episode metrics logged (achieved_reward, cum_E_kWh)
    - Checkpoint saved successfully
 
 2. Run `python run_eval_ray.py --checkpoint <pid_checkpoint_path>` and verify:

@@ -14,7 +14,7 @@ class EnergyTracker:
     def reset(self) -> None:
         self.cum_E_kWh = 0.0
 
-    def add_step_E_contrib(self, power_breakdown: Dict[str, tuple[float, float]]) -> tuple[float, float]:
+    def add_step_E_contribution(self, power_breakdown: Dict[str, tuple[float, float]]) -> tuple[float, float]:
         """Add this step's energy contribution. Returns (total_power_kW, energy_kWh)."""
         productions = [val[0] for val in power_breakdown.values()]
         consumptions = [val[1] for val in power_breakdown.values()]

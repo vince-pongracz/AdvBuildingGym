@@ -9,7 +9,7 @@ Link: https://docs.ray.io/en/latest/rllib/rllib-callback.html#rllib-callback-doc
 
 | Callback | Hook | Runs on | Purpose |
 |---|---|---|---|
-| `EpisodeMetricsCallback` | `on_episode_end` | EnvRunner (worker) | Log scalar episode metrics (reward, reward_rate, energy) |
+| `EpisodeMetricsCallback` | `on_episode_end` | EnvRunner (worker) | Log scalar episode metrics (reward, energy) |
 | `TrajectoryLoggingCallback` | `on_episode_end` | EnvRunner (eval only) | Save full per-step trajectory as JSON + HDF5 |
 | `BestModelCheckpointCallback` | `on_train_result` | Algorithm (main process) | Save best-model checkpoints every N episodes |
 | `DataScheduleCallback` | `on_train_result` | Algorithm (main process) | Push new data variant to all env_runners every N iterations |
@@ -55,7 +55,6 @@ Factory: `make_episode_metrics_callback_class(env_id, rewards, metrics_base_dir,
 
 Fires on every `on_episode_end` (training and evaluation). Logs:
 - `achieved_reward` (mean/min/max) — episode total reward
-- `reward_rate` (mean/min/max) — achieved / max_achievable (normalised [0, 1])
 - `cum_E_kWh` — cumulative energy consumption
 
 When `dump_metrics_json=True`, also writes a per-episode JSON file with observations,

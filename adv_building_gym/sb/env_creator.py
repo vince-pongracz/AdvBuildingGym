@@ -8,8 +8,8 @@ The wrapper chain matches the Ray side exactly so the policy sees an
 identical observation/action space:
 
     AdvBuildingGym
-      → HistoryWrapper            (if env_config.hst_env_wrapper_enabled)
-      → ForecastWrapper           (if env_config.forecast_env_wrapper_enabled)
+      → HistoryWrapper            (if env_config.hst.enabled)
+      → ForecastWrapper           (if env_config.forecast.enabled)
       → FlattenAction
       → RescaleAction(-1, 1)
 """
@@ -43,10 +43,7 @@ def make_sb_env_factory(
     seed: int,
     role: str = "train",
 ) -> Callable[[], gym.Env]:
-    """Return a thunk that builds one fresh wrapped env on call.
-
-    Each thunk produces an independent component bundle so parallel
-    SubprocVecEnv workers never share mutable state.
+    """Return a thunk that builds one fresh wrapped env (independent components per worker).
 
     Args:
         trial: Loaded TrialConfig (env topology, reward pool, schedules).
@@ -81,21 +78,20 @@ def make_sb_env_factory(
             instance_id=instance_id,
         )
 
-        # eval_mode makes each eval episode draw a fresh random data variant
-        # (independent (variant, day) per episode) instead of following the
-        # training swap cadence — see core/_data_variant_manager.select_variant.
+        # eval_mode: each eval episode draws a fresh random (variant, day) — see
+        # core/_data_variant_manager.select_variant
         if role == "eval":
             env.log_full_info = True
             env.eval_mode = True
 
-        if env_config.hst_env_wrapper_enabled:
+        if env_config.hst.enabled:
             env = HistoryWrapper(
                 env,
-                tracked_keys=env_config.hst_env_wrapper_tracked_keys,
-                offsets=env_config.hst_env_wrapper_offsets,
+                tracked_keys=env_config.hst.tracked_keys,
+                offsets=env_config.hst.offsets,
             )
-        if env_config.forecast_env_wrapper_enabled:
-            env = ForecastWrapper(env, forecast_steps=env_config.forecast_env_wrapper_steps)
+        if env_config.forecast.enabled:
+            env = ForecastWrapper(env, forecast_steps=env_config.forecast.steps)
 
         env = wrap_action_space(env)
         env.reset(seed=seed + rank)
@@ -112,10 +108,10 @@ def build_vec_env(
     role: str = "train",
     force_dummy: bool = False,
 ) -> VecEnv:
-    """Build a SB3 VecEnv (Dummy- or Subproc-) wrapped in VecMonitor.
+    """Build a SB3 VecEnv (Dummy/Subproc) wrapped in VecMonitor.
 
-    ``VecMonitor`` is what populates ``infos[i]["episode"]`` on episode
-    completion — many SB3 callbacks rely on that key.
+    ``VecMonitor`` populates ``infos[i]["episode"]`` (needed by many SB3 callbacks).
+    ``force_dummy`` forces DummyVecEnv (eval / ``--cpu`` smoke path).
 
     Args:
         trial: Loaded trial config.

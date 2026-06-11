@@ -11,25 +11,17 @@ logger = logging.getLogger(__name__)
 
 
 class EVChargingReward(RewardFunction):
-    """Reward for keeping the EV state-of-charge close to its target.
+    """Reward for keeping the EV SoC close to its target.
 
-    While the EV is connected, gives full reward when ``|ev_soc - target|``
-    is within ``diff_threshold`` and exponentially decaying reward outside
-    that band. Disconnected periods contribute 0 reward and 0 max-step
-    so the reward rate is not inflated.
+    While connected: full reward within ``diff_threshold`` of target, else exponential
+    decay. Disconnected steps give 0 reward.
 
-    Terminal events (vote via ``should_terminate`` in the env's Phase-1
-    pass; penalty/reward emitted by ``get_reward`` in Phase 2):
-
-    - **Disconnect judgement**: on the step the EV disconnects, compare
-      SoC against the snapshotted session target.  Within
-      ``disconnect_soc_tolerance`` → ``success_reward``, else
-      ``failure_penalty``; episode ends in either case.
-    - **Min-curve violation**: while connected and the session is *active*
-      (target reachable from start at max charge rate), if the SoC falls
-      below ``s_ev_soc_min`` (the lazy back-from-target line published by
-      the charger), apply ``min_curve_violation_penalty`` and end the
-      episode.  When the session is inactive (target was unreachable
+    Terminal events (voted in ``should_terminate``, paid in ``get_reward``):
+    - Disconnect: compare reached SoC vs session target — within ``disconnect_soc_tolerance``
+      → ``success_reward`` else ``failure_penalty``; episode ends either way.
+    - Min-curve: while connected and the session is *active* (target reachable), SoC below
+      ``s_ev_soc_min`` → ``min_curve_violation_penalty`` + end. 
+      When the session is inactive (target was unreachable
       from connect time) the corridor is suppressed and the agent should
       simply charge as fast as it can.
     """
@@ -69,28 +61,41 @@ class EVChargingReward(RewardFunction):
         self.failure_penalty = failure_penalty
         self.min_curve_violation_penalty = min_curve_violation_penalty
 
-    def should_terminate(self, actions, states, info: dict | None = None) -> bool:
+    def _disconnect_verdict(self, state, next_state) -> tuple[bool, bool]:
+        """Detect+judge an EV disconnect from the (s, s') transition.
+
+        Inferred from the connected flag flipping s→s'. The charger zeroes the obs on
+        disconnect, so the reached SoC and target are read from ``state``.
+        Returns ``(just_disconnected, success)``.
+        """
+        was_connected = float(state["s_ev_connected"][0]) >= 0.5
+        now_connected = float(next_state["s_ev_connected"][0]) >= 0.5
+        if not (was_connected and not now_connected):
+            return False, False
+        achieved_soc = float(state["s_ev_soc"][0])
+        target_soc = float(state["s_ev_target_soc"][0])
+        success = abs(achieved_soc - target_soc) <= self.disconnect_soc_tolerance
+        return True, success
+
+    def should_terminate(self, actions, state, next_state, info: dict | None = None) -> bool:
         if info is None:
             return False
-        # Disconnect judgement: any EV detach this step ends the episode.
-        if info.get("ev_just_disconnected", False):
-            current_soc = float(states["s_ev_soc"][0])
-            target_soc = float(info.get("ev_session_target_soc", 0.0))
-            success = abs(current_soc - target_soc) <= self.disconnect_soc_tolerance
+        # Disconnect judgement: a detach this step ends the episode on failure.
+        just_disconnected, success = self._disconnect_verdict(state, next_state)
+        if just_disconnected:
             if not success:
                 logger.info(
                     "[%s] terminal step on EV disconnect (FAILURE): SoC %.3f vs target %.3f (tol %.3f, step %s)",
-                    self.name, current_soc, target_soc, self.disconnect_soc_tolerance,
-                    info.get("iteration", "?"),
+                    self.name, float(state["s_ev_soc"][0]), float(state["s_ev_target_soc"][0]),
+                    self.disconnect_soc_tolerance, info.get("iteration", "?"),
                 )
                 return True
-            else:
-                return False
+            return False
 
-        # Min-curve violation while the session is active.
-        if info.get("ev_session_active", False) and float(states["s_ev_connected"][0]) >= 0.5:
-            current_soc = float(states["s_ev_soc"][0])
-            soc_min = float(states["s_ev_soc_min"][0])
+        # Min-curve violation while the session is active and still connected.
+        if info.get("ev_session_active", False) and float(next_state["s_ev_connected"][0]) >= 0.5:
+            current_soc = float(next_state["s_ev_soc"][0])
+            soc_min = float(next_state["s_ev_soc_min"][0])
             if current_soc < soc_min:
                 logger.info(
                     "[%s] terminal step: SoC %.3f below min-curve %.3f (step %s)",
@@ -99,42 +104,31 @@ class EVChargingReward(RewardFunction):
                 return True
         return False
 
-    def get_reward(self, actions, states, info: dict | None = None) -> tuple[float, float]:
-        max_step = self.weight * self.max_reward_in_step
-
+    def get_reward(self, actions, state, next_state, info: dict | None = None) -> float:
         allow_term = info.get("allow_early_termination", True) if info is not None else True
 
-        # Disconnect judgement runs first so the terminal verdict fires on
-        # the same step the EV detaches, regardless of s_ev_connected which
-        # has already flipped to 0.  Skipped entirely when the env disables
-        # early termination — both success_reward and failure_penalty are
-        # exceptional values that don't belong in a soft, non-terminating
-        # reward stream.  In that mode the disconnect step falls through to
-        # the ev_connected < 0.5 fallthrough below (no signal).
-        if allow_term and info is not None and info.get("ev_just_disconnected", False):
-            current_soc = float(states["s_ev_soc"][0])
-            target_soc = float(info.get("ev_session_target_soc", 0.0))
-            success = abs(current_soc - target_soc) <= self.disconnect_soc_tolerance
+        # Disconnect first: judge SoC reached before detach vs target. Skipped when
+        # early termination is off (terminal success/failure don't fit a soft stream);
+        # the disconnect step then falls through to the not-connected branch.
+        just_disconnected, success = self._disconnect_verdict(state, next_state)
+        if allow_term and just_disconnected:
             if success:
-                return self.weight * self.success_reward, max_step
-            return self.weight * self.failure_penalty, max_step
+                return self.weight * self.success_reward
+            return self.weight * self.failure_penalty
 
-        ev_connected = float(states["s_ev_connected"][0])
-        if ev_connected < 0.5: # Not connected: no reward, no max-step (don't inflate reward rate)
-            return 0.0, 0.0
+        if float(next_state["s_ev_connected"][0]) < 0.5:  # not connected: no reward
+            return 0.0
 
-        current_soc = float(states["s_ev_soc"][0])
-        target_soc = float(states["s_ev_target_soc"][0])
+        current_soc = float(next_state["s_ev_soc"][0])
+        target_soc = float(next_state["s_ev_target_soc"][0])
 
-        # Min-curve violation: only enforced when the session is active
-        # (reachable target).  The corridor obs key is published by the
-        # charger; reading it here keeps the reward purely a judge.  When
-        # early termination is disabled, the huge penalty is skipped and
-        # the agent receives the regular SoC-band reward below.
+        # Min-curve: enforced only for an active session (reachable target). Reading the
+        # charger's corridor key keeps this reward a pure judge. Skipped when early
+        # termination is off → falls through to the SoC-band reward.
         if allow_term and info is not None and info.get("ev_session_active", False):
-            soc_min = float(states["s_ev_soc_min"][0])
+            soc_min = float(next_state["s_ev_soc_min"][0])
             if current_soc < soc_min:
-                return self.weight * self.min_curve_violation_penalty, max_step
+                return self.weight * self.min_curve_violation_penalty
 
         soc_diff = abs(current_soc - target_soc)
         if soc_diff < self.diff_threshold:
@@ -142,7 +136,7 @@ class EVChargingReward(RewardFunction):
         else:
             reward = float(np.exp(-soc_diff * self.soc_diff_multiplier))
 
-        return self.weight * reward, max_step
+        return self.weight * reward
 
 
 ComponentRegistry.register('reward', EVChargingReward)

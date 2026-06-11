@@ -16,10 +16,9 @@ from adv_building_gym._common.warning_filters import setup_warning_filters
 from adv_building_gym._common.constants import SECONDS_PER_HOUR
 from adv_building_gym.core.data_variant import DataVariantConsumer
 from adv_building_gym.core._data_variant_manager import DataVariantManager
-from adv_building_gym.core._action_history_buffer import ActionHistoryBuffer
 from adv_building_gym.core._energy_tracker import EnergyTracker
 from adv_building_gym.core._price_tracker import PriceTracker
-from adv_building_gym.core._raw_state_collector import RawStateCollector
+from adv_building_gym.core._raw_state_tracker import RawStateTracker
 
 from adv_building_gym.config.env.env_config import EnvConfig
 
@@ -27,7 +26,7 @@ from adv_building_gym.config.env.env_config import EnvConfig
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
-    force=True  # Override any existing logging configuration (e.g., from Ray/RLlib)
+    force=True  # override existing logging config (e.g. Ray/RLlib)
 )
 logger = logging.getLogger(__name__)
 
@@ -35,11 +34,9 @@ logger = logging.getLogger(__name__)
 class AdvBuildingGym(gym.Env, DataVariantConsumer):
     """Modular Gymnasium env for building-energy control.
 
-    Composes Infrastructure, StateSource, and RewardFunction components and
-    drives them through a fixed control-step loop. Internal action and
-    observation spaces are Dict-shaped; external wrappers (FlattenAction +
-    RescaleAction) convert to the flat ``Box(-1, 1)`` interface RL libraries
-    expect.
+    Composes Infrastructure / StateSource / RewardFunction over a fixed control-step
+    loop. Internal Dict action/obs spaces; external wrappers (FlattenAction + RescaleAction)
+    give the flat ``Box(-1, 1)`` interface.
 
     Data contract — observation vs. info
         1. ``self.state`` / ``observation_space`` — policy-visible normalised
@@ -51,10 +48,9 @@ class AdvBuildingGym(gym.Env, DataVariantConsumer):
 
     Construction
         ``env_config`` (EnvConfig) supplies ``EPISODE_LENGTH``,
-        ``CONTROL_STEP``, and ``ACTION_HISTORY_LENGTH``. Components are
-        passed in as already-constructed instances (the env no longer
-        reaches into a global singleton). ``data_combinator`` and
-        ``reward_aggregator`` are pluggable strategies.
+        ``CONTROL_STEP``, and ``ACTION_HISTORY_LENGTH``.
+        Components passed are already pre-constructed.
+        ``data_combinator`` / ``reward_aggregator`` are pluggable.
     """
 
     def __init__(
@@ -70,25 +66,11 @@ class AdvBuildingGym(gym.Env, DataVariantConsumer):
         render_mode=None,
         **kwargs,
     ):
-        """Initialise the building-energy gym environment.
-
-        Args:
-            infras: Infrastructure components defining controllable
-                action/observation sub-spaces.
-            statesources: External time-series providers and physics
-                updaters. Must include ``BuildingHeatLoss``.
-            rewards: Reward functions evaluated at each step.
-            env_config: EnvConfig instance providing episode length,
-                control step, and action-history window length.
-            data_combinator: Optional pre-built DataCombinator. Defaults
-                to an empty combinator (no per-episode CSV swapping).
-            reward_aggregator: Optional aggregation strategy. Defaults to
-                ``SumRewardAggregator`` (matches previous behaviour).
-            instance_id: Human-readable identifier for this env instance
-                (e.g. ``AdvBuildingGym_w<worker>_v<vector>`` from the
-                env_creator), used for logging. Per-env seeding is handled
-                by ``reset(seed=...)``, not this id.
-            render_mode: Gymnasium render mode (currently unused).
+        """env_config: episode length, control step, action-history window.
+        infras / statesources (must include BuildingHeatLoss) / rewards: components.
+        data_combinator: per-episode CSV swapping. 
+        reward_aggregator: aggregation strategy.
+        instance_id: logging id (seeding is via reset(seed=...), not this).
         """
 
         # Setup warning filters for Ray workers (must be called early)
@@ -106,21 +88,15 @@ class AdvBuildingGym(gym.Env, DataVariantConsumer):
 
         self._energy_tracker = EnergyTracker(control_step_s=env_config.CONTROL_STEP)
         self._price_tracker = PriceTracker(control_step_s=env_config.CONTROL_STEP)
-        self._raw_state_collector = RawStateCollector()
+        self._raw_state_tracker = RawStateTracker()
 
-        # Provisional generator for the construct→first-reset window only. The
-        # authoritative per-env seed arrives via the first reset(seed=...):
-        # RLlib (config.debugging seed → trial.seed + worker_index) and SB3
-        # (model.set_random_seed → env.seed → seed+i) both override this. All
-        # in-env randomness (variant/day selection, statesource offsets) flows
-        # through self._rng, so it is reproducible per worker once seeded.
+        # provisional RNG until the first reset(seed=...) (RLlib/SB3 set the real
+        # per-env seed). All in-env randomness flows through self._rng → reproducible per worker.
         self.instance_id: str = instance_id or "AdvBuildingGym"
         self._rng: np.random.Generator = np.random.default_rng()
 
-        # Build observation and action spaces from components.
-        # Time-varying signals are normalised to small ranges; raw scale
-        # factors (e.g. temp_abs_max, E_price_max) are included
-        # unnormalised so the policy can reconstruct physical units.
+        # Build obs/action spaces from components. Time-varying signals are normalised;
+        # raw scale factors (temp_abs_max, E_price_max) are unnormalised for reconstruction.
         observation_space: OrderedDict = OrderedDict()
         action_space: OrderedDict = OrderedDict()
 
@@ -129,63 +105,37 @@ class AdvBuildingGym(gym.Env, DataVariantConsumer):
             infr.setup_spaces(observation_space, action_space)
         self.action_space_keys = list(action_space.keys())
 
-        # For each action key, publish a matching ``<key>_prev`` observation
-        # carrying the most recent applied action. Policies that want action
-        # history consume these as plain obs keys (e.g. via the env-side
-        # HistoryWrapper, which only needs to handle obs keys), so there is
-        # no need to reconstruct per-key actions from the flat Box stored in
-        # episodes by FlattenAction + RescaleAction.
-        # Link: docs/hst_mgmt.md
-        for act_key, act_box in action_space.items():
-            observation_space[f"{act_key}_prev"] = spaces.Box(
-                low=act_box.low, high=act_box.high,
-                shape=act_box.shape, dtype=act_box.dtype,
-            )
-
         self.statesources = statesources
+        self._partition_statesources()
         for ds in self.statesources:
             ds.setup_spaces(observation_space, action_space)
 
-        # Env-owned hour-of-day signal in [0, 1] (sim_hour mod 24 / 24).
-        # No component owns it because it depends only on iteration × control_step.
+        # env-owned hour-of-day [0, 1] (sim_hour mod 24 / 24); depends only on iteration × control_step
         observation_space["s_sim_hour"] = spaces.Box(low=0.0, high=1.0, shape=(1,), dtype=np.float32)
 
         self.reward_functors = rewards
-
-        # NOTE VP 2026.05.04.: Tracks actions from the last ACTION_HISTORY_LENGTH steps
-        self._action_history = ActionHistoryBuffer(
-            action_keys=self.action_space_keys,
-            max_length=env_config.ACTION_HISTORY_LENGTH,
-        )
 
         # Assign spaces
         self.observation_space = SDict(observation_space)
         self.state: OrderedDict = OrderedDict()
         for state_name, state_space in observation_space.items():
-            # Initialize observation state arrays with the same dtype as the declared space
+            # init obs arrays with the declared dtype
             self.state[state_name] = np.zeros(shape=state_space.shape, dtype=state_space.dtype)
 
-        # Shared dict for inter-component data that is NOT part of the
-        # observation space (raw kWh/kW/°C values, EV schedule parameters).
+        # shared inter-component data not in the obs space (raw kWh/kW/°C, EV schedule)
         self._component_info: dict = {}
 
         # Native Dict action space — each key maps to the component's real bounds.
         self.action_space = SDict(action_space)
 
-        # When True, step()/reset() include a deep copy of the full named state
-        # dict in info["state"]. Expensive in memory — enable for evaluation only.
+        # When True, step()/reset() put a copy of the full state in info["state"] (eval only — costly).
         self.log_full_info: bool = False
 
-        # When True, this env is an evaluation runner. In eval mode every reset()
-        # draws a *fresh random* data variant (overriding the combinator's
-        # episode_count // swap_every_n_episodes cadence) so each episode of an
-        # eval round samples an independent (variant, day) pair — giving broad,
-        # unbiased coverage rather than 5 consecutive episodes on one variant.
-        # Set by the env creators from the eval env-config override.
+        # Eval runner flag: every reset() draws a fresh random (variant, day) for broad
+        # coverage, overriding the combinator cadence. Set by the env creators.
         self.eval_mode: bool = False
 
-        # Tracks whether this env has consumed an explicit reset seed yet. Used
-        # by _maybe_reseed to seed the RNG exactly once in eval mode (see there).
+        # whether an explicit reset seed was consumed; _maybe_reseed seeds once in eval mode
         self._has_seeded: bool = False
 
         lines: list = [
@@ -213,10 +163,6 @@ class AdvBuildingGym(gym.Env, DataVariantConsumer):
         return self._variant_manager.episode_count
 
     @property
-    def action_history(self):
-        return self._action_history.history
-
-    @property
     def data_combinator(self) -> DataCombinator:
         return self._variant_manager.data_combinator
 
@@ -230,10 +176,7 @@ class AdvBuildingGym(gym.Env, DataVariantConsumer):
         logger.debug("Reward functions updated: %s", [r.name for r in rewards])
 
     def set_infras(self, infras: list[Infrastructure]) -> None:
-        """Hot-swap infrastructure components (infra_schedule callback).
-
-        Names must match the existing infras — spaces are invariant.
-        """
+        """Hot-swap infrastructure (infra_schedule callback); names must match (spaces invariant)."""
         old_names = set([i.name for i in self.infras])
         new_names = set([i.name for i in infras])
         if old_names != new_names:
@@ -243,16 +186,20 @@ class AdvBuildingGym(gym.Env, DataVariantConsumer):
         logger.info("Infrastructure swapped: %s", [i.name for i in infras])
 
     def set_statesources(self, statesources) -> None:
-        """Hot-swap statesource components (statesource_schedule callback).
-
-        Names must match the existing statesources — spaces are invariant.
-        """
+        """Hot-swap statesources (statesource_schedule callback); names must match (spaces invariant)."""
         old_names = {s.name for s in self.statesources}
         new_names = {s.name for s in statesources}
         if old_names != new_names:
             raise ValueError(f"Statesource names must match. Old: {old_names}, New: {new_names}")
         self.statesources = statesources
+        self._partition_statesources()
         logger.info("Statesources swapped: %s", [s.name for s in statesources])
+
+    def _partition_statesources(self) -> None:
+        """Split statesources by ``UPDATE_PHASE`` into endogenous (run before reward) and
+        exogenous (advance to next row after); order preserved within each group."""
+        self._endogenous_statesources = [s for s in self.statesources if s.UPDATE_PHASE == "endogenous"]
+        self._exogenous_statesources = [s for s in self.statesources if s.UPDATE_PHASE != "endogenous"]
 
     def get_state_space(self):
         return self.observation_space
@@ -297,31 +244,16 @@ class AdvBuildingGym(gym.Env, DataVariantConsumer):
         return {k: np.array(v, copy=True) for k, v in self.state.items()}, info
 
     def _maybe_reseed(self, seed: int | None) -> None:
-        """Apply Gymnasium's seeding contract.
+        """Apply Gymnasium's seeding contract: seed only when an explicit seed is given
+        (the first reset per runner); later resets must NOT recreate the RNG.
 
-        Only fires when an explicit seed is provided (typically the first
-        reset per env runner). Subsequent resets must NOT recreate the
-        RNG — that would destroy the deterministic sequence.
+        Eval-mode exception: RLlib re-hands the same fixed seed each eval round, which
+        would replay identical (variant, day) sequences. So in eval mode we seed ONCE and
+        ignore later seeds, letting the RNG advance for fresh data (still reproducible across
+        reruns). Training (timestep-sampled) and the standalone eval script are unaffected.
 
-        Eval-mode exception: RLlib's SingleAgentEnvRunner samples eval by
-        ``num_episodes``, which sets ``_needs_initial_reset=True`` after every
-        eval round and therefore re-hands the env the SAME fixed ``self._seed``
-        at the start of each round (single_agent_env_runner.py: the
-        ``seed=self._seed if self._needs_initial_reset`` reset). Honouring that
-        every round would restart ``self._rng`` from an identical state, so each
-        eval round would replay the exact same (variant, day) sequence. In eval
-        mode we therefore seed ONCE and then ignore further seeds, letting the
-        RNG advance so every eval round samples fresh data. The run stays
-        reproducible across reruns (same first seed → same advancing stream).
-        Training is unaffected — it samples by timesteps and only ever seeds on
-        its first reset. The standalone eval script (run_eval_ray) does not set
-        eval_mode, so its per-episode seeding is preserved.
-
-        Note: ``random.seed`` / ``np.random.seed`` (global RNGs) are NOT
-        touched here. Components must draw from the env rng instead — it is
-        published on the shared info channel as ``info["_rng"]`` each reset
-        (see ``_populate_initial_observations``) so statesources get the same
-        deterministic, per-worker stream without touching global state.
+        Global RNGs (``random``/``np.random``) are NOT touched; components draw from the env
+        rng via ``info["_rng"]`` (see ``_populate_initial_observations``).
         """
         apply_seed = seed is not None and not (self.eval_mode and self._has_seeded)
         super().reset(seed=seed if apply_seed else None)
@@ -342,7 +274,6 @@ class AdvBuildingGym(gym.Env, DataVariantConsumer):
         self.sim_hour = 0
         self._energy_tracker.reset()
         self._price_tracker.reset()
-        self._action_history.clear()
         # Re-zero observation arrays in place (preserves dtype/shape).
         for k, v in self.state.items():
             if isinstance(v, np.ndarray):
@@ -358,9 +289,8 @@ class AdvBuildingGym(gym.Env, DataVariantConsumer):
 
     def _populate_initial_observations(self) -> None:
         """Let statesources and infras publish their initial observations."""
-        # Publish the env rng on the shared channel so components that need
-        # per-episode randomness (e.g. InsideTemperature's initial offset) draw
-        # from the same deterministic, per-worker stream as variant/day selection.
+        # publish env rng on the shared channel so components (e.g. InsideTemperature)
+        # draw per-episode randomness from the same per-worker stream
         self._component_info["_rng"] = self._rng
         for ds in self.statesources:
             ds.reset(states=self.state, info=self._component_info)
@@ -374,7 +304,7 @@ class AdvBuildingGym(gym.Env, DataVariantConsumer):
             "episode_date": self._variant_manager.episode_date,
             "episode_day_mode": self._variant_manager.episode_day_mode,
             "data_variant": variant if variant else None,
-            "raw": self._raw_state_collector.collect(self.statesources, self.infras, self.state),
+            "raw": self._raw_state_tracker.collect(self.statesources, self.infras),
         }
         if self.log_full_info:
             info["state"] = {
@@ -385,20 +315,15 @@ class AdvBuildingGym(gym.Env, DataVariantConsumer):
         return info
 
     def _get_observation(self) -> dict:
-        # Start with the current env state so statesources have access to
-        # bookkeeping keys such as "iteration" during reset.
+        # start from current state so statesources can read bookkeeping keys (e.g. "iteration")
         state = OrderedDict(self.state) if isinstance(self.state, OrderedDict) else OrderedDict()
         for ds in self.statesources:
             ds.update_state(states=state, info=self._component_info)
         return state
 
     def is_done(self) -> bool:
-        # Episode ends when: 
-        #  (a) the natural horizon is hit 
-        #  (b) any reward voted to terminate in the Phase-1 pre-pass. 
-        # The pre-pass writes the consolidated verdict into 
-        # _component_info["terminated"] before any get_reward runs, 
-        # so reward functions can read it safely.
+        # Ends on (a) natural horizon or (b) any reward's Phase-1 terminate vote,
+        # consolidated into _component_info["terminated"] before get_reward runs.
         if self._component_info.get("terminated", False):
             return True
         return bool(self.iteration >= self.env_config.EPISODE_LENGTH)
@@ -409,23 +334,26 @@ class AdvBuildingGym(gym.Env, DataVariantConsumer):
 
     def step(self, action):
         """Execute one control step. See class docstring for the data contract."""
-        self._execute_actions(action)
-        self._advance_time_and_sync()
-        self._update_state()
-        total_power_kW, power_breakdown = self._compute_power_breakdown(action)
-        self._publish_step_info(action, total_power_kW, power_breakdown)
-        # Phase 1: termination pre-pass — consolidate every reward's verdict
-        # into info["terminated"] before any get_reward runs. This decouples
-        # rewards: episode-aggregated rewards (LTER) can read a definitive
-        # flag instead of relying on YAML ordering vs. terminating rewards.
-        self._component_info["terminated"] = self._compute_termination(action)
-        # Phase 2: reward aggregation — sees the correct terminated flag.
-        reward, reward_breakdown, max_reward_step = self._compute_rewards(action)
+        # Snapshot observed state s_t before mutation: rewards read inputs from s and
+        # action outcomes from s' (self.state) — a proper R(s, a, s') transition.
+        state = {k: np.array(v, copy=True) for k, v in self.state.items()}
 
-        # Append AFTER reward computation so ActionSmoothnessReward still
-        # compares the just-passed ``actions`` to ``action_history[-1]``.
-        # Link: docs/hst_mgmt.md
-        self._action_history.append_and_mirror(action, self.state)
+        self._execute_actions(action)        # exec_action reads observed row[t]
+        # TODO VP 2026.06.10.: Check if time advance is okay here.
+        self._advance_time_and_sync()        # iteration++, sim_hour, synchronise
+        self._update_endogenous()            # infras + inner statesources -> action outcomes (still row[t] exogenous)
+
+        # power/price under observed row[t]: price tracker reads baseprice_raw pre-advance
+        total_power_kW, power_breakdown = self._compute_power_breakdown(action)
+
+        self._update_exogenous()             # outer statesources -> row[t+1]; self.state is now s'
+
+        self._publish_step_info(action, total_power_kW)
+        # Phase 1: termination pre-pass — consolidate verdicts into info["terminated"]
+        # before any get_reward, so aggregated rewards (LTER) read a definitive flag.
+        self._component_info["terminated"] = self._compute_termination(action, state)
+        # Phase 2: reward aggregation over the full (s, a, s') transition
+        reward, reward_breakdown = self._compute_rewards(action, state)
 
         self._guard_finite_state()
 
@@ -433,7 +361,7 @@ class AdvBuildingGym(gym.Env, DataVariantConsumer):
         truncated = False
 
         info = self._build_step_info(
-            action, reward, reward_breakdown, max_reward_step,
+            action, reward, reward_breakdown,
             total_power_kW, power_breakdown,
         )
 
@@ -450,10 +378,8 @@ class AdvBuildingGym(gym.Env, DataVariantConsumer):
             infr.exec_action(action, self.state, info=self._component_info)
 
     def _advance_time_and_sync(self) -> None:
-        # Advance time: increment iteration, then synchronise all components so
-        # update_state reads the correct (new) row from time-series data.
-        # Previously synchronise was called AFTER update_state, causing exogenous
-        # datasources (price, weather, EV schedule) to lag 2 iterations behind.
+        # increment iteration, then synchronise so update_state reads the new row
+        # (synchronising after update_state used to lag exogenous sources 2 iterations)
         self.iteration += 1
         self.sim_hour = self.iteration * self.env_config.CONTROL_STEP / SECONDS_PER_HOUR
         self.state["s_sim_hour"][0] = np.float32((self.sim_hour % 24.0) / 24.0)
@@ -461,13 +387,20 @@ class AdvBuildingGym(gym.Env, DataVariantConsumer):
         for sync in self.infras + self.statesources:
             sync.synchronise(self.iteration)
 
-    def _update_state(self) -> None:
-        # Reset directional power bound accumulators before infras publish.
+    def _update_endogenous(self) -> None:
+        # within-step transition under observed row[t]: infras apply effects, then
+        # endogenous physics (BuildingHeatLoss). Reset power-bound accumulators first.
         self._component_info["max_consumption_kW"] = 0.0
         self._component_info["max_production_kW"] = 0.0
         for infr in self.infras:
             infr.update_state(self.state, info=self._component_info)
-        for ds in self.statesources:
+        for ds in self._endogenous_statesources:
+            ds.update_state(states=self.state, info=self._component_info)
+
+    def _update_exogenous(self) -> None:
+        # advance external series to row[t+1] (after reward); synchronise already moved
+        # the effective index, so these read the new row
+        for ds in self._exogenous_statesources:
             ds.update_state(states=self.state, info=self._component_info)
 
     def _compute_power_breakdown(self, action) -> tuple[float, dict[str, tuple[float, float]]]:
@@ -475,13 +408,12 @@ class AdvBuildingGym(gym.Env, DataVariantConsumer):
             infra.name: (infra.get_E(action))
             for infra in self.infras
         }
-        total_power_kW, _energy_kWh = self._energy_tracker.add_step_E_contrib(power_breakdown)
-        self._price_tracker.add_step_contrib(power_breakdown, self._current_baseprice_ct_per_kWh())
+        total_power_kW, _energy_kWh = self._energy_tracker.add_step_E_contribution(power_breakdown)
+        self._price_tracker.add_step_contribution(power_breakdown, self._current_baseprice_ct_per_kWh())
         return total_power_kW, power_breakdown
 
     def _current_baseprice_ct_per_kWh(self) -> float | None:
-        # Duck-type to avoid importing EnergyPriceDataSource (circular). The
-        # statesource caches baseprice_raw during update_state each tick.
+        # duck-type (avoid circular import); statesource caches baseprice_raw each tick
         for ds in self.statesources:
             price = getattr(ds, "baseprice_raw", None)
             if price is not None:
@@ -492,55 +424,40 @@ class AdvBuildingGym(gym.Env, DataVariantConsumer):
         self,
         action,
         total_power_kW: float,
-        power_breakdown: dict[str, float],
     ) -> None:
-        # Reward functions read these from _component_info instead of holding
-        # references to infrastructures. power_breakdown is not republished
-        # here — it is emitted only on the returned step info dict (consumed
-        # by trajectory logging / plotting), no reward needs it internally.
+        # rewards read these from _component_info (no infra references). power_breakdown
+        # is emitted only on the returned step info, not here.
         self._component_info["net_power_kW"] = total_power_kW
-        self._component_info["penalisable_power_kW"] = sum(
-            infra.get_penalisable_consumption(action, self.state)
-            for infra in self.infras
-        )
-        self._component_info["action_history"] = self._action_history.history
         self._component_info["episode_length"] = self.env_config.EPISODE_LENGTH
         self._component_info["iteration"] = self.iteration
         self._component_info["control_step_s"] = self.env_config.CONTROL_STEP
-        # Surface the env-level termination toggle so reward functors can gate
-        # their terminal-only branches (huge penalties / success bonuses).
+        # expose the termination toggle so rewards can gate terminal-only branches
         self._component_info["allow_early_termination"] = self.env_config.allow_early_termination
-        # info["terminated"] is set by _compute_termination() in Phase 1 of
-        # step(), after _publish_step_info populates the rest of info.
+        # info["terminated"] is set later by _compute_termination() (Phase 1)
 
-    def _compute_termination(self, action) -> bool:
-        """Phase-1 termination pass. Returns True iff the episode ends here.
-
-        Naturally times out at max_iteration; otherwise polls each reward's
-        ``should_terminate`` (default False). Pure: must not mutate state.
-        """
+    def _compute_termination(self, action, state) -> bool:
+        """Phase-1 termination pass: True iff the episode ends here. Times out at the horizon,
+        else polls each reward's ``should_terminate`` over (s, a, s'). Pure — no state mutation."""
         if self.iteration >= self.env_config.EPISODE_LENGTH:
             return True
         if not self.env_config.allow_early_termination:
             return False
         for rf in self.reward_functors:
-            if rf.should_terminate(action, self.state, self._component_info):
+            if rf.should_terminate(action, state, self.state, self._component_info):
                 return True
         return False
 
-    def _compute_rewards(self, action) -> tuple[float, dict[str, float], float]:
-        # Fresh per-step diagnostics channel — reward functions populate it
-        # (e.g. saturation / clip flags) and the EpisodeMetricsCallback sums
-        # each key across the episode for TensorBoard. Cleared here so values
-        # never leak from the previous step's _component_info.
+    def _compute_rewards(self, action, state) -> tuple[float, dict[str, float]]:
+        # fresh per-step diagnostics channel (rewards populate; EpisodeMetricsCallback
+        # sums per episode); cleared so values don't leak from the previous step
         self._component_info["reward_diagnostics"] = {}
+        # full transition: state = s (observed), self.state = s' (resulting)
         return self._reward_aggregator.aggregate(
-            self.reward_functors, action, self.state, self._component_info,
+            self.reward_functors, action, state, self.state, self._component_info,
         )
 
     def _guard_finite_state(self) -> None:
-        # NaN/Inf in state propagates through the network and crashes the
-        # action distribution (std = NaN → RuntimeError). Replace with 0.
+        # NaN/Inf would crash the action distribution (std=NaN); replace with 0
         for key, val in self.state.items():
             if isinstance(val, np.ndarray) and not np.all(np.isfinite(val)):
                 logger.error(
@@ -554,7 +471,6 @@ class AdvBuildingGym(gym.Env, DataVariantConsumer):
         action,
         reward: float,
         reward_breakdown: dict[str, float],
-        max_reward_step: float,
         total_power_kW: float,
         power_breakdown: dict[str, float],
     ) -> dict:
@@ -562,13 +478,12 @@ class AdvBuildingGym(gym.Env, DataVariantConsumer):
             "action": action,
             "reward": reward,
             "reward_breakdown": reward_breakdown,
-            "max_reward_step": max_reward_step,
             "reward_diagnostics": self._component_info.get("reward_diagnostics", {}),
             "cum_E_kWh": self._energy_tracker.cum_E_kWh,
             "cum_price_EUR": self._price_tracker.cum_price_EUR,
             "net_power_kW": total_power_kW,
             "power_breakdown": power_breakdown,
-            "raw": self._raw_state_collector.collect(self.statesources, self.infras, self.state),
+            "raw": self._raw_state_tracker.collect(self.statesources, self.infras),
         }
         if self.log_full_info:
             info["state"] = {

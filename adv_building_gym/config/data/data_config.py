@@ -18,7 +18,7 @@ def load_data_combinator_config(
     cfg_yaml_path: str | Path,
     default_seed: int | None = None,
 ) -> DataCombinator:
-    """Build a DataCombinator from a YAML config file.
+    """Build a DataCombinator from a data-schedule YAML.
 
     Seed resolution: if the YAML defines ``seed`` it wins; otherwise
     ``default_seed`` is used. The trial config is the typical source of
@@ -61,8 +61,9 @@ def load_data_combinator_config(
     scenarios: list[dict[str, str]] = []
     for source_template in cfg["scenario_sources"]:
         for year in years:
-            # Dictonary comprehension: fills the year in each path template and constructs the scenario dict entry for this source and year
-            # scenario = { "weather": "data/weather/weather_{year}.csv", "price": "data/prices/price_{year}.csv", ... }
+            # Dictonary comprehension: fill year into each path template
+            # → {source: path} for this year
+            # e.g. {"weather": "...weather_{year}.csv", "price": "...price_{year}.csv"}
             scenario = {
                 ts_data_type: path_pattern.format(year=year)
                 for ts_data_type, path_pattern in source_template.items()

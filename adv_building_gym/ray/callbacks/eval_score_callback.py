@@ -1,4 +1,4 @@
-"""Promote the latest evaluation return to a top-level result key for checkpoint scoring.
+"""Promote the latest evaluation return to a flat top-level result key for checkpoint scoring.
 
 Why this exists
 ---------------
@@ -34,13 +34,9 @@ CHECKPOINT_NUM_TO_KEEP = 3
 
 def _log_checkpoint_decision(state: dict, score: float, iteration: int,
                             num_to_keep: int, score_key: str) -> None:
-    """Mirror Ray's _CheckpointManager retention to log the save/keep decision.
+    """Mirror Ray's _CheckpointManager retention for logging only (the real decision is its own).
 
-    Ray keeps the ``num_to_keep`` highest-scoring checkpoints and always force-keeps
-    the latest (even when it scores below all kept ones). We replicate that bookkeeping
-    here purely for logging — the real decision is still made by the CheckpointManager
-    from the published ``score_key``. Runs once per fresh-eval iteration which, because
-    checkpoint_frequency == evaluation_interval, coincides with each checkpoint save.
+    Ray keeps the ``num_to_keep`` highest-scoring checkpoints plus the force-kept latest.
     """
     kept = state["kept"]
     prev_best = max((s for s, _ in kept), default=float("-inf"))
@@ -88,22 +84,12 @@ def create_eval_score_promote_on_train_result_cb(
     score_key: str = EVAL_SCORE_KEY,
     num_to_keep: int = CHECKPOINT_NUM_TO_KEEP,
 ):
-    """Factory returning an ``on_train_result`` callable that mirrors the eval return
-    into a flat top-level result key (carried forward on non-eval iterations) and logs
-    the resulting checkpoint save/keep/evict decision.
+    """Factory → ``on_train_result`` that mirrors the eval return into a flat top-level key
+    (carried forward on non-eval iters) and logs the checkpoint save/keep/evict decision.
 
-    The retention log fires on the iterations where Tune actually saves a checkpoint —
-    ``training_iteration % checkpoint_interval == 0`` — NOT merely when an eval metric
-    is present. RLlib carries the last eval forward in the result dict on non-eval
-    iterations, so an eval-presence trigger would fire every iteration and drift out of
-    sync with the real saves. ``checkpoint_interval`` must equal ``checkpoint_frequency``
-    (which is tied to ``evaluation_interval``).
-
-    Args:
-        checkpoint_interval: Iterations between checkpoint saves (== checkpoint_frequency).
-        source: Nested path to the eval metric inside the result dict.
-        score_key: Flat top-level key written to the result dict each iteration.
-        num_to_keep: Mirrors CheckpointConfig.num_to_keep for the retention logging.
+    The retention log fires only when Tune actually saves (``training_iteration %
+    checkpoint_interval == 0``), so it stays in sync. ``checkpoint_interval`` must equal
+    ``checkpoint_frequency`` (tied to ``evaluation_interval``).
     """
     interval = max(1, int(checkpoint_interval))
     # kept: list[(score, iteration)] mirroring the CheckpointManager retained set.
@@ -117,12 +103,11 @@ def create_eval_score_promote_on_train_result_cb(
         if value is not None and not (isinstance(value, float) and math.isnan(value)):
             state["last"] = float(value)  # latest eval (fresh on eval iters, carried otherwise)
 
-        # Always publish a flat scalar so whatever iteration Tune checkpoints on
-        # carries a comparable score.
+        # always publish a flat scalar so any checkpointed iter has a comparable score
         result[score_key] = state["last"]
 
-        # Log only on the iterations Tune actually saves a checkpoint, so the log
-        # is in lock-step with the real CheckpointManager registrations.
+        # Log only on the iterations when Tune actually saves, 
+        # in lock-step with CheckpointManager
         iteration = int(result.get("training_iteration", 0) or 0)
         if iteration > 0 and iteration % interval == 0:
             _log_checkpoint_decision(state, state["last"], iteration, num_to_keep, score_key)

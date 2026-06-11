@@ -1,36 +1,16 @@
-"""SB3 algorithm builder.
+"""SB3 algorithm builder — same :class:`TrainingParamConfig` drives PPO and SAC as the Ray side.
 
-Mirrors :func:`adv_building_gym.ray.training.select_model.select_model` so
-the same :class:`TrainingParamConfig` (loaded from the same trial YAML)
-drives PPO and SAC under Stable-Baselines3.
-
-Algorithm mapping
------------------
-
-PPO (on-policy)
-    * ``ppo_episodes_per_iteration × EPISODE_LENGTH / num_envs`` → ``n_steps``
-      (SB3's ``n_steps`` is *per env*, so we divide by the VecEnv width
-      to keep the same per-iteration batch as RLlib).
-    * ``ppo_minibatch_size`` → ``batch_size``
-    * ``ppo_num_epochs`` → ``n_epochs``
-    * GAE λ pinned to 0.95 (matches RLlib config).
-
-SAC (off-policy)
-    * ``sac_replay_batch_size`` → ``batch_size``.
-    * ``sac_episodes_to_keep_in_replay_buffer × EPISODE_LENGTH`` → ``buffer_size``.
-    * ``sac_learning_starts_after_n_episodes × EPISODE_LENGTH`` → ``learning_starts``.
-    * UTD: SB3 SAC samples ``gradient_steps`` minibatches every
-      ``train_freq`` env steps. We pick ``train_freq=1, gradient_steps=⌈UTD⌉``
-      where ``UTD = sac_training_intensity / sac_replay_batch_size``.
-      (UTD < 1 is rounded up to 1 since SB3 doesn't support fractional
-      ratios in one knob.)
-    * ``sac_n_step_return`` is **not honoured** — SB3 SAC has no n-step
-      return option in its default ReplayBuffer. A warning is logged.
-    * ``tau`` left at the SB3 default (0.005 — same as the RLlib build);
-      ``gamma`` is taken from ``training_config.gamma`` for parity with Ray.
-    * ``gradient_clip`` plumbed through ``policy_kwargs``-equivalent path
-      (SB3 doesn't expose a top-level grad-clip for SAC; we use
-      ``optimizer_kwargs`` if needed in the future).
+PPO: 
+``n_steps = ppo_episodes_per_iteration × EPISODE_LENGTH / num_envs`` (SB3 n_steps is per-env),
+``ppo_minibatch_size`` → batch_size, 
+``ppo_num_epochs`` → n_epochs, 
+GAE λ=0.95.
+SAC: 
+``sac_replay_batch_size`` → batch_size; 
+buffer/learning_starts = episodes × EPISODE_LENGTH;
+``train_freq=1, gradient_steps=⌈UTD⌉`` (UTD = sac_training_intensity / batch_size, <1 → 1).
+``sac_n_step_return`` is NOT honoured (SB3 default ReplayBuffer); tau=0.005,
+gamma from config.
 """
 
 from __future__ import annotations
@@ -47,9 +27,7 @@ from adv_building_gym.config.training.training_param_config import TrainingParam
 logger = logging.getLogger(__name__)
 
 
-# Network architecture parity with the Ray default (DefaultModelConfig
-# fcnet_hiddens=[256, 256], activation=tanh). SB3 accepts a list for shared
-# trunks; PPO/SAC both honour the policy_kwargs format below.
+# net-arch parity with the Ray default ([256, 256], tanh)
 _DEFAULT_POLICY_KWARGS: dict[str, Any] = {
     "net_arch": [256, 256],
     "activation_fn": nn.Tanh,
@@ -67,20 +45,10 @@ def sb_select_model(
     device: str = "auto",
     tensorboard_log: str | None = None,
 ):
-    """Build a configured SB3 model for ``algorithm``.
+    """Build a configured SB3 model (``"ppo"``/``"sac"``; ``"dreamerv3"`` raises).
 
-    Args:
-        algorithm: ``"ppo"`` or ``"sac"``. ``"dreamerv3"`` raises.
-        vec_env: The training ``VecEnv`` (already wrapped in VecMonitor).
-        episode_length: ``env_config.EPISODE_LENGTH`` — drives batch sizing.
-        num_envs: VecEnv width; PPO's ``n_steps`` divides by this.
-        training_config: Already-loaded trial training params.
-        seed: Reproducibility seed (propagated to SB3's PRNG).
-        device: ``"auto"`` / ``"cuda"`` / ``"cpu"``.
-        tensorboard_log: Directory for TB event files; ``None`` disables.
-
-    Returns:
-        A constructed ``stable_baselines3`` model.
+    ``episode_length`` / ``num_envs`` drive batch sizing; ``seed`` propagates to SB3's PRNG;
+    ``tensorboard_log`` None disables TB.
     """
     if algorithm == "dreamerv3":
         raise ValueError(
@@ -100,10 +68,9 @@ def sb_select_model(
     }
 
     if algorithm == "ppo":
-        # PPO total batch (across all envs) per update.
+        # PPO total batch per update; SB3 n_steps is per-env, so divide by num_envs.
         # Link: https://stable-baselines3.readthedocs.io/en/master/modules/ppo.html
         ppo_batch_timesteps = training_config.ppo_episodes_per_iteration * episode_length
-        # SB3's ``n_steps`` is per environment, so divide by num_envs.
         n_steps = max(1, ppo_batch_timesteps // max(1, num_envs))
         if n_steps * num_envs != ppo_batch_timesteps:
             logger.warning(

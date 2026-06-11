@@ -1,25 +1,11 @@
 # Reward Functions
 
 Reward functions inherit from `RewardFunction` (defined in [base.py](base.py)).
-Each `get_reward(actions, states, info)` returns a tuple
-`(weighted_reward, weighted_max_step)` — both already multiplied by
-`self.weight`.
-
-The base class exposes a `max_reward_in_step` class attribute (default `1.0`)
-that declares the maximum **raw** (unweighted) value a reward class can return
-per step. It is consumed by callbacks / eval to compute
-`reward_rate = sum(reward) / sum(max_step)`:
-
-```python
-max_reward_per_step = sum(r.weight * r.max_reward_in_step for r in rewards)
-```
-
-Subclasses whose raw output can exceed `1.0` (or whose best-case is below it)
-must override `max_reward_in_step` so `reward_rate` is meaningful. Pure-penalty
-rewards set it to `0.0` so they don't inflate the denominator.
+Each `get_reward(actions, state, next_state, info)` returns a single scalar
+`weighted_reward` — already multiplied by `self.weight`.
 
 Aggregation is performed by [`SumRewardAggregator`](aggregator.py) which sums
-the per-reward `(reward, max_step)` pairs across the active list.
+the per-reward scalars across the active list.
 
 
 ## Reward ranges at a glance
@@ -32,27 +18,22 @@ section below). The `bound OK?` column flags whether the current range
 fits the design rule for its bucket (`[-1, 1]` per step for dense,
 `O(N)` per fire for sparse).
 
-| Reward                              | File                                                                   | raw min                                                            | raw max                  | `max_reward_in_step` | type    | bound OK? |
-|-------------------------------------|------------------------------------------------------------------------|--------------------------------------------------------------------|--------------------------|----------------------|---------|-----------|
-| `TempReward`                        | [temp_reward.py](temp_reward.py)                                       | non-terminal ≈ −58 (dense); `terminate_penalty` (-100) sparse      | 1.0                      | 1.0                  | mixed   | ❌ dense; ✅ sparse |
-| `EconomicReward`                    | [economic_reward.py](economic_reward.py)                               | -1.0 (clipped)                                                     | +1.0 (clipped)           | 1.0                  | dense   | ✅        |
-| `LongTermEconomicReward`            | [long_term_economic_reward.py](long_term_economic_reward.py)           | 0 most steps; on flush ≈ `−sum(net_kW · E_price)` ≈ ±10³–10⁴       | 0 / +unbounded on flush  | 1.0 (per step; flush still pays 0 max) | sparse | ❌ unbounded |
-| `MinimiseEnergyConsumptionReward`   | [energy_consumption_reward.py](energy_consumption_reward.py)           | -1.0 (clipped)                                                     | 0.0                      | 1.0                  | dense   | ✅        |
-| `OperatorEnergyControlReward`       | [operator_energy_control_reward.py](operator_energy_control_reward.py) | dense `harsh_penalty` (-4.0); sparse `terminate_penalty` (-100)    | 0.0                      | 0.0                  | mixed   | ❌ dense; ✅ sparse |
-| `BatteryTargetReward`               | [battery_target_reward.py](battery_target_reward.py)                   | -1.0                                                               | 0.0                      | 0.0                  | dense   | ✅        |
-| `BatteryMgmtReward`                 | [battery_mgmt_reward.py](battery_mgmt_reward.py)                       | `-1/scale` on terminal (-2.0 with `scale=0.5`); else 0             | 0.0                      | 1.0                  | sparse  | ❌ too small for N=288 |
-| `EVChargingReward`                  | [ev_charging_reward.py](ev_charging_reward.py)                         | dense connected ≈ 0; sparse failure / min-curve (-100)             | dense 1.0; sparse success (+10) | 1.0 ⚠️       | mixed   | ✅ dense; ✅ sparse (but `max_reward_in_step` mismatched) |
-| `EVChargingOnTimeReward`            | [ev_charging_ontime_reward.py](ev_charging_ontime_reward.py)           | `harsh_penalty` (-5.0) — fires every step time-up                  | 1.0                      | 1.0                  | dense   | ❌        |
-| `ActionSmoothnessReward`            | [action_smoothness_reward.py](action_smoothness_reward.py)             | `-n_action_keys`                                                   | 0.0                      | `n_action_keys` (auto, set on first call) | dense | ❌ (grows with action-space size) |
+| Reward                              | File                                                                   | raw min                                                            | raw max                  | type    | bound OK? |
+|-------------------------------------|------------------------------------------------------------------------|--------------------------------------------------------------------|--------------------------|---------|-----------|
+| `TempReward`                        | [temp_reward.py](temp_reward.py)                                       | non-terminal ≈ −58 (dense); `terminate_penalty` (-100) sparse      | 1.0                      | mixed   | ❌ dense; ✅ sparse |
+| `EconomicReward`                    | [economic_reward.py](economic_reward.py)                               | -1.0 (clipped)                                                     | +1.0 (clipped)           | dense   | ✅        |
+| `LongTermEconomicReward`            | [long_term_economic_reward.py](long_term_economic_reward.py)           | 0 most steps; on flush ≈ `−sum(net_kW · E_price)` ≈ ±10³–10⁴       | 0 / +unbounded on flush  | sparse | ❌ unbounded |
+| `MinimiseEnergyConsumptionReward`   | [energy_consumption_reward.py](energy_consumption_reward.py)           | -1.0 (clipped)                                                     | 0.0                      | dense   | ✅        |
+| `OperatorEnergyControlReward`       | [operator_energy_control_reward.py](operator_energy_control_reward.py) | dense `harsh_penalty` (-4.0); sparse `terminate_penalty` (-100)    | 0.0                      | mixed   | ❌ dense; ✅ sparse |
+| `BatteryTargetReward`               | [battery_target_reward.py](battery_target_reward.py)                   | -1.0                                                               | 0.0                      | dense   | ✅        |
+| `BatteryMgmtReward`                 | [battery_mgmt_reward.py](battery_mgmt_reward.py)                       | `-1/scale` on terminal (-2.0 with `scale=0.5`); else 0             | 0.0                      | sparse  | ❌ too small for N=288 |
+| `EVChargingReward`                  | [ev_charging_reward.py](ev_charging_reward.py)                         | dense connected ≈ 0; sparse failure / min-curve (-100)             | dense 1.0; sparse success (+10) | mixed   | ✅ dense; ✅ sparse |
+| `EVChargingOnTimeReward`            | [ev_charging_ontime_reward.py](ev_charging_ontime_reward.py)           | `harsh_penalty` (-5.0) — fires every step time-up                  | 1.0                      | dense   | ❌        |
+| `ActionSmoothnessReward`            | [action_smoothness_reward.py](action_smoothness_reward.py)             | `-n_action_keys`                                                   | 0.0                      | dense | ❌ (grows with action-space size) |
 
 After weighting: `[weight * raw_min, weight * raw_max]`.
 
-⚠️ **`EVChargingReward.max_reward_in_step` is not aligned with `success_reward`/
-`failure_penalty`.** The class still uses the base default `1.0` while emitting
-up to `±100` on disconnect, so `reward_rate` under-counts terminal contributions.
-
-EV rewards return `(0.0, 0.0)` while the EV is disconnected so disconnected
-periods do not inflate the `reward_rate` denominator.
+EV rewards return `0.0` while the EV is disconnected.
 
 
 ## Per-reward details
@@ -87,8 +68,8 @@ periods do not inflate the `reward_rate` denominator.
 - **Goal**: Sparse companion to `EconomicReward` — accumulates per-step
   `net_power_kW · E_price` over the episode and emits a single bonus at
   window end OR on early termination (`info["terminated"]`).
-- **Per step**: returns `(0.0, 0.0)`.
-- **On flush**: returns `(weight * sum, 0.0)` — no clipping, no division by
+- **Per step**: returns `0.0`.
+- **On flush**: returns `weight * sum` — no clipping, no division by
   `reference_power_kW`. The sum has units of `kW · normalised price`.
 - **Reset**: `on_reset` clears the accumulator at episode start.
 - **Range (instantaneous)**: `0` most steps; on flush ≈ `±(net_kW · E_price · steps)`,
@@ -116,7 +97,6 @@ periods do not inflate the `reward_rate` denominator.
 - **Terminal**: votes terminate when `ratio > terminate_threshold_pct`
   (default `1.1`); emits `terminate_penalty` (default `−100`) on that step
   when the env honours early termination.
-- **`max_reward_in_step`**: `0.0` (pure penalty).
 - **Range**: `[terminate_penalty, 0.0]` = `[-100, 0]` by default; without
   termination the floor is `harsh_penalty = -4.0`.
 
@@ -126,7 +106,6 @@ periods do not inflate the `reward_rate` denominator.
 - **Shape**:
   - `min_pct ≤ SoC ≤ max_pct` → `0.0`
   - else → `-1.0`
-- **`max_reward_in_step`**: `0.0` (pure penalty).
 - **Range**: `[-1, 0]`.
 
 ### BatteryMgmtReward
@@ -134,17 +113,16 @@ periods do not inflate the `reward_rate` denominator.
   SoC. Asymmetric: ending equal or above yields 0, so the agent is free to
   cycle the battery mid-episode for arbitrage as long as it replenishes by
   the end.
-- **Per step**: returns `(0.0, 0.0)` while `info["terminated"]` is `False`.
+- **Per step**: returns `0.0` while `info["terminated"]` is `False`.
 - **On terminal step**:
   `deficit = max(0, episode_start_soc − episode_end_soc)`
   `reward  = −deficit / scale`
-- **`max_reward_in_step`**: `1.0` (base default, but raw best-case is `0`).
 - **Range**: `[-1/scale, 0]` = `[-2, 0]` with the default `scale = 0.5`.
 
 ### EVChargingReward
 - **Goal**: Track target SoC while connected; judge sessions on
   disconnect; enforce a lazy back-from-target min curve.
-- **Disconnected**: `(0.0, 0.0)`.
+- **Disconnected**: `0.0`.
 - **Connected, normal step**:
   - `|SoC − target| < diff_threshold` (default 0.02) → `1.0`
   - else → `exp(−soc_diff_multiplier · |SoC − target|)` (default rate 5),
@@ -156,12 +134,11 @@ periods do not inflate the `reward_rate` denominator.
   - within `disconnect_soc_tolerance` → `success_reward` (default `+10.0`)
   - else → `failure_penalty` (default `−100`); votes terminate
 - **Range**: `[failure_penalty, success_reward]` (default `[-100, 10]`).
-- ⚠️ `max_reward_in_step` defaults to `1.0` — not aligned with `success_reward`.
 
 ### EVChargingOnTimeReward
 - **Goal**: Charge to target SoC before departure; reward only when the
   agent is actively charging (gates `a_lin_ev_charger > 0.0`).
-- **Disconnected**: `(0.0, 0.0)`.
+- **Disconnected**: `0.0`.
 - **Connected**:
   - target met (`SoC ≥ target`) → `1.0`
   - no time left, target unmet → `harsh_penalty` (default `−5.0`)
@@ -176,8 +153,6 @@ periods do not inflate the `reward_rate` denominator.
   square-wave energy at Nyquist).
 - **Aggregation**: summed across action keys, negated → raw reward in
   `[-n_action_keys, 0]`.
-- **`max_reward_in_step`**: auto-set to `n_action_keys` on first call
-  (overridable via `max_reward_override`).
 - **Range**: `[-n_action_keys, 0]`. With several actuators this is well
   outside `[-1, 1]` at the lower end (e.g. `−5` for a 5-actuator config).
 
@@ -193,8 +168,7 @@ inside `[-1, 1]`. They fire every step, so their cumulative episode
 contribution is already `O(N)` with `N = EPISODE_LENGTH = 288`.
 Per-step bounds keep:
 - weights linearly interpretable across rewards,
-- SAC critic targets bounded (no spike-induced gradient explosions),
-- `reward_rate = sum(reward) / sum(max_step)` in `[-1, 1]`.
+- SAC critic targets bounded (no spike-induced gradient explosions).
 
 **Sparse rewards** (`LongTermEconomicReward`, `BatteryMgmtReward`, the
 terminal branches of `EVChargingReward` and `TempReward`/`OperatorEnergyControl…`)
@@ -218,17 +192,6 @@ return propagation. The standalone benefit of sparse rewards isn't
 gradient strength; it's removing reward-shaping bias. The magnitude
 mostly matters when mixed with dense rewards.
 
-### What to set `max_reward_in_step` to
-
-- **Dense, positive-and-negative reward** (e.g. `EconomicReward`,
-  `TempReward`): `1.0`.
-- **Dense, pure-penalty** (e.g. `BatteryTargetReward`,
-  `OperatorEnergyControl` non-terminal): `0.0` (no upside to lose).
-- **Sparse one-shot**: `N_active` if the reward can also be positive
-  (so the maximum-achievable episode return through this reward equals
-  one dense step's worth times the episode length, matching the dense
-  rewards). `0.0` if it's a pure terminal penalty.
-
 
 ## Out-of-range rewards & redesign proposals
 
@@ -244,8 +207,7 @@ The rewards flagged ❌ in the table fall into two buckets:
    length ~288. They are out of `[-1, 1]` because they have to be in
    order to remain commensurate with the cumulative dense signal.
    *Fix*: replace the hard-coded constants with explicit
-   episode-length-aware defaults, and align `max_reward_in_step` so
-   `reward_rate` works.
+   episode-length-aware defaults.
 
 The proposals below are split accordingly.
 
@@ -289,9 +251,6 @@ already lives in that ballpark for `N = 288`; replacing it with `-1`
 would shrink the failure signal to one dense step's worth and remove
 the reason to avoid comfort violations.
 
-`max_reward_in_step = 1.0` (from the dense part). The terminal does not
-contribute a positive max, so it doesn't affect `max_reward_in_step`.
-
 
 ### LongTermEconomicReward — keep the sum, normalise the bound
 This is a **sparse one-shot**. The intent is for the cumulative
@@ -307,15 +266,13 @@ per_step    = clip(- net_power_kW * E_price / reference_power_kW, -1.0, 1.0)
 accumulator += per_step
 on flush:
     reward = clip(accumulator, -episode_length, +episode_length)
-    return weight * reward, weight * episode_length   # max_reward_in_step = episode_length
+    return weight * reward
 ```
 
 - Per-step contribution is bounded to `[-1, 1]` — matches `EconomicReward`.
 - On flush, the sum lives in `[-N, +N]` (where `N = steps_seen`),
   matching the order of magnitude of `sum(EconomicReward)` over the
   episode. This is the sparse/dense parity we want.
-- `max_reward_in_step = steps_seen` (set at flush time) makes
-  `reward_rate = accumulator / steps_seen ∈ [-1, 1]`.
 - **Benefit (multi-objective)**: a single end-of-episode signal whose
   magnitude is on par with the cumulative dense per-step rewards, so
   weights stay interpretable.
@@ -341,8 +298,6 @@ on flush:
   defaulting to `-EPISODE_LENGTH`. Do **not** reduce to `-1` — that
   would make the terminal indistinguishable from one over-limit step.
 
-`max_reward_in_step = 0.0` (pure-penalty, unchanged).
-
 - **Benefits**: dense branches now respect `[-1, 0]` per step, so SAC
   Q-targets stay bounded between dense violations and dense safe steps.
   The boundary at `ratio = 1` is now smooth: `-0.99 → -1.0` instead of
@@ -365,7 +320,6 @@ deficit = max(0.0, episode_start_soc - episode_end_soc)   # in [0, 1]
 # Per-fire range scaled with episode length so it stays commensurate
 # with the cumulative dense rewards. Concretely:
 reward  = -clip(deficit / scale, 0.0, 1.0) * episode_length
-max_reward_in_step = episode_length   # at the flush step; 0 otherwise
 ```
 
 Where `scale ∈ (0, 1]` controls how big a SoC deficit saturates the
@@ -402,9 +356,6 @@ The disconnect-step and min-curve-violation branches are **sparse**.
   derived at runtime from `info["episode_length"]`. The session-length
   variant is more honest but requires knowing the session length at
   emit time; episode-length is a safe upper bound.
-- `max_reward_in_step = episode_length` on disconnect step (only),
-  `1.0` while connected, `0.0` while disconnected. This fixes the
-  `⚠️ max_reward_in_step ≠ success_reward` mismatch noted in the table.
 
 - **Benefits**: the disconnect verdict carries weight commensurate with
   a full episode's worth of dense shaping — a *single* successful
@@ -434,17 +385,15 @@ on every step where time is up and target unmet — not a one-shot.
 
 
 ### ActionSmoothnessReward — average across action keys
-Dense per-step reward currently in `[-n_keys, 0]`. The
-`max_reward_in_step = n_keys` auto-scaling fixes `reward_rate`, but the
-raw per-step value still grows linearly with action-space size, so this
-reward dominates the per-step sum in configs with many actuators.
+Dense per-step reward currently in `[-n_keys, 0]`. The raw per-step value
+grows linearly with action-space size, so this reward dominates the
+per-step sum in configs with many actuators.
 
 **Proposal**: average instead of sum across keys.
 
 ```
 osc_total = mean(per_key_penalty for ...)    # in [0, 1]
 raw       = -osc_total                       # in [-1, 0]
-max_reward_in_step = 1.0
 ```
 
 - **Benefits**: per-step bound `[-1, 0]` regardless of action-space
@@ -474,19 +423,17 @@ A practical heuristic for the YAML weight column:
 ## Adding a new reward
 
 1. Create a subclass of `RewardFunction` in a new file under `rewards/`.
-2. Implement `get_reward(actions, states, info=None) -> tuple[float, float]`
-   returning `(weight * raw, weight * max_step)`.
-3. If the raw best-case differs from `1.0`, set `max_reward_in_step` on
-   the class (or assign in `__init__`, as `BatteryTargetReward` does).
-4. Keep the raw per-step reward inside `[-1, 1]`. Bounded rewards make
+2. Implement `get_reward(actions, state, next_state, info=None) -> float`
+   returning `weight * raw`.
+3. Keep the raw per-step reward inside `[-1, 1]`. Bounded rewards make
    weight tuning predictable and keep SAC critic targets stable —
    terminal one-shots should not be order(s) of magnitude larger than
    per-step shaping.
-5. Optionally implement `should_terminate(actions, states, info)` — the
-   env runs all `should_terminate` votes in a Phase-1 pass before any
+4. Optionally implement `should_terminate(actions, state, next_state, info)` —
+   the env runs all `should_terminate` votes in a Phase-1 pass before any
    `get_reward`, so terminal verdicts are independent of YAML reward
    ordering.
-6. Register with `ComponentRegistry.register('reward', MyReward)`.
-7. Export from [`rewards/__init__.py`](__init__.py) and add to `__all__`.
-8. Add a YAML entry under [`configs/schedules/reward/`](../../configs/schedules/reward/).
-9. Update this file with the new reward's range.
+5. Register with `ComponentRegistry.register('reward', MyReward)`.
+6. Export from [`rewards/__init__.py`](__init__.py) and add to `__all__`.
+7. Add a YAML entry under [`configs/schedules/reward/`](../../configs/schedules/reward/).
+8. Update this file with the new reward's range.

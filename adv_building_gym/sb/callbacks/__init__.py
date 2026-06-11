@@ -1,11 +1,7 @@
-"""SB3 callbacks mirroring adv_building_gym.ray.callbacks.
+"""SB3 callbacks mirroring the Ray ones.
 
-These all read per-env ``infos`` published by ``AdvBuildingGym.step()``
-(``reward_breakdown``, ``max_reward_step``, ``cum_E_kWh``,
-``cum_price_EUR``, ``episode_count``) and write through the SB3
-``Logger`` API (``self.logger.record(...)``). Schedule callbacks reach
-sub-envs via ``vec_env.env_method(...)`` which goes through gymnasium's
-``get_wrapper_attr`` chain.
+They read per-env ``infos`` from ``AdvBuildingGym.step()`` and write via the SB3 ``Logger``;
+schedule callbacks reach sub-envs via ``vec_env.env_method(...)``.
 """
 
 from .episode_metrics_callback import SBEpisodeMetricsCallback

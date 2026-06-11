@@ -21,19 +21,13 @@ _SECONDS_PER_DAY: int = 24 * SECONDS_PER_HOUR
 class OperatorEnergyControl(StateSource, Forecastable):
     """Grid-operator power limit, optionally driven by a sparse step-change CSV.
 
-    Publishes ``ctxt_operator_max_power_kW`` (raw kW) every step. The reward
-    function reads that ctxt key, so the limit has a single source of truth.
-
+    Publishes ``ctxt_operator_max_power_kW`` (raw kW) every step (single source of truth).
     Two modes
-    ---------
-    * **Constant** (no ``ds_path``): publishes ``max_power_kW`` every step.
-    * **CSV-driven** (``ds_path`` given): loads a sparse profile where each
-      row sets ``max_power_kW`` at its timestamp; the value is held until
-      the next row (forward-fill). Timestamps map to per-day iteration
-      indices via ``seconds_from_midnight // control_step`` (same scheme
-      as ``EVState``), so the profile repeats every simulated day.
-      ``max_power_kW`` is the fallback held before the first event of the
-      day.
+    ---------    
+    - Constant (no ``ds_path``): ``max_power_kW`` every step.
+    - CSV-driven: forward-fill a sparse profile, 
+    timestamps → per-day iteration via ``seconds_from_midnight // control_step``
+    (repeats daily); ``max_power_kW`` is the pre-first-event fallback.
 
     CSV format
     ----------
@@ -42,7 +36,6 @@ class OperatorEnergyControl(StateSource, Forecastable):
         start,max_power_kW
         2025-01-02 00:00:00,20.0
         2025-01-02 07:00:00,12.0
-        2025-01-02 17:00:00,25.0
     """
 
     _context_params: ClassVar[Set[str]] = {"control_step"}
@@ -71,8 +64,7 @@ class OperatorEnergyControl(StateSource, Forecastable):
         super().__init__(name=name, control_step=control_step)
         self.max_power_kW: float = float(max_power_kW)
 
-        # Number of control steps that fit in one simulated day -- used to
-        # wrap iteration indices into the per-day profile array.
+        # control steps per simulated day — wraps iteration into the per-day profile
         self._steps_per_day: int = int(_SECONDS_PER_DAY // int(self.control_step))
         if self._steps_per_day <= 0:
             raise ValueError(
@@ -80,15 +72,12 @@ class OperatorEnergyControl(StateSource, Forecastable):
                 "to fit at least one step per day."
             )
 
-        # Dense per-iteration kW array (length steps_per_day) when CSV-driven;
-        # None in constant-limit mode.
+        # dense per-iteration kW array (CSV-driven); None in constant mode
         self._per_iter_kW: Optional[np.ndarray] = None
 
         if ds_path is not None:
-            # Two-phase init avoids the chicken-and-egg where
-            # ``CsvLoader.__init__(ds_path=...)`` would call back into
-            # ``_post_load_data_processing`` before ``self.loader`` finishes
-            # being assigned (``self.ts`` returns None during that window).
+            # two-phase init: CsvLoader(ds_path=...) would call _post_load before
+            # self.loader is assigned (self.ts None during that window)
             self.loader = CsvLoader(None, on_reload=self._run_post_load)
             self.loader.reload(ds_path)
             logger.info(
@@ -123,16 +112,14 @@ class OperatorEnergyControl(StateSource, Forecastable):
         ) // int(self.control_step)
         df = df.sort_values("iter_idx").reset_index(drop=True)
 
-        # NaN / non-positive values would silently propagate into the reward
-        # (which divides by this), so reject them up-front.
+        # reject NaN / non-positive — the reward divides by this
         if df["max_power_kW"].isna().any() or (df["max_power_kW"] <= 0).any():
             raise ValueError(
                 f"OperatorEnergyControl '{self.name}': max_power_kW must be > 0 in every "
                 f"row of {self.ds_path}."
             )
 
-        # Forward-fill into a dense array, seeded with the constructor
-        # fallback so iterations before the first event keep the contract.
+        # forward-fill into a dense array, seeded with the fallback for pre-first-event steps
         per_iter = np.full(self._steps_per_day, self.max_power_kW, dtype=np.float64)
         for iter_idx, value in zip(df["iter_idx"].to_numpy(), df["max_power_kW"].to_numpy()):
             iter_idx = int(iter_idx)
@@ -148,15 +135,8 @@ class OperatorEnergyControl(StateSource, Forecastable):
             )
 
     def reload(self, ds_path: str) -> None:
-        """Reload from a new CSV, lazily creating the loader on first call.
-
-        Mirrors every other scheduled source (weather, E_price, EVState):
-        when the data scheduler pushes an ``operator_energy_control`` variant
-        the source picks it up regardless of whether it was constructed with
-        a static ``max_power_kW`` or an explicit ``ds_path``. The constant
-        ``max_power_kW`` thus degrades to a pre-CSV fallback held until the
-        first scheduler push.
-        """
+        """Reload from a new CSV (lazily creating the loader), like other scheduled sources;
+        a constant ``max_power_kW`` degrades to the pre-CSV fallback until the first push."""
         if self.loader is None:
             self.loader = CsvLoader(None, on_reload=self._run_post_load)
         super().reload(ds_path)
@@ -190,5 +170,5 @@ class OperatorEnergyControl(StateSource, Forecastable):
         }
 
 
-# Register OperatorEnergyControl with the component registry
+# register with ComponentRegistry
 ComponentRegistry.register('statesource', OperatorEnergyControl)

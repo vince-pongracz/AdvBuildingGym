@@ -12,19 +12,13 @@ logger = logging.getLogger(__name__)
 
 
 class StateSource(Serializable):
-    """Base class for data sources in the building environment.
+    """Base class for env data sources.
 
-    Composition over inheritance:
-      * Synchronisation state lives in ``self.sync`` (an ``EnvSync`` instance)
-        exposed via pass-through properties (``iteration``, ``row_offset``,
-        ``effective_index``, ``synchronise``).
-      * File-backed time series live in ``self.loader`` (a ``CsvLoader``)
-        when present. Sources that don't load from CSV (e.g.
-        ``OperatorEnergyControl``) leave ``self.loader`` as ``None`` and
-        inherit the base's default ``reload`` which raises ``TypeError``.
-
-    Pass-through properties ``ts`` / ``ds_path`` / ``is_new_data_source`` keep
-    subclass call sites (``self.ts``, ``self.is_new_data_source``) unchanged.
+    Sync state lives in ``self.sync`` (``EnvSync``);
+    CSV-backed series in
+    ``self.loader`` (``CsvLoader``), ``None`` for non-CSV sources (whose default
+    ``reload`` raises). Pass-through properties (``iteration``/``row_offset``/
+    ``effective_index``/``ts``/``ds_path``/``is_new_data_source``) keep call sites unchanged.
     """
 
     # Parameters derived from context (building_props, control_step)
@@ -32,6 +26,13 @@ class StateSource(Serializable):
 
     # Internal state - never serialize
     _exclude_params: ClassVar[Set[str]] = set()
+
+    # When update_state runs within step():
+    #   "exogenous" (default): external series, advanced AFTER the reward (so rewards
+    #       see the observed values).
+    #   "endogenous": within-step physics on action-affected state (e.g. heat loss),
+    #       run BEFORE the reward under the observed exogenous row.
+    UPDATE_PHASE: ClassVar[str] = "exogenous"
 
     def __init__(self,
                 name: str,
@@ -42,8 +43,7 @@ class StateSource(Serializable):
         self.sync = EnvSync()
         self.name = name
         self.control_step = control_step  # Control timestep in seconds
-        # CSV-backed subclasses assign ``self.loader = CsvLoader(ds_path,
-        # on_reload=self._run_post_load)`` after setting their own attributes.
+        # CSV-backed subclasses set ``self.loader = CsvLoader(ds_path, on_reload=self._run_post_load)``.
         self.loader: Optional[CsvLoader] = None
 
     # ----- EnvSync pass-throughs (composition) -----
@@ -81,42 +81,27 @@ class StateSource(Serializable):
 
     @property
     def is_new_data_source(self) -> bool:
-        """True when the current ds_path differs from the last processed one.
-
-        Used by subclasses to guard one-time diagnostics (e.g. NaN warnings).
-        Always ``False`` for sources without a loader.
-        """
+        """True when ds_path differs from the last processed (guards one-time diagnostics); False without a loader."""
         return self.loader.is_new_data_source if self.loader is not None else False
 
     def _post_load_data_processing(self) -> None:
-        """Override to re-run post-processing after a new CSV is loaded.
+        """Override for post-load processing (normalise columns, cache scalars, parse events).
 
-        Called from ``_run_post_load`` after any ``ReloadObserver`` notification
-        and after the underlying ``CsvLoader`` has populated ``self.ts``.
-        Subclasses that normalise columns, cache scalars, or parse events from
-        the CSV put that logic here. Use ``self.is_new_data_source`` to gate
-        one-time diagnostics so they fire only when the file actually changes.
+        Runs after ``CsvLoader`` populates ``self.ts``; gate one-time diagnostics with
+        ``self.is_new_data_source``.
         """
 
     def _run_post_load(self) -> None:
-        """Notify reload observers, then run subclass post-processing.
+        """Notify ReloadObserver mixins (e.g. Forecastable), then run subclass post-processing.
 
-        Wired as the ``on_reload`` callback of the source's ``CsvLoader`` so
-        it fires automatically after every successful read. Any mixin
-        satisfying the ``ReloadObserver`` protocol (i.e. defining
-        ``on_reload``) is notified before subclass post-processing — e.g.
-        ``Forecastable`` drops its cached column views here.
+        Wired as the CsvLoader ``on_reload`` callback, firing after every read.
         """
         if isinstance(self, ReloadObserver):
             self.on_reload()
         self._post_load_data_processing()
 
     def reload(self, ds_path: str) -> None:
-        """Load a new time-series file without recreating this StateSource.
-
-        Delegates to ``self.loader``. Sources without a loader (e.g.
-        ``OperatorEnergyControl``) raise — they are not file-backed.
-        """
+        """Load a new time-series file (delegates to ``self.loader``); non-file-backed sources raise."""
         if self.loader is None:
             raise TypeError(
                 f"{type(self).__name__} '{self.name}' is not a file-backed source "
@@ -132,29 +117,16 @@ class StateSource(Serializable):
         return state_spaces, action_spaces
 
     def update_state(self, states, info: dict | None = None) -> None:
-        """Update state based on current iteration. Implement in derived classes.
-
-        Args:
-            states: Observable state dict (agent-visible).
-            info: Shared dict for inter-component data that is not part of
-                the observation space (e.g., scale factors, EV schedule).
-        """
+        """Update observable state for the current iteration (implement in subclasses)."""
         pass
 
     def reset(self, states, info: dict | None = None) -> None:
-        """Populate initial state at episode start (after data reloads).
+        """Populate initial state at episode start (after reloads).
 
-        Called once per episode instead of update_state() during reset().
-        The default implementation delegates to update_state(); subclasses
-        can override to apply reset-specific initialisation (e.g. seeding
-        temp_in_norm from the desired setpoint).
+        Once per episode in place of update_state(); default delegates to it.
         """
         self.update_state(states, info)
 
     def get_raw_values(self) -> dict[str, float]:
-        """Return raw (unnormalised) physical values for logging.
-
-        Override in subclasses that track raw values (e.g. raw temperature).
-        Default returns an empty dict.
-        """
+        """Raw (unnormalised) physical values for logging; override to populate."""
         return {}

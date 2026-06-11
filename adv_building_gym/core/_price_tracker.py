@@ -9,10 +9,8 @@ CT_PER_EUR: float = 100.0
 class PriceTracker:
     """Sums per-step electricity cost into a running counter (EUR).
 
-    Sign convention: positive ``cum_price_EUR`` means money spent on grid
-    consumption at positive prices (or money earned by export at negative
-    prices). Mirrors the ``EnergyTracker`` shape but uses the
-    consumption-positive convention requested for the cost readout.
+    Positive ``cum_price_EUR`` = money spent (consumption -- positive prices); uses the
+    consumption-positive convention, unlike ``EnergyTracker``.
     """
 
     def __init__(self, control_step_s: int) -> None:
@@ -22,16 +20,13 @@ class PriceTracker:
     def reset(self) -> None:
         self.cum_price_EUR = 0.0
 
-    def add_step_contrib(
+    def add_step_contribution(
         self,
         power_breakdown: Dict[str, tuple[float, float]],
         baseprice_ct_per_kWh: float | None,
     ) -> tuple[float, float]:
-        """Add this step's cost contribution. Returns (net_consumption_kW, cost_EUR).
-
-        ``baseprice_ct_per_kWh`` may be ``None`` for envs without an
-        ``EnergyPriceDataSource``; in that case the tracker is a no-op.
-        """
+        """Add this step's cost. Returns (net_consumption_kW, cost_EUR);
+        no-op when ``baseprice_ct_per_kWh`` is None (no EnergyPriceDataSource)."""
         if baseprice_ct_per_kWh is None:
             return 0.0, 0.0
 

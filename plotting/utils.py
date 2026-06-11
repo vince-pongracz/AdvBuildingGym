@@ -68,7 +68,7 @@ class EpisodeData:
     length: int
     episode_date: str | None = None
 
-    # Summary scalars (reward_rate, achieved_reward, cum_E_kWh, …)
+    # Summary scalars (achieved_reward, cum_E_kWh, …)
     summary: dict[str, float] = field(default_factory=dict)
 
     # Time axis in minutes (float32)
@@ -117,7 +117,7 @@ class EpisodeData:
     def title_suffix(self) -> str:
         """Short suffix with episode metadata for figure titles.
 
-        Format: ``ep {id}, date: {YYYY.MM.DD} | reward_rate {x} ; achieved_reward {y}``.
+        Format: ``ep {id}, date: {YYYY.MM.DD} | achieved_reward {y}``.
         Falls back gracefully when the date is missing.
         """
         date_str = self.episode_date or ""
@@ -129,7 +129,6 @@ class EpisodeData:
             ep_part = f"ep {self.episode_id}"
         return (
             f"{ep_part}  |  "
-            f"reward_rate {self.summary.get('reward_rate', 0):.3f} ; "
             f"achieved_reward {self.summary.get('achieved_reward', 0):.2f}"
         )
 
@@ -178,7 +177,7 @@ def load_episode(
     hdf5_path: str,
     episode_id: str | None = None,
     control_step_seconds: int = 300,
-    select_by: str = "reward_rate",
+    select_by: str = "achieved_reward",
 ) -> EpisodeData:
     """Load one episode from an HDF5 trajectory file.
 
@@ -188,8 +187,8 @@ def load_episode(
             according to ``select_by``.
         control_step_seconds: Control timestep in seconds (default 300 = 5 min).
         select_by: Summary metric used to pick the best episode when
-            ``episode_id`` is None. One of "reward_rate", "achieved_reward",
-            "cum_E_kWh". Default: "reward_rate".
+            ``episode_id`` is None. One of "achieved_reward",
+            "cum_E_kWh". Default: "achieved_reward".
 
     Returns:
         An ``EpisodeData`` instance.

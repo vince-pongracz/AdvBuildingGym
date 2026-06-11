@@ -39,14 +39,10 @@ def normalise_with_scale_factor(
     series: pd.Series,
     method: Normalisation | None,
 ) -> tuple[pd.Series, float]:
-    """Normalise a pandas Series and return the scale factor used.
+    """Normalise a Series, returning (normalised, scale_factor) — the divided-out denominator.
 
-    Returns:
-        (normalised_series, scale_factor) — the denominator that was
-        divided out.  ``raw ≈ norm * scale_factor`` for symmetric methods
-        (ABS_MIN_MAX, MAX_ABS).  For MIN_MAX_SCALING the offset is
-        ``series.min()``; for STANDARDISATION it is ``series.mean()``.
-        scale_factor is 1.0 when *method* is ``None``.
+    ``raw ≈ norm * scale`` for symmetric methods (ABS_MIN_MAX, MAX_ABS); MIN_MAX offsets by
+    min, STANDARDISATION by mean. scale is 1.0 when *method* is None.
     """
     match method:
         case Normalisation.ABS_MIN_MAX_SCALING:
@@ -68,11 +64,7 @@ def normalise_with_scale_factor(
 
 
 def get_scale_factor(series: pd.Series, method: Normalisation | None) -> float:
-    """Return the denominator that normalisation would divide by.
-
-    Standalone implementation — computes only the scalar, without
-    normalising the full series.
-    """
+    """The denominator normalisation would divide by (scalar only, no full normalisation)."""
     match method:
         case Normalisation.ABS_MIN_MAX_SCALING:
             return float(max(abs(series.min()), abs(series.max()))) or 1.0

@@ -18,7 +18,7 @@ def discover_synthetic_scenarios(
     weather_dir: str | list[tuple[str, str]] = "data/weather/dwd/preprocessed",
     price_dirs: dict[str, str] | None = None,
 ) -> list[dict[str, str]]:
-    """Glob for synthesised yearly CSVs and pair weather + price by year.
+    """Discover synthesised yearly CSVs, pair weather + price by year (and syn_cfg token).
 
     Args:
         years: Year range to search.

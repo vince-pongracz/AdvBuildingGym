@@ -23,11 +23,7 @@ logger = logging.getLogger(__name__)
 
 
 class EnvConfigManager:
-    """Handles serialization and deserialization of EnvConfig objects.
-
-    Uses the flexible serialization system where each component (Infrastructure,
-    StateSource) knows how to serialize itself.
-    """
+    """(De)serialises EnvConfig; each component serialises itself."""
 
     @staticmethod
     def _load_yaml(path: Path) -> Dict[str, Any]:
@@ -42,13 +38,9 @@ class EnvConfigManager:
         statesources_doc: Dict[str, Any],
         env_meta_doc: Dict[str, Any],
     ) -> EnvConfig:
-        """Reconstruct an EnvConfig from the three parsed YAML documents.
-
-        Stores the raw component specs on the config; the env's factory
-        methods (``create_infras`` / ``create_statesources``) are the
-        single deserialisation path.
-        """
-        from adv_building_gym.config.env.env_config import EnvConfig
+        """Reconstruct an EnvConfig from the three parsed YAML docs; stores raw specs
+        (factory methods are the single deserialisation path)."""
+        from adv_building_gym.config.env.env_config import EnvConfig, HstConfig, ForecastConfig
         from adv_building_gym.config.rewards.reward_config import RewardConfig
 
         control_step = env_meta_doc.get("control_step", 300)
@@ -91,11 +83,15 @@ class EnvConfigManager:
             EPISODE_LENGTH=episode_length,
             CONTROL_STEP=control_step,
             allow_early_termination=allow_early_termination,
-            hst_env_wrapper_enabled=hst_enabled,
-            hst_env_wrapper_tracked_keys=hst_tracked_keys,
-            hst_env_wrapper_offsets=hst_offsets,
-            forecast_env_wrapper_enabled=forecast_enabled,
-            forecast_env_wrapper_steps=forecast_steps,
+            hst=HstConfig(
+                enabled=hst_enabled,
+                tracked_keys=hst_tracked_keys,
+                offsets=hst_offsets,
+            ),
+            forecast=ForecastConfig(
+                enabled=forecast_enabled,
+                steps=forecast_steps,
+            ),
             infra_specs=infra_specs,
             statesource_specs=statesource_specs,
             infras=None,
@@ -131,16 +127,16 @@ class EnvConfigManager:
             "control_step": config.CONTROL_STEP,
             "allow_early_termination": config.allow_early_termination,
         }
-        if config.hst_env_wrapper_enabled:
+        if config.hst.enabled:
             env_meta_doc["hst_env_wrapper"] = {
                 "enabled": True,
-                "tracked_keys": list(config.hst_env_wrapper_tracked_keys),
-                "offsets": list(config.hst_env_wrapper_offsets),
+                "tracked_keys": list(config.hst.tracked_keys),
+                "offsets": list(config.hst.offsets),
             }
-        if config.forecast_env_wrapper_enabled:
+        if config.forecast.enabled:
             env_meta_doc["forecast_env_wrapper"] = {
                 "enabled": True,
-                "forecast_steps": list(config.forecast_env_wrapper_steps),
+                "forecast_steps": list(config.forecast.steps),
             }
 
         for path, doc in (

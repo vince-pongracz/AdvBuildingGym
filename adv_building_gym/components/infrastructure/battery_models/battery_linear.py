@@ -12,48 +12,31 @@ logger = logging.getLogger(__name__)
 
 
 class BatteryLinear(Infrastructure):
-    """Battery infrastructure using a simple linear model.
+    """Bidirectional battery as an ideal linear store (no losses/voltage variation).
 
-    This model provides a straightforward battery simulation where action
-    directly translates to charge/discharge power. No voltage variations
-    or efficiency losses are modeled - it's an ideal battery.
+    Action ``a_battery`` in [-1, 1] → [-max_power_kW, max_power_kW]: positive=charge
+    (consume), negative=discharge (export).
 
-    Power-based action:
-        - action in [-1, 1] maps to [-max_power_kW, max_power_kW] kW
-        - Positive action: charge battery (consume power from grid)
-        - Negative action: discharge battery (provide power to grid)
+    Per ``exec_action``: delta_E = action*max_power_kW*control_step/3600;
+    delta_SoC = delta_E/max_cap_kWh; soc = clip(soc+delta_SoC, soc_min, soc_max).
+    After clipping, ``actual_power_kW`` and ``actions["a_battery"]`` are
+    back-calculated from the realised SoC change.
 
-    Energy change per timestep:
-        delta_E (kWh) = action * max_power_kW (kW) * control_step (s) / 3600
-        delta_SoC = delta_E / max_cap_kWh
-
-    NOTE on healthy-band semantics:
-        Reward-related concepts (the (min_pct, max_pct) operating band, any
-        target SoC setpoint) live on the reward side, not on the battery.
-        BatteryTargetReward owns ``min_pct`` / ``max_pct`` as constructor
-        arguments and reads ``s_battery_soc`` from the obs.  An alternative
-        we considered (Option B) was to drive the band from a CSV schedule —
-        each row gives a (min, max) pair, allowing the band to vary over
-        time (e.g. wider during the day, narrower overnight).  We chose the
-        static form for simplicity; if a time-varying band is ever wanted,
-        plumb a small data source that publishes the two values and have
-        the reward (or a connector) pull them per step.
+    Publishes ``s_battery_soc``, ``ctxt_battery_capacity_kWh``, ``ctxt_battery_power_kW``.
+    ``reset`` restores SoC to ``start_soc_percentage`` ± uniform ``start_soc_jitter`` (env rng), clipped.
     """
 
     POWER_FLOW = "bidirectional"
 
     _context_params: ClassVar[Set[str]] = {'control_step'}
 
-    _exclude_params: ClassVar[Set[str]] = {
-        'iteration', 'soc', 'actual_power_kW'
-    }
+    _exclude_params: ClassVar[Set[str]] = { 'iteration', 'soc', 'actual_power_kW' }
 
     def __init__(self, name: str,
                 max_power_kW: float,
                 max_cap_kWh: float,
                 control_step: int,
                 start_soc_percentage: float,
-                history_length: int,
                 soc_min: float,
                 soc_max: float,
                 start_soc_jitter: float = 0.0,
@@ -66,7 +49,6 @@ class BatteryLinear(Infrastructure):
             max_cap_kWh: Battery capacity in kWh
             control_step: Timestep duration in seconds
             start_soc_percentage: Initial state of charge [0, 1]
-            history_length: Number of past SoC values to track
             soc_min: Hardware minimum SoC (clipping floor)
             soc_max: Hardware maximum SoC (clipping ceiling)
             start_soc_jitter: Half-width of the uniform per-episode offset
@@ -83,22 +65,18 @@ class BatteryLinear(Infrastructure):
         self.start_soc_jitter = start_soc_jitter
         self.soc = start_soc_percentage
         self.control_step = control_step
-        self.history_length = history_length
         self.soc_min = soc_min
         self.soc_max = soc_max
-
         self.actual_power_kW = 0.0
 
-    def setup_spaces(self,
-                    state_spaces,
-                    action_spaces):
+    def setup_spaces(self, state_spaces, action_spaces):
         if "a_battery" not in action_spaces.keys():
             action_spaces["a_battery"] = Box(low=-1, high=1, shape=(1,), dtype=np.float32)
 
         if "s_battery_soc" not in state_spaces.keys():
             state_spaces["s_battery_soc"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
 
-        # Raw battery capacity (kWh) and power (kW) — constant hardware parameters
+        # Capacity (kWh) and power (kW) — constant hardware parameters
         if "ctxt_battery_capacity_kWh" not in state_spaces.keys():
             state_spaces["ctxt_battery_capacity_kWh"] = Box(low=0, high=np.inf, shape=(1,), dtype=np.float32)
         if "ctxt_battery_power_kW" not in state_spaces.keys():
@@ -107,40 +85,33 @@ class BatteryLinear(Infrastructure):
         return state_spaces, action_spaces
 
     def exec_action(self, actions: Dict, states: Dict, info=None) -> None:
-        """Execute battery charge/discharge action using linear model.
-
-        Action in [-1, 1]:
-            - Positive: charge battery (consume power from grid)
-            - Negative: discharge battery (provide power to grid)
-
-        The action represents fraction of max power (max_power_kW).
-        """
+        """Linear charge/discharge. action in [-1, 1] (fraction of max_power_kW):
+        positive=charge (consume), negative=discharge (export)."""
         action = float(np.atleast_1d(actions["a_battery"])[0])
 
-        # Calculate requested power in kW
+        # requested power (kW)
         requested_power_kW = action * self.max_power_kW
 
-        # Calculate energy change in this timestep
-        # E (kWh) = P (kW) * t (h)
+        # energy change: E[kWh] = P[kW] * t[h]
         time_duration_in_hours = self.control_step / SECONDS_PER_HOUR
         delta_energy_kWh = requested_power_kW * time_duration_in_hours
 
-        # Convert energy to SoC change
+        # energy → SoC change
         delta_soc = delta_energy_kWh / self.max_cap_kWh if self.max_cap_kWh > 0 else 0.0
 
-        # Apply SoC change and clip to valid range
+        # apply and clip
         old_soc = self.soc
         new_soc = self.soc + delta_soc
         self.soc = float(np.clip(new_soc, self.soc_min, self.soc_max))
 
-        # Calculate actual energy transferred (may be limited by SoC bounds)
+        # actual energy transferred (may be SoC-limited)
         actual_delta_soc = self.soc - old_soc
         actual_energy_kWh = actual_delta_soc * self.max_cap_kWh
 
-        # Calculate actual power for consumption reporting
+        # actual power, for reporting
         self.actual_power_kW = actual_energy_kWh / time_duration_in_hours if time_duration_in_hours > 0 else 0.0
 
-        # Update the action dict to reflect actual (clipped) action
+        # rewrite action to the clipped fraction
         actual_action = self.actual_power_kW / self.max_power_kW if self.max_power_kW > 0 else 0.0
         actions["a_battery"] = np.array([np.float32(actual_action)], dtype=np.float32)
 
@@ -151,16 +122,10 @@ class BatteryLinear(Infrastructure):
         states["ctxt_battery_power_kW"][0] = np.float32(self.max_power_kW)
 
     def reset(self, states: Dict, info=None) -> None:
-        """Re-initialise transient state at the start of every episode.
+        """Reset SoC to start_soc each episode (base would carry it over).
 
-        The base implementation only re-emits update_state(), which would
-        leave self.soc carrying over from the previous episode.
-
-        When ``start_soc_jitter`` > 0 the initial SoC is perturbed by a
-        uniform offset drawn from the env rng (published on the shared info
-        channel as "_rng") so episodes do not always begin from the same
-        charge level. The rng shares the deterministic, per-worker stream
-        seeded by reset(seed=...); fallback only for standalone use.
+        With ``start_soc_jitter`` > 0, perturb by a uniform offset from the env rng
+        (info["_rng"], deterministic per-worker; standalone fallback), then clip.
         """
         self.soc = self.start_soc
         if self.start_soc_jitter > 0.0:
@@ -172,12 +137,11 @@ class BatteryLinear(Infrastructure):
         super().reset(states, info)
 
     def get_E(self, actions: Dict) -> tuple[float, float]:
-        # self.actual_power_kW is positive when the battery charges -- consumes energy
+        # actual_power_kW > 0 = charging (consumes); returns (production, consumption)
         if self.actual_power_kW > 0.0:
-            # production, consumption
             return 0.0, self.actual_power_kW
         else:
-            # self.actual_power_kW is negative when the battery discharges -- produces energy to the others
+            # < 0 = discharging (produces to others)
             return -1.0 * self.actual_power_kW, 0.0
 
 

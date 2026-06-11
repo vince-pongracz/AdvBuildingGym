@@ -6,8 +6,7 @@ class DataVariantConsumer(ABC):
 
     @abstractmethod
     def apply_data_variant(self, variant: dict[str, str]) -> None:
-        """Reload datasources whose names appear in *variant*.
-
+        """Reload datasources named in *variant* (source name → new CSV path).
         Args:
             variant: Mapping of source name -> new CSV file path.
         """

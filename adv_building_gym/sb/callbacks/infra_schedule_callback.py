@@ -1,10 +1,7 @@
-"""Infra schedule switching for SB3.
+"""Infra schedule switching for SB3 (episode-counting twin of the Ray callback).
 
-Episode-counting twin of ``infra_schedule_callback.py``. Each sub-env
-(train + eval) gets its own fresh infra instances via
-``InfraCombinator.create_infras`` so internal state (iteration counters,
-action history references) stays independent. Eval follows training so
-the eval signal describes the configuration currently being trained.
+Each sub-env (train + eval) gets fresh infra instances via ``InfraCombinator.create_infras``
+(independent state); eval follows training.
 """
 
 from __future__ import annotations

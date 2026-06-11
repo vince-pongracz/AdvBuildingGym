@@ -1,11 +1,7 @@
-"""Reward configuration for AdvBuildingGym.
+"""Reward configuration — holds the active reward function instances.
 
-Data holder for the active reward function instances.  Reward creation
-and scheduling is handled by ``RewardScheduleManager`` — this class only
-stores the resulting list so that other parts of the codebase (eval,
-serialization) can access it via ``EnvConfig.reward_config.rewards``.
-
-Serialization is handled by ``RewardConfigSerializer`` (separation of concerns).
+Creation/scheduling is done by ``RewardScheduleManager``; serialisation by
+``RewardConfigSerializer``. Accessed via ``EnvConfig.reward_config.rewards``.
 """
 
 import logging
@@ -22,9 +18,10 @@ logger = logging.getLogger(__name__)
 class RewardConfig(LoggableConfig):
     """Data holder for reward function composition.
 
-    Stores the active reward function instances.  Reward creation is
-    delegated to ``RewardScheduleManager`` which reads definitions from
-    YAML.  Assign the result to ``self.rewards`` before use.
+    Stores the active reward function instances.
+    Reward creation is delegated to ``RewardScheduleManager`` which reads definitions from
+    YAML.
+    Assign the result to ``self.rewards`` before use.
 
     Serialization: use ``RewardConfigSerializer.save()`` / ``.load()``.
     """

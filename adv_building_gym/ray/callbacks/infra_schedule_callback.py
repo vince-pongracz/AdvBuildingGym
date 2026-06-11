@@ -1,15 +1,7 @@
-"""Episode-budget-aligned infrastructure config scheduling via RLlib callback.
+"""Episode-budget-aligned infrastructure scheduling via on_train_result.
 
-Pushes fresh Infrastructure instances to all env_runners once
-``num_episodes_lifetime`` has advanced by at least
-``max(swap_every_n_episodes, num_env_runners)`` since the previous swap,
-ensuring all workers change configuration simultaneously.
-
-Pattern mirrors ``data_schedule_callback.py``.
-
-``create_infra_schedule_on_train_result_cb(...)`` returns an
-``on_train_result`` function that can be passed as a keyword argument
-to ``config.callbacks(ExistingClass, on_train_result=func)``.
+Pushes fresh Infrastructure instances to all env_runners simultaneously once the swap gate
+fires. ``create_infra_schedule_on_train_result_cb`` returns the callable.
 """
 
 import logging
@@ -62,8 +54,7 @@ def _push_infras_to_runners(
     swap_index = infra_combinator._swap_index
 
     def apply(env_runner) -> None:
-        # env_runner.env is wrapped:
-        #   DictInfoToList -> SyncVectorEnv -> [TimeLimit -> ... -> AdvBuildingGym]
+        # env wrapping: DictInfoToList → SyncVectorEnv → [... → AdvBuildingGym].
         # The local (driver) env_runner may have env=None in the new API stack.
         vec_env = getattr(env_runner, "env", None)
         if vec_env is None:

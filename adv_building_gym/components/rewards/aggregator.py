@@ -22,38 +22,37 @@ class RewardAggregator(ABC):
         self,
         reward_funcs: List[RewardFunction],
         actions: Dict,
-        states: Dict,
+        state: Dict,
+        next_state: Dict,
         info: Dict,
-    ) -> Tuple[float, Dict[str, float], float]:
-        """Return ``(total_reward, breakdown, total_max_step)``."""
+    ) -> Tuple[float, Dict[str, float]]:
+        """Combine per-component rewards over the (s, a, s') transition.
+
+        ``state`` is the observed state ``s``; ``next_state`` is the
+        resulting state ``s'``. Returns ``(total_reward, breakdown)``.
+        """
 
 
 class SumRewardAggregator(RewardAggregator):
     """Default aggregator — sum of weighted component rewards."""
 
-    def aggregate(self, reward_funcs, actions, states, info):
+    def aggregate(self, reward_funcs, actions, state, next_state, info):
         total_reward = 0.0
-        total_max_step = 0.0
         breakdown: Dict[str, float] = {}
         for rf in reward_funcs:
-            reward, reward_max = rf.get_reward(actions, states, info=info)
-            reward = float(np.asarray(reward).item())
+            reward = float(np.asarray(rf.get_reward(actions, state, next_state, info=info)).item())
             breakdown[rf.name] = reward
             total_reward += reward
-            total_max_step += reward_max
-        return total_reward, breakdown, total_max_step
+        return total_reward, breakdown
 
 class NashRewardAggregator(RewardAggregator):
     """Nash equilibrium-based aggregator — product of weighted component rewards."""
 
-    def aggregate(self, reward_funcs, actions, states, info):
+    def aggregate(self, reward_funcs, actions, state, next_state, info):
         total_reward = 1.0
-        total_max_step = 1.0
         breakdown: Dict[str, float] = {}
         for rf in reward_funcs:
-            reward, reward_max = rf.get_01_reward(actions, states, info=info)
-            reward = float(np.asarray(reward).item())
+            reward = float(np.asarray(rf.get_01_reward(actions, state, next_state, info=info)).item())
             breakdown[rf.name] = reward
             total_reward *= reward
-            total_max_step *= reward_max
-        return total_reward, breakdown, total_max_step
+        return total_reward, breakdown

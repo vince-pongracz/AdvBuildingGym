@@ -54,7 +54,7 @@ Per episode, six figure groups are emitted (each a list of plotly figures):
 | `--hdf5`         | latest in `ep_metrics/trajectories/` | Path to `trajectories.hdf5`. |
 | `--episode`      | best by `--select-by`            | Plot a specific episode id (HDF5 group name). |
 | `--all-episodes` | off                              | Plot every episode in the file (one subdir per episode). Mutex with `--episode`. |
-| `--select-by`    | `achieved_reward`                | Auto-pick metric. One of `reward_rate`, `achieved_reward`, `cum_E_kWh` (lowest is best for this one). |
+| `--select-by`    | `achieved_reward`                | Auto-pick metric. One of `achieved_reward`, `cum_E_kWh` (lowest is best for this one). |
 | `--output-dir`   | `plotting/out/traj_plots/ep_<id>/` | Output root. With `--all-episodes` this is the parent dir. |
 | `--format`       | `html svg`                       | One or more of `html`, `png`, `svg`, `pdf`. |
 | `--control-step` | `300`                            | Control timestep in seconds (used for time-axis). |
@@ -74,8 +74,8 @@ python -m plotting.traj_plotting --episode be574d12
 # Plot every episode in the file (one subdir per episode)
 python -m plotting.traj_plotting --all-episodes
 
-# Auto-select episode by reward_rate instead
-python -m plotting.traj_plotting --select-by reward_rate
+# Auto-select episode by cum_E_kWh instead
+python -m plotting.traj_plotting --select-by cum_E_kWh
 
 # Auto-select episode by lowest cumulative energy
 python -m plotting.traj_plotting --select-by cum_E_kWh
@@ -106,7 +106,7 @@ from plotting.utils import load_episode
 from plotting.traj_plotting.trajectory_plot import generate_all_plots
 from plotting.traj_plotting.plot_states import plot_states
 
-episode = load_episode("trajectories.hdf5", select_by="reward_rate")
+episode = load_episode("trajectories.hdf5", select_by="achieved_reward")
 figs = plot_states(episode)
 figs[0].show()
 

@@ -1,13 +1,9 @@
 """ForecastWrapper — augment the Dict observation space with future-step values.
 
-When enabled via ``env_meta.forecast_env_wrapper`` in the trial config, this
-wrapper queries every StateSource's ``forecast(selected_future_steps)`` method
-and adds the returned ``s_fc_<var>`` arrays to the observation Dict each step.
-
-The forecast offsets (``forecast_steps``) are positive integers in control-step
-units, sorted ascending and deduplicated. Forecast values stay untouched by
-HistoryWrapper when this wrapper is applied AFTER it (see env_creator.py
-wrapper composition).
+Queries each StateSource's ``forecast(selected_future_steps)`` and adds the returned
+``s_fc_<var>`` arrays to the obs Dict each step. ``forecast_steps`` are positive
+control-step offsets (sorted, deduped). 
+Applied AFTER HistoryWrapper so forecasts stay untouched.
 """
 
 from __future__ import annotations
@@ -23,12 +19,10 @@ from adv_building_gym.components.statesources.forecastable import Forecastable
 
 
 class ForecastWrapper(gymnasium.ObservationWrapper):
-    """Adds ``s_fc_<var>`` Box entries with shape ``(len(forecast_steps),)`` to
-    the wrapped env's Dict observation space.
+    """Adds ``s_fc_<var>`` Box entries of shape ``(len(forecast_steps),)`` to the Dict obs.
 
-    StateSources that implement the ``Forecastable`` interface contribute their
-    declared ``s_fc_*`` keys; non-Forecastable sources are ignored. Values are
-    returned in the same normalisation as the live ``s_<var>`` key.
+    Only ``Forecastable`` sources contribute their declared ``s_fc_*`` keys (same
+    normalisation as the live ``s_<var>``); others are ignored.
     """
 
     def __init__(self, env: gymnasium.Env, forecast_steps: Iterable[int]) -> None:
@@ -48,15 +42,12 @@ class ForecastWrapper(gymnasium.ObservationWrapper):
         self._forecast_steps_list: list[int] = list(steps)
         self._n: int = len(self._forecast_steps_list)
 
-        # AdvBuildingGym exposes its statesource list on the inner env. We
-        # only care about the subset that opts into the Forecastable interface
-        # — non-forecasting sources have no s_fc_* contract to honour.
+        # only the Forecastable subset of the inner env's statesources
         self._forecasters: tuple[Forecastable, ...] = tuple(
             ds for ds in env.unwrapped.statesources if isinstance(ds, Forecastable)
         )
 
-        # Discover s_fc_* keys via the static Forecastable contract so the
-        # space is well-defined even when CSVs have not been loaded yet.
+        # discover s_fc_* keys via the static contract (well-defined before any CSV load)
         fc_keys: list[str] = []
         seen: set[str] = set()
         for ds in self._forecasters:
@@ -73,9 +64,7 @@ class ForecastWrapper(gymnasium.ObservationWrapper):
                 fc_keys.append(k)
         self._fc_keys: tuple[str, ...] = tuple(fc_keys)
 
-        # Mirror the live key's Box bounds when one exists; otherwise use a
-        # generous (-inf, inf) Box. The dtype is always float32 to match the
-        # rest of the observation buffer.
+        # mirror the live key's Box bounds if present, else (-inf, inf); dtype float32
         live_spaces = env.observation_space.spaces
         new_spaces: "OrderedDict[str, spaces.Space]" = OrderedDict(live_spaces)
         for key in self._fc_keys:

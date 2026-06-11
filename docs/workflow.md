@@ -237,7 +237,7 @@ Total variant pool = (2 sources x 7 years) x 6 EV profiles = 84 combinations.
 SLURM resources: 4 CPUs, 1 GPU, 10 min (increase `--time` for real runs).
 
 ```bash
-# Default: PPO, 7000 episodes (from config), seed 42, optimise reward_rate
+# Default: PPO, 7000 episodes (from config), seed 42, optimise episode_return_mean
 sbatch slurm_scripts/slurm_train_ray.sh --algorithm ppo
 
 # PPO with fewer episodes (CLI override)
@@ -260,7 +260,7 @@ sbatch slurm_scripts/slurm_train_ray.sh --algorithm ppo --episodes 3500 --log-tr
 | `--algorithm {ppo,sac}` | `ppo` | RL algorithm |
 | `--episodes N` | from config (`7000`) | Total training episodes (primary stop criterion) |
 | `--seed N` | `42` (from YAML) | Random seed |
-| `--metric {reward_rate,achieved_reward,episode_return_mean}` | `reward_rate` | Optimisation metric |
+| `--metric {achieved_reward,episode_return_mean}` | `episode_return_mean` | Optimisation metric |
 | `--checkpoint-frequency-episodes N` | `20` | Save checkpoint every N episodes |
 | `--load-config PATH` | — (**required**) | Environment YAML to load; `env_config_name` inside sets the checkpoint dir name |
 | `--data-config PATH` | `configs/train_data_combinator_config.yaml` | Data combinator YAML |
@@ -345,7 +345,7 @@ sbatch slurm_scripts/slurm_eval_ray.sh --algorithm ppo --episodes 20 --data-conf
 2. Resolves checkpoint path (auto-discovers best if not provided)
 3. Initialises Ray (CPU-only), loads RLModule from checkpoint
 4. Runs episodes: reset → infer → step → collect trajectories
-5. Aggregates metrics: `achieved_reward`, `reward_rate`, `cum_E_kWh`
+5. Aggregates metrics: `achieved_reward`, `cum_E_kWh`
 6. Saves results JSON + trajectory HDF5
 7. Optionally generates plots
 
@@ -397,7 +397,7 @@ python -m plotting.traj_plotting --output-dir my_plots/
 |------|---------|---------|
 | `--hdf5 PATH` | auto-discover latest | Path to `trajectories.hdf5` |
 | `--episode ID` | best by `--select-by` | Episode ID to plot |
-| `--select-by METRIC` | `reward_rate` | Metric for best-episode selection |
+| `--select-by METRIC` | `achieved_reward` | Metric for best-episode selection |
 | `--format FMT [...]` | `html svg` | Output formats: `html`, `png`, `svg`, `pdf` |
 | `--output-dir PATH` | `plotting/out/<episode_id>/` | Output directory |
 | `--control-step N` | `300` | Timestep in seconds (for x-axis) |
@@ -528,7 +528,7 @@ sbatch slurm_scripts/slurm_train_ray.sh --algorithm ppo --episodes 3500 --seed 4
 sbatch slurm_scripts/slurm_eval_ray.sh --algorithm ppo --episodes 20 --data-config
 
 # 4. Plot
-sbatch slurm_scripts/slurm_plot_trajectory.sh --select-by reward_rate --format html svg
+sbatch slurm_scripts/slurm_plot_trajectory.sh --select-by achieved_reward --format html svg
 ```
 
 **Local (no SLURM):** replace `sbatch slurm_scripts/slurm_*.sh` with the Python

@@ -10,8 +10,6 @@ What it produces, mirroring the Ray side ([ray/callbacks/eval_state_action_callb
 1. ``eval/*`` scalars on the main TB log (via ``self.logger``):
    - ``eval/mean_reward``       (preserves SB3 EvalCallback's tag for tooling)
    - ``eval/mean_ep_length``
-   - ``eval/achieved_reward``   (parity with ``rollout/achieved_reward``)
-   - ``eval/reward_rate``       (parity with ``rollout/reward_rate``)
    - ``eval/cum_E_kWh``
    - ``eval/cum_price_EUR``
    - ``eval/reward/<component>``
@@ -70,13 +68,12 @@ class _EvalRunStats:
     """Iteration-level accumulators populated during one eval round."""
 
     __slots__ = (
-        "returns", "reward_rates", "cum_E_kWh", "cum_price_EUR",
+        "returns", "cum_E_kWh", "cum_price_EUR",
         "lengths", "per_component_totals", "trajectory_buffer",
     )
 
     def __init__(self):
         self.returns: list[float] = []
-        self.reward_rates: list[float] = []
         self.cum_E_kWh: list[float] = []
         self.cum_price_EUR: list[float] = []
         self.lengths: list[int] = []
@@ -86,11 +83,8 @@ class _EvalRunStats:
 
 
 class SBEvalStateActionCallback(BaseCallback):
-    """Hand-rolled eval callback for the SB3 driver.
-
-    Replaces ``stable_baselines3.common.callbacks.EvalCallback``. Owns
-    the eval loop, emits parity-with-Ray TB tags, and saves the
-    best-by-mean-reward model.
+    """Hand-rolled eval callback (replaces SB3's ``EvalCallback``): owns the eval loop,
+    emits parity-with-Ray TB tags, saves the best-by-mean-reward model.
 
     Args:
         eval_env: A SB3 VecEnv (typically ``DummyVecEnv`` wrapped in
@@ -171,7 +165,6 @@ class SBEvalStateActionCallback(BaseCallback):
         episode_counts = np.zeros(n_envs, dtype=int)
 
         obs = env.reset()
-        max_reward_sums = np.zeros(n_envs)
         breakdown_sums: list[dict[str, float]] = [defaultdict(float) for _ in range(n_envs)]
         in_flight: list[dict[str, list[float]]] = [defaultdict(list) for _ in range(n_envs)]
         stats = _EvalRunStats()
@@ -184,9 +177,6 @@ class SBEvalStateActionCallback(BaseCallback):
                     continue
                 self._capture_per_step(in_flight[env_idx], info)
 
-                ms = info.get("max_reward_step")
-                if isinstance(ms, (int, float)):
-                    max_reward_sums[env_idx] += float(ms)
                 for k, v in (info.get("reward_breakdown") or {}).items():
                     if isinstance(v, (int, float)):
                         breakdown_sums[env_idx][k] += float(v)
@@ -194,10 +184,8 @@ class SBEvalStateActionCallback(BaseCallback):
                 if dones[env_idx] and "episode" in info:
                     ep_return = float(info["episode"].get("r", 0.0))
                     ep_length = int(info["episode"].get("l", 0))
-                    max_total = max_reward_sums[env_idx]
                     stats.returns.append(ep_return)
                     stats.lengths.append(ep_length)
-                    stats.reward_rates.append(ep_return / max_total if max_total > 0 else 0.0)
                     if "cum_E_kWh" in info:
                         stats.cum_E_kWh.append(float(info["cum_E_kWh"]))
                     if "cum_price_EUR" in info:
@@ -205,7 +193,6 @@ class SBEvalStateActionCallback(BaseCallback):
                     stats.per_component_totals.append(dict(breakdown_sums[env_idx]))
                     stats.trajectory_buffer.append(dict(in_flight[env_idx]))
 
-                    max_reward_sums[env_idx] = 0.0
                     breakdown_sums[env_idx] = defaultdict(float)
                     in_flight[env_idx] = defaultdict(list)
                     episode_counts[env_idx] += 1
@@ -276,7 +263,6 @@ class SBEvalStateActionCallback(BaseCallback):
         self.logger.record("eval/mean_reward", mean_reward)
         self.logger.record("eval/mean_ep_length", float(np.mean(stats.lengths)))
         self.logger.record("eval/achieved_reward", mean_reward)
-        self.logger.record("eval/reward_rate", float(np.mean(stats.reward_rates)))
         if stats.cum_E_kWh:
             self.logger.record("eval/cum_E_kWh", float(np.mean(stats.cum_E_kWh)))
         if stats.cum_price_EUR:
@@ -290,28 +276,21 @@ class SBEvalStateActionCallback(BaseCallback):
                 vals = [d.get(k, 0.0) for d in stats.per_component_totals]
                 self.logger.record(f"eval/reward/{k}", float(np.mean(vals)))
 
-        # Dump immediately so eval scalars appear on the eval cadence rather
-        # than waiting for the next training-side dump (same pattern as SB3's
-        # stock EvalCallback at callbacks.py:498-530).
+        # dump now so eval scalars appear on the eval cadence (like SB3's EvalCallback)
         self.logger.dump(self.num_timesteps)
 
         if self.verbose:
             logger.info(
-                "Eval round %d (n_eval_episodes=%d): mean_reward=%.4f reward_rate=%.4f",
-                self._eval_round, self._n_eval_episodes,
-                mean_reward, float(np.mean(stats.reward_rates)),
+                "Eval round %d (n_eval_episodes=%d): mean_reward=%.4f",
+                self._eval_round, self._n_eval_episodes, mean_reward,
             )
 
     def _write_trajectory_subrun(self, ep_buffer: list[dict[str, list[float]]]) -> None:
         if not ep_buffer:
             return
 
-        # No cross-episode averaging: a round's episodes are typically
-        # different days / variants, so each episode is written as its own
-        # TensorBoard sub-run (``iter_<N>[_<trial>]/ep_<i>``). Sub-runs share
-        # tag names, so the episodes overlay per chart and the real
-        # per-episode spread is visible. Mirrors the Ray-side callback
-        # (ray/callbacks/eval_state_action_callback.py).
+        # No cross-episode averaging (different days/variants): each episode is its own
+        # sub-run ``iter_<N>[_<trial>]/ep_<i>`` with shared tags, so they overlay (mirrors Ray).
         suffix = f"_{self._trial_suffix}" if self._trial_suffix else ""
         iter_group = os.path.join(
             self._eval_trajectories_root,

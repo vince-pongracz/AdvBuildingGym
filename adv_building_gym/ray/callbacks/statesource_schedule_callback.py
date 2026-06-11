@@ -1,10 +1,7 @@
-"""Episode-budget-aligned statesource scheduling via RLlib on_train_result callback.
+"""Episode-budget-aligned statesource scheduling via on_train_result.
 
-Mirror of ``infra_schedule_callback.py`` for statesource bundles.  Pushes
-fresh StateSource instances to all env_runners once
-``num_episodes_lifetime`` has advanced by at least
-``max(swap_every_n_episodes, num_env_runners)`` since the previous swap.
-Optionally fires the shared exploration-reset bump.
+Mirror of ``infra_schedule_callback.py``: pushes fresh StateSource instances to all
+env_runners once the swap gate fires; optionally fires the exploration bump.
 """
 
 import logging

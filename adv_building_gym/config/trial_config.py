@@ -11,7 +11,7 @@ Schema (top-level keys, ordered):
     # run control
     algorithm: ppo|sac|dreamerv3
     seed: 42
-    metric: episode_return_mean | achieved_reward | reward_rate
+    metric: episode_return_mean | achieved_reward
     # Eval + checkpoint cadence is a single knob: training_params.common.evaluation_interval
     # (checkpoints are taken on eval iterations; see run_train_ray._build_tuner).
     log_trajectories: false
@@ -65,7 +65,7 @@ logger = logging.getLogger(__name__)
 
 _RUN_DEFAULTS: dict[str, Any] = {
     "algorithm": "ppo",
-    "metric": "reward_rate",
+    "metric": "episode_return_mean",
     "log_trajectories": False,
     "num_envs": 1,
     "grad_train": False,
@@ -168,9 +168,7 @@ class TrialConfig:
         if not isinstance(env_meta_doc, dict):
             raise ValueError(f"Trial config {label}: 'env_meta' must be inlined (dict)")
 
-        # When infras / statesources are deferred to a schedule, seed the
-        # env config with empty lists; the swap callback will set_infras /
-        # set_statesources before training begins.
+        # deferred to a schedule → seed empty lists; swap callback sets them before training
         env_config = EnvConfigManager.from_dict(
             infras_doc={"infras": list(infras_inline)} if infras_inline else {"infras": []},
             statesources_doc={"statesources": list(ss_inline)} if ss_inline else {"statesources": []},

@@ -1,11 +1,8 @@
 """Component registry + serialisation for pluggable env components.
 
-Holds ``Serializable`` (the mixin every component inherits), ``ComponentRegistry``
-(the bucketed registry that maps class names to classes), and the module-level
-``from_dict`` helper that reconstructs a registered component from a dict.
-
-Lives in ``components/`` so devices/statesources/rewards can import the
-registry without triggering the config package's heavier imports.
+Holds ``Serializable`` (the component mixin), ``ComponentRegistry`` (name→class
+buckets), and ``from_dict`` (rebuild a registered component from a dict). Lives in
+``components/`` so devices/statesources/rewards import it without the config deps.
 """
 
 import inspect
@@ -31,13 +28,7 @@ class ComponentRegistry:
 
     @classmethod
     def register(cls, component_type: str, component_class: Type['Serializable']) -> None:
-        """
-        Register a component class.
-
-        Args:
-            component_type: Type of component ('infrastructure', 'statesource', 'reward')
-            component_class: The class to register
-        """
+        """Register a component class under component_type ('infrastructure'/'statesource'/'reward')."""
         if component_type not in cls._registries:
             raise ValueError(f"Unknown component type: {component_type}")
         cls._registries[component_type][component_class.__name__] = component_class
@@ -45,19 +36,7 @@ class ComponentRegistry:
 
     @classmethod
     def get(cls, component_type: str, class_name: str) -> Type['Serializable']:
-        """
-        Get a component class by name.
-
-        Args:
-            component_type: Type of component ('infrastructure', 'statesource', 'reward')
-            class_name: Name of the class to retrieve
-
-        Returns:
-            The registered class
-
-        Raises:
-            ValueError: If component type or class name is not found
-        """
+        """Return the registered class for class_name; ValueError if type/name unknown."""
         if component_type not in cls._registries:
             raise ValueError(f"Unknown component type: {component_type}")
         if class_name not in cls._registries[component_type]:
@@ -73,77 +52,9 @@ class ComponentRegistry:
         """Get all registered classes for a component type."""
         return cls._registries.get(component_type, {}).copy()
 
-
-class Serializable(ABC):
-    """
-    Mixin providing flexible JSON serialization for config components.
-
-    Subclasses can customize serialization by:
-    - Setting `_context_params`: Set of parameter names that come from context
-      (e.g., building_props) and should be excluded from serialization
-    - Setting `_exclude_params`: Set of parameter names to always exclude
-    - Overriding `_get_serialize_value()` for custom value handling
-
-    Context parameters are not stored in the serialized dict but are passed
-    during reconstruction from the deserialization context.
-    """
-
-    # Parameters that come from external context (e.g., building_props, infras)
-    # These are excluded from serialization but required during reconstruction
-    _context_params: ClassVar[Set[str]] = set()
-
-    # Parameters to always exclude from serialization (e.g., internal state)
-    _exclude_params: ClassVar[Set[str]] = set()
-
-    def to_dict(self) -> Dict[str, Any]:
-        """
-        Serialize this component to a dictionary.
-
-        Uses introspection of __init__ parameters to determine what to serialize.
-        Excludes context_params and exclude_params.
-
-        Returns:
-            Dictionary representation of this component
-        """
-        result = {
-            'class': self.__class__.__name__,
-        }
-
-        # Get __init__ signature to find serializable parameters
-        sig = inspect.signature(self.__class__.__init__)
-        params = list(sig.parameters.keys())
-
-        for param in params:
-            if param == 'self':
-                continue
-            if param in self._context_params:
-                continue
-            if param in self._exclude_params:
-                continue
-
-            # Get the value from the instance
-            if hasattr(self, param):
-                value = getattr(self, param)
-                serialized_value = self._get_serialize_value(param, value)
-                if serialized_value is not None:
-                    result[param] = serialized_value
-
-        return result
-
-    def _get_serialize_value(self, param_name: str, value: Any) -> Any:
-        """
-        Get the serializable value for a parameter.
-
-        Override this method to handle special serialization cases.
-
-        Args:
-            param_name: Name of the parameter
-            value: Current value of the parameter
-
-        Returns:
-            Serializable value, or None to skip this parameter
-        """
-        # Skip None values
+def _get_serialize_value(param_name: str, value: Any) -> Any:
+        """Serialisable form of a param value, or None to skip it."""
+        # skip None
         if value is None:
             return None
 
@@ -177,24 +88,55 @@ class Serializable(ABC):
         )
         return None
 
+
+class Serializable(ABC):
+    """JSON serialisation mixin for config components.
+
+    ``_context_params``: param names from context (e.g. building_props), excluded from
+    the dict but supplied at reconstruction. ``_exclude_params``: always excluded (e.g.
+    internal state). Override ``_get_serialize_value()`` for custom handling.
+    """
+
+    # From external context (e.g. building_props); excluded from the dict, supplied at reconstruction
+    _context_params: ClassVar[Set[str]] = set()
+
+    # Always excluded (e.g. internal state)
+    _exclude_params: ClassVar[Set[str]] = set()
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialise to a dict via __init__ introspection, excluding context/exclude params."""
+        result = {
+            'class': self.__class__.__name__,
+        }
+
+        # __init__ params = what to serialise
+        sig = inspect.signature(self.__class__.__init__)
+        params = list(sig.parameters.keys())
+
+        for param in params:
+            if param == 'self':
+                continue
+            if param in self._context_params:
+                continue
+            if param in self._exclude_params:
+                continue
+
+            # Get the value from the instance
+            if hasattr(self, param):
+                value = getattr(self, param)
+                serialized_value = _get_serialize_value(param, value)
+                if serialized_value is not None:
+                    result[param] = serialized_value
+
+        return result
+
     @classmethod
     def _get_init_args(
         cls,
         data: Dict[str, Any],
         context: Dict[str, Any] | None = None
     ) -> Dict[str, Any]:
-        """
-        Build kwargs dict for __init__ from serialized data and context.
-
-        Merges serialized data with context parameters.
-
-        Args:
-            data: Serialized data dictionary
-            context: Optional context with derived parameters
-
-        Returns:
-            kwargs dictionary for __init__
-        """
+        """Build __init__ kwargs by merging serialised data with context params."""
         context = context or {}
         kwargs = {}
 
@@ -205,18 +147,17 @@ class Serializable(ABC):
             if param_name == 'self':
                 continue
 
-            # Check if value is in serialized data
+            # from serialised data
             if param_name in data:
                 kwargs[param_name] = data[param_name]
-            # Check if value is in context
+            # from context
             elif param_name in context:
                 kwargs[param_name] = context[param_name]
-            # Check if parameter has a default value
+            # else fall back to the signature default
             elif param.default is not inspect.Parameter.empty:
-                # Use default from signature
                 pass
             else:
-                # Required parameter is missing
+                # required param missing
                 logger.warning(
                     "Missing required parameter '%s' for %s",
                     param_name, cls.__name__
@@ -236,8 +177,7 @@ def from_dict(
 ) -> "Serializable":
     """Reconstruct a registered component from a serialised dict.
 
-    Replaces the three byte-identical ``from_dict`` classmethods that previously
-    lived on ``StateSource``, ``Infrastructure``, and ``RewardFunction``.
+    Replaces the per-class ``from_dict`` once on StateSource/Infrastructure/RewardFunction.
     """
     class_name = data.get("class")
     if class_name is None:

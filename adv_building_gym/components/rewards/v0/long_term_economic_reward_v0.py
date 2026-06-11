@@ -53,40 +53,40 @@ class LongTermEconomicRewardV0(RewardFunction):
         self._step = 0
         self._accumulated_norm = 0.0
 
-    def get_reward(self, actions, states, info: dict | None = None) -> tuple[float, float]:
+    def get_reward(self, actions, state, next_state, info: dict | None = None) -> float:
         if info is None:
             logger.warning("LongTermEconomicRewardV0: info dict is None, returning 0")
-            return 0.0, 0.0
+            return 0.0
 
         episode_length = info.get("episode_length")
         if episode_length is None:
             logger.warning("LongTermEconomicRewardV0: missing episode_length in info, returning 0")
-            return 0.0, 0.0
+            return 0.0
         episode_length = int(episode_length)
 
         net_power_kW = info.get("net_power_kW")
         if net_power_kW is None:
             logger.warning("LongTermEconomicRewardV0: missing net_power_kW in info, returning 0")
-            return 0.0, 0.0
+            return 0.0
 
-        current_energy_price_norm = float(states["s_E_price"][0]) 
-        
-        # Rescale the price by the data-driven denominator so per-step values
-        # span more of [-1, 1]; ctxt is 1.0 (no-op) when EnergyPriceDataSource's
-        # dynamic_max_price_calc is disabled.
-        dynamic_max = states.get("ctxt_E_price_dynamic_max")
-        dynamic_max_ep = states.get("ctxt_E_price_dynamic_max_ep")
+        # Price (and its scaling ctxt) the agent observed and acted under (s).
+        current_energy_price_norm = float(state["s_E_price"][0])
+
+        # rescale price by the data-driven denominator to span more of [-1, 1];
+        # ctxt = 1.0 (no-op) when dynamic_max_price_calc is disabled
+        dynamic_max = state.get("ctxt_E_price_dynamic_max")
+        dynamic_max_ep = state.get("ctxt_E_price_dynamic_max_ep")
         dyn_max = float(dynamic_max[0]) if dynamic_max is not None else 1.0
         dyn_max_ep = float(dynamic_max_ep[0]) if dynamic_max_ep is not None else 1.0
-        
+
         dyn_max_price_divisor = (dyn_max * 0.7 + dyn_max_ep * 0.3)
-        
+
         if dyn_max_price_divisor != 0:
             price_signal = current_energy_price_norm / dyn_max_price_divisor
         else:
             price_signal = current_energy_price_norm
 
-        op_max_kW = self._resolve_reference_power_kW(states)
+        op_max_kW = self._resolve_reference_power_kW(state)
 
         # Canonical: net > 0 means export, net < 0 means consumption.
         per_step = float(np.clip(net_power_kW * price_signal / op_max_kW, -1.0, 1.0))
@@ -96,12 +96,11 @@ class LongTermEconomicRewardV0(RewardFunction):
 
         terminated = bool(info.get("terminated", False))
         if self._step < episode_length and not terminated:
-            return 0.0, 0.0
+            return 0.0
 
-        steps_seen = self._step
-        # reward = float(np.clip(self._accumulated_norm, -float(steps_seen), float(steps_seen)))
+        # reward = float(np.clip(self._accumulated_norm, -float(self._step), float(self._step)))
         reward = self._accumulated_norm
-        return float(self.weight * reward), float(self.weight * steps_seen)
+        return float(self.weight * reward)
 
 
 ComponentRegistry.register('reward', LongTermEconomicRewardV0)

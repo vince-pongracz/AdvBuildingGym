@@ -1,8 +1,7 @@
-"""Shared helpers for the event-driven exploration reset.
+"""Shared helpers for the event-driven exploration reset (reward/infra/statesource swap callbacks).
 
-Used by reward / infra / statesource swap callbacks.  The owning
-callback decides whether to fire (via ``ExplorationResetConfig.fires_on``)
-and only then drives ``capture_baselines`` / ``apply_exploration_level``.
+The owning callback decides whether to fire (``ExplorationResetConfig.fires_on``) and then
+drives ``capture_baselines`` / ``apply_exploration_level``.
 """
 
 from __future__ import annotations
@@ -18,11 +17,8 @@ logger = logging.getLogger(__name__)
 def capture_baselines(algorithm) -> None:
     """Snapshot per-learner baseline entropy_coeff, log_alpha, and LRs.
 
-    Ratchet semantics: if a baseline already exists, each scalar is updated
-    only when the current learned value is *lower* (more focused) than the
-    stored one. This preserves the policy's learned focus across swap events
-    — bumped exploration always decays back to the tightest baseline seen so
-    far, never to a stale, looser early-training snapshot.
+    Ratchet: each scalar is updated only when the current value is *lower* (more focused),
+    so bumped exploration always decays back to the tightest baseline seen so far.
     """
 
     def capture(learner) -> None:
@@ -137,16 +133,10 @@ def apply_exploration_level(
 
 
 def make_decay_loop(exploration_reset: ExplorationResetConfig, event: str):
-    """Return a tuple (state, on_train_result_handler) implementing the decay envelope.
+    """Return (state, maybe_decay, fire_bump) implementing the decay envelope.
 
-    The decay handler should be called every iteration; it decays a
-    previously-applied bump back to baseline. Baselines are (re)captured
-    inside ``fire_bump`` with ratchet semantics — each swap can only
-    *tighten* the baseline towards a more focused learned state.
-
-    Returns (state_dict, maybe_decay, fire_bump). ``state_dict`` keeps
-    bump_iter.  ``fire_bump(algorithm, iteration)`` should be called by the
-    owning callback right after a successful swap.
+    ``maybe_decay`` runs every iteration, decaying a previous bump back to baseline.
+    ``fire_bump`` is called right after a swap; it re-captures baselines (ratcheted) and applies the bump.
     """
     state: dict = {"bump_iter": None}
     fires_here = exploration_reset.fires_on(event)
@@ -166,8 +156,7 @@ def make_decay_loop(exploration_reset: ExplorationResetConfig, event: str):
     def fire_bump(algorithm, iteration: int) -> None:
         if not fires_here:
             return
-        # Ratchet baselines towards the current (possibly more-focused) learner state
-        # before applying the bump. capture_baselines() only lowers existing entries.
+        # ratchet baselines towards the current learner state before the bump (only lowers)
         capture_baselines(algorithm)
 
         def _snapshot(learner):

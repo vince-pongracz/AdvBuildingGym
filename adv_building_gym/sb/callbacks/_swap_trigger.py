@@ -1,11 +1,8 @@
 """Episode-counting swap gate for SB3 schedule callbacks.
 
-SB3 has no ``on_train_result`` hook; instead callbacks receive
-``_on_step`` for every env step plus per-env ``dones`` / ``infos`` arrays.
-This helper counts lifetime episodes by watching ``dones`` and fires
-when at least ``max(swap_every_n_episodes, num_env_runners)`` new
-episodes have completed since the previous fire (matching the Ray
-swap-gate semantics in ``adv_building_gym/callbacks/_swap_trigger.py``).
+SB3 has no ``on_train_result``; so callbacks get ``_on_step`` with per-env ``dones``. 
+This counts lifetime episodes and fires after ``max(swap_every_n_episodes, num_env_runners)`` new
+ones (matching the Ray swap-gate semantics).
 """
 
 from __future__ import annotations
@@ -28,14 +25,8 @@ class SBSwapDecision:
 class EpisodeCountingSwapGate:
     """Counts completed episodes across a VecEnv and gates swap events.
 
-    Use ``update(dones)`` once per ``_on_step`` to feed in the per-env
-    done flags; the internal counter accumulates lifetime episodes.
-    Then call ``check()`` to ask "should we fire now?".
-
-    First call always returns ``should_fire=True, is_first_fire=True``
-    (initial push) — schedulers that have an ``advance()`` step should
-    skip it on the first fire so the initial config is pushed
-    unmodified. This matches the Ray helper.
+    ``update(dones)`` per ``_on_step`` accumulates the count; ``check()`` decides whether to fire.
+    First call fires with ``is_first_fire=True`` (initial push); schedulers skip ``advance()`` then.
     """
 
     def __init__(self, name: str, configured_n: int, num_env_runners: int) -> None:

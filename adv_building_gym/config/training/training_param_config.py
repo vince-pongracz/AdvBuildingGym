@@ -19,31 +19,11 @@ logger = logging.getLogger(__name__)
 class TrainingParamConfig(LoggableConfig):
     """Training hyperparameters, split by algorithm where semantics differ.
 
-    PPO (on-policy) collects a batch of complete episodes before each policy
-    update.  The batch size is therefore expressed in episodes
-    (``ppo_episodes_per_iteration``), converted to timesteps via
-    ``ppo_episodes_per_iteration × episode_length`` in ``select_model``.
-    Within each update, SGD iterates over mini-batches of
-    ``ppo_minibatch_size`` timesteps.
-
-    SAC (off-policy) stores all experience in a replay buffer and samples
-    ``sac_replay_batch_size`` transitions per gradient step, independent of
-    episode boundaries.
-
-    Attributes:
-        ppo_episodes_per_iteration: How many full episodes PPO collects
-            before one policy update (on-policy batch, in episode units).
-        ppo_minibatch_size: SGD mini-batch size within each PPO epoch
-            (in timesteps).
-        sac_replay_batch_size: Number of transitions sampled from the
-            replay buffer per SAC gradient step.
-        sac_training_intensity: Ratio of replayed steps to sampled steps.
-            Controls how many gradient updates SAC performs per sampling
-            round.  Standard UTD ≈ training_intensity / batch_size.
-            With batch_size=256 and rollout_fragment_length=288 (3 workers),
-            training_intensity=128 gives UTD≈0.5 (432 gradient steps
-            per iteration instead of 1).
-            Link: https://arxiv.org/abs/1802.09477
+    PPO (on-policy): batch in episodes (``ppo_episodes_per_iteration`` × episode_length
+    timesteps), SGD over ``ppo_minibatch_size`` mini-batches.
+    SAC (off-policy): samples ``sac_replay_batch_size`` transitions per gradient step.
+    ``sac_training_intensity`` sets UTD ≈ intensity / batch_size (e.g. 128 with batch 256 → UTD≈0.5).
+    Link: https://arxiv.org/abs/1802.09477
     """
 
     episode_lookback_horizon_steps: int = 120
@@ -51,18 +31,14 @@ class TrainingParamConfig(LoggableConfig):
     max_episodes_to_run:int = 10000
     gamma: float = 0.99
     clip_actions_to_env_bounds: bool = True
-    # When True, num_learners=0 → the Learner runs inside the driver process
-    # (no remote Learner actor). The driver's CPU then covers both driver and
-    # learner duties, freeing one CPU for an extra EnvRunner.
+    # When True, num_learners=0 → Learner runs in the driver (no remote actor),
+    # freeing one CPU for an extra EnvRunner.
     local_learner: bool = True
-    # Rolling window for `episode_return_mean` smoothing. Used by RLlib's
-    # `metrics_num_episodes_for_smoothing` on the Ray side and by the SB3
-    # best-by-metric checkpoint callback's deque, so both drivers score
-    # mean return over the same number of recent episodes.
+    # Rolling window for episode_return_mean smoothing (RLlib metrics_num_episodes_for_smoothing
+    # and the SB3 best-by-metric deque), so both drivers score over the same recent episodes.
     episode_return_mean_window: int = 30
-    # Evaluation cadence in training iterations (RLlib `evaluation_interval`).
-    # The checkpoint frequency is tied to this so every checkpoint lands on a
-    # fresh-eval iteration and can be ranked by eval return (best-N retention).
+    # Eval cadence in iterations (RLlib evaluation_interval); checkpoints align to it
+    # so each lands on a fresh-eval iteration (ranked by eval return).
     evaluation_interval: int = 2
 
     ppo_episodes_per_iteration: int = 25
@@ -75,11 +51,8 @@ class TrainingParamConfig(LoggableConfig):
     sac_n_step_return: int = 1
     sac_learning_starts_after_n_episodes: int = 50 # Warm up replay buffer with 50 episodes before learning starts.
 
-    # DreamerV3 (model-based, off-policy via world-model imagination rollouts).
-    # World model is trained on sequences of length batch_length_T sampled from
-    # the episode replay buffer; actor/critic are trained on imagined rollouts
-    # of length horizon_H. training_ratio is the UTD analogue (replayed env
-    # steps per sampled env step).
+    # DreamerV3 (model-based, off-policy): world model trained on batch_length_T sequences
+    # from the replay buffer; actor/critic on imagined horizon_H rollouts; training_ratio = UTD analogue.
     # Link: https://arxiv.org/pdf/2301.04104
     dreamerv3_model_size: str = "XS"  # one of "XS", "S", "M", "L", "XL"
     dreamerv3_batch_size_B: int = 16  # RLlib default
@@ -119,22 +92,9 @@ class TrainingParamConfig(LoggableConfig):
     def from_yaml(path: str | Path, default_seed: int | None = None) -> "TrainingParamConfig":
         """Load training config from a YAML file.
 
-        The YAML is organised into ``common``, ``ppo``, and ``sac`` sections.
-        Keys inside ``ppo`` / ``sac`` are prefixed with the algorithm name
-        (e.g. ``ppo.episodes_per_iteration`` → ``ppo_episodes_per_iteration``)
-        before being passed to the dataclass constructor.
-
-        Seed resolution: if ``common.seed`` is present in the YAML it wins;
-        otherwise ``default_seed`` is used (typically the trial seed). This
-        makes the trial config the single source of truth while still
-        letting a training-params YAML opt out with its own seed.
-
-        Args:
-            path: Path to the YAML config file.
-            default_seed: Fallback seed when the YAML omits ``common.seed``.
-
-        Returns:
-            TrainingParamConfig populated from the file.
+        Sections ``common``/``ppo``/``sac`` are flattened with the algorithm prefix
+        (``ppo.episodes_per_iteration`` → ``ppo_episodes_per_iteration``). Seed: YAML's
+        ``common.seed`` wins, else ``default_seed`` (the trial seed).
         """
         with open(path, "r") as cfg_file:
             tparam_cfg = yaml.safe_load(cfg_file)

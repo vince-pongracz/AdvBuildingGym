@@ -17,16 +17,8 @@ def resolve_episode_date(
     row_offset: int,
     control_step: int,
 ) -> str:
-    """Derive a date string from *row_offset* using the first statesource with a ``start`` column.
-
-    Args:
-        statesources: Sequence of statesource instances to inspect.
-        row_offset: Row index into the underlying timeseries.
-        control_step: Control timestep in seconds (used for the day-index fallback).
-
-    Returns:
-        A date string such as ``"2025-07-15"`` or ``"day-3"`` if no date column exists.
-    """
+    """Date string for *row_offset* from the first statesource with a ``start`` column,
+    else a ``"day-N"`` fallback (uses control_step for the day index)."""
     for src in statesources:
         if src.ts is not None and "start" in src.ts.columns and row_offset < len(src.ts):
             return str(pd.to_datetime(src.ts.iloc[row_offset]["start"]).date())

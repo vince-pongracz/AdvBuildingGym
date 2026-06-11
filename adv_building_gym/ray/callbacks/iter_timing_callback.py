@@ -1,24 +1,12 @@
 """Per-iteration timer logging via on_train_result.
 
-Surfaces RLlib's built-in iteration timers so the relative cost of sampling,
-learner updates, and weight sync is visible in the SLURM logs without
-opening TensorBoard.
+Surfaces RLlib's built-in iteration timers (``result["timers"]``) in the SLURM logs.
+Keys absent on iterations where the phase didn't run, so read defensively.
 
-The timer keys live under ``result["timers"]`` and are populated by RLlib's
-algorithm step (see ray/rllib/algorithms/algorithm.py — ``_TIMERS``). They
-are absent on iterations where the corresponding phase did not run, so we
-read them defensively.
-
-EMA smoothing is disabled here: before any RLlib code touches them, the
-underlying ``Stats`` objects are pre-registered with
-``reduce="mean", window=10000, clear_on_reduce=True``. Result:
-``compile()`` at the end of every ``training_iteration`` returns the
-arithmetic mean of all per-call values pushed *during this iter*, then
-clears the values list for the next iter. No EMA blending across iters,
-no single-sample variance — the printed timer is exactly the within-iter
-per-call mean.
-
-To go back to RLlib's default EMA, set ``RAW_TIMERS = False`` below.
+EMA is disabled: timer ``Stats`` are pre-registered with ``reduce="mean", window=10000,
+clear_on_reduce=True``, so each iter's ``compile()`` returns the within-iter per-call mean,
+then clears. 
+Set ``RAW_TIMERS = False`` to restore RLlib's default EMA.
 """
 
 import logging
@@ -34,14 +22,11 @@ logger = logging.getLogger(__name__)
 # False -> default RLlib EMA (ema_coeff=0.01) — values smoothed across iters.
 RAW_TIMERS = True
 
-# RLlib new API stack timer keys (values are seconds; not all are present every iter).
-# - learner_update_timer / replay_buffer_sampling_timer are absent during the warmup
-#   phase (num_steps_sampled_before_learning_starts).
-# - synch_env_connectors only fires when env-runner state is broadcast.
-# - replay_buffer_sampling_timer wraps one local_replay_buffer.sample() call inside
-#   the UTD inner loop in DQN.training_step (SAC inherits) — with RAW_TIMERS=True
-#   the printed value is the within-iter MEAN over all per-call durations in this
-#   iter; multiply by sample_and_train_weight (calculate_rr_weights) for per-iter total.
+# RLlib timer keys (seconds; not all present every iter).
+# - learner_update_timer / replay_buffer_sampling_timer absent during warmup.
+# - synch_env_connectors only fires on env-runner state broadcast.
+# - replay_buffer_sampling_timer is one sample() call inside the UTD loop; with RAW_TIMERS
+#   the value is the within-iter MEAN (× sample_and_train_weight for the per-iter total).
 _TRACKED_TIMER_KEYS = (
     "training_iteration",              # total wall time of one Algorithm.training() call (n training_step() calls)
     "training_step",                   # duration of a single Algorithm.training_step() call
@@ -59,29 +44,17 @@ _TRACKED_TIMER_KEYS = (
 )
 
 
-# Large enough to capture every per-call push within one iter (the UTD inner
-# loop tops out around ~1500 calls/iter with current intensities). values is
-# cleared each iter via clear_on_reduce=True, so this is a per-iter cap, not
-# a lifetime cap.
+# big enough for every per-call push within one iter (~1500 calls); cleared each iter
+# via clear_on_reduce=True, so a per-iter cap not a lifetime cap
 _TIMER_WINDOW = 10000
 
 
 def _force_raw_timer_stats(algorithm) -> None:
-    """Replace EMA-mode timer Stats with within-iter mean ones (idempotent).
+    """Replace EMA-mode timer Stats with within-iter-mean ones (idempotent).
 
-    RLlib's MetricsLogger creates a Stats on the first ``log_time`` call
-    with whatever defaults the caller passed (default: reduce="mean",
-    window=None → continuous EMA at ema_coeff=0.01). The Stats object is
-    looked up by nested key on subsequent calls. By pre-installing a
-    ``reduce="mean", window=_TIMER_WINDOW, clear_on_reduce=True`` Stats
-    under each timer key, subsequent ``log_time`` pushes target our Stats
-    and the next ``metrics.compile()`` (called at end of training_iteration
-    in algorithm.py:3673) reduces them to the arithmetic mean of all
-    pushes during this iter, then clears the list.
-
-    Called every on_train_result tick to be robust against state-restore /
-    re-init paths that would otherwise re-create the EMA Stats. No-op when
-    a within-iter Stats is already in place.
+    Pre-installs ``reduce="mean", window=_TIMER_WINDOW, clear_on_reduce=True`` under each
+    timer key, so subsequent ``log_time`` pushes reduce to the within-iter mean at ``compile()``.
+    Called every tick to survive state-restore/re-init; no-op when already in place.
     """
     metrics = getattr(algorithm, "metrics", None)
     if metrics is None:

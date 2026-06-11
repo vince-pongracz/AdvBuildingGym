@@ -1,10 +1,7 @@
 """CsvLoader — composition target for time-series-backed StateSources.
 
-Extracted from ``StateSource`` so the base class no longer assumes every
-source loads from a CSV. Sources that need file-backed time series compose
-one (``self.loader = CsvLoader(...)``); sources that don't (e.g.
-``OperatorEnergyControl``) hold no loader and inherit the base's default
-``reload`` which raises ``TypeError``.
+CSV-backed sources compose one (``self.loader = CsvLoader(...)``); others hold no
+loader and inherit the base's default ``reload`` (which raises).
 """
 
 from __future__ import annotations
@@ -25,13 +22,10 @@ _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 
 
 class CsvLoader:
-    """Owns a single time-series CSV and the lifecycle around reloads.
+    """Owns a time-series CSV and its reload lifecycle.
 
-    The host registers a callback (typically ``StateSource._run_post_load``)
-    that is invoked after every successful load — including the initial one
-    if a ``ds_path`` was supplied. The callback is where the host fires any
-    reload observers (``Forecastable`` cache invalidation) and runs subclass
-    post-processing.
+    Calls the host ``on_reload`` callback after every successful load (incl. the
+    initial one), where the host invalidates reload observers and post-processes.
     """
 
     def __init__(

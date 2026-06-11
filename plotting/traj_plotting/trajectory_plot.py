@@ -48,7 +48,7 @@ def generate_all_plots(
     output_dir: str | None = None,
     control_step_seconds: int = 300,
     formats: list[str] = ["html"],
-    select_by: str = "reward_rate",
+    select_by: str = "achieved_reward",
     file_prefix: str | None = None,
 ) -> list[str]:
     """Load an episode, generate all four figures, save to output_dir.
@@ -168,7 +168,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--select-by", type=str, default="achieved_reward",
-        choices=["reward_rate", "achieved_reward", "cum_E_kWh"],
+        choices=["achieved_reward", "cum_E_kWh"],
         help="Summary metric for selecting the best episode. Default: achieved_reward.",
     )
     args = parser.parse_args()

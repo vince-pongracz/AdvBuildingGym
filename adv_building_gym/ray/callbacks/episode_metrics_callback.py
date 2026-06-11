@@ -1,10 +1,5 @@
-"""
-Episode metrics callback for RLlib training.
-
-Provides EpisodeMetricsCallback via a factory function that logs scalar
-episode metrics (achieved_reward, reward_rate, cum_E_kWh) and saves
-per-episode JSON dumps with observations, actions, and rewards.
-
+"""Episode metrics callback (factory): logs scalar episode metrics (achieved_reward,
+cum_E_kWh) and optional per-episode JSON dumps.
 Link: https://docs.ray.io/en/latest/rllib/rllib-callback.html
 """
 
@@ -23,25 +18,14 @@ from adv_building_gym._common.json_encoder import CustomJSONEncoder
 
 logger = logging.getLogger(__name__)
 
-# Within-iter aggregation window for callback-emitted metrics. Combined with
-# clear_on_reduce=True this makes each TB scalar equal the arithmetic
-# mean/min/max over the episodes that ended in the current iter, with no
-# cross-iter blending. See _swap_trigger.py for the invariant chain.
+# Within-iter aggregation window; with clear_on_reduce=True each TB scalar is the
+# per-iter arithmetic mean/min/max (no cross-iter blending). See _swap_trigger.py.
 _WITHIN_ITER_WINDOW = 10_000
 
 
 def _extract_clipped_actions(episode: SingleAgentEpisode) -> list | None:
-    """Extract clipped actions from episode info dicts.
-
-    Each info dict may contain an "action" key with the post-clip action
-    (dict or ndarray). Falls back to raw policy outputs if extraction fails.
-
-    Args:
-        episode: The completed episode.
-
-    Returns:
-        List of flattened action arrays, or None if unavailable.
-    """
+    """Flattened post-clip actions from episode info ("action" key); falls back to raw policy
+    outputs, or None if unavailable."""
     clipped_actions = []
     if hasattr(episode, "get_infos"):
         infos = episode.get_infos()
@@ -80,21 +64,17 @@ def _save_episode_metrics_json(
     ep_metrics_file: str,
     ep_length: int,
     ep_achieved_reward: float,
-    max_achievable_reward: float,
-    reward_rate: float,
     cum_E_kWh: float | None,
     cum_price_EUR: float | None,
     reward_component_totals: dict[str, float] | None = None,
 ) -> None:
-    """Save per-episode metrics as a JSON file.
+    """Save per-episode metrics as JSON.
 
     Args:
         episode: The completed episode.
         ep_metrics_file: Output file path.
         ep_length: Number of steps in the episode.
         ep_achieved_reward: Total reward achieved.
-        max_achievable_reward: Theoretical maximum reward.
-        reward_rate: achieved / max ratio.
         cum_E_kWh: Cumulative energy consumption, or None.
         cum_price_EUR: Cumulative electricity cost (EUR), or None.
         reward_component_totals: Per-component episode reward sums, or None.
@@ -105,8 +85,6 @@ def _save_episode_metrics_json(
         "id": episode.id_[:6],
         "length": ep_length,
         "achieved_reward": float(ep_achieved_reward),
-        "total_reward": float(max_achievable_reward),
-        "reward_rate": float(reward_rate),
         "cum_E_kWh": float(cum_E_kWh) if cum_E_kWh is not None else None,
         "cum_price_EUR": float(cum_price_EUR) if cum_price_EUR is not None else None,
         "reward_breakdown": reward_component_totals if reward_component_totals else None,
@@ -129,12 +107,9 @@ def make_episode_metrics_cb_class(
     exec_date: Optional[datetime.datetime],
     dump_metrics_json: bool,
 ) -> Type["EpisodeMetricsCallback"]:
-    """Factory that returns a configured EpisodeMetricsCallback class.
-
-    The returned class logs scalar episode metrics (achieved_reward,
-    reward_rate, cum_E_kWh) via metrics_logger and saves per-episode
-    JSON dumps with observations, actions, and rewards.
-
+    """Factory → configured EpisodeMetricsCallback class. 
+    Logs scalar episode metrics and
+    (if ``dump_metrics_json``) logs per-episode JSON.
     Args:
         metrics_base_dir: Base directory for saving episode metrics JSON.
         exec_date: Execution datetime for directory naming. Defaults to now.
@@ -146,19 +121,13 @@ def make_episode_metrics_cb_class(
     if exec_date is None:
         exec_date = datetime.datetime.now()
 
-    # Capture parameters in closure so each class definition is self-contained.
-    # Resolve metrics_base_dir to absolute path at factory time so that file
-    # writes land in the correct location regardless of process cwd (Ray Tune
-    # changes the Trainable actor's cwd to the trial log directory).
+    # capture params in closure; resolve metrics_base_dir absolute at factory time so writes
+    # land correctly regardless of cwd (Ray Tune changes the actor's cwd)
     _metrics_base_dir = os.path.abspath(metrics_base_dir)
     _exec_date = exec_date
 
     class EpisodeMetricsCallback(RLlibCallback):
-        """Log scalar episode metrics and save per-episode JSON dumps.
-
-        Runs on every episode end (both training and evaluation EnvRunners).
-        Registered as part of callbacks_class list in config.callbacks().
-        """
+        """Log scalar episode metrics and optional per-episode JSON, on every episode end."""
 
         def on_episode_end(
             self,
@@ -173,12 +142,6 @@ def make_episode_metrics_cb_class(
             ep_length = len(episode)
             episode_return = np.sum(episode.get_rewards())
 
-            # Sum step-wise max achievable rewards from info dicts.
-            # Each step's info contains "max_reward_step" — the sum of
-            # per-reward max values returned by get_reward() — so the
-            # total adapts to state-dependent maxima (e.g. EV rewards
-            # are 0 when the EV is disconnected).
-            max_achievable_reward = 0.0
             cum_E_kWh = None
             cum_price_EUR = None
             episode_count: int | None = None
@@ -187,7 +150,6 @@ def make_episode_metrics_cb_class(
                 infos = episode.get_infos()
                 for info in infos:
                     if isinstance(info, dict):
-                        max_achievable_reward += info.get("max_reward_step", 0.0)
                         reward_breakdown = info.get("reward_breakdown")
                         if reward_breakdown:
                             for reward_key, reward_value in reward_breakdown.items():
@@ -199,29 +161,13 @@ def make_episode_metrics_cb_class(
                 if infos and isinstance(infos[0], dict):
                     episode_count = infos[0].get("episode_count")
 
-            reward_rate = (
-                episode_return / max_achievable_reward
-                if max_achievable_reward > 0 else 0.0
-            )
-
-            # Register custom metrics with RLlib's metrics system.
-            # Every call passes window=_WITHIN_ITER_WINDOW + clear_on_reduce=True
-            # so each iter's TB scalar is the per-iter arithmetic mean/min/max,
-            # not RLlib's default EMA(alpha=0.01) (mean) / lifetime extreme
-            # (min/max). Aligns with iter-aligned scheduler swaps so reported
-            # values never blend across regimes.
+            # window=_WITHIN_ITER_WINDOW + clear_on_reduce=True → per-iter mean/min/max
+            # (not RLlib's default EMA / lifetime extreme), aligned with iter-aligned swaps
             metrics_logger.log_value("achieved_reward", episode_return, reduce="mean",
                                      window=_WITHIN_ITER_WINDOW, clear_on_reduce=True)
             metrics_logger.log_value("achieved_reward_min", episode_return, reduce="min",
                                      window=_WITHIN_ITER_WINDOW, clear_on_reduce=True)
             metrics_logger.log_value("achieved_reward_max", episode_return, reduce="max",
-                                     window=_WITHIN_ITER_WINDOW, clear_on_reduce=True)
-
-            metrics_logger.log_value("reward_rate", reward_rate, reduce="mean",
-                                     window=_WITHIN_ITER_WINDOW, clear_on_reduce=True)
-            metrics_logger.log_value("reward_rate_min", reward_rate, reduce="min",
-                                     window=_WITHIN_ITER_WINDOW, clear_on_reduce=True)
-            metrics_logger.log_value("reward_rate_max", reward_rate, reduce="max",
                                      window=_WITHIN_ITER_WINDOW, clear_on_reduce=True)
 
             # Log cumulative energy consumption
@@ -242,9 +188,7 @@ def make_episode_metrics_cb_class(
                 metrics_logger.log_value("cum_price_EUR_max", cum_price_EUR, reduce="max",
                                         window=_WITHIN_ITER_WINDOW, clear_on_reduce=True)
 
-            # Log per-component reward breakdown for TensorBoard.
-            # Appears under env_runners/reward/<name> (training) and
-            # evaluation/env_runners/reward/<name> (eval).
+            # per-component reward breakdown → (evaluation/)env_runners/reward/<name>
             for reward_key, comp_total in reward_component_totals.items():
                 metrics_logger.log_value(f"reward/{reward_key}", comp_total, reduce="mean",
                                         window=_WITHIN_ITER_WINDOW, clear_on_reduce=True)
@@ -252,8 +196,8 @@ def make_episode_metrics_cb_class(
             episode_id: str = episode.id_[:6]
             episode_num_str = str(episode_count) if episode_count is not None else "?"
             logger.info(
-                "Episode %s (ID: %s) ended. Length: %s, Episode return: %.2f, Reward Rate: %.4f",
-                episode_num_str, episode_id, ep_length, episode_return, reward_rate,
+                "Episode %s (ID: %s) ended. Length: %s, Episode return: %.2f",
+                episode_num_str, episode_id, ep_length, episode_return,
             )
 
             if dump_metrics_json:
@@ -267,8 +211,6 @@ def make_episode_metrics_cb_class(
                     ep_metrics_file=ep_metrics_file,
                     ep_length=ep_length,
                     ep_achieved_reward=float(episode_return),
-                    max_achievable_reward=float(max_achievable_reward),
-                    reward_rate=float(reward_rate),
                     cum_E_kWh=cum_E_kWh,
                     cum_price_EUR=cum_price_EUR,
                     reward_component_totals=reward_component_totals,

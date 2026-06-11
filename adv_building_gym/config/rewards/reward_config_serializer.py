@@ -18,23 +18,11 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 class RewardConfigSerializer:
-    """Handles serialization and deserialization of RewardConfig objects.
-
-    Mirrors the pattern used by EnvConfigManager for EnvConfig.
-    """
+    """(De)serialises RewardConfig (mirrors EnvConfigManager)."""
 
     @staticmethod
     def to_dict(reward_config: RewardConfig) -> Dict[str, Any]:
-        """Serialize a RewardConfig to a dictionary.
-
-        Each RewardFunction serializes itself via the Serializable mixin.
-
-        Args:
-            reward_config: RewardConfig object to serialize.
-
-        Returns:
-            Dictionary with a ``rewards`` key containing serialized reward list.
-        """
+        """Serialise a RewardConfig to a dict (each reward serialises itself); ``rewards`` key holds the list."""
         config_dict: Dict[str, Any] = {}
         if reward_config.rewards is not None:
             config_dict["rewards"] = [
@@ -44,10 +32,7 @@ class RewardConfigSerializer:
 
     @staticmethod
     def from_dict(config_dict: Dict[str, Any]) -> RewardConfig:
-        """Deserialize a RewardConfig from a dictionary.
-
-        Uses the ComponentRegistry to find the correct class for each
-        reward and reconstructs it from serialized parameters.
+        """Deserialise a RewardConfig from a dict via ComponentRegistry (reads the ``rewards`` key).
 
         Args:
             config_dict: Dictionary that may contain a ``rewards`` key.

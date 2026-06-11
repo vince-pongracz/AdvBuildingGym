@@ -47,15 +47,15 @@ class LongTermEconomicReward(RewardFunction):
         self._accumulated_usage_price_norm = 0.0
         self._sum_net_power_kW = 0.0
 
-    def get_reward(self, actions, states, info: dict | None = None) -> tuple[float, float]:
+    def get_reward(self, actions, state, next_state, info: dict | None = None) -> float:
         if info is None:
             logger.warning("LongTermEconomicReward: info dict is None, returning 0")
-            return 0.0, 0.0
+            return 0.0
 
         episode_length = info.get("episode_length")
         if episode_length is None:
             logger.warning("LongTermEconomicReward: missing episode_length in info, returning 0")
-            return 0.0, 0.0
+            return 0.0
         episode_length = int(episode_length)
 
         # Net power positive --> export to the grid / production
@@ -63,26 +63,23 @@ class LongTermEconomicReward(RewardFunction):
         net_power_kW = info.get("net_power_kW")
         if net_power_kW is None:
             logger.warning("LongTermEconomicReward: missing net_power_kW in info, returning 0")
-            return 0.0, 0.0
+            return 0.0
 
-        current_energy_price_norm = float(states["s_E_price"][0])
+        current_energy_price_norm = float(state["s_E_price"][0])  # observed price (s)
         # _accumulated_usage_price_norm: positive -- we produce, we get paid
         # _accumulated_usage_price_norm: negative -- we consume, we pay
         self._accumulated_usage_price_norm += net_power_kW * current_energy_price_norm
         self._sum_net_power_kW += net_power_kW
-        # For the early termination scenario -- if the env is configured like that -- 
-        # but iter could be fetched from the info dict
+        # step counter (for early termination; could also read iter from info)
         self._step += 1
 
-        # Flush at the natural window boundary OR on early termination.
-        # `info["terminated"]` is now set in the env's Phase-1 termination
-        # pre-pass *before* any get_reward runs, so it's the single
-        # authoritative signal regardless of YAML reward ordering.
+        # Flush at the window boundary OR on early termination. info["terminated"] is
+        # set in the env's termination pre-pass, so it's authoritative regardless of reward order.
         terminated = bool(info.get("terminated", False))
         if self._step < episode_length and not terminated:
-            return 0.0, 0.0
+            return 0.0
 
-        return float(self.weight * self._accumulated_usage_price_norm), 0.0
+        return float(self.weight * self._accumulated_usage_price_norm)
 
 
 ComponentRegistry.register('reward', LongTermEconomicReward)

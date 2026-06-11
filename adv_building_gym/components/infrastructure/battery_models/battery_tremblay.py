@@ -45,14 +45,11 @@ logger = logging.getLogger(__name__)
 
 
 class BatteryTremblay(Infrastructure):
-    """Battery infrastructure using Tremblay model with series-parallel cell configuration.
+    """Battery using the Tremblay model with series-parallel (NsNp) cell config.
 
-    Action convention: positive = consumption (charging from grid), negative = production (discharging to grid).
-    Battery action is in [-1, 1] where +1 = max charge rate, -1 = max discharge rate.
-
-    Tremblay model (IEEE 2008) describes battery terminal voltage as a function of
-    state-of-charge, current, and internal parameters. This provides more realistic
-    charge/discharge behavior than simple linear models.
+    Action ``a_battery`` in [-1, 1]: +1 = max charge (consume), -1 = max discharge (export).
+    Tremblay (IEEE 2008) gives terminal voltage from SoC, current and cell params —
+    more realistic than a linear model.
 
     Tremblay discharge equation (per cell):
         E = E0 - K*(Q/(Q-it))*it - K*(Q/(Q-it))*i + A*exp(-B*it)
@@ -124,10 +121,8 @@ class BatteryTremblay(Infrastructure):
         self.soc = start_soc_percentage
         self.history_length = history_length
         self.control_step = control_step
+        # C-rate = charge/discharge rate vs rated capacity (1C ≈ full in 1h).
         # Link: https://www.batterypowertips.com/how-to-read-battery-discharge-curves-faq/
-        # Charge Rate (C‐rate) is the rate of charge or discharge of a battery relative to its rated capacity.
-        # For example, a 1C rate will fully charge or discharge a battery in 1 hour.
-        # At a discharge rate of 0.5C, a battery will be fully discharged in 2 hours.
         self.max_charge_rate = max_charge_rate
 
         # Tremblay model parameters (per cell)
@@ -141,14 +136,10 @@ class BatteryTremblay(Infrastructure):
         self.n_series = n_series
         self.n_parallel = n_parallel
 
-        # Derived pack properties from cell configuration
-        # Pack voltage = series cells × cell voltage
-        self.nominal_voltage = E0 * n_series
-        # Pack capacity = parallel strings × cell capacity
-        self.max_cap_Ah = n_parallel * cell_capacity_Ah
-        # Pack resistance = (series cells × cell resistance) / parallel strings
+        # Derived pack properties (NsNp scaling)
+        self.nominal_voltage = E0 * n_series             # series cells add voltage
+        self.max_cap_Ah = n_parallel * cell_capacity_Ah  # parallel strings add capacity
         self.R_pack = (n_series * R_cell) / n_parallel
-        # Pack energy capacity in kWh
         self.max_cap_kWh = (self.max_cap_Ah * self.nominal_voltage) / 1000.0
         # TODO VP 2026.05.31.: Define max_power_kW -- check this battery model again
         self.max_power_kW = max_charge_voltage * max_charge_amps / 1000.0  # Convert W to kW
@@ -166,16 +157,9 @@ class BatteryTremblay(Infrastructure):
         self.actual_voltage = self._calculate_terminal_voltage(self.soc, 0.0)
         self.actual_power_kW = 0.0  # Track actual power for consumption reporting
 
-    def setup_spaces(self,
-                    state_spaces,
-                    action_spaces):
-        """Setup observation and action spaces for battery.
-
-        Action convention: positive = consumption (charging from grid), negative = production (discharging to grid).
-        Battery action is in [-1, 1].
-        """
-        # Action: charge/discharge level [-1, 1]
-        # Sign convention: positive = charging (consuming from grid), negative = discharging (providing to grid)
+    def setup_spaces(self, state_spaces, action_spaces):
+        """Register a_battery [-1, 1] (positive=charge, negative=discharge) plus SoC/context states."""
+        # a_battery in [-1, 1]: positive=charge (consume), negative=discharge (export)
         if "a_battery" not in action_spaces.keys():
             action_spaces["a_battery"] = Box(low=-1, high=1, shape=(1,), dtype=np.float32)
 
@@ -183,7 +167,7 @@ class BatteryTremblay(Infrastructure):
         if "s_battery_soc" not in state_spaces.keys():
             state_spaces["s_battery_soc"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
 
-        # Raw battery capacity (kWh) — constant hardware parameter.
+        # Capacity (kWh) — constant hardware parameter.
         if "ctxt_battery_capacity_kWh" not in state_spaces.keys():
             state_spaces["ctxt_battery_capacity_kWh"] = Box(low=0, high=np.inf, shape=(1,), dtype=np.float32)
         if "ctxt_battery_max_power_kW" not in state_spaces.keys():
@@ -192,46 +176,31 @@ class BatteryTremblay(Infrastructure):
         return state_spaces, action_spaces
 
     def _calculate_terminal_voltage(self, soc: float, pack_current: float) -> float:
-        """Calculate battery terminal voltage using Tremblay model at cell level.
+        """Tremblay terminal voltage (pack), computed per cell then scaled.
 
-        The Tremblay equations are applied per cell, then scaled to pack level.
-        Pack current is divided among parallel strings to get cell current.
-
-        For discharge (current > 0):
-            E = E0 - K*(Q/(Q-it))*it - K*(Q/(Q-it))*i + A*exp(-B*it)
-        For charge (current < 0):
-            E = E0 - K*(Q/(it+0.1*Q))*it - K*(Q/(Q-it))*|i| + A*exp(-B*it)
-
-        Terminal voltage: V = E - R*i (discharge) or V = E + R*|i| (charge)
-
-        Args:
-            soc: State of charge [0, 1]
-            pack_current: Pack current in Amps (positive = discharge, negative = charge)
-
-        Returns:
-            Terminal voltage of the battery pack in Volts
+        Discharge (i≥0): E = E0 - K*(Q/(Q-it))*it - K*(Q/(Q-it))*i + A*exp(-B*it).
+        Charge (i<0):  E = E0 - K*(Q/(it+0.1*Q))*it - K*(Q/(Q-it))*|i| + A*exp(-B*it).
+        V = E - R*i (discharge) / E + R*|i| (charge).
+        pack_current in A: positive=discharge, negative=charge. Returns pack voltage (V).
         """
-        # Cell current = pack current divided among parallel strings
+        # cell current = pack current / parallel strings
         cell_current = pack_current / self.n_parallel if self.n_parallel > 0 else pack_current
 
-        # Extracted capacity (Ah) at cell level - how much has been discharged
+        # extracted capacity (Ah) at cell level = (1-SoC)*Q
         it = (1.0 - soc) * self.cell_capacity_Ah
         Q = self.cell_capacity_Ah
 
-        # Prevent division by zero at extreme SoC values
+        # guard against division by zero at extreme SoC
         epsilon = 0.001 * Q
 
-        if cell_current >= 0:  # Discharge
-            # Tremblay discharge equation (per cell)
+        if cell_current >= 0:  # discharge
             denom = max(Q - it, epsilon)
             E_cell = (self.E0
                       - self.K * (Q / denom) * it
                       - self.K * (Q / denom) * cell_current
                       + self.A * np.exp(-self.B * it))
-            # Cell terminal voltage with IR drop
-            V_cell = E_cell - self.R_cell * cell_current
-        else:  # Charge
-            # Tremblay charge equation (modified for charging, per cell)
+            V_cell = E_cell - self.R_cell * cell_current  # IR drop
+        else:  # charge (modified equation)
             abs_current = abs(cell_current)
             denom_charge = it + 0.1 * Q
             denom_discharge = max(Q - it, epsilon)
@@ -239,90 +208,67 @@ class BatteryTremblay(Infrastructure):
                       - self.K * (Q / denom_charge) * it
                       - self.K * (Q / denom_discharge) * abs_current
                       + self.A * np.exp(-self.B * it))
-            # Cell terminal voltage rises during charging
-            V_cell = E_cell + self.R_cell * abs_current
+            V_cell = E_cell + self.R_cell * abs_current  # voltage rises while charging
 
-        # Scale to pack voltage: series cells multiply voltage
+        # series cells multiply voltage
         V_pack = V_cell * self.n_series
         return float(np.clip(V_pack, 0.0, self.max_charge_voltage * 1.2))
 
     def _calculate_max_current(self, is_charging: bool) -> float:
-        """Calculate maximum allowable pack current based on C-rate and current limits.
+        """Max allowable pack current (A) from C-rate and current limits.
 
-        C-rate is applied at cell level, then scaled by parallel strings for pack current.
-        Pack current limit = n_parallel × cell C-rate limit
-
-        Args:
-            is_charging: True if charging, False if discharging
-
-        Returns:
-            Maximum pack current in Amps
+        Pack limit = n_parallel × (max_charge_rate × cell_capacity), capped by max_charge_amps.
         """
-        # C-rate limit per cell: max_charge_rate * cell_capacity gives max cell current
         cell_c_rate_limit = self.max_charge_rate * self.cell_capacity_Ah
-
-        # Pack current limit = parallel strings × cell current limit
         pack_c_rate_limit = self.n_parallel * cell_c_rate_limit
 
-        if is_charging:
-            return min(self.max_charge_amps, pack_c_rate_limit)
-        else:
-            # Discharge can also be limited by C-rate
-            return min(self.max_charge_amps, pack_c_rate_limit)
+        # same C-rate cap for charge and discharge
+        return min(self.max_charge_amps, pack_c_rate_limit)
 
     def exec_action(self, actions: Dict, states: Dict, info=None) -> None:
-        """Execute battery charge/discharge action using Tremblay model.
-    
-        Action is in [-1, 1]:
-            - Positive: charge battery (consume power from grid)
-            - Negative: discharge battery (provide power to grid)
-
-        The action represents fraction of max power (max_power_kW).
-        """
+        """Charge/discharge via Tremblay model. action in [-1, 1] (fraction of max_power_kW):
+        positive=charge (consume), negative=discharge (export)."""
         action = float(np.atleast_1d(actions["a_battery"])[0])
 
-        # Determine if charging or discharging
         is_charging = action > 0
 
-        # Calculate requested power in kW
+        # requested power (kW)
         requested_power_kW = abs(action) * self.max_power_kW
 
-        # Get current terminal voltage for power-to-current conversion
-        # Use small test current in the right direction to estimate voltage
+        # estimate voltage with a small test current to convert power → current
         test_current = 1.0 if not is_charging else -1.0
         estimated_voltage = self._calculate_terminal_voltage(self.soc, test_current)
 
-        # Convert power to current: P = V * I, so I = P / V
+        # I = P / V
         if estimated_voltage > 0:
             requested_current = (requested_power_kW * 1000) / estimated_voltage
         else:
             requested_current = 0.0
 
-        # Apply current limits based on C-rate and max charge current
+        # clip to C-rate / max-current limit
         max_current = self._calculate_max_current(is_charging)
         actual_current = min(requested_current, max_current)
 
-        # Calculate energy transferred in this control step
-        # Energy (Ah) = Current (A) * Time (h)
+        # energy: Ah = A * h
         time_hours = self.control_step / SECONDS_PER_HOUR
         delta_Ah = actual_current * time_hours
 
-        # Apply efficiency losses
+        # efficiency losses
         if is_charging:
             delta_Ah_effective = delta_Ah * self.charge_efficiency
         else:
             delta_Ah_effective = delta_Ah / self.discharge_efficiency
 
-        # Convert Ah change to SoC change
+        # Ah → SoC change
         delta_soc = delta_Ah_effective / self.max_cap_Ah if self.max_cap_Ah > 0 else 0.0
 
-        # Apply SoC change and clip to valid range
+        # apply and clip
         old_soc = self.soc
         new_soc = self.soc + delta_soc if is_charging else self.soc - delta_soc
         self.soc = float(np.clip(new_soc, self.soc_min, self.soc_max))
         actual_delta_soc = abs(self.soc - old_soc)
 
-        # Calculate actual current based on actual delta_soc (for voltage calculation)
+        # current from realised delta_soc (for voltage calc)
         if is_charging:
             actual_Ah = actual_delta_soc * self.max_cap_Ah / self.charge_efficiency
         else:
@@ -330,40 +276,32 @@ class BatteryTremblay(Infrastructure):
 
         self.current_amps = actual_Ah / time_hours if time_hours > 0 else 0.0
         if not is_charging:
-            self.current_amps = -self.current_amps  # Convention: positive = discharge
+            self.current_amps = -self.current_amps  # convention: positive = discharge
 
-        # Update terminal voltage with actual current
-        # _calculate_terminal_voltage expects positive = discharge, negative = charge.
-        # After line 334, current_amps is negative for discharge, positive for charge,
-        # so negate to match the expected convention.
+        # terminal voltage at actual current; helper wants positive=discharge,
+        # so negate current_amps (negative for discharge here).
         self.actual_voltage = self._calculate_terminal_voltage(
             self.soc, -self.current_amps
         )
 
-        # Calculate actual power for consumption reporting (kW)
+        # actual power (kW), for reporting
         self.actual_power_kW = (self.actual_voltage * abs(self.current_amps)) / 1000.0
         if not is_charging:
             self.actual_power_kW = -self.actual_power_kW
 
-        # Update the action dict to reflect actual (clipped) action
+        # rewrite action to the clipped fraction
         actual_action = self.actual_power_kW / self.max_power_kW if self.max_power_kW > 0 else 0.0
         actions["a_battery"] = np.array([np.float32(actual_action)], dtype=np.float32)
 
     def update_state(self, states: Dict, info=None) -> None:
         super().update_state(states, info)
-        # Ensure float32 dtype for all updates
         states["s_battery_soc"][0] = np.float32(self.soc)
         states["ctxt_battery_capacity_kWh"][0] = np.float32(self.max_cap_kWh)
         states["ctxt_battery_max_power_kW"][0] = np.float32(self.max_power_kW)
 
     def reset(self, states: Dict, info=None) -> None:
-        """Re-initialise transient state at the start of every episode.
-
-        The base implementation only re-emits update_state(), which would
-        leave self.soc carrying over from the previous episode.  Restore it
-        (and the derived voltage/current/power readouts) to the values set
-        in __init__ so each episode starts from a clean battery.
-        """
+        """Reset SoC and derived voltage/current/power to __init__ values each episode
+        (base would carry self.soc over)."""
         self.soc = self.start_soc_percentage
         self.current_amps = 0.0
         self.actual_voltage = self._calculate_terminal_voltage(self.soc, 0.0)
@@ -371,18 +309,13 @@ class BatteryTremblay(Infrastructure):
         super().reset(states, info)
 
     def get_E(self, actions: Dict) -> tuple[float, float]:
-        # self.actual_power_kW is positive when the battery charges -- consumes energy
+        # actual_power_kW > 0 = charging (consumes); returns (production, consumption)
         if self.actual_power_kW > 0.0:
-            # production, consumption
             return 0.0, self.actual_power_kW
         else:
-            # self.actual_power_kW is negative when the battery discharges -- produces energy to the others
+            # < 0 = discharging (produces to others)
             return -1.0 * self.actual_power_kW, 0.0
 
-    def _get_actual_battery_charge_kW(self) -> float:
-        """Calculate actual charge in kW based on current battery percentage and max capacity."""
-        return self.soc * self.max_cap_kWh
 
-
-# Register BatteryTremblay with the component registry
+# register with ComponentRegistry
 ComponentRegistry.register('infrastructure', BatteryTremblay)

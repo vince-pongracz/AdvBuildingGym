@@ -1,10 +1,7 @@
 """Gymnasium action-space wrappers for AdvBuildingGym.
 
-FlattenAction converts a Dict action space into a flat Box, complementing
-Gymnasium's built-in FlattenObservation wrapper.  Composed with
-RescaleAction it provides the standard [-1, 1] flat interface that
-RL libraries expect while letting the environment work with named
-Dict actions internally.
+FlattenAction (Dict → flat Box) + RescaleAction give the policy the [-1, 1] flat
+interface RL libs expect while the env keeps named Dict actions internally.
 
 Wrapper chain (outermost first)::
 
@@ -20,12 +17,8 @@ from gymnasium.wrappers import RescaleAction
 
 
 class FlattenAction(gymnasium.ActionWrapper):
-    """Flatten a Dict action space into a single Box.
-
-    Uses gymnasium.spaces.utils.flatten_space to produce a flat Box whose
-    bounds match the concatenated per-key bounds of the original Dict.
-    Incoming flat actions are unflattened back to a Dict before being
-    forwarded to the wrapped environment.
+    """Flatten a Dict action space into a single Box (via flatten_space); incoming
+    flat actions are unflattened back to a Dict for the wrapped env.
     """
 
     def __init__(self, env: gymnasium.Env) -> None:
@@ -44,12 +37,9 @@ class FlattenAction(gymnasium.ActionWrapper):
 
 
 def wrap_action_space(env: gymnasium.Env) -> gymnasium.Env:
-    """Apply FlattenAction + RescaleAction wrapper chain.
+    """FlattenAction + RescaleAction: policy sees Box(-1, 1), env sees real Dict bounds.
 
-    The resulting env exposes a flat Box(-1, 1) action space to the policy
-    while the inner AdvBuildingGym receives named Dict actions with real
-    component bounds. Pure-Gymnasium helper; lives in core so both Ray and
-    SB3 drivers can use it without pulling each other in.
+    Pure-Gymnasium so both Ray and SB3 drivers can reuse it.
     """
     env = FlattenAction(env)
     env = RescaleAction(env, min_action=-1.0, max_action=1.0)

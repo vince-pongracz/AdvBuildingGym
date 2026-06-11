@@ -1,24 +1,9 @@
-"""Reward schedule switching for SB3.
+"""Reward schedule switching for SB3 (episode-counting twin of the Ray callback).
 
-Episode-counting twin of ``reward_switch_callback.py``. On each swap
-window boundary advances the ``RewardScheduleManager`` and pushes the
-new active reward set to every sub-env in BOTH train and eval VecEnvs
-via ``env_method("set_reward_funcs", rewards)``.
-
-Each sub-env gets its own *fresh* reward instances (the manager's
-``create_active_rewards()`` is called per sub-env) so per-env reward
-state (e.g. action history references) stays independent.
-
-When ``exploration_reset.fires_on("on_reward_swap")`` and the active
-set actually changes, the SB3 exploration reset utility bumps SAC's
-``log_ent_coef`` (or PPO's ``ent_coef``) and any per-optimiser LR
-multipliers, then decays them back over ``decay_iterations`` env-step
-ticks of this callback.
-
-Note on SAC: when the reward set changes, transitions already in the
-replay buffer carry rewards computed under the previous set. Keep
-``swap_every_n_episodes`` large compared to buffer turnover to avoid
-mixing reward signals. Same caveat as the Ray version.
+On each swap boundary advances the ``RewardScheduleManager`` and pushes fresh active rewards
+to every sub-env in both train and eval VecEnvs (``env_method("set_reward_funcs", ...)``); each
+sub-env gets its own instances. On change, fires the exploration bump (decayed over
+``decay_iterations`` ticks). SAC caveat: keep ``swap_every_n_episodes`` large vs buffer turnover.
 """
 
 from __future__ import annotations
@@ -54,18 +39,15 @@ class _RewardSwitchCallback(BaseCallback):
             reward_manager.swap_every_n_episodes,
             num_env_runners,
         )
-        # Exploration-reset hooks (see _exploration_reset_util.py). The
-        # decay loop runs every _on_step; fire_bump triggers on swap.
+        # exploration-reset hooks (see _exploration_reset_util.py): 
+        # decay loop every _on_step, fire_bump on swap
         self._maybe_decay, self._fire_bump = make_decay_loop(
             exploration_reset or ExplorationResetConfig(),
             event="on_reward_swap",
         )
 
     def _on_step(self) -> bool:
-        # Decay any in-flight exploration bump from a previous swap.
-        # Step-aligned (not iter-aligned like RLlib) — fine since SB3
-        # has no iteration concept; we just spread the decay over
-        # decay_iterations env-step callbacks.
+        # decay any in-flight bump (step-aligned; SB3 has no iteration concept)
         self._maybe_decay(self.model)
 
         dones = self.locals.get("dones")

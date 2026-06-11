@@ -5,11 +5,9 @@ Mathematical definition of every `*_reward_v0.py` reward function in
 
 Conventions used throughout:
 
-- Every `get_reward` returns the tuple `(w · r, w · r_max)` where `w` is the
-  per-reward `weight` and `r_max = max_reward_in_step` is the best raw reward
-  attainable on that step. The env sums the second element to form the
-  `reward_rate` denominator. The formulas below give the **raw** reward `r`
-  (before multiplication by `w`).
+- Every `get_reward` returns the scalar `w · r` where `w` is the per-reward
+  `weight`. The formulas below give the **raw** reward `r` (before
+  multiplication by `w`).
 - **Canonical power sign convention** (set by `EnergyTracker`):
   `net_power_kW > 0` ⇒ **export** (production > consumption);
   `net_power_kW < 0` ⇒ **import / consumption**.
@@ -21,7 +19,7 @@ Conventions used throughout:
 
 ## 1. TempRewardV0 — temperature comfort
 
-File: `temp_reward_v0.py`. Per-step, range `[-1, 1]`, `r_max = 1`.
+File: `temp_reward_v0.py`. Per-step, range `[-1, 1]`.
 
 Let the temperature error in °C be
 
@@ -54,7 +52,7 @@ Peaks at $+1$ when $d = 0$, decays towards $-1$ as $|d|$ grows.
 
 ## 2. EconomicRewardV0 — dense electricity cost / income
 
-File: `economic_reward_v0.py`. Per-step, range `[-1, 1]`, `r_max = 1`.
+File: `economic_reward_v0.py`. Per-step, range `[-1, 1]`.
 
 Let `p = s_E_price` (normalised price) and `P_ref` the reference power
 (`ctxt_operator_max_power_kW` if positive, else constructor
@@ -73,8 +71,8 @@ Sign matrix (canonical convention):
 
 ## 3. LongTermEconomicRewardV0 — sparse, episode-aggregated economics
 
-File: `long_term_economic_reward_v0.py`. Returns `(0, 0)` every step until the
-episode terminates, then flushes. Range at flush `[-N, +N]`, `r_max = N`
+File: `long_term_economic_reward_v0.py`. Returns `0` every step until the
+episode terminates, then flushes. Range at flush `[-N, +N]`
 (where `N = steps_seen`).
 
 Per-step the price is rescaled by a data-driven denominator. With
@@ -99,7 +97,7 @@ $$ \text{dyn\_max} = \max\!\left(\frac{\text{stat}(b)}{\text{price\_max}},\; 10^
 
 At episode end ($n = $ `episode_length`, or `info["terminated"]`):
 
-$$ r = \mathrm{clip}(A,\,-n,\,n), \qquad r_{\max} = n $$
+$$ r = \mathrm{clip}(A,\,-n,\,n) $$
 
 `P_ref` resolves as in EconomicRewardV0 (default 15 kW).
 
@@ -108,7 +106,7 @@ $$ r = \mathrm{clip}(A,\,-n,\,n), \qquad r_{\max} = n $$
 ## 4. MinimiseEnergyConsumptionRewardV0 — sparse energy throughput
 
 File: `energy_consumption_reward_v0.py`. Sparse, flushed at episode end.
-Range at flush `[-N, +N]`, `r_max = N`.
+Range at flush `[-N, +N]`.
 
 With `P_op = op_max_kW` (`ctxt_operator_max_power_kW` if positive, else
 `reference_power_kW`, default 20 kW):
@@ -118,7 +116,7 @@ $$ \text{per\_step} = \mathrm{clip}\!\left(\frac{P_{\text{net}}}{P_{\text{op}}},
 Consumption ($P_{net}<0$) ⇒ negative per-step (penalty); export ⇒ positive.
 At episode end:
 
-$$ r = \mathrm{clip}(A,\,-n,\,n), \qquad r_{\max} = n $$
+$$ r = \mathrm{clip}(A,\,-n,\,n) $$
 
 (Note: `export_scale` is accepted but the asymmetric scaling line is commented
 out, so export and import are treated symmetrically.)
@@ -128,7 +126,7 @@ out, so export and import are treated symmetrically.)
 ## 5. OperatorEnergyControlRewardV0 — grid-limit guardrail
 
 File: `operator_energy_control_reward_v0.py`. Pure penalty, per-step range
-`[-1, 0]`, `r_max = 0`. Symmetric in both flow directions.
+`[-1, 0]`. Symmetric in both flow directions.
 
 Define the load ratio (using the **absolute** net power):
 
@@ -157,8 +155,7 @@ decaying recovery curve instead of the warning curve.
 
 ## 6. BatteryTargetRewardV0 — SoC dead-zone
 
-File: `battery_target_reward_v0.py`. Pure penalty, per-step range `[-1, 0]`,
-`r_max = 0`.
+File: `battery_target_reward_v0.py`. Pure penalty, per-step range `[-1, 0]`.
 
 With SoC `c = s_battery_soc` and band `[min_pct, max_pct]`:
 
@@ -175,17 +172,17 @@ $$
 ## 7. BatteryMgmtRewardV0 — terminal SoC-deficit
 
 File: `battery_mgmt_reward_v0.py`. Sparse; fires only on the terminal step
-(`info["terminated"]`). Per-fire range `[-L, 0]` where `L = episode_length`,
-`r_max = L`. Asymmetric: only ending below the start SoC is penalised.
+(`info["terminated"]`). Per-fire range `[-L, 0]` where `L = episode_length`.
+Asymmetric: only ending below the start SoC is penalised.
 
 Capture the start SoC at reset: `c_0 = s_battery_soc`. At the terminal step
 with end SoC `c_T = s_battery_soc` and `scale = σ` (default 1.0):
 
 $$ \text{deficit} = \max(0,\; c_0 - c_T) $$
 
-$$ r = -\,\mathrm{clip}\!\left(\frac{\text{deficit}}{\sigma},\,0,\,1\right) \cdot L, \qquad r_{\max} = L $$
+$$ r = -\,\mathrm{clip}\!\left(\frac{\text{deficit}}{\sigma},\,0,\,1\right) \cdot L $$
 
-All non-terminal steps return `(0, 0)`.
+All non-terminal steps return `0`.
 
 ---
 
@@ -194,25 +191,25 @@ All non-terminal steps return `(0, 0)`.
 File: `ev_charging_reward_v0.py`. Mixed dense/sparse. Maintains a counter
 `m` = number of connected steps in the current session.
 
-**Disconnected** (and not the just-disconnected step): `(0, 0)`.
+**Disconnected** (and not the just-disconnected step): `0`.
 
 **Disconnect step** (`info["ev_just_disconnected"]`): let session magnitude
 $M = \max(m, 1)$ and the session target $\tau = $ `info["ev_session_target_soc"]`
 (note: from `info`, not the live `s_ev_target_soc`). Success
 $= |s_{\text{ev\_soc}} - \tau| \le \text{disconnect\_soc\_tolerance}$:
 
-$$ r = \begin{cases} +M & \text{success} \\ -M & \text{failure} \end{cases}, \qquad r_{\max} = M $$
+$$ r = \begin{cases} +M & \text{success} \\ -M & \text{failure} \end{cases} $$
 
 then `m ← 0`. (Constructor overrides `success_reward` / `failure_penalty`
 replace $\pm M$ when provided.)
 
 **Min-curve violation** (session active and `s_ev_soc < s_ev_soc_min`):
 
-$$ r = -M, \qquad r_{\max} = M $$
+$$ r = -M $$
 
 (or `min_curve_violation_penalty` override).
 
-**Regular connected step** (dense, `[0, 1]`, `r_max = 1`): increment `m`, with
+**Regular connected step** (dense, `[0, 1]`): increment `m`, with
 `soc_diff = |s_ev_soc - s_ev_target_soc|`, `diff_threshold = δ` (0.02),
 `soc_diff_multiplier = μ` (5.0):
 
@@ -228,9 +225,9 @@ $$
 
 ## 9. EVChargingOnTimeRewardV0 — on-time charging feasibility
 
-File: `ev_charging_ontime_reward_v0.py`. Per-step range `[-1, 1]`, `r_max = 1`.
+File: `ev_charging_ontime_reward_v0.py`. Per-step range `[-1, 1]`.
 
-- EV not connected (`s_ev_connected < 0.5`): `(0, 0)`.
+- EV not connected (`s_ev_connected < 0.5`): `0`.
 - Target met (`s_ev_soc ≥ s_ev_target_soc`): `r = +1`.
 
 Otherwise compute the energy needed vs. the energy still achievable in the
@@ -262,7 +259,7 @@ it is actually drawing charge**.
 
 File: `action_smoothness_reward_v0.py` — a thin alias of
 `ActionSmoothnessReward` (`action_smoothness_reward.py`). Pure penalty,
-range `[-n_keys, 0]`, `r_max = n_keys` (number of action keys).
+range `[-n_keys, 0]` (n_keys = number of action keys).
 
 For each action key, a length-`N` ring buffer (`n_steps`, default 16) holds the
 recent actions. Per dimension $d$, mean-subtract the window $x$, take the real

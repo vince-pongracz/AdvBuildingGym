@@ -18,20 +18,15 @@ logger = logging.getLogger(__name__)
 # It is important to keep this distinction in mind and not mix them up.
 
 class HP(Infrastructure):
-    """Heat Pump infrastructure component.
-
-    Action convention: single value in [-1, 1].
-    Negative = cooling, positive = heating, magnitude = energy level.
-    Heat pumps only consume energy (|action| * max_power_kW).
-    """
+    """Heat pump. Action a_hp in [-1, 1]: negative=cool, positive=heat; consumes |a_hp|*max_power_kW."""
 
     POWER_FLOW = "consumer"
 
-    # control_step comes from env_meta context; mC is read from ctxt_building_mC obs at run time.
+    # control_step from env context; mC read from ctxt_building_mC obs at runtime.
     _context_params: ClassVar[Set[str]] = {'control_step'}
 
-    # Internal state variables - don't serialize
-    _exclude_params: ClassVar[Set[str]] = {'iteration', 'temp_in_norm', 'temp_in_norm_change', 'control_step', 'actual_power_kW'}
+    # Internal state - not serialised
+    _exclude_params: ClassVar[Set[str]] = {'iteration', 'temp_in_norm', 'temp_in_norm_change', 'control_step', 'actual_power_kW', 'temp_in_raw'}
 
     def __init__(self,
                 name: str,
@@ -50,7 +45,8 @@ class HP(Infrastructure):
 
         self.temp_in_norm = 0
         self.temp_in_norm_change = 0
-        self.actual_power_kW = 0.0  # Track actual electric consumption for reporting
+        self.actual_power_kW = 0.0  # actual electric draw (kW), for reporting
+        self.temp_in_raw = 0.0  # Denormalised indoor temp after this component's update (°C)
 
         if self.cop_heat <= 0 or self.cop_cool <= 0:
             raise ValueError("cop_heat and cop_cool must be positive.")
@@ -58,8 +54,7 @@ class HP(Infrastructure):
     def setup_spaces(self,
                     state_spaces: OrderedDict,
                     action_spaces: OrderedDict) -> tuple[OrderedDict, OrderedDict]:
-        # HP action is 1D: [-1, 1]
-        # Negative = cooling, positive = heating, magnitude = energy level
+        # a_hp in [-1, 1]: sign = cool/heat, magnitude = level
         action_spaces["a_hp"] = Box(
             low=np.array([-1.0], dtype=np.float32),
             high=np.array([1.0], dtype=np.float32),
@@ -72,17 +67,14 @@ class HP(Infrastructure):
         if "s_temp_out_norm" not in state_spaces:
             state_spaces["s_temp_out_norm"] = Box(low=-1, high=1, shape=(1,), dtype=np.float32)
 
-        # Raw electric capacity (kW) — static context variable, only
-        # changes between episodes if the config is swapped.
+        # Raw electric capacity (kW) — static per episode.
         if "ctxt_hp_max_power_kW" not in state_spaces:
-            state_spaces["ctxt_hp_max_power_kW"] = Box(
-                low=0, high=np.inf, shape=(1,), dtype=np.float32
-            )
+            state_spaces["ctxt_hp_max_power_kW"] = Box(low=0, high=np.inf, shape=(1,), dtype=np.float32)
 
         return state_spaces, action_spaces
 
     def exec_action(self, actions, states, info=None) -> None:
-        # Action is 1D: [-1, 1]. Negative = cooling, positive = heating.
+        # a_hp in [-1, 1]: negative=cool, positive=heat.
         hp_action = float(np.atleast_1d(actions["a_hp"])[0])
         energy = abs(hp_action)
 
@@ -116,20 +108,14 @@ class HP(Infrastructure):
         # Link: https://www.sciencedirect.com/science/article/pii/S0378778812003039?via%3Dihub
         # NOTE VP 2026.01.20. : According to paper2, 1R1C mean RMS error to the reality is ~0.47 C --> influences precision
 
-        # Building thermal mass is owned and published by BuildingHeatLoss.
-        # Reading it as an observation keeps envelope params on a single owner
-        # and removes the implicit context injection that used to duplicate
-        # K/mC across components.
+        # Thermal mass owned/published by BuildingHeatLoss; read as obs to keep
+        # envelope params on a single owner.
         mC = float(states["ctxt_building_mC"][0])
         temp_abs_max = float(states["ctxt_temp_abs_max"][0]) if "ctxt_temp_abs_max" in states else 60.0
 
-        # 1R1C update in strict SI (LLEC convention):
-        #   dT_raw [K] = SLOWDOWN_TERM * dt * q_hp_W / mC
-        # q_hp arrives in kW from the action mapping above, so convert to W
-        # explicitly. SLOWDOWN_TERM is the dynamical slowdown (separate from
-        # the unit conversion); see utils/constants.py.
-        # The state buffer s_temp_in_norm lives in normalised units, so the
-        # raw °C change is divided by temp_abs_max before being written.
+        # 1R1C update (SI): dT_raw [K] = SLOWDOWN_TERM * dt * q_hp_W / mC.
+        # q_hp converted kW->W; SLOWDOWN_TERM is the dynamical slowdown (see constants.py).
+        # s_temp_in_norm is normalised, so divide the raw °C change by temp_abs_max.
         q_hp_W = q_hp * W_PER_KW
         dT_raw = SLOWDOWN_TERM * self.control_step * q_hp_W / mC
         dTemp_norm = dT_raw / temp_abs_max if temp_abs_max > 0 else 0.0
@@ -139,31 +125,28 @@ class HP(Infrastructure):
         new_temp_norm = current_temp_norm + dTemp_norm
 
         if new_temp_norm > 1.0 or new_temp_norm < -1.0:
-            # Calculate actual temperature change needed to reach the limit
+            # temp change needed to reach the limit
             if new_temp_norm > 1.0:
                 actual_dTemp = 1.0 - current_temp_norm
             else:  # new_temp < -1.0
                 actual_dTemp = -1.0 - current_temp_norm
 
-            # Invert the forward path:
-            #   actual_dTemp (norm) -> actual_dT_raw [K]
-            #   actual_dT_raw -> actual_q_hp_W
-            #   actual_q_hp_W -> actual_q_hp (kW) -> actual_energy
+            # Invert the forward path: dTemp(norm) -> dT_raw -> q_hp_W -> q_hp(kW) -> energy
             actual_dT_raw = actual_dTemp * temp_abs_max
             actual_q_hp_W = actual_dT_raw * mC / (SLOWDOWN_TERM * self.control_step)
             actual_q_hp_kW = actual_q_hp_W / W_PER_KW
             actual_energy = abs(actual_q_hp_kW) / (self.max_power_kW * cop) if (self.max_power_kW * cop) > 0 else 0.0
             actual_energy = np.clip(actual_energy, 0.0, 1.0)
 
-            # Update action preserving sign (cooling/heating direction)
+            # preserve sign (cool/heat)
             sign = -1.0 if hp_action < 0 else 1.0
             actions["a_hp"][0] = np.float32(sign * actual_energy)
 
-            # Store the actual temperature change and power consumption
+            # store actual temp change + power
             self.temp_in_norm_change = actual_dTemp
             self.actual_power_kW = actual_energy * self.max_power_kW
         else:
-            # No clipping needed, use the original dTemp
+            # no clip needed
             self.temp_in_norm_change = dTemp_norm
             self.actual_power_kW = energy * self.max_power_kW
 
@@ -171,30 +154,33 @@ class HP(Infrastructure):
         super().update_state(states, info)
 
         new_temp = states["s_temp_in_norm"][0] + self.temp_in_norm_change
-        # Clipping ensured in exec_action -- maybe reintroduction needed later
+        # clip already ensured in exec_action (may reintroduce later)
         states["s_temp_in_norm"][0] = np.float32(new_temp)
         states["ctxt_hp_max_power_kW"][0] = np.float32(self.max_power_kW)
+
+        # Cache raw indoor temp after this component's heat. BuildingHeatLoss
+        # re-derives it later; collected after infras, so its value wins.
+        temp_abs_max = float(states["ctxt_temp_abs_max"][0]) if "ctxt_temp_abs_max" in states else 60.0
+        self.temp_in_raw = float(states["s_temp_in_norm"][0]) * temp_abs_max
 
     def reset(self, states, info=None) -> None:
         """Clear per-episode transient state before publishing initial obs."""
         self.temp_in_norm = 0
         self.temp_in_norm_change = 0
         self.actual_power_kW = 0.0
+        self.temp_in_raw = 0.0
         super().reset(states, info)
         
     def get_raw_values(self) -> dict[str, float]:
         return {
-            "raw_hp_kW": self.actual_power_kW
+            "raw_hp_kW": self.actual_power_kW,
+            "raw_temp_in": self.temp_in_raw,
         }
 
     def get_E(self, actions) -> tuple[float, float]:
-        """Get current electric energy consumption from heat pump in kW.
-
-        Always positive — HP only consumes energy regardless of heating/cooling mode.
-        Uses the actual power computed during exec_action (accounts for clipping).
-        """
+        """Electric consumption (kW), always positive. Uses post-clip power from exec_action."""
         return 0.0, self.actual_power_kW
 
 
-# Register HP with the component registry
+# register with ComponentRegistry
 ComponentRegistry.register('infrastructure', HP)

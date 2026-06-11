@@ -18,8 +18,7 @@ class InsideTemperature(StateSource, Forecastable):
     def __init__(self, name: str, ds_path: str | None = None) -> None:
         super().__init__(name=name)
         self.desired_temp_in_raw: float = 0.0  # Raw desired temperature (°C)
-        # Cached temp_abs_max from the last update_state call — used by forecast()
-        # since the forecast API has no access to the shared state dict.
+        # cached temp_abs_max from last update_state — forecast() has no state dict access
         self._last_temp_abs_max: float = 60.0
 
         self.loader = CsvLoader(ds_path, on_reload=self._run_post_load)
@@ -27,12 +26,9 @@ class InsideTemperature(StateSource, Forecastable):
             logger.info("Use data file: %s", ds_path)
 
     def _post_load_data_processing(self) -> None:
-        """Detect the raw temperature column after CSV load / reload.
-
-        Normalisation is deferred to update_state() so it can use the
-        same scale (temp_abs_max) as WeatherDataSource / temp_in_norm.
-        """
-        # Expected column: "desired_temp_in [°C]" or similar
+        """Detect the raw temperature column; normalisation is deferred to update_state
+        (to reuse temp_abs_max from WeatherDataSource)."""
+        # expected column: "desired_temp_in [°C]" or "desired_temp_in"
         if "desired_temp_in [°C]" in self.ts.columns:
             self._raw_column = "desired_temp_in [°C]"
         elif "desired_temp_in" in self.ts.columns:
@@ -56,27 +52,19 @@ class InsideTemperature(StateSource, Forecastable):
         return state_spaces, action_spaces
 
     def update_state(self, states, info=None) -> None:
-        """Update desired temperature state based on current iteration.
-
-        When CSV data is available the raw °C value is normalised at
-        runtime using the same scale as temp_in_norm / temp_out_norm
-        (ABS_MIN_MAX_SCALING with temp_abs_max from WeatherDataSource).
-        This ensures the reward function sees comparable values.
-        """
+        """Update desired temperature; raw °C normalised at runtime with temp_abs_max
+        (same scale as temp_in_norm / temp_out_norm) so rewards see comparable values."""
         if self.ts is None:
             raise RuntimeError(
                 f"InsideTemperature '{self.name}': no CSV loaded. The DataCombinator "
                 "must push a desired_temp_in variant before update_state is called."
             )
 
-        # Shared temperature scale published by WeatherDataSource into the state dict.
-        # Fallback 60 °C is a safe default when no weather data is loaded.
+        # temp scale from WeatherDataSource (60 °C fallback)
         temp_abs_max: float = float(states["ctxt_temp_abs_max"][0]) if "ctxt_temp_abs_max" in states else 60.0
         self._last_temp_abs_max = temp_abs_max if temp_abs_max != 0 else 60.0
 
-        # Profile CSVs cover a single day (e.g. 288 rows at 5-min steps).
-        # Index by time-of-day so the profile repeats daily regardless of
-        # the actual simulation date or row_offset.
+        # single-day profile: index by time-of-day so it repeats daily (ignores row_offset)
         arr = self._forecast_array_cache.get(self._raw_column)
         if arr is None:
             arr = self.ts[self._raw_column].to_numpy()
@@ -92,21 +80,13 @@ class InsideTemperature(StateSource, Forecastable):
         states["s_desired_temp_in_norm"][0] = desired_temp_in_norm
 
     def reset(self, states, info=None) -> None:
-        """Populate initial desired temperature and seed temp_in_norm.
-
-        At episode start the indoor temperature starts near the desired
-        setpoint with a small random offset so the agent does not always
-        begin in a perfectly comfortable state.
-        """
+        """Populate desired temperature and seed temp_in_norm near setpoint (small random offset)."""
         self.update_state(states, info)
         if "s_temp_in_norm" in states and "s_desired_temp_in_norm" in states:
-            # ±2 °C variance in normalised space (temp_abs_max default 60 °C
-            # ⇒ 2/60 ≈ 0.033 normalised units)
+            # ±2 °C in normalised space (2/60 ≈ 0.033 at default 60 °C)
             temp_abs_max = float(states["ctxt_temp_abs_max"][0]) if "ctxt_temp_abs_max" in states else 60.0
             max_offset_norm = 2.0 / temp_abs_max if temp_abs_max != 0 else 0.0
-            # Draw the offset from the env rng (published on the shared info
-            # channel as "_rng"), so it shares the deterministic, per-worker
-            # stream seeded by reset(seed=...). Fallback only for standalone use.
+            # offset from env rng (info["_rng"], deterministic per-worker; standalone fallback)
             rng = (info.get("_rng") if info else None) or np.random.default_rng()
             variance = rng.uniform(-max_offset_norm, max_offset_norm)
             
@@ -118,8 +98,7 @@ class InsideTemperature(StateSource, Forecastable):
         return ("s_fc_desired_temp_in_norm",)
 
     def forecast(self, selected_future_steps: list[int]) -> dict[str, list[float]]:
-        # Profile is single-day and repeats — wrap-around index, not zero-fill,
-        # so Forecastable._csv_forecast (which zero-fills) is not reused here.
+        # single-day profile: wrap-around index (not zero-fill), so _csv_forecast isn't reused
         if self.ts is None:
             return {"s_fc_desired_temp_in_norm": [0.0] * len(selected_future_steps)}
         arr = self._forecast_array_cache.get(self._raw_column)
@@ -135,5 +114,5 @@ class InsideTemperature(StateSource, Forecastable):
         return {"raw_desired_temp_in": self.desired_temp_in_raw}
 
 
-# Register InsideTemperature with the component registry
+# register with ComponentRegistry
 ComponentRegistry.register('statesource', InsideTemperature)

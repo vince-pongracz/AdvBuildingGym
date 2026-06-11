@@ -1,14 +1,8 @@
 """Organised startup banner for training runs.
 
-Prints a structured block that summarises everything a reader
-needs to reconstruct the run from scratch: invocation, tensorboard, eval, 
-env config, training setup, env topology: infrastructure, 
-statesources, rewards + schedules.
-
-The same block is optionally written to ``<run_dir>/startup.txt`` so the
-snapshot travels with the checkpoint and can be diffed against other runs.
-
-Call once from the training script, before learning/training starts.
+Summarises the run (invocation, tensorboard, eval, env config, training setup, infra,
+statesources, rewards + schedules), optionally written to ``<run_dir>/startup.txt``.
+Call once before training starts.
 """
 
 from __future__ import annotations
@@ -26,9 +20,8 @@ logger = logging.getLogger("startup")
 
 _HORIZONTAL_LINE = "=" * 70
 
-# Each section builder returns one or more (title, body_lines) tuples.
-# Numbering is applied at render time from the order of the list below, so
-# reordering sections (or adding/removing one) cannot desync the labels.
+# Section builders return (title, body_lines); numbering is applied at render time
+# from list order, so reordering can't desync labels.
 Section = tuple[str, list[str]]
 
 
@@ -37,13 +30,8 @@ def _header(title: str) -> str:
 
 
 def _fmt_numeric_params(component: Any) -> str:
-    """Discover numeric constructor params via the component's own to_dict().
-
-    Field names differ across infra/statesource, so rather than hardcode a
-    list we lean on Serializable.to_dict() — it already introspects __init__
-    and drops internal state (`_exclude_params`) and context (`_context_params`),
-    leaving exactly the configured scalars. We then keep only the numeric ones.
-    """
+    """Numeric constructor params via the component's own ``to_dict()`` 
+    (keeps only numeric scalars)."""
     to_dict = getattr(component, "to_dict", None)
     if not callable(to_dict):
         return ""
@@ -110,9 +98,8 @@ def _section_tensorboard(
             f"    ./start_tensorboard.sh {eval_trajectories_path}",
         ])
         if exec_date is not None:
-            # Matches make_eval_state_action_cb_class: dir is
-            # ep_metrics/eval_trajectories/<YYYYmmdd_HHMMSS>_<SLURM_JOB_ID|pidNNN>/
-            # so that concurrent sbatches starting in the same second don't collide.
+            # matches make_eval_state_action_cb_class dir:
+            # ep_metrics/eval_trajectories/<YYYYmmdd_HHMMSS>_<job|pid>/ (avoids same-second collisions)
             job_suffix = os.environ.get("SLURM_JOB_ID") or f"pid{os.getpid()}"
             run_dir_name = f"{exec_date.strftime('%Y%m%d_%H%M%S')}_{job_suffix}"
             run_eval_trajectories_path = os.path.join(eval_trajectories_path, run_dir_name)
@@ -203,8 +190,7 @@ def _section_training_setup(
     ]
 
     if args.log_trajectories:
-        # Mirrors common_model_setup default: metrics_base_dir/trajectories/<exec_date>
-        # consumed by make_trajectory_logging_cb_class.
+        # mirrors common_model_setup: metrics_base_dir/trajectories/<exec_date>
         stamp = (exec_date or datetime.datetime.now()).strftime("%Y%m%d_%H%M%S")
         traj_dir = (Path.cwd() / "ep_metrics" / "trajectories" / stamp).as_posix()
         body.append(f"  Trajectory dir  : {traj_dir}")
@@ -304,23 +290,12 @@ def log_startup_banner(
     eval_trajectories_path: str | None = None,
     write_to_disk: bool = True,
 ) -> None:
-    """Log an organised startup banner.
+    """Log an organised startup banner (sections auto-numbered from list order).
 
-    Sections are numbered automatically from their order in the list below;
-    reordering or adding sections does not require touching any `[i/N]` label.
-
-    Args:
-        experiment_path: Per-run directory used by the EVAL section to
-            describe checkpoint paths.
-        storage_path: Parent of all runs for this algorithm; shown as the
-            "all runs (compare across seeds)" TB launch target.
-        tensorboard_log_path: TB events root for this run. Defaults to
-            ``experiment_path`` (correct for Ray, which writes events at
-            the run root); SB3 callers pass the ``tb/`` subdir.
-        eval_trajectories_path: Root dir of TB sub-runs written by the
-            Ray-side ``EvalStateActionCallback``. Pass ``None`` (default)
-            to skip the eval-trajectories block — SB3 has no equivalent
-            callback, so leaving it ``None`` keeps the banner honest.
+    ``storage_path``: parent of all runs (cross-seed TB target). 
+    ``tensorboard_log_path``: TB events root (defaults to ``experiment_path``; SB3 passes the ``tb/`` subdir).
+    ``eval_trajectories_path``: root of the Ray ``EvalStateActionCallback`` sub-runs;
+    ``None`` skips that block (e.g. SB3).
     """
     sections: list[Section] = [
         *_section_invocation(seed, getattr(args, "load_config", None)),
@@ -349,8 +324,7 @@ def log_startup_banner(
         rendered.extend(body)
 
     banner = "\n".join(rendered)
-    # Single logger.info call so the timestamp prefix appears only once and
-    # the box borders stay vertically aligned.
+    # single logger.info so the timestamp prefix appears once and borders stay aligned
     logger.info("\n%s\nStartup summary:\n%s\n%s", _HORIZONTAL_LINE, banner, _HORIZONTAL_LINE)
 
     if write_to_disk:

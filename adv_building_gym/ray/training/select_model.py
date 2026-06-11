@@ -1,9 +1,4 @@
-"""
-Ray RLlib model configuration and selection.
-
-This module provides functions for configuring and selecting RL algorithms
-for training with Ray RLlib, including PPO and SAC.
-"""
+"""Ray RLlib algorithm selection/config (PPO, SAC, DreamerV3)."""
 
 import logging
 from pathlib import Path
@@ -19,6 +14,7 @@ from adv_building_gym.config.training.training_param_config import TrainingParam
 
 logger = logging.getLogger(__name__)
 
+# TODO VP 2026.06.10.: Remove this
 # Default path to the bundled training config YAML
 _DEFAULT_TRAINING_CONFIG = Path(__file__).resolve().parents[2] / "configs" / "training_param_config.yaml"
 
@@ -28,22 +24,10 @@ def select_model(
     episode_length: int,
     training_config: TrainingParamConfig | None = None,
 ):
-    """
-    Selects and configures algorithm-specific settings for training.
+    """Build the algorithm-specific config (ppo/sac/dreamerv3) with its hyperparameters.
 
-    This function creates the algorithm-specific configuration (e.g., PPO, SAC)
-    with algorithm-specific hyperparameters and training settings. The returned
-    config should be passed to common_model_config() by the caller for common
-    configuration (environment, resources, callbacks, etc.).
-
-    Args:
-        algorithm: RL algorithm to use ("ppo", "sac", or "dreamerv3")
-        episode_length: Episode length in timesteps
-        training_config: Optional TrainingConfig with learning rate and batch
-            size.  When *None* the bundled ``training_config.yaml`` is loaded.
-
-    Returns:
-        Algorithm-specific config (before common_model_config applied)
+    Caller then passes it to common_model_setup() for env/resources/callbacks.
+    ``training_config`` None → loads the bundled ``training_config.yaml``.
     """
 
     if training_config is None:
@@ -52,15 +36,9 @@ def select_model(
     # Algorithm-specific configuration
     if algorithm == "ppo":
         config = PPOConfig()
-        # PPO is on-policy: env runners collect a full batch of experience,
-        # then the learner runs multiple SGD epochs over that batch.
-        #
-        # train_batch_size_per_learner = total timesteps collected per iteration.
-        # We express this in episodes (ppo_episodes_per_iteration) and convert
-        # to timesteps here, so the user thinks in episodes, not raw timesteps.
-        #
-        # minibatch_size = SGD mini-batch within each epoch (subset of the
-        # collected batch).  Smaller than train_batch_size_per_learner.
+        # PPO on-policy: collect a full batch, then multiple SGD epochs over it.
+        # train_batch_size_per_learner = timesteps/iteration (ppo_episodes_per_iteration ×
+        # episode_length); minibatch_size = SGD mini-batch within each epoch.
         ppo_batch_timesteps = training_config.ppo_episodes_per_iteration * episode_length
         config.training(
             # lr left at RLlib default: 5e-5
@@ -76,17 +54,10 @@ def select_model(
 
     elif algorithm == "sac":
         config = SACConfig()
-        # SAC is off-policy: experience is stored in a replay buffer and the
-        # learner samples sac_replay_batch_size transitions per gradient step,
-        # independent of episode boundaries.  This is fundamentally different
-        # from PPO's episode-based batching — the "batch size" here is just how
-        # many transitions are drawn from the buffer, not how much new data is
-        # collected per iteration.
-        # New API stack (default in RLlib 2.7+) requires EpisodeReplayBuffer
-        # and separate learning rates for actor, critic, and alpha.
-        # Collect complete episodes before returning to learner.
-        # Without this, SAC defaults rollout_fragment_length to 1, causing
-        # training episodes to be reported as length = 1 in callbacks.
+        # SAC off-policy: samples sac_replay_batch_size transitions per gradient step from
+        # the replay buffer (not episode-batched like PPO). New API stack needs
+        # EpisodeReplayBuffer and separate actor/critic/alpha LRs. rollout_fragment_length
+        # defaults to 1 otherwise, reporting episode length 1 in callbacks.
         config.training(
             # NOTE VP 2026.02.11. : Actor critic methods SAC & PPO - blog
             # Link: https://joel-baptista.github.io/phd-weekly-report/posts/ac/
@@ -94,9 +65,8 @@ def select_model(
             # critic_lr left at RLlib default 3e-4 (LR of the critic network)
             # alpha_lr left at RLlib default 3e-4 (weight of entropy -- exploration)
             alpha_lr = 0.0, # Keep it fixed (no auto-tuning)
-            # PrioritizedEpisodeReplayBuffer crashes on Ray 2.52.1 with
-            # KeyError in sum-tree when priorities degenerate to zero.
-            # Use uniform EpisodeReplayBuffer until the bug is fixed upstream.
+            # PrioritizedEpisodeReplayBuffer crashes on Ray 2.52.1 (sum-tree KeyError at
+            # zero priorities); use uniform EpisodeReplayBuffer until fixed.
             # Link: https://github.com/ray-project/ray/issues/50966
             replay_buffer_config={
                 "type": "EpisodeReplayBuffer",
@@ -111,33 +81,22 @@ def select_model(
             n_step=training_config.sac_n_step_return,  # RLlib default: 1
             tau=0.005,  # Soft update coefficient for target networks (at Polyak averaging). RLlib default
             train_batch_size_per_learner=training_config.sac_replay_batch_size,  # RLlib default: 256
-            # training_intensity = replayed_steps / sampled_steps.
-            # Without this, RLlib defaults to [1, 1] round-robin: only
-            # 1 gradient update per ~864 sampled env steps (UTD ≈ 0.001).
-            # Standard SAC uses UTD ≈ 1.0 (1 grad step per env step).
-            # UTD = training_intensity / batch_size.
+            # training_intensity = replayed/sampled steps; UTD = intensity / batch_size.
+            # Default [1, 1] round-robin gives UTD ≈ 0.001; standard SAC uses ≈ 1.0.
             # Link: https://arxiv.org/abs/1802.09477
             training_intensity=training_config.sac_training_intensity,  # RLlib default: None
             num_steps_sampled_before_learning_starts=training_config.sac_learning_starts_after_n_episodes * episode_length, # Warm up replay buffer with N episodes before learning starts.
-            # Gradient clipping mitigates but does NOT fully prevent NaN in
-            # the policy network. If the loss itself is NaN/Inf (e.g. from
-            # extreme Q-values caused by large reward spikes like the -2.0
-            # harsh penalty in OperatorEnergyControlReward), NaN propagates
-            # into weights before grad_clip can act.  The root fix is keeping
-            # per-step rewards in a bounded range (ideally [-1, 1] total).
-            # See: slurm job 1624328 — crash at iter 48 with
-            # "normal expects all elements of std >= 0.0".
+            # grad_clip mitigates but doesn't fully prevent NaN: if the loss is NaN/Inf
+            # (extreme Q from reward spikes) it reaches weights first. Root fix = bounded
+            # per-step rewards (~[-1, 1]). See slurm job 1624328 (crash iter 48,
+            # "normal expects all elements of std >= 0.0").
             # grad_clip=1.0,  # RLlib default: None
         )
     elif algorithm == "dreamerv3":
         config = DreamerV3Config()
-        # DreamerV3 is model-based off-policy: episodes are stored in a replay
-        # buffer, the recurrent world model (RSSM) is fit on sampled sequences
-        # of length batch_length_T, and actor/critic are trained on imagined
-        # rollouts of length horizon_H produced inside the world model.
-        # training_ratio is the UTD analogue (replayed env steps per sampled
-        # env step). DreamerV3 ships its own torch RLModule, so the shared
-        # DefaultModelConfig block below is skipped for this algorithm.
+        # DreamerV3 model-based off-policy: world model (RSSM) fit on batch_length_T sequences,
+        # actor/critic on imagined horizon_H rollouts; training_ratio = UTD analogue. Ships its
+        # own RLModule, so the DefaultModelConfig block below is skipped.
         # Link: https://arxiv.org/pdf/2301.04104
         config.training(
             model_size=training_config.dreamerv3_model_size,

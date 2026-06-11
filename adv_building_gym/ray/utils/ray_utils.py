@@ -13,14 +13,8 @@ def _slugify(name: str) -> str:
 
 
 def make_trial_dirname_creator(trial_name: str | None = None):
-    """Factory: return a Ray Tune ``trial_dirname_creator`` that appends
-    ``_<trial_name>`` to the short trial id so the on-disk dir reflects which
-    trial config produced it (useful when multiple trials share an algo dir).
-
-    Args:
-        trial_name: TrialConfig.trial_name. ``None`` falls back to the legacy
-            behaviour (short trial_id only).
-    """
+    """Factory → Ray Tune ``trial_dirname_creator`` appending ``_<trial_name>`` to the short
+    trial id (so the dir reflects the trial config). ``None`` → short trial_id only."""
     suffix = f"{_slugify(trial_name)}" if trial_name else ""
 
     def trial_dirname_creator(trial) -> str:

@@ -1,18 +1,10 @@
 """Resource allocation for an already-built RLlib algorithm config.
 
-Runs after ``select_model`` and before ``common_model_setup``. It is the *only*
-place that touches resource-dependent settings, operating on the already
-algorithm-specific config:
-
-- splits the SLURM CPU/GPU budget into learner / driver / env-runner shares,
-- resolves the algorithm-specific env-runner count (DreamerV3 forces in-process
-  sampling, PPO caps to its train-batch size),
-- applies ``config.learners`` and ``config.env_runners`` resource settings,
-- validates the allocation against the SLURM constraints.
-
-The resolved ``config.num_env_runners`` is later read back by ``register_callbacks``
-(in ``common_model_setup``) to floor the schedule swap window. Keeping this separate
-lets ``common_model_setup`` stay resource-independent.
+Runs between ``select_model`` and ``common_model_setup`` — the only place touching
+resource settings: splits the SLURM CPU/GPU budget into learner/driver/env-runner shares,
+resolves the algorithm-specific env-runner count (DreamerV3 → 0, PPO → train-batch cap),
+applies ``config.learners`` / ``config.env_runners``, and validates against SLURM.
+``common_model_setup`` reads back the resolved ``config.num_env_runners``.
 """
 
 import logging
@@ -36,24 +28,14 @@ def resolve_num_env_runners(
     episode_length: int,
     num_learners: int,
 ) -> int:
-    """Apply algorithm-specific constraints to the resource-derived env-runner count.
+    """Apply algorithm-specific constraints to the budget env-runner count.
 
-    ``resource_env_runners`` is the algorithm-independent budget (all CPUs left after
-    the driver and learners). The final count depends on the algorithm:
-
-    - **DreamerV3** (Ray <= 2.52.x): ``training_step`` reads the env spaces off the
-      driver-local EnvRunner (``self.env_runner.env.single_action_space``). With any
-      *remote* runner the local runner has no env (``env_runner.env is None``) →
-      ``AttributeError``. Force in-process sampling (0 remote runners) so the local
-      runner owns the env. Fixed upstream in Ray 2.53.0 (PR #58495, reads
-      ``self.spaces`` instead). Link: https://github.com/ray-project/ray/issues/56749
-    - **PPO** (on-policy): RLlib validates ``total_train_batch_size ≈
-      num_env_runners * rollout_fragment_length`` (within 10%). With
-      ``rollout_fragment_length = episode_length`` we need
-      ``num_env_runners ≈ train_batch_size_per_learner * num_learners / episode_length``.
-      Cap the runner count to that target so episodes are not over-collected each
-      iteration (surplus CPUs go unused).
-    - All other algorithms use the full budget.
+    - DreamerV3 (Ray ≤ 2.52.x): force 0 remote runners — training_step reads env spaces off
+      the driver-local runner, which has no env when remote runners exist. Fixed in Ray 2.53.0.
+      Link: https://github.com/ray-project/ray/issues/56749
+    - PPO: cap to ``train_batch_size_per_learner * num_learners / episode_length`` so episodes
+      aren't over-collected (RLlib validates total_train_batch_size ≈ runners × fragment_length).
+    - Others: full budget.
     """
     algo = type(config).__name__
 
@@ -89,28 +71,14 @@ def resource_setup(
     training_config: TrainingParamConfig,
     env_config: EnvConfig,
 ) -> AlgorithmConfig:
-    """Apply resource-dependent settings to an already-built algorithm config.
+    """Apply resource-dependent settings to an algorithm config (mutated in place).
 
-    Runs after ``select_model`` (algorithm config) and before ``common_model_setup``.
-    Sets the learner / env-runner resources and the algorithm-specific env-runner
-    count, then validates the allocation against the SLURM constraints. Callbacks are
-    registered later by ``common_model_setup``, which reads back the resolved
-    ``config.num_env_runners`` set here.
-
-    Args:
-        config: Algorithm config from ``select_model``.
-        slurm_resources: SLURM-allocated CPU/GPU resources.
-        training_config: Hyperparameters (``local_learner`` drives the CPU split).
-        env_config: Provides ``EPISODE_LENGTH`` for the PPO env-runner cap.
-
-    Returns:
-        The same config, mutated in place.
+    Sets learner/env-runner resources and the algorithm-specific env-runner count, then
+    validates against SLURM. ``common_model_setup`` later reads back ``config.num_env_runners``.
     """
     allocation = compute_resource_allocation(slurm_resources, training_config.local_learner)
 
-    # num_env_runners is algorithm-specific (DreamerV3 forces 0, PPO caps to batch size);
-    # everything else in the allocation is algorithm-independent. Overwrite the budget
-    # count with the resolved one so the struct holds the final allocation.
+    # num_env_runners is algorithm-specific; overwrite the budget with the resolved count
     allocation.num_env_runners = resolve_num_env_runners(
         config, allocation.num_env_runners, env_config.EPISODE_LENGTH, allocation.num_learners,
     )
@@ -128,8 +96,7 @@ def resource_setup(
         num_gpus_per_learner=allocation.num_gpus_per_learner,
         num_cpus_per_learner=allocation.num_cpus_per_learner,
     )
-    # Sampling (querying the env / policy) — no GPU needed. rollout_fragment_length and
-    # connectors are set in common_model_setup; here we only set the resource counts.
+    # Sampling — no GPU; fragment_length/connectors are in common_model_setup, only counts here
     config.env_runners(
         num_env_runners=allocation.num_env_runners,
         num_cpus_per_env_runner=allocation.num_cpus_per_env_runner,

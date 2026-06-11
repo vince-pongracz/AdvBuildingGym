@@ -1,9 +1,5 @@
-"""Inference utilities for Ray/RLlib trained RL modules.
-
-Provides functions to load an RLModule from a checkpoint directory,
-flatten dictionary observations (mirroring the FlattenObservations
-connector used during training), and run forward inference in either
-deterministic (``tanh(mean)``) or stochastic (squashed-Gaussian sample) mode.
+"""Inference utilities for trained RLModules: load from a checkpoint and run forward
+inference, deterministic (``tanh(mean)``) or stochastic (squashed-Gaussian sample).
 """
 
 import logging
@@ -17,18 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 def load_rl_module(checkpoint_path: str) -> RLModule:
-    """Load an RLModule from a Ray/RLlib checkpoint.
-
-    Appends the standard sub-path to reach the default single-agent policy
-    within the checkpoint directory tree.
-
-    Args:
-        checkpoint_path: Path to the top-level Ray checkpoint directory
-            (e.g., ``checkpoint_000123``).
-
-    Returns:
-        The restored ``RLModule`` ready for inference.
-    """
+    """Load an RLModule from a Ray checkpoint dir (appends the default-policy sub-path)."""
     full_path = (
         f"{checkpoint_path}/learner_group/learner/rl_module/default_policy"
     )
@@ -43,11 +28,12 @@ def infer_action(
     generator: torch.Generator | None = None,
     state_in: dict | None = None,
 ) -> tuple[np.ndarray, dict]:
-    """Run forward inference on a single observation.
+    """Forward inference on a single (flat) observation.
 
-    Builds a batched tensor, calls ``_forward_inference``, and handles
-    ``action_dist_inputs`` (SAC/PPO squashed-Gaussian), direct ``actions``
-    outputs (DreamerV3), and recurrent state threading (DreamerV3's RSSM).
+    Handles ``action_dist_inputs`` (SAC/PPO squashed-Gaussian), direct ``actions`` (DreamerV3),
+    and recurrent state threading. ``stochastic`` samples ``tanh(mean + exp(log_std)*eps)`` instead
+    of ``tanh(mean)``; ``generator`` makes ``eps`` reproducible. ``state_in``: batched recurrent
+    state ({} for stateless). Returns (action, state_out).
     Link: https://docs.ray.io/en/latest/rllib/package_ref/rl_modules.html
 
     Args:
@@ -73,10 +59,8 @@ def infer_action(
         Columns.OBS: torch.as_tensor(flat_obs, dtype=torch.float32).unsqueeze(0),
     }
     if state_in:
-        # RLlib convention: STATE_IN is a (possibly nested) dict of tensors
-        # already batched along axis 0. Callers must add the batch dim
-        # before passing it in. ``get_initial_state()`` returns unbatched
-        # tensors; eval_runner is responsible for unsqueeze(0).
+        # RLlib convention: STATE_IN is a (nested) dict of tensors already batched on axis 0;
+        # callers add the batch dim (get_initial_state() returns unbatched).
         batch[Columns.STATE_IN] = state_in
 
     with torch.no_grad():

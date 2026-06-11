@@ -293,7 +293,7 @@ New stuff can be in my thesis:
 - based on data and actions, forecast the passive states as well -- try to learn the passive states -- model based RL (?)
 - resolution is more fine grained, I use wholesale price data
 - Flexibility: not only PV, HVAC and ESS -- wind turbine, etc, config and flexibility
-- more rewards, more reward aspects, flexible to config how many rewards. Optimise on achieved reward or to reward rate
+- more rewards, more reward aspects, flexible to config how many rewards. Optimise on achieved reward
 
 TODO VP: How to solve that the same model used for different infra/state configs?
 --> if it's multi agent, then it's easy -- each agent outputs an action, number of agents change, but not really their state
@@ -475,7 +475,7 @@ MLFlow:
 --> MLFlow does not seem to good to track Env changes, behavioural changes...
 
 Tensorboard:
-- For metrics -- during training and across training runs, track achieved_reward, reward_rate and episode_reward_mean
+- For metrics -- during training and across training runs, track achieved_reward and episode_reward_mean
 - track policy_entropy, episode_reward_mean
 
 
@@ -837,7 +837,7 @@ python run_train_ray.py --algorithm sac --load-config configs/env/env_test1_mid.
 ```
 
 Common flags: `--algorithm {ppo,sac}`, `--episodes`, `--seed`,
-`--metric {reward_rate,achieved_reward,episode_return_mean}`,
+`--metric {achieved_reward,episode_return_mean}`,
 `--checkpoint-frequency-episodes`, `--data-config`, `--reward-schedule`,
 `--infra-schedule`, `--grad-train`, `--log-trajectories`.
 

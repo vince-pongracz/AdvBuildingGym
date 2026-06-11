@@ -16,8 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 class WeatherDataSource(StateSource, Forecastable):
-    """WeatherDataSource — exposes ambient temperature, wind speed, and global
-    solar irradiance from a preprocessed weather CSV.
+    """Ambient temperature, wind speed, and solar irradiance from a preprocessed weather CSV.
 
     Units (raw, before runtime normalisation):
         - ``temp_amb`` / ``raw_temp_out``         : °C
@@ -47,15 +46,11 @@ class WeatherDataSource(StateSource, Forecastable):
         # Raw values for get_raw_values() — updated each step
         self.temp_out_raw: float = 0.0
         self.wind_speed_raw: float = 0.0
-        # Solar irradiance in W/m² — mean over the 5-min control step.
-        # Both DWD (converted from J/cm² per 10 min during preprocessing) and
-        # Zenodo/WPuQ (native W/m²) CSVs deliver this column in W/m².
+        # Solar irradiance (W/m², 5-min mean); both DWD and Zenodo/WPuQ CSVs deliver W/m².
         self.sun_shine_raw: float = 0.0
         self.sun_shine_abs_max: float = 0.0
 
-        # Composition: loader auto-fires _run_post_load after each read.
-        # All subclass attrs that _post_load_data_processing depends on MUST
-        # be set above this line.
+        # loader auto-fires _run_post_load after each read; attrs it needs MUST be set above.
         self.loader = CsvLoader(ds_path, on_reload=self._run_post_load)
         if ds_path is not None:
             logger.info("Use data file: %s", ds_path)
@@ -63,14 +58,8 @@ class WeatherDataSource(StateSource, Forecastable):
             logger.debug("No initial data file for '%s', data source will be assigned by DataCombinator", name)
 
     def _post_load_data_processing(self) -> None:
-        """Normalise weather columns after CSV load / reload.
-
-        Data cleaning (sentinel replacement, NaN handling, column aliasing)
-        is handled by the preprocessing scripts. This method only validates
-        that the data is clean and applies runtime normalisation.
-        """
-        # Validate and clean data; only warn when a new file is loaded (not
-        # on every reload of the same file, which happens each episode reset).
+        """Normalise weather columns after load/reload (cleaning is done in preprocessing)."""
+        # warn only on a new file (not every same-file reload at episode reset)
         weather_cols = ["temp_amb", "sun_shine", "avg_wind_speed"]
         for col in weather_cols:
             if col in self.ts.columns:
@@ -84,8 +73,7 @@ class WeatherDataSource(StateSource, Forecastable):
                         )
                     self.ts[col] = self.ts[col].fillna(0)
 
-        # Normalise raw columns and derive scale factors so downstream
-        # components can convert between raw and normalised values.
+        # Normalise raw columns + derive scale factors for raw↔norm conversion.
         # cols = { raw_col: (norm_col, scale_attr) }
         cols = {
             "temp_amb": ("s_temp_out_norm", "temp_abs_max"),
@@ -100,8 +88,7 @@ class WeatherDataSource(StateSource, Forecastable):
                 if scale_attr is not None:
                     setattr(self, scale_attr, scale_factor)
 
-        # Day-of-year normalised to [0, 1] per row. Divisor is the year length
-        # (366 in leap years) so 1 January → ~0 and 31 December → ~1.
+        # Day-of-year normalised to [0, 1] (divisor = year length; leap → 366)
         if "timestamp" in self.ts.columns:
             ts_parsed = pd.to_datetime(self.ts["timestamp"], utc=True, errors="coerce")
             year_length = np.where(ts_parsed.dt.is_leap_year, 366.0, 365.0)
@@ -123,21 +110,16 @@ class WeatherDataSource(StateSource, Forecastable):
             state_spaces["s_solar_irradiance_norm"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
         if "s_avg_wind_speed_norm" not in state_spaces.keys():
             state_spaces["s_avg_wind_speed_norm"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
-        # Day-of-year of the current row, normalised to [0, 1]. Effectively
-        # constant across an episode (one day) but recomputed each step so
-        # episodes crossing midnight stay consistent with the underlying row.
+        # Day-of-year of the current row, [0, 1]; recomputed per step for midnight crossings.
         if "s_date" not in state_spaces.keys():
             state_spaces["s_date"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
 
-        # Raw scale factors — set once when data is loaded, not every step.
-        # The policy can use these to reconstruct physical units from
-        # normalised observations (e.g. temp_out_raw = temp_out_norm * temp_abs_max).
+        # Scale factors — set on data load; reconstruct raw = norm * scale.
         if "ctxt_temp_abs_max" not in state_spaces.keys():
             state_spaces["ctxt_temp_abs_max"] = Box(low=0, high=np.inf, shape=(1,), dtype=np.float32)
         if "ctxt_wind_speed_abs_max" not in state_spaces.keys():
             state_spaces["ctxt_wind_speed_abs_max"] = Box(low=0, high=np.inf, shape=(1,), dtype=np.float32)
-        # Solar irradiance scale factor in W/m² (max value seen during normalisation).
-        # Use raw_irradiance = s_solar_irradiance_norm * ctxt_solar_irradiance_max.
+        # Solar scale (W/m²): raw = s_solar_irradiance_norm * ctxt_solar_irradiance_max.
         if "ctxt_solar_irradiance_max" not in state_spaces.keys():
             state_spaces["ctxt_solar_irradiance_max"] = Box(low=0, high=np.inf, shape=(1,), dtype=np.float32)
 
@@ -162,8 +144,7 @@ class WeatherDataSource(StateSource, Forecastable):
         states["s_avg_wind_speed_norm"][0] = np.float32(avg_wind_speed_norm)
         states["s_date"][0] = np.float32(row.get("s_date", 0.0))
 
-        # Raw scale factors — constant within an episode, change only when
-        # a new data variant is loaded (via _post_load_data_processing).
+        # scale factors — constant per episode, change only on a new data variant
         states["ctxt_temp_abs_max"][0] = np.float32(self.temp_abs_max) # type: ignore
         states["ctxt_wind_speed_abs_max"][0] = np.float32(self.wind_speed_abs_max) # type: ignore
         states["ctxt_solar_irradiance_max"][0] = np.float32(self.sun_shine_abs_max)
@@ -195,5 +176,5 @@ class WeatherDataSource(StateSource, Forecastable):
         return super()._get_serialize_value(param_name, value)
 
 
-# Register WeatherDataSource with the component registry
+# register with ComponentRegistry
 ComponentRegistry.register('statesource', WeatherDataSource)

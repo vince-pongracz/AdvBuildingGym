@@ -137,16 +137,14 @@ class DataCombinator:
         data_start_year: int | None = None,
         rng: np.random.Generator | None = None,
     ) -> tuple[int, str]:
-        """Compute the row offset for the day selection of the current episode.
-
-        Day selection happens every episode, independent of variant swapping:
+        """Row offset for this episode's start day (independent of variant swapping).
 
         - ``"random"``: sample a uniformly random day each episode.
         - ``"each"``: walk through days sequentially (episode 1 → day 0,
           episode 2 → day 1, …), wrapping around when all days are exhausted.
         - A date string (e.g. ``"2025-03-15"``): pin every episode to that day.
 
-        Args:
+         Args:
             episode_count: Current episode number.
             max_days: Number of complete days available in the data.
             steps_per_day: Rows per day (e.g. 288 for 5-min steps).
