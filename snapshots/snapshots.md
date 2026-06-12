@@ -49,26 +49,36 @@ python -m tools.snapshot.submit_snapshot \
     --kind eval \
     -- --episodes 20 --plot-all
 
-# 3. Dry-run: print the sbatch command without creating a snapshot or job
+# 3. Eval against a SPECIFIC checkpoint (e.g. an earlier one). --checkpoint
+#    bypasses the latest-checkpoint auto-discovery, so eval is pinned to
+#    exactly the checkpoint root you name (the dir holding rllib_checkpoint.json).
+python -m tools.snapshot.submit_snapshot \
+    --snapshot snapshots/<existing>/ \
+    --kind eval \
+    --checkpoint /abs/path/to/<run>/models/<trial>/ray/<algo>/<run_name>/<trial_id>/checkpoint_<checkpoint_idx> \
+    --sbatch="--time=02:00:00" \
+    -- --episodes 10 --plot-all
+
+# 4. Dry-run: print the sbatch command without creating a snapshot or job
 python -m tools.snapshot.submit_snapshot \
     --trial configs/trial_cfgs/trial_cfg_1_sac.yaml --kind train --dry-run
 
-# 4. Snapshot only (no submission). Prints the new snapshot dir on stdout.
+# 5. Snapshot only (no submission). Prints the new snapshot dir on stdout.
 python -m tools.snapshot.make_snapshot \
     --trial configs/trial_cfgs/trial_cfg_1_sac.yaml --note "baseline"
 
-# 5. Fan out multiple seeds from a single snapshot. Each run gets its own
+# 6. Fan out multiple seeds from a single snapshot. Each run gets its own
 #    isolated dir; the original snapshot and live-repo YAML stay untouched.
 python -m tools.snapshot.submit_snapshot --snapshot snapshots/<existing>/ --kind train --seed 123
 python -m tools.snapshot.submit_snapshot --snapshot snapshots/<existing>/ --kind train --seed 456
 python -m tools.snapshot.submit_snapshot --snapshot snapshots/<existing>/ --kind eval  --seed 999 -- --episodes 10
 
-# 6. CPU-only training (no GPU partition request, --cpu pinned by the wrapper).
+# 7. CPU-only training (no GPU partition request, --cpu pinned by the wrapper).
 #    Useful for smoke tests or when no GPU is allocated.
 python -m tools.snapshot.submit_snapshot --snapshot snapshots/<existing>/ --kind train-cpu
 python -m tools.snapshot.submit_snapshot --snapshot snapshots/<existing>/ --kind train-sb-cpu
 
-# 7. Run a snapshot in the current shell (no sbatch). Stdout/stderr stream
+# 8. Run a snapshot in the current shell (no sbatch). Stdout/stderr stream
 #    straight to the terminal; the wrapper's #SBATCH directives are inert.
 python -m tools.snapshot.submit_snapshot \
     --snapshot snapshots/<existing>/ --kind eval --local -- --episodes 5
@@ -132,6 +142,32 @@ recommended pairing for a fast non-SLURM iteration is
 `--note`, `--out`, `--dry-run`, and pass-through args. It is mutually
 unhelpful with cluster-only `--sbatch` flags; those are ignored with a
 warning.
+
+### `--checkpoint PATH` — pin eval to a specific checkpoint
+
+`--kind eval` without `--checkpoint` calls `_find_latest_train_checkpoint`,
+which walks `<snapshot>/runs/train_*/models/` and picks the **most recent**
+checkpoint root by mtime (a dir containing `rllib_checkpoint.json` or
+`.is_checkpoint`). That is the right default for "eval whatever I just
+trained", but it cannot reach an earlier checkpoint.
+
+`--checkpoint <abs path>` bypasses auto-discovery entirely and pins eval to
+exactly the checkpoint root you name — use it to evaluate an intermediate
+checkpoint (e.g. `checkpoint_000412`) rather than the last one:
+
+```bash
+python -m tools.snapshot.submit_snapshot \
+    --snapshot snapshots/20260610_105255_sta_lin_battery_only/ \
+    --kind eval \
+    --checkpoint /abs/path/to/runs/train_<ts>/models/<trial>/ray/sac/<run_name>/<trial_id>/checkpoint_000412 \
+    -- --episodes 10 --plot-all
+```
+
+The path must point at the checkpoint **root** (the directory holding
+`rllib_checkpoint.json`), not at `learner_group/...` inside it — the eval
+runner appends `learner_group/learner/rl_module/default_policy` itself. The
+trial YAML is still auto-injected from the frozen snapshot, so do not pass
+`--trial`. `--checkpoint` is eval-only and is ignored for train kinds.
 
 ### `--seed N` — per-run seed override
 

@@ -89,7 +89,7 @@ Key `run_train_ray.py` options:
 | `--episodes N` | Total training episodes | 3500 |
 | `--load-config PATH` | Load env config from YAML (**required**) | - |
 | `--seed N` | Random seed | 42 |
-| `--metric METRIC` | Optimisation target (`reward_rate`, `achieved_reward`, `episode_return_mean`) | `reward_rate` |
+| `--metric METRIC` | Optimisation target (`achieved_reward`, `episode_return_mean`) | `episode_return_mean` |
 | `--checkpoint-frequency-episodes N` | Checkpoint every N episodes | 20 |
 | `--log-trajectories` | Save per-step trajectory JSON during eval | off |
 
@@ -179,7 +179,7 @@ Key options:
 | `--hdf5 PATH` | Path to trajectories.hdf5 | auto-discover latest |
 | `--episode ID` | Episode ID to plot | best by `--select-by` |
 | `--format FMT [...]` | Output formats: `html`, `png`, `svg`, `pdf` | `html svg` |
-| `--select-by METRIC` | Metric for best-episode selection | `reward_rate` |
+| `--select-by METRIC` | Metric for best-episode selection | `achieved_reward` |
 
 ## GPU diagnostics (slurm_check_gpu_info.sh)
 

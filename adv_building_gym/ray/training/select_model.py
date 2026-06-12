@@ -75,7 +75,7 @@ def select_model(
             # SAC-specific hyperparameters
             twin_q=True,  # Use twin Q-networks to reduce overestimation bias. RLlib default
             # NOTE VP 2026.06.04.: initial_alpha=0.2 is in the SB3 default
-            initial_alpha=0.2,  # Initial entropy coefficient (auto-tuned via alpha_lr). RLlib default
+            initial_alpha=0.2,  # Initial entropy coefficient (auto-tuned via alpha_lr). RLlib default = 1.0
             target_entropy=0.0,  # Target entropy for automatic alpha tuning. RLlib default: "auto" = -action_dim
             # target_network_update_freq=1,  # Update target networks every step. RLlib default: 0
             n_step=training_config.sac_n_step_return,  # RLlib default: 1

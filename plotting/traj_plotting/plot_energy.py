@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
@@ -17,9 +18,9 @@ from plotting.utils import (
 def plot_energy(episode: EpisodeData) -> list[go.Figure]:
     """Stacked bar chart for per-infra power, line for cumulative energy (dual y).
 
-    When per-infrastructure breakdown is available, each timestep shows two
-    bar groups side by side: a single net-power bar and a stacked breakdown bar.
-    Falls back to a single bar when breakdown data is unavailable.
+    The full-breakdown figure shows one stacked bar per timestep (one trace per
+    infrastructure) and does not plot the net power. A separate net-energy figure
+    plots the net-power bar alongside cumulative energy.
     """
     time = episode.time_minutes
     power = episode.net_power_kW
@@ -29,7 +30,7 @@ def plot_energy(episode: EpisodeData) -> list[go.Figure]:
 
     fig = make_subplots(specs=[[{"secondary_y": True}]])
 
-    # Net power bar (always shown)
+    # Net power hover reused by the standalone net-energy figure below
     net_custom = list(zip(time_hhmm, power, cum_e))
     net_hover = (
         "time: %{customdata[0]}<br>"
@@ -37,19 +38,9 @@ def plot_energy(episode: EpisodeData) -> list[go.Figure]:
         "cumulative: %{customdata[2]:.3f} kWh"
         "<extra></extra>"
     )
-    fig.add_trace(
-        go.Bar(
-            x=time, y=power, name="Net Power (kW)",
-            marker_color="#636EFA", opacity=0.7,
-            customdata=net_custom, hovertemplate=net_hover,
-            offsetgroup="net",
-        ),
-        secondary_y=False,
-    )
 
     if power_breakdown:
-        # Stacked bar — one trace per infrastructure, placed as a second
-        # bar group next to the net power bar
+        # Stacked bar — one trace per infrastructure
         for infra_name, infra_power in power_breakdown.items():
             custom = list(zip(time_hhmm, infra_power, cum_e))
             hover = (
@@ -96,7 +87,16 @@ def plot_energy(episode: EpisodeData) -> list[go.Figure]:
     )
     fig.update_yaxes(title_text="Power (kW)", secondary_y=False)
     fig.update_yaxes(title_text="Cumulative Energy (kWh)", secondary_y=True)
-    align_zero_dual_yaxes(fig, power, cum_e)
+    # Left-axis extent is driven by the stacked breakdown bars (positives stack
+    # up, negatives stack down under barmode="relative"), not the net power.
+    if power_breakdown:
+        stacked = np.vstack(list(power_breakdown.values()))
+        pos_stack = np.clip(stacked, 0.0, None).sum(axis=0)
+        neg_stack = np.clip(stacked, None, 0.0).sum(axis=0)
+        power_extent = list(pos_stack) + list(neg_stack)
+    else:
+        power_extent = list(power)
+    align_zero_dual_yaxes(fig, power_extent, cum_e)
 
     # --- Second figure: net power + cumulative energy only ---
     fig_net = make_subplots(specs=[[{"secondary_y": True}]])
@@ -131,7 +131,7 @@ def plot_energy(episode: EpisodeData) -> list[go.Figure]:
     fig_net.update_yaxes(title_text="Cumulative Energy (kWh)", secondary_y=True)
     align_zero_dual_yaxes(fig_net, power, cum_e)
 
-    n_full_legend = 2 + len(power_breakdown)  # net power + cum energy + breakdown traces
+    n_full_legend = 1 + len(power_breakdown)  # cum energy + breakdown traces
     wm = get_width_multiplier("energy")
     return [
         style_figure(fig, n_legend_items=n_full_legend, width_multiplier=wm),
