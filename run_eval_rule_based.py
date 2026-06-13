@@ -68,10 +68,10 @@ def parse_args() -> argparse.Namespace:
         "--episodes", type=int, default=10,
         help="Number of evaluation episodes per strategy (and per eval config)",
     )
-    # TODO VP 2026.06.13.: Check seed of RBC eval and Eval script eval
     parser.add_argument(
         "--seed", type=int, default=None,
-        help="Base seed (episode N uses seed+N). Defaults to the trial seed.",
+        help="Base seed (episode N uses seed + (N-1), 1-based like run_eval_ray.py). "
+            "Defaults to the trial seed.",
     )
     parser.add_argument(
         "--output-dir", type=str, default="eval_results",
@@ -211,25 +211,28 @@ def evaluate_strategy(strategy, env: AdvBuildingGym, args: argparse.Namespace,
     episode_stats: list[dict] = []
     start_time = time.time()
     for ep in range(args.episodes):
+        # 1-based episode label to match run_eval_ray.py: episode N uses seed+ (N-1),
+        # so RBC episode K and RL episode K share the same seed -> same data variant/date.
+        episode_num = ep + 1
         episode_seed = seed + ep
         stat = run_episode(env, strategy, collector, episode_seed)
-        stat = {"episode": ep, **stat}
+        stat = {"episode": episode_num, **stat}
         episode_stats.append(stat)
         logger.info(
             "[%s] episode %d/%d: reward=%.4f length=%d cum_E_kWh=%.3f cum_price_EUR=%.4f "
             "battery_charged_kWh=%s battery_discharged_kWh=%s",
-            strategy.name, ep + 1, args.episodes, stat["total_reward"],
+            strategy.name, episode_num, args.episodes, stat["total_reward"],
             stat["length"], stat["cum_E_kWh"], stat["cum_price_EUR"],
             f"{stat['battery_charged_kWh']:.3f}" if stat["battery_charged_kWh"] is not None else "n/a",
             f"{stat['battery_discharged_kWh']:.3f}" if stat["battery_discharged_kWh"] is not None else "n/a",
         )
         if collector is not None:
             collector.on_episode_end(
-                episode_id=ep, seed=episode_seed,
+                episode_id=episode_num, seed=episode_seed,
                 metadata={"strategy": strategy.name, "trial_name": trial_name},
             )
-            collector.save_json(os.path.join(out_dir, "trajectories", f"{ep}_trajectory.json"))
-            collector.save_hdf5(os.path.join(out_dir, "trajectories.hdf5"), episode_id=str(ep))
+            collector.save_json(os.path.join(out_dir, "trajectories", f"{episode_num}_trajectory.json"))
+            collector.save_hdf5(os.path.join(out_dir, "trajectories.hdf5"), episode_id=str(episode_num))
 
     rewards = [s["total_reward"] for s in episode_stats]
     strategy_params: dict = {"preserve_start_soc": args.preserve_start_soc}

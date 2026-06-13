@@ -14,19 +14,26 @@ class HouseholdEnergyConsumers(Infrastructure):
     """Passive household consumer (no policy action).
 
     Converts the normalised ``desired_energy_need`` signal (from DesiredUserEnergyNeed)
-    to kW and writes it read-only into ``actions['a_hh_consumption']`` (0=none, 1=peak)
-    so rewards can account for it. Positive = consumption from grid.
+    to physical kW and writes it read-only into ``actions['a_hh_consumption']`` (0=none,
+    1=peak) so rewards can account for it. Positive = consumption from grid.
+
+    The peak scale is the dataset's own max published by DesiredUserEnergyNeed as
+    ``ctxt_hh_consumption_max`` (so ``kW = norm * data_max`` recovers the raw load and
+    varies per data variant). ``peak_consumption_kW`` is only a fallback for configs
+    with no DesiredUserEnergyNeed source (synthetic profile path).
     """
 
     POWER_FLOW = "consumer"
 
     # Internal state variables — don't serialize
     _exclude_params: ClassVar[Set[str]] = {
-        'iteration', 'consumption_norm', 'current_consumption_kW', '_rng'
+        'iteration', 'consumption_norm', 'current_consumption_kW', '_rng',
+        '_effective_peak_kW',
     }
 
     def __init__(self, name: str, peak_consumption_kW: float) -> None:
-        """peak_consumption_kW: peak household consumption (kW)."""
+        """peak_consumption_kW: fallback peak (kW) used only when no
+        DesiredUserEnergyNeed source publishes ``ctxt_hh_consumption_max``."""
         super().__init__(name, peak_consumption_kW)
 
         self.peak_consumption_kW = peak_consumption_kW
@@ -34,6 +41,9 @@ class HouseholdEnergyConsumers(Infrastructure):
         # State variables
         self.consumption_norm = 0.0  # Normalized consumption [0, 1]
         self.current_consumption_kW = 0.0  # Actual consumption in kW
+        # Effective peak (kW) used to scale the normalised signal: the published
+        # data max when available, else the configured fallback. Refreshed per episode.
+        self._effective_peak_kW = peak_consumption_kW
 
         # Per-episode RNG for the synthetic fallback; rebound to env rng
         # (info["_rng"]) on reset(). Standalone default until first reset.
@@ -42,12 +52,13 @@ class HouseholdEnergyConsumers(Infrastructure):
     def setup_spaces(self,
                     state_spaces,
                     action_spaces):
-        """Register state space only — consumption is set by DesiredUserEnergyNeed, no action."""
+        """Register state space only — consumption is set by DesiredUserEnergyNeed, no action.
+
+        The peak scale (``ctxt_hh_consumption_max``) is owned/published by
+        DesiredUserEnergyNeed, so it is not declared here.
+        """
         if "s_hh_consumption_norm" not in state_spaces:
             state_spaces["s_hh_consumption_norm"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
-        
-        if "ctxt_peak_consumption_kW" not in state_spaces:
-            state_spaces["ctxt_peak_consumption_kW"] = Box(low=0, high=np.inf, shape=(1,), dtype=np.float32)
 
         return state_spaces, action_spaces
 
@@ -64,8 +75,11 @@ class HouseholdEnergyConsumers(Infrastructure):
             # Fallback: synthetic time-based profile
             self.consumption_norm = self._synthetic_consumption(states)
 
-        # Scale normalized signal to physical kW
-        self.current_consumption_kW = self.consumption_norm * self.peak_consumption_kW
+        # Scale normalised signal to physical kW by the dataset's own max (recovers
+        # raw kW since DesiredUserEnergyNeed uses abs-min-max scaling); fall back to
+        # the configured peak when no such source is present.
+        self._effective_peak_kW = self._resolve_peak_kW(states)
+        self.current_consumption_kW = self.consumption_norm * self._effective_peak_kW
 
         # write normalised consumption as read-only output (positive = consumption)
         # NOTE VP 2026.05.07.: It's not really needed to be an action...
@@ -80,16 +94,34 @@ class HouseholdEnergyConsumers(Infrastructure):
         """Write current normalized consumption into states for observation."""
         super().update_state(states, info)
         states["s_hh_consumption_norm"][0] = np.float32(self.consumption_norm)
-        states["ctxt_peak_consumption_kW"][0] = np.float32(self.peak_consumption_kW)
 
     def reset(self, states: Dict, info=None) -> None:
-        """Clear per-episode consumption readouts."""
+        """Clear per-episode consumption readouts and refresh the effective peak.
+
+        Statesources reset before infras, so ``ctxt_hh_consumption_max`` is already
+        published here when a DesiredUserEnergyNeed source exists.
+        """
         self.consumption_norm = 0.0
         self.current_consumption_kW = 0.0
+        self._effective_peak_kW = self._resolve_peak_kW(states)
         # Bind to env rng (info["_rng"]) so fallback noise shares the
         # deterministic per-worker stream; standalone fallback otherwise.
         self._rng = (info.get("_rng") if info else None) or np.random.default_rng()
         super().reset(states, info)
+
+    @property
+    def max_consumption_kW(self) -> float:
+        """Max grid draw (kW) = effective peak (data max when published, else fallback)."""
+        return self._effective_peak_kW
+
+    def _resolve_peak_kW(self, states: Dict) -> float:
+        """Physical peak load (kW): the dataset max published by DesiredUserEnergyNeed
+        (``ctxt_hh_consumption_max``) when present and positive, else the configured fallback."""
+        if "ctxt_hh_consumption_max" in states:
+            published = float(states["ctxt_hh_consumption_max"][0])
+            if published > 0.0:
+                return published
+        return self.peak_consumption_kW
 
     def _synthetic_consumption(self, states: Dict) -> float:
         """Stepped time-of-day profile (matches DesiredUserEnergyNeed) plus Gaussian noise."""

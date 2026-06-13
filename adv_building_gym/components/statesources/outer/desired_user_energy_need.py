@@ -23,15 +23,18 @@ NORM_COLUMN: str = "desired_energy_need_norm"
 class DesiredUserEnergyNeed(StateSource, Forecastable):
     """Desired user energy need from the ``hh_consumption_kW`` CSV column.
 
-    Min-max normalised to [0, 1], exposed as ``s_desired_energy_need``
-    (positive = consuming, 0 = no need; negative is meaningless).
+    Abs-min-max normalised to [0, 1], exposed as ``s_desired_energy_need``
+    (1 = peak load, 0 = no need; negative is meaningless). For non-negative
+    consumption the scale factor equals the raw max, so ``raw_kW = norm * scale``
+    holds exactly and ``ctxt_hh_consumption_max`` is the genuine peak in kW —
+    consumed by ``HouseholdEnergyConsumers`` to recover physical kW.
     """
 
     # consumption_max is derived from data, don't serialize
     _exclude_params: ClassVar[Set[str]] = {'consumption_max'}
 
     def __init__(self, name: str, ds_path: str | None = None,
-                normalise: Normalisation | str | None = Normalisation.MIN_MAX_SCALING) -> None:
+                normalise: Normalisation | str | None = Normalisation.ABS_MIN_MAX_SCALING) -> None:
         super().__init__(name=name)
 
         self.normalise = Normalisation.init(normalise)
