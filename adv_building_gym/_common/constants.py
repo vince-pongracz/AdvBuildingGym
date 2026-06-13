@@ -13,6 +13,10 @@ KJ_PER_KWH: int = 3600
 # kW -> W
 W_PER_KW: float = 1000.0
 
+# Safety cap against non-terminating eval episodes. Shared by the RLlib eval
+# runner and the rule-based eval driver so both abort runaway episodes alike.
+MAX_STEPS_PER_EPISODE: int = 1000
+
 # Dynamical slowdown on the 1R1C thermal update (HP + heat-loss paths). From the LLEC
 # parent project; gives hour-scale time constants from tens-K / hundreds-mC YAML params
 # instead of the seconds-scale strict-SI dynamics.

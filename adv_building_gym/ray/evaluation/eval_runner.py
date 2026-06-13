@@ -31,6 +31,7 @@ from adv_building_gym.ray.training.rl_module_inference import (
 )
 from adv_building_gym.ray.utils.trajectory_collector import TrajectoryCollector
 from adv_building_gym._common.space_check import check_space_compatibility
+from adv_building_gym._common.constants import MAX_STEPS_PER_EPISODE
 
 from .results import EpisodeStat, EvalResults
 from .utils import copy_rl_module, copy_trial_yaml, write_provenance
@@ -220,7 +221,6 @@ def evaluate_model(
     error: str | None = None
 
     try:
-        MAX_STEPS_PER_EPISODE = 1000
         for ep in range(num_episodes):
             episode_num = ep + 1
             logger.info("=" * 50)
