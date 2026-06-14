@@ -12,6 +12,7 @@ KJ_PER_KWH: int = 3600
 
 # kW -> W
 W_PER_KW: float = 1000.0
+KW_TO_W: float = W_PER_KW
 
 # Safety cap against non-terminating eval episodes. Shared by the RLlib eval
 # runner and the rule-based eval driver so both abort runaway episodes alike.

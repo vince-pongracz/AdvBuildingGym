@@ -1,7 +1,6 @@
 """Ray RLlib algorithm selection/config (PPO, SAC, DreamerV3)."""
 
 import logging
-from pathlib import Path
 
 from ray.rllib.algorithms.ppo import PPOConfig
 from ray.rllib.algorithms.sac import SACConfig
@@ -14,24 +13,16 @@ from adv_building_gym.config.training.training_param_config import TrainingParam
 
 logger = logging.getLogger(__name__)
 
-# TODO VP 2026.06.10.: Remove this
-# Default path to the bundled training config YAML
-_DEFAULT_TRAINING_CONFIG = Path(__file__).resolve().parents[2] / "configs" / "training_param_config.yaml"
-
 
 def select_model(
     algorithm: str,
     episode_length: int,
-    training_config: TrainingParamConfig | None = None,
+    training_config: TrainingParamConfig,
 ):
     """Build the algorithm-specific config (ppo/sac/dreamerv3) with its hyperparameters.
 
     Caller then passes it to common_model_setup() for env/resources/callbacks.
-    ``training_config`` None → loads the bundled ``training_config.yaml``.
     """
-
-    if training_config is None:
-        training_config = TrainingParamConfig.from_yaml(_DEFAULT_TRAINING_CONFIG)
 
     # Algorithm-specific configuration
     if algorithm == "ppo":

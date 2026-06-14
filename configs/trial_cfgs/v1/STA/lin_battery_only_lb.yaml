@@ -74,7 +74,6 @@ infras:
   max_cap_kWh: 15.0
   start_soc_percentage: 0.3
   start_soc_jitter: 0.1
-  history_length: 4
   soc_min: 0.1
   soc_max: 0.95
 - class: SolarPanel
@@ -91,7 +90,7 @@ infras:
   cut_out_speed: 25.0
 - class: HouseholdEnergyConsumers
   name: hh_consumers
-  peak_consumption_kW: 8.0 # TODO VP 2026.05.17.: What does this do?
+  peak_consumption_kW: 8.0
 
 rewards:
 - class_name: BatteryTargetReward

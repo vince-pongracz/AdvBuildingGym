@@ -80,13 +80,10 @@ infras:
   cop_cool: 2.5
 - class: BatteryTremblay
   name: battery
-  max_power_kW: 19.0
   cell_capacity_Ah: 3.5
-  max_charge_amps: 48.0
-  max_charge_voltage: 420.0
-  start_soc_percentage: 0.3
+  max_charge_A: 48.0
+  start_soc: 0.3
   max_charge_rate: 1.5
-  history_length: 4
   E0: 3.2
   K: 0.009
   A: 0.468
