@@ -62,6 +62,7 @@ WHITELIST_FILES = (
     "pyproject.toml",
     "run_train_ray.py",
     "run_eval_ray.py",
+    "run_eval_rule_based.py",
     "rl_ma_train.py",
     "run_train_sb.py",
 )

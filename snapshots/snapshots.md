@@ -82,12 +82,20 @@ python -m tools.snapshot.submit_snapshot --snapshot snapshots/<existing>/ --kind
 #    straight to the terminal; the wrapper's #SBATCH directives are inert.
 python -m tools.snapshot.submit_snapshot \
     --snapshot snapshots/<existing>/ --kind eval --local -- --episodes 5
+
+# 9. Rule-based eval — no checkpoint, no GPU. Runs the rbc_strats heuristics
+#    (run_eval_rule_based.py) against a snapshot. --kind eval-rbc skips the
+#    checkpoint auto-discovery that --kind eval performs.
+python -m tools.snapshot.submit_snapshot \
+    --trial configs/trial_cfgs/v0/STA/lin_battery_only.yaml \
+    --kind eval-rbc \
+    -- --strategy all --episodes 10
 ```
 
-`--kind` ∈ `{train, train-cpu, eval, train-ma, train-sb, train-sb-cpu}`
+`--kind` ∈ `{train, train-cpu, eval, eval-rbc, train-ma, train-sb, train-sb-cpu}`
 selects the SLURM wrapper. Anything after `--` is forwarded verbatim to
-the entry script (`run_train_ray.py`, `run_eval_ray.py`, `rl_ma_train.py`,
-`run_train_sb.py`).
+the entry script (`run_train_ray.py`, `run_eval_ray.py`,
+`run_eval_rule_based.py`, `rl_ma_train.py`, `run_train_sb.py`).
 
 ### CPU-only kinds — `train-cpu` / `train-sb-cpu`
 
@@ -107,6 +115,32 @@ The two `-cpu` kinds point at sibling SLURM wrappers
 Use these when you want a deterministic CPU baseline, when no GPU is
 available, or when you want to keep a quick smoke-test path that does not
 contend for GPU partition slots.
+
+### Rule-based eval — `eval-rbc`
+
+`--kind eval-rbc` points at `slurm_eval_rbc.sh` and runs
+`run_eval_rule_based.py` — the `adv_building_gym.rbc_strats` heuristic
+controllers (`do_nothing`, `pv_surplus_charge`, `self_coverage`,
+`deficit_discharge`, `price_median`, or `all`) — against a snapshot. It
+differs from `--kind eval` in two ways:
+
+* **No checkpoint.** Rule-based strategies have no learned policy, so the
+  `--kind eval` checkpoint auto-discovery (and `--checkpoint`) never applies
+  and is not triggered for this kind.
+* **CPU-only, no GPU.** The wrapper requests no GPU (like the eval wrapper)
+  and defaults to `--time=00:30:00` — bump it via `--sbatch="--time=..."`
+  for many episodes/strategies.
+
+Forward rule-based flags after `--`: `--strategy {…|all}`, `--episodes N`,
+`--seed N`, `--evening-start/-end H` (for `self_coverage`),
+`--preserve-start-soc`, and `--plot/--plot-all`. Results land under
+`<snapshot>/runs/eval_rbc_<ts>/eval_results/`.
+
+```bash
+python -m tools.snapshot.submit_snapshot \
+    --trial configs/trial_cfgs/v0/STA/lin_battery_only.yaml \
+    --kind eval-rbc -- --strategy all --episodes 10
+```
 
 ### `--local` — run in the current shell, no sbatch
 
@@ -208,7 +242,7 @@ submitter rejects that combination up front.
 | Variable | Purpose |
 |----------|---------|
 | `SNAPSHOT_DIR`    | absolute path of the snapshot dir |
-| `SNAPSHOT_RUN_ID` | unique per-submission id (e.g. `train_20260521_232358`, `train_cpu_20260524_185655`, `train_sb_cpu_20260528_151019_seed42`) |
+| `SNAPSHOT_RUN_ID` | unique per-submission id (e.g. `train_20260521_232358`, `train_cpu_20260524_185655`, `eval_rbc_20260615_124334`, `train_sb_cpu_20260528_151019_seed42`) |
 | `LIVE_REPO_ROOT`  | absolute path of the live repo (so `plotting/` resolves) |
 
 In sbatch mode they are passed via `sbatch --export=`. In `--local` mode

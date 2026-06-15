@@ -1,0 +1,125 @@
+trial_name: sta_lin_battery_only
+algorithm: sac
+seed: 42
+metric: episode_return_mean
+log_trajectories: false
+num_envs: 1
+grad_train: false
+
+env_meta:
+  EPISODE_LENGTH: 288
+  control_step: 300
+  allow_early_termination: false
+  hst_env_wrapper:
+    enabled: true
+    tracked_keys:
+    - s_battery_soc
+    - s_ev_soc
+    - s_temp_in_norm
+    - s_temp_out_norm
+    - s_solar_irradiance_norm
+    offsets:
+    - -1
+    - -2
+    - -3
+    - -4
+    - -6
+
+  forecast_env_wrapper:
+    enabled: true
+    forecast_steps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+
+training_params:
+  common:
+    evaluation_interval: 4
+    episode_lookback_horizon_steps: 6
+    max_episodes_to_run: 7000
+    clip_actions_to_env_bounds: true
+    gamma: 0.99
+  ppo:
+    episodes_per_iteration: 10
+    minibatch_size: 64
+    num_epochs: 20
+  sac:
+    episodes_to_keep_in_replay_buffer: 500
+    n_step_return: 3
+    training_intensity: 32
+    learning_starts_after_n_episodes: 50
+  dreamerv3:
+    model_size: "XS"
+    batch_size_B: 16
+    batch_length_T: 64
+    training_ratio: 128.0
+    horizon_H: 15
+    episodes_to_keep_in_replay_buffer: 500
+    world_model_lr: 1.0e-4
+    actor_lr: 3.0e-5
+    critic_lr: 3.0e-5
+
+statesources:
+- class: EnergyPriceDataSource
+  name: E_price
+  normalise: abs_min_max
+  # max_calc_mode options:
+  #   mean              - mean of raw baseprice over the loaded series
+  #   median            - median of raw baseprice
+  #   percentile        - quantile of raw baseprice at `percentile` (e.g. 0.75)
+  #   mean_above_median - mean of raw baseprice values strictly above the median
+  dynamic_max_price_calc: true
+  max_calc_mode: mean
+  percentile: 0.75  # consulted only when max_calc_mode == "percentile"
+- class: WeatherDataSource
+  name: weather
+  normalise: abs_min_max
+- class: InsideTemperature
+  name: desired_temp_in
+- class: DesiredUserEnergyNeed
+  name: user_energy_need
+- class: BuildingHeatLoss
+  name: building_heat_loss
+  K: 20
+  mC: 300
+- class: EVState
+  name: ev_schedule
+- class: OperatorEnergyControl
+  name: operator_energy_control
+  max_power_kW: 20.0
+
+infras:
+- class: BatteryLinear
+  name: battery
+  max_power_kW: 10.0
+  max_cap_kWh: 15.0
+  start_soc_percentage: 0.3
+  start_soc_jitter: 0.1
+  soc_min: 0.1
+  soc_max: 0.95
+- class: SolarPanel
+  name: solar
+  max_power_kW: 5.0
+  pv_efficiency: 0.22
+  panel_area_m2: 50
+- class: WindTurbine
+  name: wind_turbine
+  max_power_kW: 5.0
+  rated_power_kW: 5.0
+  cut_in_speed: 3.0
+  rated_speed: 12.0
+  cut_out_speed: 25.0
+- class: HouseholdEnergyConsumers
+  name: hh_consumers
+  peak_consumption_kW: 8.0
+
+rewards:
+- class_name: EconomicRewardV0
+  weight: 1.0
+
+infra_schedule: null
+
+statesource_schedule: null
+
+reward_schedule: null
+
+data_schedule:
+  train: configs/schedules/data/train.yaml
+  eval: configs/schedules/data/eval.yaml

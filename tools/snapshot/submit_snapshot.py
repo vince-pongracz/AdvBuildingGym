@@ -63,6 +63,7 @@ KIND_SPECS: dict[str, tuple[str, str]] = {
     "train":        ("slurm_train_ray.sh",     "run_train_ray.py"),
     "train-cpu":    ("slurm_train_ray_cpu.sh", "run_train_ray.py"),
     "eval":         ("slurm_eval_ray.sh",      "run_eval_ray.py"),
+    "eval-rbc":     ("slurm_eval_rbc.sh",      "run_eval_rule_based.py"),
     "train-ma":     ("slurm_train_ma.sh",      "rl_ma_train.py"),
     "train-sb":     ("slurm_train_sb.sh",      "run_train_sb.py"),
     "train-sb-cpu": ("slurm_train_sb_cpu.sh",  "run_train_sb.py"),
