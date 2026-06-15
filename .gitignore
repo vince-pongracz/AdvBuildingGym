@@ -66,6 +66,11 @@ param_space.json
 # Plotting outputs
 plotting/out/**
 
+# Dashboard third-party JS/CSS libs (SortableJS, Prism) installed via npm.
+# package.json + package-lock.json are committed; node_modules is not.
+# Run: npm install --prefix plotting/dashboard
+plotting/dashboard/node_modules/
+
 # Eval results
 eval_results/**
 

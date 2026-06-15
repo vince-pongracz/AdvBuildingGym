@@ -793,6 +793,23 @@ jupyter kernelspec list
 Always activate the virtual environment (`source llec_env/bin/activate`) before starting Jupyter to ensure correct dependencies.
 After registering the kernel, restart Jupyter so the `Python (llec_env)` kernel becomes available.
 
+### 2.5 Dashboard assets (one-time `npm install`, only needed for plotting)
+
+The trajectory plots and the aggregated evaluation **dashboard** (`plotting/dashboard/`) need two 3rd-party libraries — they are ,managed as npm dependencies.
+Install them once:
+
+```bash
+npm install --prefix plotting/dashboard
+```
+
+Run it on a **login node** (Node ≥ 18). The Python build then
+reads the pinned files from `plotting/dashboard/node_modules/` and **inlines** them into
+each generated dashboard HTML. 
+`node_modules/` only needed to *build* a dashboard, not to
+*view* one. Plot generation only *reads* node_modules (it never installs) and it fails with
+a clear message pointing here if the libs are missing. Versions are pinned in
+`plotting/dashboard/package.json`.
+
 </details>
 
 ## Data Preprocessing

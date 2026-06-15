@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>{{PAGE_TITLE}}</title>
+<style>{{PRISM_CSS}}</style>
+<style>{{CARD_CSS}}</style>
+<style>{{APP_CSS}}</style>
+<style>{{ROOT_VARS}}</style>
+</head>
+<body>
+<header class="topbar" id="topbar"></header>
+<div class="layout">
+  <aside class="left" id="leftPanel">
+    <div class="panel-head">Plots</div>
+    <div class="tree" id="tree"></div>
+  </aside>
+  <div class="splitter v" id="splitLeft" title="drag to resize"></div>
+  <main class="middle" id="middle">
+    <div class="plot-flex" id="plotFlex"></div>
+    <div class="footnotes" id="footnotes"></div>
+  </main>
+  <div class="splitter v" id="splitRight" title="drag to resize"></div>
+  <aside class="right" id="rightPanel">
+    <section class="pane" id="manifestPane">
+      <div class="pane-title">manifest.json</div>
+      <div class="manifest-summary" id="manifestSummary"></div>
+      <pre class="code line-numbers"><code class="language-json" id="manifestCode"></code></pre>
+    </section>
+    <div class="splitter h" id="splitPanes" title="drag to resize"></div>
+    <section class="pane" id="configPane">
+      <div class="pane-title">trial config yaml</div>
+      <pre class="code line-numbers"><code class="language-yaml" id="configCode"></code></pre>
+    </section>
+  </aside>
+</div>
+<script>{{PLOTLY_JS}}</script>
+<script>{{VENDOR_JS}}</script>
+<script>{{DATA_JS}}</script>
+<script>{{APP_JS}}</script>
+</body>
+</html>

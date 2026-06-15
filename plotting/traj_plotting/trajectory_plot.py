@@ -21,6 +21,7 @@ import os
 import h5py
 import plotly.graph_objects as go
 
+from plotting.dashboard.build_dashboard import write_episode_dashboard_html
 from plotting.utils import (
     ensure_chrome_for_kaleido,
     find_latest_hdf5,
@@ -50,8 +51,10 @@ def generate_all_plots(
     formats: list[str] = ["html"],
     select_by: str = "achieved_reward",
     file_prefix: str | None = None,
+    manifest_path: str | None = None,
+    config_path: str | None = None,
 ) -> list[str]:
-    """Load an episode, generate all four figures, save to output_dir.
+    """Load an episode, generate all figure groups, save to output_dir.
 
     Args:
         hdf5_path: Path to trajectories.hdf5.
@@ -61,6 +64,10 @@ def generate_all_plots(
         formats: Output formats to produce. Default: ["html"].
         select_by: Summary metric for auto-selecting the best episode.
         file_prefix: Prefix for output filenames. Default: episode_id.
+        manifest_path: Snapshot manifest.json for the dashboard's right panel.
+            None = auto-discover by walking up from ``output_dir``.
+        config_path: Trial-config YAML for the dashboard's right panel.
+            None = auto-discover from the eval-results dir.
 
     Returns:
         List of saved file paths.
@@ -88,6 +95,19 @@ def generate_all_plots(
     }
 
     saved: list[str] = []
+
+    # Aggregated self-contained dashboard (HTML only). Built BEFORE the per-group
+    # writers run because write_figure_list_html mutates each figure's layout
+    # size in place — serialising here captures the figures with their heights.
+    if "html" in formats:
+        dashboard_path = os.path.join(output_dir, f"{ep_id}_dashboard.html")
+        write_episode_dashboard_html(
+            all_figures, html_footnotes, episode, dashboard_path,
+            output_dir=output_dir,
+            manifest_path=manifest_path,
+            config_path=config_path,
+        )
+        saved.append(dashboard_path)
 
     # Ensure Chrome/Chromium is available for static image export (svg/png/pdf).
     # Kaleido v1+ requires Chrome; this downloads it once to ~/.cache if missing.

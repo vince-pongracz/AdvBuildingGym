@@ -66,6 +66,16 @@ figure:
   width_multipliers:
     energy: 1.5
 
+dashboard:
+  # Aggregated 3-panel episode dashboard (plotting/dashboard/).
+  # Default number of plot cards per row in the middle flex grid. Each card is
+  # still freely drag-resizable, so this only sets the initial density.
+  default_per_row: 2
+  # Initial width (px) of the left ticker tree and right manifest/config panel.
+  # Both panels are drag-resizable at runtime (CSS resize: horizontal).
+  left_panel_px: 260
+  right_panel_px: 400
+
 output:
   # Relative to repository root
   dir: plotting/out/traj_plots
