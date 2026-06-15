@@ -7,6 +7,7 @@ plot_states  – state variable plots
 plot_actions – action dimension plots
 plot_rewards – reward breakdown plots
 plot_energy  – energy / power plots
+plot_price   – cumulative electricity cost plots
 plot_raw     – raw (unnormalised) physical value plots
 """
 
@@ -15,6 +16,7 @@ from .plot_states import plot_states
 from .plot_actions import plot_actions
 from .plot_rewards import plot_rewards
 from .plot_energy import plot_energy
+from .plot_price import plot_price
 from .plot_raw import plot_raw
 
 __all__ = [
@@ -25,6 +27,7 @@ __all__ = [
     "plot_actions",
     "plot_rewards",
     "plot_energy",
+    "plot_price",
     "plot_raw",
     "generate_all_plots",
 ]

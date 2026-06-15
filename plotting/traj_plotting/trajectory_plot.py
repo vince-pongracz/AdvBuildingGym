@@ -33,6 +33,7 @@ from .plot_states import plot_states
 from .plot_actions import plot_actions
 from .plot_rewards import plot_rewards
 from .plot_energy import ENERGY_SIGN_CONVENTION_HTML, plot_energy
+from .plot_price import PRICE_SIGN_CONVENTION_HTML, plot_price
 from .plot_raw import plot_raw
 from .plot_raw_policy_actions import plot_raw_policy_actions
 
@@ -86,12 +87,14 @@ def generate_all_plots(
         "raw_policy_actions": plot_raw_policy_actions(episode),
         "rewards": plot_rewards(episode),
         "energy": plot_energy(episode),
+        "price": plot_price(episode),
         "raw": plot_raw(episode),
     }
 
     # Per-figure-group footnotes rendered as separate HTML divs below the plots
     html_footnotes: dict[str, str] = {
         "energy": ENERGY_SIGN_CONVENTION_HTML,
+        "price": PRICE_SIGN_CONVENTION_HTML,
     }
 
     saved: list[str] = []
