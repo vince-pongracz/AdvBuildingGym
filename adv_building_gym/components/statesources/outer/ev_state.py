@@ -27,8 +27,9 @@ class EVState(StateSource):
     Populated ``max_cap_kWh`` = connect (full EvSpec); NaN = disconnect. Each timestamp's
     time-of-day maps to an iteration via ``control_step``.
 
-    Writes ``ev_schedule_connected`` and EV spec fields into the shared dict;
-    LinearEVCharger reads them in ``exec_action`` and calls ``set_ev_connected``.
+    Publishes the EV spec as ``ctxt_ev_schedule_*`` observation keys (zeroed when no EV);
+    LinearEVCharger reads them in ``exec_action`` — connection is signalled by
+    ``ctxt_ev_schedule_max_cap_kWh`` > 0 — and calls ``set_ev_connected``.
     """
 
     _context_params: ClassVar[Set[str]] = {'control_step'}
@@ -37,18 +38,20 @@ class EVState(StateSource):
         '_ev_connected', '_current_spec',
     }
 
-    # State keys written by this source (read by LinearEVCharger)
-    KEY_CONNECTED = "ev_schedule_connected"
-    KEY_MAX_CAP = "ev_schedule_max_cap_kWh"
-    KEY_MAX_CHARGE = "ev_schedule_max_charging_kW"
-    KEY_CHARGE_EFF = "ev_schedule_charger_eff"
-    KEY_DISCHARGE_EFF = "ev_schedule_discharge_eff"
+    # EV-side spec fields — published as ctxt_ev_schedule_* OBSERVATION keys (the
+    # schedule/contract view). The charger reads these from the state to build its EvSpec
+    # and to detect connect/disconnect (ctxt_ev_schedule_max_cap_kWh > 0); the policy sees
+    # them too. This source writes no info — it is a pure observation publisher.
     KEY_V2G = "ctxt_ev_schedule_v2g"
     KEY_START_SOC = "ctxt_ev_schedule_start_soc"
     KEY_TARGET_SOC = "ctxt_ev_schedule_target_soc"
+    KEY_CHARGE_EFF = "ctxt_ev_schedule_charger_eff"
+    KEY_DISCHARGE_EFF = "ctxt_ev_schedule_discharge_eff"
+    KEY_MAX_CAP = "ctxt_ev_schedule_max_cap_kWh"
+    KEY_MAX_CHARGE = "ctxt_ev_schedule_max_charging_kW"
     # Hours from connect to hit target_soc — the user contract, deadline for the
     # LinearEVCharger corridor (not the actual disconnect time, not assumed observable).
-    KEY_CHARGE_TO_TARGET_HRS = "ev_schedule_charge_to_target_hrs"
+    KEY_CHARGE_TO_TARGET_HRS = "ctxt_ev_schedule_charge_to_target_hrs"
 
     def __init__(
         self,
@@ -120,50 +123,49 @@ class EVState(StateSource):
 
 
     def setup_spaces(self, state_spaces, action_spaces):
-        """Register the bounded [0, 1] EV schedule keys; unbounded/raw fields go to info
-        instead (see ``update_state``)."""
-        if self.KEY_V2G not in state_spaces:
-            state_spaces[self.KEY_V2G] = Box(low=0, high=1, shape=(1,), dtype=np.float32,)
-        if self.KEY_START_SOC not in state_spaces:
-            state_spaces[self.KEY_START_SOC] = Box(low=0, high=1, shape=(1,), dtype=np.float32,)
-        if self.KEY_TARGET_SOC not in state_spaces:
-            state_spaces[self.KEY_TARGET_SOC] = Box(low=0, high=1, shape=(1,), dtype=np.float32,)
+        """Publish the EV-side schedule spec as ctxt_ev_schedule_* observation keys.
+
+        Bounded [0, 1] for soc / efficiency / v2g; 
+        positive-real for kWh / kW / hours (the ctxt scale-factor convention, like ctxt_evc_max_charging_kW). 
+        The connect/disconnect event is the only field that stays in info.
+        """
+        bounded_keys = (
+            self.KEY_V2G, self.KEY_START_SOC, self.KEY_TARGET_SOC,
+            self.KEY_CHARGE_EFF, self.KEY_DISCHARGE_EFF,
+        )
+        for key in bounded_keys:
+            if key not in state_spaces:
+                state_spaces[key] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
+
+        magnitude_keys = (self.KEY_MAX_CAP, self.KEY_MAX_CHARGE, self.KEY_CHARGE_TO_TARGET_HRS)
+        for key in magnitude_keys:
+            if key not in state_spaces:
+                state_spaces[key] = Box(low=0, high=np.inf, shape=(1,), dtype=np.float32)
 
         return state_spaces, action_spaces
 
     def update_state(self, states, info=None) -> None:
-        """Check for EV events at the current iteration and write schedule."""
+        """Publish the EV-side schedule spec to the observation, evaluated at the current
+        iteration (zeroed when no EV is scheduled). Writes nothing to info."""
         event = self._event_lookup.get(self.iteration)
         if event is not None:
             is_connect, ev_spec = event
             self._ev_connected = is_connect
             self._current_spec = ev_spec if is_connect else None
 
-        # Bounded [0, 1] keys → states; 
-        # zero everything when EV is disconnected (avoid stale spec values)
-        if self._ev_connected and self._current_spec is not None:
-            states[self.KEY_V2G][0] = np.float32(1.0 if self._current_spec.v2g_enabled else 0.0)
-            states[self.KEY_START_SOC][0] = np.float32(self._current_spec.start_soc)
-            states[self.KEY_TARGET_SOC][0] = np.float32(self._current_spec.target_soc)
-        else:
-            states[self.KEY_V2G][0] = np.float32(0.0)
-            states[self.KEY_START_SOC][0] = np.float32(0.0)
-            states[self.KEY_TARGET_SOC][0] = np.float32(0.0)
+        connected = self._ev_connected and self._current_spec is not None
+        spec = self._current_spec
 
-        # Unbounded / raw keys → info (inter-component communication only)
-        # TODO VP 2026.06.10.: Why are these in the info dict, they should be in the state.
-        if info is not None:
-            connected = self._ev_connected and self._current_spec is not None
-            info[self.KEY_CONNECTED] = 1.0 if self._ev_connected else 0.0
-            info[self.KEY_MAX_CAP] = self._current_spec.max_cap_kWh if connected else 0.0
-            info[self.KEY_MAX_CHARGE] = self._current_spec.max_charging_kW if connected else 0.0
-            # mirror bounded keys so LinearEVCharger reads all spec fields from info
-            info[self.KEY_CHARGE_EFF] = self._current_spec.charger_efficiency if connected else 0.0
-            info[self.KEY_DISCHARGE_EFF] = self._current_spec.discharge_efficiency if connected else 0.0
-            info[self.KEY_V2G] = (1.0 if self._current_spec.v2g_enabled else 0.0) if connected else 0.0
-            info[self.KEY_START_SOC] = self._current_spec.start_soc if connected else 0.0
-            info[self.KEY_TARGET_SOC] = self._current_spec.target_soc if connected else 0.0
-            info[self.KEY_CHARGE_TO_TARGET_HRS] = self._current_spec.charge_to_target_in_hrs if connected else 0.0
+        # EV-side spec → observation keys; zero everything when disconnected so neither
+        # the policy nor the charger ever read stale spec values.
+        states[self.KEY_V2G][0] = np.float32(1.0 if (connected and spec.v2g_enabled) else 0.0)
+        states[self.KEY_START_SOC][0] = np.float32(spec.start_soc if connected else 0.0)
+        states[self.KEY_TARGET_SOC][0] = np.float32(spec.target_soc if connected else 0.0)
+        states[self.KEY_CHARGE_EFF][0] = np.float32(spec.charger_efficiency if connected else 0.0)
+        states[self.KEY_DISCHARGE_EFF][0] = np.float32(spec.discharge_efficiency if connected else 0.0)
+        states[self.KEY_MAX_CAP][0] = np.float32(spec.max_cap_kWh if connected else 0.0)
+        states[self.KEY_MAX_CHARGE][0] = np.float32(spec.max_charging_kW if connected else 0.0)
+        states[self.KEY_CHARGE_TO_TARGET_HRS][0] = np.float32(spec.charge_to_target_in_hrs if connected else 0.0)
 
 
 ComponentRegistry.register('statesource', EVState)

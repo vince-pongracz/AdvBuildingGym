@@ -195,7 +195,7 @@ File: `ev_charging_reward_v0.py`. Mixed dense/sparse. Maintains a counter
 
 **Disconnect step** (`info["ev_just_disconnected"]`): let session magnitude
 $M = \max(m, 1)$ and the session target $\tau = $ `info["ev_session_target_soc"]`
-(note: from `info`, not the live `s_ev_target_soc`). Success
+(note: from `info`, not the live `s_evc_target_soc`). Success
 $= |s_{\text{ev\_soc}} - \tau| \le \text{disconnect\_soc\_tolerance}$:
 
 $$ r = \begin{cases} +M & \text{success} \\ -M & \text{failure} \end{cases} $$
@@ -203,14 +203,14 @@ $$ r = \begin{cases} +M & \text{success} \\ -M & \text{failure} \end{cases} $$
 then `m ← 0`. (Constructor overrides `success_reward` / `failure_penalty`
 replace $\pm M$ when provided.)
 
-**Min-curve violation** (session active and `s_ev_soc < s_ev_soc_min`):
+**Min-curve violation** (session active and `s_evc_soc < s_evc_soc_min`):
 
 $$ r = -M $$
 
 (or `min_curve_violation_penalty` override).
 
 **Regular connected step** (dense, `[0, 1]`): increment `m`, with
-`soc_diff = |s_ev_soc - s_ev_target_soc|`, `diff_threshold = δ` (0.02),
+`soc_diff = |s_evc_soc - s_evc_target_soc|`, `diff_threshold = δ` (0.02),
 `soc_diff_multiplier = μ` (5.0):
 
 $$
@@ -227,12 +227,12 @@ $$
 
 File: `ev_charging_ontime_reward_v0.py`. Per-step range `[-1, 1]`.
 
-- EV not connected (`s_ev_connected < 0.5`): `0`.
-- Target met (`s_ev_soc ≥ s_ev_target_soc`): `r = +1`.
+- EV not connected (`s_evc_connected < 0.5`): `0`.
+- Target met (`s_evc_soc ≥ s_evc_target_soc`): `r = +1`.
 
 Otherwise compute the energy needed vs. the energy still achievable in the
 remaining window. With remaining time
-`t_rem = s_ev_charge_to_target_hrs_norm · ctxt_ev_max_charge_time_hrs`:
+`t_rem = s_evc_charge_to_target_hrs_norm · ctxt_evc_max_charge_time_hrs`:
 
 $$ E_{\text{need}} = (\text{target} - \text{soc}) \cdot \text{ctxt\_ev\_max\_cap\_kWh} $$
 

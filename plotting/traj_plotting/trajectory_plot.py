@@ -54,6 +54,7 @@ def generate_all_plots(
     file_prefix: str | None = None,
     manifest_path: str | None = None,
     config_path: str | None = None,
+    dashboard_dir: str | None = None,
 ) -> list[str]:
     """Load an episode, generate all figure groups, save to output_dir.
 
@@ -69,6 +70,9 @@ def generate_all_plots(
             None = auto-discover by walking up from ``output_dir``.
         config_path: Trial-config YAML for the dashboard's right panel.
             None = auto-discover from the eval-results dir.
+        dashboard_dir: Directory for the aggregated dashboard HTML. None = write
+            it inside ``output_dir`` (default). Multi-episode callers point this
+            at a shared ``dashboards/`` dir sitting beside the ``ep_*`` dirs.
 
     Returns:
         List of saved file paths.
@@ -103,7 +107,9 @@ def generate_all_plots(
     # writers run because write_figure_list_html mutates each figure's layout
     # size in place — serialising here captures the figures with their heights.
     if "html" in formats:
-        dashboard_path = os.path.join(output_dir, f"{ep_id}_dashboard.html")
+        dashboard_out = dashboard_dir if dashboard_dir is not None else output_dir
+        os.makedirs(dashboard_out, exist_ok=True)
+        dashboard_path = os.path.join(dashboard_out, f"{ep_id}_dashboard.html")
         write_episode_dashboard_html(
             all_figures, html_footnotes, episode, dashboard_path,
             output_dir=output_dir,
@@ -205,6 +211,7 @@ def main() -> None:
         with h5py.File(hdf5_path, "r") as hf:
             episode_ids = list(hf.keys())
         base_output_dir = args.output_dir or str(get_output_root())
+        dashboard_dir = os.path.join(base_output_dir, "dashboards")
         paths: list[str] = []
         for ep_id in episode_ids:
             ep_label = f"ep_{ep_id}"
@@ -217,6 +224,7 @@ def main() -> None:
                 formats=args.format,
                 select_by=args.select_by,
                 file_prefix=ep_label,
+                dashboard_dir=dashboard_dir,
             ))
         logger.info(
             "Generated %d plot files for %d episodes under %s",

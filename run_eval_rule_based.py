@@ -242,6 +242,14 @@ def evaluate_strategy(strategy, env: AdvBuildingGym, args: argparse.Namespace,
     if strategy.name == "price_median":
         # median of the LAST episode (per-episode values vary with the data variant)
         strategy_params["last_episode_median_price_ct_per_kWh"] = strategy.median_price
+    if strategy.name.startswith("price_median_scaled"):
+        strategy_params["charge_fraction"] = strategy.charge_fraction
+        # median of the LAST episode (per-episode values vary with the data variant)
+        strategy_params["last_episode_median_price_ct_per_kWh"] = strategy.median_price
+    if strategy.name == "price_median_autarky":
+        strategy_params["drain_last_steps"] = strategy.drain_last_steps
+        # median of the LAST episode (per-episode values vary with the data variant)
+        strategy_params["last_episode_median_price_ct_per_kWh"] = strategy.median_price
 
     summary = {
         "trial_name": trial_name,
@@ -289,6 +297,7 @@ def _generate_plots(out_dir: str | None, args: argparse.Namespace) -> None:
     if args.plot_all:
         with h5py.File(hdf5_path, "r") as hf:
             episode_ids = list(hf.keys())
+        dashboard_dir = os.path.join(plot_dir, "dashboards")
         total_paths: list[str] = []
         for ep_id in episode_ids:
             ep_label = f"ep_{ep_id}"
@@ -297,6 +306,7 @@ def _generate_plots(out_dir: str | None, args: argparse.Namespace) -> None:
                 episode_id=ep_id,
                 output_dir=os.path.join(plot_dir, ep_label),
                 file_prefix=ep_label,
+                dashboard_dir=dashboard_dir,
             )
             total_paths.extend(paths)
         logger.info(

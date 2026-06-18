@@ -8,6 +8,7 @@ from .v1.battery_target_reward import BatteryTargetReward
 from .v0.battery_target_reward_v0 import BatteryTargetRewardV0
 from .v1.battery_mgmt_reward import BatteryMgmtReward
 from .v0.battery_mgmt_reward_v0 import BatteryMgmtRewardV0
+from .v0.battery_range_mgmt_reward_v0 import BatteryRangeMgmtRewardV0
 from .v1.economic_reward import EconomicReward
 from .v0.economic_reward_v0 import EconomicRewardV0
 from .v1.long_term_economic_reward import LongTermEconomicReward
@@ -33,6 +34,7 @@ __all__ = [
     "BatteryTargetRewardV0",
     "BatteryMgmtReward",
     "BatteryMgmtRewardV0",
+    "BatteryRangeMgmtRewardV0",
     "EconomicReward",
     "EconomicRewardV0",
     "LongTermEconomicReward",

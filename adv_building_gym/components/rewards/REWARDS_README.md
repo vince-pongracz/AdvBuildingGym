@@ -128,7 +128,7 @@ EV rewards return `0.0` while the EV is disconnected.
   - else → `exp(−soc_diff_multiplier · |SoC − target|)` (default rate 5),
     so reward stays in `(0, 1]`.
 - **Min-curve violation** (only when `info["ev_session_active"]` and
-  `s_ev_soc < s_ev_soc_min`): emits `min_curve_violation_penalty`
+  `s_evc_soc < s_evc_soc_min`): emits `min_curve_violation_penalty`
   (default `−100`); also votes terminate.
 - **Disconnect step** (`info["ev_just_disconnected"]`):
   - within `disconnect_soc_tolerance` → `success_reward` (default `+10.0`)

@@ -14,7 +14,7 @@ env_meta:
     enabled: true
     tracked_keys:
     - s_battery_soc
-    - s_ev_soc
+    - s_evc_soc
     - s_temp_in_norm
     - s_temp_out_norm
     - s_solar_irradiance_norm
@@ -111,11 +111,15 @@ infras:
   peak_consumption_kW: 8.0
 
 rewards:
-- class_name: BatteryTargetRewardV0
+# - class_name: BatteryTargetRewardV0
+#   weight: 1.0
+#   params:
+#     min_pct: 0.15
+#     max_pct: 0.85
+- class_name: BatteryRangeMgmtRewardV0
   weight: 1.0
   params:
-    min_pct: 0.15
-    max_pct: 0.85
+    allowed_deviation: 0.05
 - class_name: OperatorEnergyControlRewardV0
   weight: 1.0
   params:

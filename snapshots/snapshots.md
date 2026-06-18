@@ -47,7 +47,7 @@ python -m tools.snapshot.submit_snapshot \
 python -m tools.snapshot.submit_snapshot \
     --snapshot snapshots/<existing>/ \
     --kind eval \
-    -- --episodes 20 --plot-all
+    -- --episodes 10 --plot-all
 
 # 3. Eval against a SPECIFIC checkpoint (e.g. an earlier one). --checkpoint
 #    bypasses the latest-checkpoint auto-discovery, so eval is pinned to

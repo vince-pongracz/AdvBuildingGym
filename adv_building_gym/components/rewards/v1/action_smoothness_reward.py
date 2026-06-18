@@ -44,7 +44,7 @@ class ActionSmoothnessReward(RewardFunction):
         """Construct the reward.
 
         Args:
-            weight: Linear scale applied to both ``reward`` and ``max_step``.
+            weight: Linear scale applied to the returned weighted ``reward``.
             name: Reward identifier (used in the breakdown dict).
             n_steps: FFT window length in control steps. Must be an even
                 integer >= 4. The buffer is pre-allocated and zero-padded

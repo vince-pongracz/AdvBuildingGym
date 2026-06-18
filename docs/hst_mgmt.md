@@ -29,7 +29,7 @@ Three mechanisms coexist:
    - Window length: `EnvConfig.ACTION_HISTORY_LENGTH = 4`
      (`config/env_config.py:44`).
 
-2. **Per-component state history** — e.g. `hst_s_battery_soc`, `hst_s_ev_soc`
+2. **Per-component state history** — e.g. `hst_s_battery_soc`, `hst_s_evc_soc`
    declared and maintained by the respective infrastructure components
    (`battery_linear.py`, `battery_tremblay.py`, `linear_ev_charger.py`).
 

@@ -37,7 +37,7 @@ class EVChargingOnTimeReward(RewardFunction):
     def get_reward(self, actions: Dict, state: Dict, next_state: Dict, info: dict | None = None) -> float:
         """EV charging progress reward. EV signals (SoC, target, remaining time) from
         ``next_state``; charger params from ``info``. Returns 0 if unplugged."""
-        ev_connected = next_state["s_ev_connected"][0]
+        ev_connected = next_state["s_evc_connected"][0]
 
         if ev_connected < 0.5:
             return 0.0
@@ -46,21 +46,21 @@ class EVChargingOnTimeReward(RewardFunction):
             logger.warning("EVChargingOnTimeReward: info dict is None, returning 0")
             return 0.0
 
-        current_soc = next_state["s_ev_soc"][0]
-        target_soc = next_state["s_ev_target_soc"][0]
+        current_soc = next_state["s_evc_soc"][0]
+        target_soc = next_state["s_evc_target_soc"][0]
 
         # Max reward if target already achieved
         if current_soc >= target_soc:
             return self.weight * 1.0
 
-        # charger params from info (published by LinearEVCharger)
-        max_charging_kW = info["ctxt_ev_max_charging_kW"]
-        max_cap_kWh = info["ctxt_ev_max_cap_kWh"] or 0.0  # avoid None
-        charger_efficiency = info["ctxt_ev_charger_efficiency"]
-        max_charge_time_hrs = info["ctxt_ev_max_charge_time_hrs"]
+        # all charger-owned EV params are observation keys (same timing as s_evc_*)
+        max_charging_kW = float(next_state["ctxt_evc_max_charging_kW"][0])
+        max_cap_kWh = float(next_state["ctxt_evc_max_cap_kWh"][0])
+        charger_efficiency = float(next_state["ctxt_evc_charger_efficiency"][0])
+        max_charge_time_hrs = float(next_state["ctxt_evc_max_charge_time_hrs"][0])
 
         # remaining time [0,1] → hours
-        normalized_time = next_state["s_ev_charge_to_target_hrs_norm"][0]
+        normalized_time = next_state["s_evc_charge_to_target_hrs_norm"][0]
         remaining_hrs = normalized_time * max_charge_time_hrs
 
         # energy needed (kWh)

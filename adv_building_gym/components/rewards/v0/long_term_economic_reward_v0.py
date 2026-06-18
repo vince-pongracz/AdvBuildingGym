@@ -10,24 +10,21 @@ logger = logging.getLogger(__name__)
 class LongTermEconomicRewardV0(RewardFunction):
     """Sparse, episode-aggregated economic reward (V0).
 
-    Per step accumulates ``clip(net_power_kW * E_price / op_max_kW, -1, 1)``
+    Per step accumulates ``clip(net_power_kW * price_signal / op_max_kW, -1, 1)``
     into an internal counter, using the canonical sign convention
-    (``net_power_kW > 0`` = export, ``< 0`` = consumption). Returns
-    ``(0.0, 0.0)`` every step until the natural end of the episode
-    (``_step == episode_length``) or until ``info["terminated"]`` flips
-    True, then flushes the accumulator:
-
-        reward   = clip(accumulator, -steps_seen, +steps_seen)
-        max_step = steps_seen
+    (``net_power_kW > 0`` = export, ``< 0`` = consumption). Returns the
+    single weighted float ``0.0`` every step until the natural end of the
+    episode (``_step == episode_length``) or until ``info["terminated"]``
+    flips True, then flushes the accumulator as ``weight * accumulator``.
 
     Sign matrix per step (matches ``EconomicRewardV0``):
 
         export at +price → +reward (income)
         consume at +price → −reward (cost)
 
-    Range at flush: ``[-N, +N]`` where ``N = steps_seen``. Per-step value
-    is in ``[-1, 1]`` so the magnitude is commensurate with the cumulative
-    return of a dense ``EconomicRewardV0`` over the same window.
+    Range at flush: ``[-N, +N]`` where ``N = steps_seen`` (each per-step
+    value is in ``[-1, 1]``), so the magnitude is commensurate with the
+    cumulative return of a dense ``EconomicRewardV0`` over the same window.
     """
 
     _exclude_params = {"_step", "_accumulated_norm"}

@@ -10,9 +10,18 @@ from __future__ import annotations
 
 import logging
 
+import numpy as np
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
-from plotting.utils import COLORS, EpisodeData, apply_day_xaxis, load_plot_config, style_figure
+from plotting.utils import (
+    COLORS,
+    EpisodeData,
+    align_zero_dual_yaxes,
+    apply_day_xaxis,
+    load_plot_config,
+    style_figure,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +62,62 @@ def _unit_label(key: str) -> str:
         if fragment in f"_{lower}_":
             return unit
     return "Value"
+
+
+def _temp_diff_figure(episode: EpisodeData) -> go.Figure | None:
+    """Per-step and cumulative ``raw_temp_in − raw_desired_temp_in`` difference.
+
+    The per-step difference (°C) is drawn as bars on the left axis; the running
+    cumulative sum of that difference is drawn as a line on the right axis.
+    Positive = indoor warmer than desired, negative = colder. Returns ``None``
+    when either temperature series is missing from the episode.
+    """
+    raw = episode.raw
+    if "raw_temp_in" not in raw or "raw_desired_temp_in" not in raw:
+        return None
+
+    time = episode.time_minutes
+    time_hhmm = episode.time_hhmm
+    diff = (raw["raw_temp_in"] - raw["raw_desired_temp_in"]).astype(np.float32)
+    cum_diff = np.cumsum(diff).astype(np.float32)
+
+    fig = make_subplots(specs=[[{"secondary_y": True}]])
+
+    custom = list(zip(time_hhmm, diff, cum_diff))
+    hover = (
+        "time: %{customdata[0]}<br>"
+        "Δ per step: %{customdata[1]:.3f} °C<br>"
+        "Δ cumulative: %{customdata[2]:.3f} °C"
+        "<extra></extra>"
+    )
+    fig.add_trace(
+        go.Bar(
+            x=time, y=diff, name="Δ per step (°C)",
+            marker_color=COLORS[0], opacity=0.7,
+            customdata=custom, hovertemplate=hover,
+        ),
+        secondary_y=False,
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=time, y=cum_diff, mode="lines",
+            name="Δ cumulative (°C)",
+            line=dict(color=COLORS[1], width=2.5),
+            customdata=custom, hovertemplate=hover,
+        ),
+        secondary_y=True,
+    )
+
+    apply_day_xaxis(fig)
+    fig.update_layout(
+        title=f"raw_temp_in − raw_desired_temp_in  —  {episode.title_suffix()}",
+        height=400,
+        bargap=0.25,
+    )
+    fig.update_yaxes(title_text="Δ per step (°C)", secondary_y=False)
+    fig.update_yaxes(title_text="Δ cumulative (°C)", secondary_y=True)
+    align_zero_dual_yaxes(fig, list(diff), list(cum_diff))
+    return style_figure(fig, n_legend_items=2)
 
 
 def plot_raw(episode: EpisodeData) -> list[go.Figure]:
@@ -129,5 +194,10 @@ def plot_raw(episode: EpisodeData) -> list[go.Figure]:
             height=350,
         )
         figures.append(style_figure(fig, n_legend_items=len(keys)))
+
+    # Per-step + cumulative indoor-vs-desired temperature difference
+    diff_fig = _temp_diff_figure(episode)
+    if diff_fig is not None:
+        figures.append(diff_fig)
 
     return figures

@@ -19,7 +19,7 @@ class EVChargingRewardV0(RewardFunction):
     Sparse one-shots scaled to the session length (connected steps since last connect):
     - Disconnect: success (within ``disconnect_soc_tolerance``) → ``+session_steps``, 
     else ``-session_steps``.
-    - Min-curve violation (``ev_session_active`` and ``s_ev_soc < s_ev_soc_min``)
+    - Min-curve violation (``s_evc_session_target_feasible`` > 0.5 and ``s_evc_soc < s_evc_soc_min``)
     → ``-session_steps``.
 
     Explicit ``success_reward`` / ``failure_penalty`` / ``min_curve_violation_penalty`` override the
@@ -57,13 +57,14 @@ class EVChargingRewardV0(RewardFunction):
         return float(sign * max(magnitude, 1))
 
     def get_reward(self, actions, state, next_state, info: dict | None = None) -> float:
-        # Disconnect this step (connected s → not s'). Charger zeroes s_ev_soc on detach,
+        # Disconnect this step (connected s → not s'). Charger zeroes s_evc_soc on detach,
         # so judge the SoC reached before leaving (both from ``state``) vs target.
-        was_connected = float(state["s_ev_connected"][0]) >= 0.5
-        now_connected = float(next_state["s_ev_connected"][0]) >= 0.5
+        was_connected = float(state["s_evc_connected"][0]) >= 0.5
+        now_connected = float(next_state["s_evc_connected"][0]) >= 0.5
+        # disconnect step
         if was_connected and not now_connected:
-            achieved_soc = float(state["s_ev_soc"][0])
-            target_soc = float(state["s_ev_target_soc"][0])
+            achieved_soc = float(state["s_evc_soc"][0])
+            target_soc = float(state["s_evc_target_soc"][0])
             success = abs(achieved_soc - target_soc) <= self.disconnect_soc_tolerance
             magnitude = max(self._session_steps, 1)
 
@@ -78,11 +79,11 @@ class EVChargingRewardV0(RewardFunction):
         if not now_connected:
             return 0.0
 
-        current_soc = float(next_state["s_ev_soc"][0])
-        target_soc = float(next_state["s_ev_target_soc"][0])
+        current_soc = float(next_state["s_evc_soc"][0])
+        target_soc = float(next_state["s_evc_target_soc"][0])
 
-        if info is not None and info.get("ev_session_active", False):
-            soc_min = float(next_state["s_ev_soc_min"][0])
+        if float(next_state["s_evc_session_target_feasible"][0]) > 0.5:
+            soc_min = float(next_state["s_evc_soc_min"][0])
             if current_soc < soc_min:
                 magnitude = max(self._session_steps, 1)
                 value = self._resolve_signed(self.min_curve_violation_penalty, -1, magnitude)

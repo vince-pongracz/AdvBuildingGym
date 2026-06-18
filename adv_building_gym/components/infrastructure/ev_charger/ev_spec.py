@@ -15,7 +15,7 @@ class EvSpec:
     target_soc: float = 0.9
     # Hard deadline (hours from connect) to reach target_soc — the user-observable
     # charging contract. Drives the LinearEVCharger corridor:
-    #   * s_ev_soc_min: back-from-target line reaching target_soc by the deadline at
+    #   * s_evc_soc_min: back-from-target line reaching target_soc by the deadline at
     #     max rate; dropping below it makes the target unreachable → EVChargingReward ends the episode.
-    #   * s_ev_soc_max: forward-from-start line at max rate, capped at 1.0 (upper envelope of reachable SoC).
+    #   * s_evc_soc_max: forward-from-start line at max rate, capped at 1.0 (upper envelope of reachable SoC).
     charge_to_target_in_hrs: float = 8.0

@@ -20,7 +20,7 @@ class EVChargingReward(RewardFunction):
     - Disconnect: compare reached SoC vs session target — within ``disconnect_soc_tolerance``
       → ``success_reward`` else ``failure_penalty``; episode ends either way.
     - Min-curve: while connected and the session is *active* (target reachable), SoC below
-      ``s_ev_soc_min`` → ``min_curve_violation_penalty`` + end. 
+      ``s_evc_soc_min`` → ``min_curve_violation_penalty`` + end. 
       When the session is inactive (target was unreachable
       from connect time) the corridor is suppressed and the agent should
       simply charge as fast as it can.
@@ -68,12 +68,12 @@ class EVChargingReward(RewardFunction):
         disconnect, so the reached SoC and target are read from ``state``.
         Returns ``(just_disconnected, success)``.
         """
-        was_connected = float(state["s_ev_connected"][0]) >= 0.5
-        now_connected = float(next_state["s_ev_connected"][0]) >= 0.5
+        was_connected = float(state["s_evc_connected"][0]) >= 0.5
+        now_connected = float(next_state["s_evc_connected"][0]) >= 0.5
         if not (was_connected and not now_connected):
             return False, False
-        achieved_soc = float(state["s_ev_soc"][0])
-        target_soc = float(state["s_ev_target_soc"][0])
+        achieved_soc = float(state["s_evc_soc"][0])
+        target_soc = float(state["s_evc_target_soc"][0])
         success = abs(achieved_soc - target_soc) <= self.disconnect_soc_tolerance
         return True, success
 
@@ -86,16 +86,16 @@ class EVChargingReward(RewardFunction):
             if not success:
                 logger.info(
                     "[%s] terminal step on EV disconnect (FAILURE): SoC %.3f vs target %.3f (tol %.3f, step %s)",
-                    self.name, float(state["s_ev_soc"][0]), float(state["s_ev_target_soc"][0]),
+                    self.name, float(state["s_evc_soc"][0]), float(state["s_evc_target_soc"][0]),
                     self.disconnect_soc_tolerance, info.get("iteration", "?"),
                 )
                 return True
             return False
 
-        # Min-curve violation while the session is active and still connected.
-        if info.get("ev_session_active", False) and float(next_state["s_ev_connected"][0]) >= 0.5:
-            current_soc = float(next_state["s_ev_soc"][0])
-            soc_min = float(next_state["s_ev_soc_min"][0])
+        # Min-curve violation while the session is feasible and still connected.
+        if float(next_state["s_evc_session_target_feasible"][0]) > 0.5 and float(next_state["s_evc_connected"][0]) >= 0.5:
+            current_soc = float(next_state["s_evc_soc"][0])
+            soc_min = float(next_state["s_evc_soc_min"][0])
             if current_soc < soc_min:
                 logger.info(
                     "[%s] terminal step: SoC %.3f below min-curve %.3f (step %s)",
@@ -116,17 +116,17 @@ class EVChargingReward(RewardFunction):
                 return self.weight * self.success_reward
             return self.weight * self.failure_penalty
 
-        if float(next_state["s_ev_connected"][0]) < 0.5:  # not connected: no reward
+        if float(next_state["s_evc_connected"][0]) < 0.5:  # not connected: no reward
             return 0.0
 
-        current_soc = float(next_state["s_ev_soc"][0])
-        target_soc = float(next_state["s_ev_target_soc"][0])
+        current_soc = float(next_state["s_evc_soc"][0])
+        target_soc = float(next_state["s_evc_target_soc"][0])
 
-        # Min-curve: enforced only for an active session (reachable target). Reading the
+        # Min-curve: enforced only for a feasible session (reachable target). Reading the
         # charger's corridor key keeps this reward a pure judge. Skipped when early
         # termination is off → falls through to the SoC-band reward.
-        if allow_term and info is not None and info.get("ev_session_active", False):
-            soc_min = float(next_state["s_ev_soc_min"][0])
+        if allow_term and float(next_state["s_evc_session_target_feasible"][0]) > 0.5:
+            soc_min = float(next_state["s_evc_soc_min"][0])
             if current_soc < soc_min:
                 return self.weight * self.min_curve_violation_penalty
 

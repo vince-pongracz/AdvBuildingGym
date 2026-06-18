@@ -16,17 +16,17 @@ states:
     - [s_battery_soc, s_battery_target_pct]
     - [s_temp_in_norm, s_desired_temp_in_norm, s_temp_out_norm]
     - [ctxt_ev_schedule_start_soc, ctxt_ev_schedule_target_soc]
-    - [s_ev_soc, s_ev_target_soc]
+    - [s_evc_soc, s_evc_target_soc]
 
   # Keys masked with NaN when a condition key is below 0.5.
   # Produces non-continuous lines (gaps) when the device is disconnected.
   mask_when_disconnected:
-    condition_key: s_ev_connected
+    condition_key: s_evc_connected
     keys:
-      - s_ev_soc
-      - s_ev_target_soc
-      - hst_s_ev_soc
-      - s_ev_charge_to_target_hrs_norm
+      - s_evc_soc
+      - s_evc_target_soc
+      - hst_s_evc_soc
+      - s_evc_charge_to_target_hrs_norm
 
 
 actions:

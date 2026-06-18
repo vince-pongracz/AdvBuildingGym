@@ -108,6 +108,7 @@ def _generate_plots(results, args, logger) -> None:
     if args.plot_all:
         with h5py.File(hdf5_path, "r") as hf:
             episode_ids = list(hf.keys())
+        dashboard_dir = os.path.join(plot_dir, "dashboards")
         total_paths: list[str] = []
         for ep_id in episode_ids:
             ep_label = f"ep_{ep_id}"
@@ -117,6 +118,7 @@ def _generate_plots(results, args, logger) -> None:
                 episode_id=ep_id,
                 output_dir=ep_plot_dir,
                 file_prefix=ep_label,
+                dashboard_dir=dashboard_dir,
             )
             total_paths.extend(paths)
         logger.info(

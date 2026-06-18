@@ -20,6 +20,7 @@ class DoNothingStrategy(RuleBasedStrategy):
         return self.zero_action()
 
 
+# TODO noprio VP 2026.06.16.: This strat does not make any sense
 class PVSurplusChargeStrategy(RuleBasedStrategy):
     """Charge the battery with the renewable surplus; never discharge.
 
@@ -36,10 +37,10 @@ class PVSurplusChargeStrategy(RuleBasedStrategy):
         surplus_kW = self._renewable_surplus_kW(last_info)
         if surplus_kW <= 0.0:
             return self.zero_action()
-        return self._battery_action(self._charge_value(surplus_kW))
+        return self._battery_action(self._battery_value(surplus_kW, charging=True))
 
 
-class SelfCoverageStrategy(RuleBasedStrategy):
+class Autarky(RuleBasedStrategy):
     """Surplus-charge outside the evening window; inside it, discharge to
     cover the consumption deficit (idle while there is no deficit yet —
     stored energy is kept for later steps in the window)."""
@@ -63,10 +64,10 @@ class SelfCoverageStrategy(RuleBasedStrategy):
         if in_time_window(self._hour_of_day(), self.evening_start, self.evening_end):
             deficit_kW = -surplus_kW
             if deficit_kW > 0.0:
-                return self._battery_action(self._discharge_value(deficit_kW))
+                return self._battery_action(self._battery_value(deficit_kW, charging=False))
             return self.zero_action()
         if surplus_kW > 0.0:
-            return self._battery_action(self._charge_value(surplus_kW))
+            return self._battery_action(self._battery_value(surplus_kW, charging=True))
         return self.zero_action()
 
 
@@ -81,9 +82,9 @@ class DeficitDischargeStrategy(RuleBasedStrategy):
     def _decide(self, obs: dict, last_info: dict | None) -> dict[str, np.ndarray]:
         surplus_kW = self._renewable_surplus_kW(last_info)
         if surplus_kW > 0.0:
-            return self._battery_action(self._charge_value(surplus_kW))
+            return self._battery_action(self._battery_value(surplus_kW, charging=True))
         if surplus_kW < 0.0:
-            return self._battery_action(self._discharge_value(-surplus_kW))
+            return self._battery_action(self._battery_value(-surplus_kW, charging=False))
         return self.zero_action()
 
 
@@ -109,13 +110,7 @@ class PriceMedianStrategy(RuleBasedStrategy):
 
     def reset(self, obs: dict) -> None:
         super().reset(obs)
-        ts = self.price_source.ts
-        if ts is None or "baseprice" not in ts.columns:
-            raise RuntimeError(f"Strategy '{self.name}': price source has no 'baseprice' data loaded.")
-        # Same episode window slice the source itself uses in its reset()
-        start = self.price_source.row_offset
-        end = min(start + self.episode_length, len(ts))
-        self.median_price = float(np.median(ts["baseprice"].iloc[start:end]))
+        self.median_price = self._episode_median_baseprice()
         logger.debug("Episode median baseprice: %.4f ct/kWh", self.median_price)
 
     def _decide(self, obs: dict, last_info: dict | None) -> dict[str, np.ndarray]:
@@ -125,7 +120,139 @@ class PriceMedianStrategy(RuleBasedStrategy):
         if price is None:
             return self.zero_action()
         if price < self.median_price:
-            return self._battery_action(self._charge_value(self._charge_headroom_kW()))
+            return self._battery_action(self._battery_value(self._charge_headroom_kW(), charging=True))
         if price > self.median_price:
-            return self._battery_action(self._discharge_value(self._discharge_headroom_kW()))
+            return self._battery_action(self._battery_value(self._discharge_headroom_kW(), charging=False))
         return self.zero_action()
+
+
+# Default charge/discharge strength levels for the preconfigured
+# ScaledPriceMedianStrategy variants (one registered strategy each). Full power
+# (1.0) is already covered by PriceMedianStrategy; add levels here to register
+# more variants.
+SCALED_PRICE_MEDIAN_FRACTIONS: tuple[float, ...] = (0.75, 0.5, 0.25)
+
+class ScaledPriceMedianStrategy(RuleBasedStrategy):
+    """PriceMedianStrategy with a configurable charge / discharge strength: below
+    the episode median price charge at ``charge_fraction`` of the battery's rated
+    power, above it discharge at the same fraction of rated power — both still
+    bounded by the SoC headrooms (the fraction never pushes past soc_max / the SoC
+    floor). ``charge_fraction == 1.0`` reproduces PriceMedianStrategy (full-power
+    arbitrage); 0.0 idles.
+
+    This is a template: concrete variants with the fraction baked in are built by
+    ``make_scaled_price_median`` and registered as ``price_median_scaled_<f>`` (see
+    ``SCALED_PRICE_MEDIAN_FRACTIONS``). Median source and billing caveats match
+    PriceMedianStrategy.
+    """
+
+    name: ClassVar[str] = "price_median_scaled"
+    requires_battery: ClassVar[bool] = True
+    requires_price: ClassVar[bool] = True
+    # Fraction of rated power (same for charging and discharging); overridden per
+    # variant by the factory.
+    charge_fraction: ClassVar[float] = 1.0
+
+    def __init__(self, env: AdvBuildingGym, *, preserve_start_soc: bool = True):
+        super().__init__(env, preserve_start_soc=preserve_start_soc)
+        if not 0.0 <= self.charge_fraction <= 1.0:
+            raise ValueError(f"charge_fraction must be in [0, 1], got {self.charge_fraction}")
+        self.median_price: float = 0.0
+
+    def reset(self, obs: dict) -> None:
+        super().reset(obs)
+        self.median_price = self._episode_median_baseprice()
+        logger.debug("Episode median baseprice: %.4f ct/kWh", self.median_price)
+
+    def _decide(self, obs: dict, last_info: dict | None) -> dict[str, np.ndarray]:
+        # baseprice_raw is refreshed by the source's update_state each tick,
+        # so it is current (prices are known ahead — no measurement lag).
+        price = getattr(self.price_source, "baseprice_raw", None)
+        if price is None:
+            return self.zero_action()
+        # Scale the rated power by the fraction; the fraction helpers still clamp
+        # to the SoC headroom, so end-SoC >= start-SoC is preserved.
+        if price < self.median_price:
+            return self._battery_action(self._battery_value_fraction(self.charge_fraction, charging=True))
+        if price > self.median_price:
+            return self._battery_action(self._battery_value_fraction(self.charge_fraction, charging=False))
+        return self.zero_action()
+
+
+def make_scaled_price_median(charge_fraction: float) -> type[ScaledPriceMedianStrategy]:
+    """Build a concrete ScaledPriceMedianStrategy variant with the fraction baked in.
+
+    The single ``charge_fraction`` scales both the charge and discharge legs. The
+    registered name is ``price_median_scaled_{charge_fraction}``.
+    """
+    if not 0.0 <= charge_fraction <= 1.0:
+        raise ValueError(f"charge_fraction must be in [0, 1], got {charge_fraction}")
+    variant_name = f"price_median_scaled_{charge_fraction}"
+    return type(variant_name, (ScaledPriceMedianStrategy,), {
+        "name": variant_name,
+        "charge_fraction": charge_fraction,
+    })
+
+
+# Number of final episode steps over which PriceMedianAutarky force-drains the
+# battery to the SoC floor so no surplus is left at episode end (24 steps = 2 h
+# at the standard 300 s control step). Baked into the registered strategy.
+PRICE_MEDIAN_AUTARKY_DRAIN_LAST_STEPS: int = 24
+
+
+class PriceMedianAutarky(RuleBasedStrategy):
+    """Hybrid of price-based charging (PriceMedianStrategy) and deficit-based
+    discharging (Autarky): charge at full headroom while the price is below the
+    episode median; while above the median, discharge only to cover the
+    consumption deficit (renewables not covering usage) and idle otherwise, so
+    stored energy is saved for later high-price / larger-deficit evening steps.
+
+    Over the final ``drain_last_steps`` steps any energy above the SoC floor is
+    discharged regardless of price or deficit, so no surplus remains at the end
+    of the episode. Median source and billing caveats match PriceMedianStrategy.
+    """
+
+    name: ClassVar[str] = "price_median_autarky"
+    requires_battery: ClassVar[bool] = True
+    requires_price: ClassVar[bool] = True
+    # Final-steps drain window; see PRICE_MEDIAN_AUTARKY_DRAIN_LAST_STEPS.
+    drain_last_steps: ClassVar[int] = PRICE_MEDIAN_AUTARKY_DRAIN_LAST_STEPS
+
+    def __init__(self, env: AdvBuildingGym, *, preserve_start_soc: bool = True):
+        super().__init__(env, preserve_start_soc=preserve_start_soc)
+        if not 0 <= self.drain_last_steps <= self.episode_length:
+            raise ValueError(f"drain_last_steps must be in [0, {self.episode_length}], got {self.drain_last_steps}")
+        self.median_price: float = 0.0
+
+    def reset(self, obs: dict) -> None:
+        super().reset(obs)
+        self.median_price = self._episode_median_baseprice()
+        logger.debug("Episode median baseprice: %.4f ct/kWh", self.median_price)
+
+    def _decide(self, obs: dict, last_info: dict | None) -> dict[str, np.ndarray]:
+        # End-of-episode drain over the final `drain_last_steps` steps: empty any
+        # energy above the SoC floor regardless of price or deficit, so no
+        # surplus is left in the battery. `_step` is the 0-based index of the
+        # current decision, so episode_length - _step is the steps remaining.
+        if self.episode_length - self._step <= self.drain_last_steps:
+            headroom_kW = self._discharge_headroom_kW()
+            if headroom_kW > 0.0:
+                return self._battery_action(self._battery_value(headroom_kW, charging=False))
+            return self.zero_action()
+
+        price = getattr(self.price_source, "baseprice_raw", None)
+        if price is None:
+            return self.zero_action()
+        # Below median: charge at full headroom (price-based charge).
+        if price < self.median_price:
+            return self._battery_action(self._battery_value(self._charge_headroom_kW(), charging=True))
+        # Above median: discharge only to cover the deficit; idle while
+        # renewables still cover usage so energy is kept for later steps.
+        if price > self.median_price:
+            deficit_kW = -self._renewable_surplus_kW(last_info)
+            if deficit_kW > 0.0:
+                return self._battery_action(self._battery_value(deficit_kW, charging=False))
+        return self.zero_action()
+    
+# TODO VP 2026.06.16.: Add a perfectforecast strategy that uses future price, future household consumption and future renewable production to optimally schedule the battery, as an upper bound on the performance of any real strategy.
+# So compute the whole day production, the whole day consumption, 

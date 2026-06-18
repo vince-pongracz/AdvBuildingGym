@@ -1,4 +1,4 @@
-trial_name: sta_lin_battery_only
+trial_name: sta_lin_battery_only_price
 algorithm: sac
 seed: 42
 metric: episode_return_mean
@@ -14,7 +14,7 @@ env_meta:
     enabled: true
     tracked_keys:
     - s_battery_soc
-    - s_ev_soc
+    - s_evc_soc
     - s_temp_in_norm
     - s_temp_out_norm
     - s_solar_irradiance_norm
@@ -23,11 +23,10 @@ env_meta:
     - -2
     - -3
     - -4
-    - -6
 
   forecast_env_wrapper:
     enabled: true
-    forecast_steps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+    forecast_steps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24]
 
 training_params:
   common:

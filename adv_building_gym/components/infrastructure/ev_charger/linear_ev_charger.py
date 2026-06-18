@@ -19,11 +19,12 @@ class LinearEVCharger(Infrastructure):
     """EV charging station with controllable rate and optional V2G.
 
     Action ``a_lin_ev_charger`` in [-1, 1] (V2G) or [0, 1]: positive=charge (consume),
-    negative=V2G export. The connected EV is an :class:`EvSpec` (``None`` = unplugged);
-    EVState pushes connect/disconnect events via info, and :meth:`_check_schedule`
-    rebuilds the EvSpec and calls :meth:`set_ev_connected`.
+    negative=V2G export. The connected EV is an :class:`EvSpec` (``None`` = unplugged).
+    EVState publishes the schedule as ``ctxt_ev_schedule_*`` observation keys;
+    :meth:`_check_schedule` reads them, rebuilds the EvSpec on a connect, and calls
+    :meth:`set_ev_connected`. Connection is signalled by ``ctxt_ev_schedule_max_cap_kWh``
+    being > 0 (no real EV has zero capacity), so no separate event channel is needed.
     """
-    # TODO VP 2026.06.10.: Connect disconnect event publish mechanism review.
 
     # Runtime v2g_enabled flag still gates export; see max_production_kW override.
     POWER_FLOW = "bidirectional"
@@ -33,11 +34,6 @@ class LinearEVCharger(Infrastructure):
 
     # Internal state variables - don't serialize
     _exclude_params: ClassVar[Set[str]] = {'iteration', 'soc', 'ev_spec', 'charge_to_target_in_hrs', 'actual_power_kW'}
-
-    # Info-dict keys for the per-session corridor exposed to rewards.
-    INFO_JUST_DISCONNECTED: ClassVar[str] = "ev_just_disconnected"
-    INFO_SESSION_TARGET_SOC: ClassVar[str] = "ev_session_target_soc"
-    INFO_SESSION_ACTIVE: ClassVar[str] = "ev_session_active"
 
     def __init__(self,
                 name: str,
@@ -54,7 +50,7 @@ class LinearEVCharger(Infrastructure):
             max_power_kW: Charger hardware electrical rating in kW.
             control_step: Control timestep in seconds.
             max_charge_time_hrs: Upper bound on the per-session deadline; also
-                the normaliser for ``s_ev_charge_to_target_hrs_norm``.
+                the normaliser for ``s_evc_charge_to_target_hrs_norm``.
             v2g_enabled: Charger-side V2G capability. Drives the action-space
                 lower bound at construction. Effective V2G at runtime requires
                 both this flag and ``ev_spec.v2g_enabled``.
@@ -75,15 +71,13 @@ class LinearEVCharger(Infrastructure):
         self.charge_to_target_in_hrs: float = 0.0
         self.actual_power_kW: float = 0.0
 
-        # Per-session corridor bookkeeping; snapshot at connect, held through
-        # the disconnect step so rewards keep the original target.
+        # Per-session corridor bookkeeping; snapshot at connect.
         self._session_step: int = 0
         self._session_total_steps: int = 0
         self._session_start_soc: float = 0.0
         self._session_target_soc: float = 0.0
         self._session_step_soc_gain: float = 0.0
         self._session_active: bool = False
-        self._just_disconnected: bool = False
 
     # ----- Connection state helpers -----
 
@@ -93,7 +87,7 @@ class LinearEVCharger(Infrastructure):
 
     @property
     def target_soc(self) -> float:
-        return self.ev_spec.target_soc if self.ev_spec is not None else 0.0
+        return self.ev_spec.target_soc if self.is_connected else 0.0 # type: ignore
 
     @property
     def effective_max_charging_kW(self) -> float:
@@ -104,12 +98,20 @@ class LinearEVCharger(Infrastructure):
 
     @property
     def effective_v2g(self) -> bool:
-        return self.v2g_enabled and (self.ev_spec.v2g_enabled if self.ev_spec is not None else False)
+        return self.v2g_enabled and (self.ev_spec.v2g_enabled if self.is_connected else False) # type: ignore
+
+    @property
+    def max_consumption_kW(self) -> float:
+        # Only a connected EV can draw power; bound by charger AND EV acceptance
+        # (effective_max_charging_kW is 0 when unplugged). 
+        # Overrides the class-level default
+        return self.effective_max_charging_kW
 
     @property
     def max_production_kW(self) -> float:
-        # v2g_enabled is a per-instance gate that class-level POWER_FLOW can't express.
-        return self.max_power_kW if self.v2g_enabled else 0.0
+        # Export needs both V2G flags AND a connected EV; the amount of exportable energy depends on the 
+        # bound of the charger AND EV acceptance.
+        return self.effective_max_charging_kW if self.effective_v2g else 0.0
 
     def setup_spaces(self, state_spaces, action_spaces):
         """Setup observation and action spaces for EV charger.
@@ -128,26 +130,37 @@ class LinearEVCharger(Infrastructure):
             action_spaces["a_lin_ev_charger"] = Box(low=low, high=1, shape=(1,), dtype=np.float32)
 
         # States
-        if "s_ev_soc" not in state_spaces.keys():
-            state_spaces["s_ev_soc"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
-        if "s_ev_target_soc" not in state_spaces.keys():
-            state_spaces["s_ev_target_soc"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
-        if "s_ev_connected" not in state_spaces.keys():
+        if "s_evc_soc" not in state_spaces.keys():
+            state_spaces["s_evc_soc"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
+        if "s_evc_target_soc" not in state_spaces.keys():
+            state_spaces["s_evc_target_soc"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
+        if "s_evc_connected" not in state_spaces.keys():
             # Binary: 0 = not connected, 1 = connected
-            state_spaces["s_ev_connected"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
-        if "s_ev_charge_to_target_hrs_norm" not in state_spaces.keys():
+            state_spaces["s_evc_connected"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
+        if "s_evc_charge_to_target_hrs_norm" not in state_spaces.keys():
             # Normalised: 0 = none/disconnected, 1 = max_charge_time_hrs remaining
-            state_spaces["s_ev_charge_to_target_hrs_norm"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
+            state_spaces["s_evc_charge_to_target_hrs_norm"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
 
         # Max charging power (kW) — changes per connected EV.
-        if "ctxt_ev_max_charging_kW" not in state_spaces.keys():
-            state_spaces["ctxt_ev_max_charging_kW"] = Box(low=0, high=np.inf, shape=(1,), dtype=np.float32)
+        if "ctxt_evc_max_charging_kW" not in state_spaces.keys():
+            state_spaces["ctxt_evc_max_charging_kW"] = Box(low=0, high=np.inf, shape=(1,), dtype=np.float32)
 
         # Effective V2G = charger.v2g_enabled AND ev_spec.v2g_enabled. Unlike
         # ctxt_ev_schedule_v2g (EV-side only), this is the actionable composite
         # (0 if unplugged or either side forbids V2G).
-        if "ctxt_ev_v2g_effective" not in state_spaces.keys():
-            state_spaces["ctxt_ev_v2g_effective"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
+        if "ctxt_evc_v2g_effective" not in state_spaces.keys():
+            state_spaces["ctxt_evc_v2g_effective"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
+
+        # Charger-owned EV params the EV rewards read from the observation. Published
+        # here (not just the EVState ctxt_ev_schedule_* view) so the reward reads them
+        # with the same timing as s_evc_connected / s_evc_soc — the charger lags EVState's
+        # schedule by one step, so mixing the two views would desync at session edges.
+        if "ctxt_evc_max_cap_kWh" not in state_spaces.keys():
+            state_spaces["ctxt_evc_max_cap_kWh"] = Box(low=0, high=np.inf, shape=(1,), dtype=np.float32)
+        if "ctxt_evc_charger_efficiency" not in state_spaces.keys():
+            state_spaces["ctxt_evc_charger_efficiency"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
+        if "ctxt_evc_max_charge_time_hrs" not in state_spaces.keys():
+            state_spaces["ctxt_evc_max_charge_time_hrs"] = Box(low=0, high=np.inf, shape=(1,), dtype=np.float32)
 
         # Per-session SoC corridor (zero when disconnected). Deadline is
         # ``charge_to_target_in_hrs`` (the user's contract), not the actual
@@ -155,10 +168,18 @@ class LinearEVCharger(Infrastructure):
         # Min: back-from-target line hitting target_soc by the deadline at max
         # rate; below it the target is unreachable → EVChargingReward terminates.
         # Max: forward-from-start line at max rate, capped at 1.0.
-        if "s_ev_soc_min" not in state_spaces.keys():
-            state_spaces["s_ev_soc_min"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
-        if "s_ev_soc_max" not in state_spaces.keys():
-            state_spaces["s_ev_soc_max"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
+        if "s_evc_soc_min" not in state_spaces.keys():
+            state_spaces["s_evc_soc_min"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
+        if "s_evc_soc_max" not in state_spaces.keys():
+            state_spaces["s_evc_soc_max"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
+
+        # Per-session target feasibility (snapshotted at connect): 
+        # 1.0 reachable,
+        # 0.0 unreachable, 
+        # 0.5 neutral when no EV. 
+        # The reward enforces the min-curve only when 1.0; the policy can use it to trade off price vs the charging deadline.
+        if "s_evc_session_target_feasible" not in state_spaces.keys():
+            state_spaces["s_evc_session_target_feasible"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
 
         return state_spaces, action_spaces
 
@@ -178,9 +199,11 @@ class LinearEVCharger(Infrastructure):
             # Cap charge_to_target_in_hrs at max_charge_time_hrs
             self.charge_to_target_in_hrs = min(ev_spec.charge_to_target_in_hrs, self.max_charge_time_hrs)
 
+    # NOTE VP 2026.06.15.: Compute whether the session is feasible to achieve target_soc.
     def _snapshot_session(self) -> None:
-        """Snapshot corridor params at connect (after set_ev_connected, so self.soc
-        is the start SoC). ``_session_active`` is False when target is unreachable
+        """Snapshot boundary params at connect (after set_ev_connected, so self.soc
+        is the start SoC). 
+        - ``_session_active`` is False when target is unreachable
         from start at max rate — corridor keys still computed, but EVChargingReward
         suppresses the min-curve termination then.
         """
@@ -198,44 +221,42 @@ class LinearEVCharger(Infrastructure):
         # capacity/efficiency so the corridor tracks the actual session.
         if self.ev_spec.max_cap_kWh > 0:
             self._session_step_soc_gain = (
-                self.effective_max_charging_kW * self.ev_spec.charger_efficiency
-                * self.control_step / SECONDS_PER_HOUR / self.ev_spec.max_cap_kWh
+                self.effective_max_charging_kW * self.ev_spec.charger_efficiency * self.control_step / SECONDS_PER_HOUR / 
+                self.ev_spec.max_cap_kWh
             )
         else:
             self._session_step_soc_gain = 0.0
 
         soc_gap = max(0.0, self._session_target_soc - self._session_start_soc)
-        max_reachable_gain = self._session_step_soc_gain * self._session_total_steps
-        self._session_active = max_reachable_gain >= soc_gap
+        max_reachable_soc_gain = self._session_step_soc_gain * self._session_total_steps
+        self._session_active = max_reachable_soc_gain >= soc_gap
 
-    def _check_schedule(self, info: Dict) -> None:
-        """Apply EV connect/disconnect from EVState's info dict.
+    def _check_schedule(self, states: Dict) -> None:
+        """Apply an EV connect/disconnect transition from the schedule observation.
 
-        Reads ``ev_schedule_connected`` (+ spec fields); on a change calls
-        :meth:`set_ev_connected`.
+        Connection is read from ``ctxt_ev_schedule_max_cap_kWh`` > 0 (no real EV has zero
+        capacity); on a connect the EvSpec is rebuilt from the ``ctxt_ev_schedule_*``
+        observation keys. On a change calls :meth:`set_ev_connected`.
         """
-        # reset one-shot flag; re-armed below only on a 1->0 transition
-        self._just_disconnected = False
-
-        if "ev_schedule_connected" not in info:
+        if "ctxt_ev_schedule_max_cap_kWh" not in states:
             return  # No EVState in this config
 
-        scheduled_connected = bool(info["ev_schedule_connected"] > 0.5)
+        scheduled_connected = float(states["ctxt_ev_schedule_max_cap_kWh"][0]) > 0.0
 
         if scheduled_connected == self.is_connected:
             return  # No change
 
         if scheduled_connected:
-            # build EvSpec from info fields
+            # build EvSpec from the ctxt_ev_schedule_* observation keys
             ev_spec = EvSpec(
-                max_cap_kWh=float(info["ev_schedule_max_cap_kWh"]),
-                max_charging_kW=float(info["ev_schedule_max_charging_kW"]),
-                charger_efficiency=float(info["ev_schedule_charger_eff"]),
-                discharge_efficiency=float(info["ev_schedule_discharge_eff"]),
-                v2g_enabled=bool(info["ctxt_ev_schedule_v2g"] > 0.5),
-                start_soc=float(info["ctxt_ev_schedule_start_soc"]),
-                target_soc=float(info["ctxt_ev_schedule_target_soc"]),
-                charge_to_target_in_hrs=float(info.get("ev_schedule_charge_to_target_hrs", 8.0)),
+                max_cap_kWh=float(states["ctxt_ev_schedule_max_cap_kWh"][0]),
+                max_charging_kW=float(states["ctxt_ev_schedule_max_charging_kW"][0]),
+                charger_efficiency=float(states["ctxt_ev_schedule_charger_eff"][0]),
+                discharge_efficiency=float(states["ctxt_ev_schedule_discharge_eff"][0]),
+                v2g_enabled=bool(states["ctxt_ev_schedule_v2g"][0] > 0.5),
+                start_soc=float(states["ctxt_ev_schedule_start_soc"][0]),
+                target_soc=float(states["ctxt_ev_schedule_target_soc"][0]),
+                charge_to_target_in_hrs=float(states["ctxt_ev_schedule_charge_to_target_hrs"][0]),
             )
             logger.debug("EV schedule: CONNECT (cap=%.1f, soc=%.2f->%.2f)",
                         ev_spec.max_cap_kWh, ev_spec.start_soc, ev_spec.target_soc)
@@ -244,14 +265,11 @@ class LinearEVCharger(Infrastructure):
         else:
             logger.debug("EV schedule: DISCONNECT")
             self.set_ev_connected(connected=False)
-            # mark transition for one step; keep the session snapshot so
-            # EVChargingReward can judge the disconnect against the target
-            self._just_disconnected = True
 
     def exec_action(self, actions: Dict, states: Dict, info=None) -> None:
         """Execute charging/discharging action."""
-        # apply any EV schedule change first
-        self._check_schedule(info or {})
+        # apply any EV schedule change first (read from the ctxt_ev_schedule_* obs keys)
+        self._check_schedule(states)
 
         if not self.is_connected:
             # no EV → no action
@@ -314,26 +332,27 @@ class LinearEVCharger(Infrastructure):
     def update_state(self, states: Dict, info=None) -> None:
         """Update observable state."""
         super().update_state(states, info)
-        states["s_ev_soc"][0] = np.float32(self.soc)
-        states["s_ev_target_soc"][0] = np.float32(self.target_soc)
-        states["s_ev_connected"][0] = np.float32(1.0 if self.is_connected else 0.0)
-        states["ctxt_ev_max_charging_kW"][0] = np.float32(self.effective_max_charging_kW)
-        states["ctxt_ev_v2g_effective"][0] = np.float32(1.0 if self.effective_v2g else 0.0)
+        states["s_evc_soc"][0] = np.float32(self.soc)
+        states["s_evc_target_soc"][0] = np.float32(self.target_soc)
+        states["s_evc_connected"][0] = np.float32(1.0 if self.is_connected else 0.0)
+        states["ctxt_evc_max_charging_kW"][0] = np.float32(self.effective_max_charging_kW)
+        states["ctxt_evc_v2g_effective"][0] = np.float32(1.0 if self.effective_v2g else 0.0)
+        states["ctxt_evc_max_cap_kWh"][0] = np.float32(self.ev_spec.max_cap_kWh if self.is_connected else 0.0)
+        states["ctxt_evc_charger_efficiency"][0] = np.float32(self.ev_spec.charger_efficiency if self.is_connected else 0.0)
+        states["ctxt_evc_max_charge_time_hrs"][0] = np.float32(self.max_charge_time_hrs)
 
-        # decrement deadline by control_step (s→h)
-        if self.is_connected and self.charge_to_target_in_hrs > 0:
-            time_step_hrs = self.control_step / SECONDS_PER_HOUR
-            self.charge_to_target_in_hrs = max(0.0, self.charge_to_target_in_hrs - time_step_hrs)
-
-        # normalise to [0, 1]
-        normalized_time = self.charge_to_target_in_hrs / self.max_charge_time_hrs if self.max_charge_time_hrs > 0 else 0.0
-        states["s_ev_charge_to_target_hrs_norm"][0] = np.float32(np.clip(normalized_time, 0.0, 1.0))
-
-        # corridor envelopes (zero when disconnected)
-        soc_min, soc_max = 0.0, 0.0
+        # Corridor envelopes and the remaining-time obs share one step budget
+        # (_session_step / _session_total_steps) so the deadline has a single source of
+        # truth; all zero when disconnected.
+        soc_min, soc_max, normalized_time = 0.0, 0.0, 0.0
         if self.is_connected:
             self._session_step += 1
             steps_to_deadline = max(0, self._session_total_steps - self._session_step)
+
+            # remaining hours to the deadline, normalised by max_charge_time_hrs to [0, 1]
+            remaining_hrs = steps_to_deadline * self.control_step / SECONDS_PER_HOUR
+            normalized_time = remaining_hrs / self.max_charge_time_hrs if self.max_charge_time_hrs > 0 else 0.0
+
             soc_max = float(np.clip(
                 self._session_start_soc + self._session_step_soc_gain * self._session_step,
                 0.0, 1.0,
@@ -345,23 +364,15 @@ class LinearEVCharger(Infrastructure):
                 ))
             else:
                 soc_min = float(np.clip(self._session_target_soc, 0.0, 1.0))
-        states["s_ev_soc_min"][0] = np.float32(soc_min)
-        states["s_ev_soc_max"][0] = np.float32(soc_max)
+        states["s_evc_charge_to_target_hrs_norm"][0] = np.float32(np.clip(normalized_time, 0.0, 1.0))
+        states["s_evc_soc_min"][0] = np.float32(soc_min)
+        states["s_evc_soc_max"][0] = np.float32(soc_max)
 
-        # publish per-EV params to info for rewards (e.g. EVChargingOnTimeReward)
-        # that need them without an infra reference
-        if info is not None:
-            info["ctxt_ev_max_charging_kW"] = self.effective_max_charging_kW
-            info["ctxt_ev_max_cap_kWh"] = self.ev_spec.max_cap_kWh if self.is_connected else 0.0
-            info["ctxt_ev_charger_efficiency"] = self.ev_spec.charger_efficiency if self.is_connected else 0.0
-            info["ctxt_ev_max_charge_time_hrs"] = self.max_charge_time_hrs
-            info["ctxt_ev_v2g_effective"] = bool(self.effective_v2g)
-
-            # corridor signals for EVChargingReward; session_target_soc keeps the
-            # snapshot through the disconnect step (EVState zeros s_ev_target_soc).
-            info[self.INFO_JUST_DISCONNECTED] = bool(self._just_disconnected)
-            info[self.INFO_SESSION_ACTIVE] = bool(self._session_active and self.is_connected)
-            info[self.INFO_SESSION_TARGET_SOC] = float(self._session_target_soc if (self.is_connected or self._just_disconnected) else 0.0)
+        # Session target feasibility (held from the connect snapshot): 1.0 reachable,
+        # 0.0 unreachable, 0.5 neutral when no EV. EVChargingReward gates the min-curve on
+        # this being 1.0. The charger now publishes no info — every EV signal is an obs key.
+        feasible = (1.0 if self._session_active else 0.0) if self.is_connected else 0.5
+        states["s_evc_session_target_feasible"][0] = np.float32(feasible)
 
     def reset(self, states: Dict, info=None) -> None:
         """Reset to a fresh, disconnected state; EVState re-connects on step 1 if needed."""
@@ -375,7 +386,6 @@ class LinearEVCharger(Infrastructure):
         self._session_target_soc = 0.0
         self._session_step_soc_gain = 0.0
         self._session_active = False
-        self._just_disconnected = False
         super().reset(states, info)
 
     def get_E(self, actions: Dict) -> tuple[float, float]:

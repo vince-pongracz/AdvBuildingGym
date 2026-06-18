@@ -117,6 +117,19 @@ class RuleBasedStrategy:
         episode starts at midnight (standard config: 288 × 300 s = one day)."""
         return utils.hour_of_day(self._step, self.control_step_s)
 
+    # ------------------------------------------------------------------ price
+    def _episode_median_baseprice(self) -> float:
+        """Median of the raw ``baseprice`` over the episode window — the same
+        slice [row_offset, +episode_length] EnergyPriceDataSource bills with.
+        Requires a price source (``requires_price``); raw day-ahead prices are
+        public, so reading the window upfront is a fair heuristic."""
+        ts = self.price_source.ts
+        if ts is None or "baseprice" not in ts.columns:
+            raise RuntimeError(f"Strategy '{self.name}': price source has no 'baseprice' data loaded.")
+        start = self.price_source.row_offset
+        end = min(start + self.episode_length, len(ts))
+        return float(np.median(ts["baseprice"].iloc[start:end]))
+
     # ------------------------------------------------------------------ SoC headrooms
     def _soc_floor(self) -> float:
         floor = self.battery.soc_min
@@ -134,16 +147,18 @@ class RuleBasedStrategy:
         dt_h = self.control_step_s / SECONDS_PER_HOUR
         return max(0.0, (self.battery.soc_max - self.battery.soc) * self.battery.max_cap_kWh / dt_h)
 
-    def _charge_value(self, power_kW: float) -> float:
-        """a_battery in [0, 1] charging min(power, headroom); surplus beyond it exports to the grid."""
-        if self.battery.max_power_kW <= 0:
-            return 0.0
-        power_kW = min(power_kW, self._charge_headroom_kW())
-        return float(np.clip(power_kW / self.battery.max_power_kW, 0.0, 1.0))
+    def _battery_value(self, power_kW: float, *, charging: bool) -> float:
+        """a_battery for ``power_kW``, capped at the direction's SoC headroom.
 
-    def _discharge_value(self, power_kW: float) -> float:
-        """a_battery in [-1, 0] discharging min(power, SoC-floor headroom)."""
+        charging=True  → [0, 1], min(power, charge headroom); surplus beyond it exports to the grid.
+        charging=False → [-1, 0], min(power, SoC-floor discharge headroom).
+        """
         if self.battery.max_power_kW <= 0:
             return 0.0
-        power_kW = min(power_kW, self._discharge_headroom_kW())
-        return float(-np.clip(power_kW / self.battery.max_power_kW, 0.0, 1.0))
+        headroom_kW = self._charge_headroom_kW() if charging else self._discharge_headroom_kW()
+        magnitude = float(np.clip(min(power_kW, headroom_kW) / self.battery.max_power_kW, 0.0, 1.0))
+        return magnitude if charging else -magnitude
+
+    def _battery_value_fraction(self, fraction: float, *, charging: bool) -> float:
+        """a_battery at ``fraction`` of rated power in the given direction, capped at the SoC headroom."""
+        return self._battery_value(fraction * self.battery.max_power_kW, charging=charging)
