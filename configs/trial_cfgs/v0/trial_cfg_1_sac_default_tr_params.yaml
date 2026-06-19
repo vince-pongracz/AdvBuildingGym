@@ -115,6 +115,7 @@ training_params:
   # Common hyperparameters (shared across all algorithms)
   common:
     evaluation_interval: 4
+    evaluation_duration: 10
     episode_lookback_horizon_steps: 120 # 5min steps, 12 steps = 1h --> 120 steps = 10h
     max_episodes_to_run: 3000
     clip_actions_to_env_bounds: True

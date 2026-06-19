@@ -245,7 +245,7 @@ def common_model_setup(
         # evaluation_num_env_runners=1, # not important for now
         evaluation_interval=training_config.evaluation_interval,  # RLlib default: None
         evaluation_duration_unit="episodes",  # RLlib default
-        evaluation_duration=10,  # RLlib default: 10
+        evaluation_duration=training_config.evaluation_duration,  # RLlib default: 10
         evaluation_parallel_to_training=False,  # RLlib default
         evaluation_config=AlgorithmConfig.overrides(env_config=eval_env_config),
     )

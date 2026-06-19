@@ -238,7 +238,7 @@ def sb_common_model_setup(
         paths=paths,
         eval_env=eval_vec,
         eval_freq_per_env=eval_freq_per_env,
-        n_eval_episodes=2,  # parity with Ray's evaluation_duration=2
+        n_eval_episodes=trial.training_param_config.evaluation_duration,  # parity with Ray's evaluation_duration
         num_envs=trial.num_envs,
         eval_trajectories_root=eval_trajectories_root,
     )

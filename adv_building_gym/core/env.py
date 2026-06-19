@@ -339,7 +339,6 @@ class AdvBuildingGym(gym.Env, DataVariantConsumer):
         state = {k: np.array(v, copy=True) for k, v in self.state.items()}
 
         self._execute_actions(action)        # exec_action reads observed row[t]
-        # TODO VP 2026.06.10.: Check if time advance is okay here.
         self._advance_time_and_sync()        # iteration++, sim_hour, synchronise
         self._update_endogenous()            # infras + inner statesources -> action outcomes (still row[t] exogenous)
 

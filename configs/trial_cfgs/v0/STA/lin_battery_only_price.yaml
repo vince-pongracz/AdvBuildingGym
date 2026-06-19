@@ -31,10 +31,11 @@ env_meta:
 training_params:
   common:
     evaluation_interval: 4
+    evaluation_duration: 10
     episode_lookback_horizon_steps: 6
     max_episodes_to_run: 7000
     clip_actions_to_env_bounds: true
-    gamma: 0.99
+    gamma: 0.997
   ppo:
     episodes_per_iteration: 10
     minibatch_size: 64

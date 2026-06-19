@@ -39,7 +39,10 @@ class TrainingParamConfig(LoggableConfig):
     episode_return_mean_window: int = 30
     # Eval cadence in iterations (RLlib evaluation_interval); checkpoints align to it
     # so each lands on a fresh-eval iteration (ranked by eval return).
-    evaluation_interval: int = 2
+    evaluation_interval: int = 10
+    # Episodes per evaluation round (RLlib evaluation_duration, unit=episodes; also the
+    # SB driver's n_eval_episodes), so both drivers average over the same number of episodes.
+    evaluation_duration: int = 10
 
     ppo_episodes_per_iteration: int = 25
     ppo_minibatch_size: int = 128 # Rllib default
