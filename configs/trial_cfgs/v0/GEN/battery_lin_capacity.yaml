@@ -24,12 +24,6 @@ env_meta:
     - -3
     - -4
     - -6
-    - -12
-    - -18
-    - -24
-    - -36
-    - -48
-    - -60
 
   forecast_env_wrapper:
     enabled: true
@@ -49,7 +43,7 @@ training_params:
   sac:
     replay_batch_size: 256
     training_intensity: 32
-    episodes_to_keep_in_replay_buffer: 3500
+    episodes_to_keep_in_replay_buffer: 500
     n_step_return: 3
     learning_starts_after_n_episodes: 50
 
@@ -57,9 +51,16 @@ statesources:
 - class: EnergyPriceDataSource
   name: E_price
   normalise: abs_min_max
+  # max_calc_mode options:
+  #   mean              - mean of raw baseprice over the loaded series
+  #   median            - median of raw baseprice
+  #   percentile        - quantile of raw baseprice at `percentile` (e.g. 0.75)
+  #   mean_above_median - mean of raw baseprice values strictly above the median
+  dynamic_max_price_calc: true
+  max_calc_mode: mean
+  percentile: 0.75  # consulted only when max_calc_mode == "percentile"
 - class: WeatherDataSource
   name: weather
-  normalise: abs_min_max
 - class: InsideTemperature
   name: desired_temp_in
 - class: DesiredUserEnergyNeed
@@ -77,60 +78,29 @@ statesources:
 infras: null
 
 rewards:
-- class_name: TempRewardV0
-  weight: 1.0
-  params: {}
-- class_name: LongTermEconomicRewardV0
-  weight: 1.0
-  params:
-    reference_power_kW: 22.0
-- class_name: MinimiseEnergyConsumptionRewardV0
-  weight: 1.0
-  params: {}
 - class_name: OperatorEnergyControlRewardV0
   weight: 1.0
   params:
     harsh_penalty: -4.0
     soft_threshold_pct: 0.9
     recovery_steps: 3
-- class_name: BatteryTargetRewardV0
+- class_name: EconomicRewardV0
   weight: 1.0
-  params:
-    min_pct: 0.15
-    max_pct: 0.95
-- class_name: BatteryMgmtRewardV0
-  weight: 1.0
-  params:
-    scale: 0.5
-- class_name: EVChargingRewardV0
-  weight: 1.0
-  params:
-    diff_threshold: 0.02
-    soc_diff_multiplier: 5.0
-    disconnect_soc_tolerance: 0.05
-- class_name: EVChargingOnTimeRewardV0
-  weight: 1.0
-  params: {}
-- class_name: ActionSmoothnessRewardV0
-  weight: 1.0
-  params:
-    n_steps: 16
-    mode: weighted
-    freq_exponent: 1.0
+
 infra_schedule:
   mode: cycle
-  swap_every_n_episodes: 100
+  swap_every_n_episodes: 20
   configs:
     train:
-    - configs/infra_cfgs/GEN/battery_lin_capacity/battery_lin_cap_1.yaml
-    - configs/infra_cfgs/GEN/battery_lin_capacity/battery_lin_cap_2.yaml
-    - configs/infra_cfgs/GEN/battery_lin_capacity/battery_lin_cap_3.yaml
-    - configs/infra_cfgs/GEN/battery_lin_capacity/battery_lin_cap_4.yaml
-    - configs/infra_cfgs/GEN/battery_lin_capacity/battery_lin_cap_5.yaml
+    - configs/infra_cfgs/GEN/battery_lin_capacity_so/battery_lin_cap_1.yaml
+    - configs/infra_cfgs/GEN/battery_lin_capacity_so/battery_lin_cap_2.yaml
+    - configs/infra_cfgs/GEN/battery_lin_capacity_so/battery_lin_cap_3.yaml
+    - configs/infra_cfgs/GEN/battery_lin_capacity_so/battery_lin_cap_4.yaml
+    - configs/infra_cfgs/GEN/battery_lin_capacity_so/battery_lin_cap_5.yaml
     eval:
-    - configs/infra_cfgs/GEN/battery_lin_capacity/battery_lin_cap_eval_1.yaml
-    - configs/infra_cfgs/GEN/battery_lin_capacity/battery_lin_cap_eval_2.yaml
-    - configs/infra_cfgs/GEN/battery_lin_capacity/battery_lin_cap_eval_3.yaml
+    - configs/infra_cfgs/GEN/battery_lin_capacity_so/battery_lin_cap_eval_1.yaml
+    - configs/infra_cfgs/GEN/battery_lin_capacity_so/battery_lin_cap_eval_2.yaml
+    - configs/infra_cfgs/GEN/battery_lin_capacity_so/battery_lin_cap_eval_3.yaml
 
 statesource_schedule: null
 
@@ -141,10 +111,6 @@ data_schedule:
   eval: configs/schedules/data/eval.yaml
 
 exploration_reset:
-  enabled: true
+  enabled: false
   trigger: on_infra_swap
-  ppo_entropy_coeff: 0.05
-  ppo_entropy_baseline: 0.0
   sac_alpha: 0.5
-  decay_iterations: 50
-  lr_multiplier: 1.5

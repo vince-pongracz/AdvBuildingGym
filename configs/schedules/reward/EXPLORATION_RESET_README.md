@@ -1,33 +1,50 @@
 # Exploration reset configuration
 
-Event-driven exploration kick fired on every reward set / weight change (see `README.md` for the reward schedule modes that emit such events: `gradual_add`, `random`, `dirichlet`).
+Event-driven exploration kick fired on every curriculum swap that matches `trigger`
+(reward set/weight change, infra swap, or statesource swap). The goal is to **temporarily
+raise the policy's exploration** so it re-tests the action space under the shifted objective.
 
-On each event, exploration is pushed up so the policy re-tests the action space under the shifted objective, then linearly decays back to baseline over `decay_iterations` training iterations. This avoids the policy staying stuck in the previous optimum and gives the critic / value head room to recalibrate.
+Implementation: `adv_building_gym/config/training/exploration_reset.py` (config) and the
+`_exploration_reset_util.py` helpers under `adv_building_gym/ray/callbacks/` and
+`adv_building_gym/sb/callbacks/`.
 
-Algorithm-specific behaviour (`adv_building_gym/config/exploration_reset.py`):
-- **PPO** — `entropy_coeff` is bumped to `ppo_entropy_coeff` and decays to `ppo_entropy_baseline`. Read fresh each loss step.
-- **SAC** — `log_alpha` is forced to `log(sac_alpha)`. SAC's own `alpha_lr` continues retuning toward target entropy; the decay envelope still applies.
-- **Both** — optimiser LRs are multiplied by `lr_multiplier` at the bump peak and interpolated back to `1.0` over `decay_iterations`.
+## Algorithm-specific behaviour
+
+- **SAC** — the temperature is a *learned* parameter (`curr_log_alpha` on the RLlib learner;
+  `log_ent_coef` in SB3), auto-tuned each gradient step toward `target_entropy`. On a swap the
+  live temperature is **raised to `log(sac_alpha)`, but only where it has fallen below it**
+  (a raise-only kick — it never *lowers* exploration). No manual decay: SAC's own alpha
+  optimiser relaxes it back toward the target between swaps.
+
+- **PPO** — `entropy_coeff` is a *fixed* loss coefficient (no optimiser, no `target_entropy`)
+  that does not change during training; the actual exploration is the Gaussian policy's `log_std`,
+  which the policy gradient narrows as it converges. On a swap, `entropy_coeff` is raised to
+  `ppo_entropy_coeff` (strengthening the entropy bonus so the optimiser re-widens `log_std`),
+  then **linearly decayed back to its original configured value** over `decay_iterations`
+  iterations. The reset performs both the raise and the decay, because nothing else moves it.
+
+Learning rates are **not** touched (they are fixed constants in this project); the reset only
+moves the exploration parameter, not the optimisation speed.
 
 ## Fields
 
-- `enabled` (default `false`) — master switch. When `false`, no bump is applied even on reward swaps.
-- `trigger`: which swap triggers the exploration reset: if the rewards swap/change, if the infrastructure changes or if both of them changes.
-- `ppo_entropy_coeff` (default `0.05`) — boosted PPO entropy coefficient at the bump peak.
-- `ppo_entropy_baseline` (default `0.0`) — value the entropy coefficient decays back to.
-- `sac_alpha` (default `0.5`) — value forced onto SAC `log_alpha` as `log(sac_alpha)`. Must be `> 0`.
-- `decay_iterations` (default `25`) — iterations to linearly ramp boost → baseline. Must be `>= 1`.
-- `lr_multiplier` (default `1.0`, i.e. off) — optimiser LR multiplier at the bump peak; interpolated back to `1.0` over `decay_iterations`. Must be `> 0`.
+- `enabled` (default `false`) — master switch. When `false`, no kick is applied.
+- `trigger` — which swap fires the kick: `on_reward_swap`, `on_infra_swap`,
+  `on_statesource_swap`, `on_reward_and_infra`, `all`, or `off`.
+- `sac_alpha` (default `0.5`) — SAC: temperature is raised to `log(sac_alpha)` where below it.
+  Must be `> 0`.
+- `ppo_entropy_coeff` (default `0.05`) — PPO: peak `entropy_coeff` at the kick.
+- `decay_iterations` (default `25`) — PPO: iterations to linearly decay `entropy_coeff` from the
+  peak back to its original configured value. Must be `>= 1`. (Unused by SAC.)
 
 ## Example
 
 ```yaml
-exploration_reset_schedule:
+exploration_reset:
   enabled: true
-  trigger: on_reward_swap # on_reward_swap | on_infra_swap | both
-  ppo_entropy_coeff: 0.05
-  ppo_entropy_baseline: 0.0
+  trigger: on_infra_swap   # off | on_reward_swap | on_infra_swap | on_statesource_swap | on_reward_and_infra | all
   sac_alpha: 0.5
-  decay_iterations: 50    # iterations over which to decay the bump back to baseline
-  lr_multiplier: 1.5
+  # PPO-only (ignored for SAC):
+  ppo_entropy_coeff: 0.05
+  decay_iterations: 25
 ```

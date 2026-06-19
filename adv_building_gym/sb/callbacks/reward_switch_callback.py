@@ -2,8 +2,9 @@
 
 On each swap boundary advances the ``RewardScheduleManager`` and pushes fresh active rewards
 to every sub-env in both train and eval VecEnvs (``env_method("set_reward_funcs", ...)``); each
-sub-env gets its own instances. On change, fires the exploration bump (decayed over
-``decay_iterations`` ticks). SAC caveat: keep ``swap_every_n_episodes`` large vs buffer turnover.
+sub-env gets its own instances. On change, fires the exploration kick (SAC: raise the
+temperature, auto-relaxed; PPO: raise entropy then decay over ``decay_iterations`` ticks).
+SAC caveat: keep ``swap_every_n_episodes`` large vs buffer turnover.
 """
 
 from __future__ import annotations

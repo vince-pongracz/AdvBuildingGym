@@ -214,8 +214,4 @@ statesource_schedule: null
 exploration_reset:
   enabled: false
   trigger: on_reward_swap        # off | on_reward_swap | on_infra_swap | on_statesource_swap | on_reward_and_infra | all
-  ppo_entropy_coeff: 0.05
-  ppo_entropy_baseline: 0.0
   sac_alpha: 0.5
-  decay_iterations: 50           # half of swap_every_n_episodes
-  lr_multiplier: 1.5

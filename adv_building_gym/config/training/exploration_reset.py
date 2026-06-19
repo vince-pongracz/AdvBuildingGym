@@ -38,17 +38,25 @@ class ExplorationResetTrigger(str, Enum):
 @dataclass
 class ExplorationResetConfig:
     """Exploration kick on swap events (event-driven dynamic callback).
-    
-    By default: switched OFF -- no exploration reset
+
+    Fires on every swap matching ``trigger``. Algorithm-specific knobs:
+    - ``sac_alpha`` — SAC: the live temperature is raised (only if currently lower)
+      to ``log(sac_alpha)``; SAC's own ``alpha_lr``/``target_entropy`` tuner relaxes
+      it again between swaps, so there is no manual decay.
+    - ``ppo_entropy_coeff`` / ``decay_iterations`` — PPO: ``entropy_coeff`` is raised
+      to ``ppo_entropy_coeff`` then linearly decayed back to its original configured
+      value over ``decay_iterations`` iterations (PPO entropy is not auto-tuned).
+
+    By default: switched OFF -- no exploration reset.
     """
 
     enabled: bool = False
     trigger: ExplorationResetTrigger = ExplorationResetTrigger.ON_REWARD_SWAP
-    ppo_entropy_coeff: float = 0.05
-    ppo_entropy_baseline: float = 0.0
+
     sac_alpha: float = 0.5
+
+    ppo_entropy_coeff: float = 0.05
     decay_iterations: int = 25
-    lr_multiplier: float = 1.0
 
     @staticmethod
     def from_dict(cfg_raw: dict | None) -> "ExplorationResetConfig":
@@ -67,25 +75,17 @@ class ExplorationResetConfig:
         cfg = ExplorationResetConfig(
             enabled=bool(cfg_raw.get("enabled", False)),
             trigger=trigger,
-            ppo_entropy_coeff=float(cfg_raw.get("ppo_entropy_coeff", 0.05)),
-            ppo_entropy_baseline=float(cfg_raw.get("ppo_entropy_baseline", 0.0)),
             sac_alpha=float(cfg_raw.get("sac_alpha", 0.5)),
+            ppo_entropy_coeff=float(cfg_raw.get("ppo_entropy_coeff", 0.05)),
             decay_iterations=int(cfg_raw.get("decay_iterations", 25)),
-            lr_multiplier=float(cfg_raw.get("lr_multiplier", 1.0)),
         )
 
         if cfg.decay_iterations < 1:
             raise ValueError(f"exploration_reset.decay_iterations must be >= 1, got {cfg.decay_iterations}")
         if cfg.sac_alpha <= 0:
             raise ValueError(f"exploration_reset.sac_alpha must be > 0, got {cfg.sac_alpha}")
-        if cfg.lr_multiplier <= 0:
-            raise ValueError(f"exploration_reset.lr_multiplier must be > 0, got {cfg.lr_multiplier}")
         return cfg
 
     def fires_on(self, event: str) -> bool:
         """Return True if this config should fire the bump on *event*."""
         return self.enabled and self.trigger.fires_on(event)
-
-
-# Backwards-compatible alias for legacy imports.
-ExplorationBumpConfig = ExplorationResetConfig

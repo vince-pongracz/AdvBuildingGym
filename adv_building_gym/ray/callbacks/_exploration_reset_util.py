@@ -1,7 +1,17 @@
-"""Shared helpers for the event-driven exploration reset (reward/infra/statesource swap callbacks).
+"""Shared helper for the event-driven exploration reset (reward/infra/statesource swap callbacks).
 
-The owning callback decides whether to fire (``ExplorationResetConfig.fires_on``) and then
-drives ``capture_baselines`` / ``apply_exploration_level``.
+Fires on every swap matching the configured ``trigger`` (the owning callback gates via
+``ExplorationResetConfig.fires_on``). The exploration parameter is *raised* per algorithm:
+
+- **SAC** — the live temperature ``learner.curr_log_alpha[mid]`` (an ``nn.Parameter`` shared
+  with the ``"alpha"`` optimiser and the loss, ``sac_torch_learner.py``) is raised *only if it
+  has fallen below* ``log(sac_alpha)``. SAC's own ``alpha_lr``/``target_entropy`` tuner relaxes
+  it again between swaps, so there is no manual decay for SAC.
+- **PPO** — ``entropy_coeff`` is not auto-tuned; it is read from a per-module ``Scheduler``
+  (``ppo_learner.py``). On a swap it is raised to ``ppo_entropy_coeff`` and then linearly
+  decayed back to its *original configured value* (captured once) over ``decay_iterations``.
+  Writing ``Scheduler._curr_value`` is the runtime hook: ``Scheduler.update()`` is a no-op for a
+  fixed value and ``get_current_value()`` returns ``_curr_value`` (``schedules/scheduler.py``).
 """
 
 from __future__ import annotations
@@ -14,183 +24,91 @@ from adv_building_gym.config.training.exploration_reset import ExplorationResetC
 logger = logging.getLogger(__name__)
 
 
-def capture_baselines(algorithm) -> None:
-    """Snapshot per-learner baseline entropy_coeff, log_alpha, and LRs.
-
-    Ratchet: each scalar is updated only when the current value is *lower* (more focused),
-    so bumped exploration always decays back to the tightest baseline seen so far.
-    """
-
-    def capture(learner) -> None:
-        existing = getattr(learner, "_exploration_reset_baselines", None) or {}
-        baselines: dict = {}
-
-        cfg = getattr(learner, "config", None)
-        if cfg is not None and hasattr(cfg, "entropy_coeff"):
-            try:
-                current = float(cfg.entropy_coeff)
-            except (TypeError, ValueError):
-                current = None
-            if current is not None:
-                prev = existing.get("entropy_coeff")
-                baselines["entropy_coeff"] = current if prev is None else min(prev, current)
-
-        log_alpha_baselines: dict[str, float] = dict(existing.get("log_alpha", {}))
-        module_dict = getattr(learner, "module", None)
-        if module_dict is not None:
-            try:
-                module_ids = list(module_dict.keys())
-            except AttributeError:
-                module_ids = []
-            for mid in module_ids:
-                module = module_dict[mid]
-                log_alpha = getattr(module, "log_alpha", None)
-                if log_alpha is not None and hasattr(log_alpha, "item"):
-                    current = float(log_alpha.item())
-                    prev = log_alpha_baselines.get(mid)
-                    log_alpha_baselines[mid] = current if prev is None else min(prev, current)
-        if log_alpha_baselines:
-            baselines["log_alpha"] = log_alpha_baselines
-
-        lr_baselines: dict[str, list[float]] = {
-            name: list(vals) for name, vals in existing.get("lrs", {}).items()
-        }
-        named_opts = getattr(learner, "_named_optimizers", None) or {}
-        for name, opt in named_opts.items():
-            current_lrs = [float(g["lr"]) for g in opt.param_groups]
-            prev_lrs = lr_baselines.get(name)
-            if prev_lrs is None:
-                lr_baselines[name] = current_lrs
-            else:
-                lr_baselines[name] = [
-                    min(p, c) for p, c in zip(prev_lrs, current_lrs)
-                ]
-        baselines["lrs"] = lr_baselines
-
-        learner._exploration_reset_baselines = baselines  # type: ignore[attr-defined]
-        logger.info(
-            "Captured exploration baselines on learner (ratcheted): "
-            "entropy_coeff=%s, log_alpha=%s, optimisers=%s",
-            baselines.get("entropy_coeff"), log_alpha_baselines or None,
-            list(lr_baselines.keys()) or None,
-        )
-
-    algorithm.learner_group.foreach_learner(capture)
-
-
-def apply_exploration_level(
-    algorithm,
-    bump_cfg: ExplorationResetConfig,
-    *,
-    frac: float,
-) -> None:
-    """Set entropy / log_alpha / LR to baseline + frac * (boost - baseline)."""
-    frac = max(0.0, min(1.0, float(frac)))
-
-    def apply(learner) -> None:
-        baselines = getattr(learner, "_exploration_reset_baselines", None)
-        if baselines is None:
-            return
-
-        if "entropy_coeff" in baselines:
-            base = baselines["entropy_coeff"]
-            target = base + frac * (bump_cfg.ppo_entropy_coeff - bump_cfg.ppo_entropy_baseline)
-            cfg = getattr(learner, "config", None)
-            if cfg is not None:
-                try:
-                    object.__setattr__(cfg, "entropy_coeff", float(target))
-                except Exception as exc:
-                    logger.warning("Failed to set entropy_coeff: %s", exc)
-
-        log_alpha_baselines = baselines.get("log_alpha")
-        if log_alpha_baselines:
-            target_log = math.log(bump_cfg.sac_alpha)
-            module_dict = getattr(learner, "module", None)
-            if module_dict is not None:
-                for mid, base_log in log_alpha_baselines.items():
-                    interp = base_log + frac * (target_log - base_log)
-                    try:
-                        module = module_dict[mid]
-                    except KeyError:
-                        continue
-                    la = getattr(module, "log_alpha", None)
-                    if la is None:
-                        continue
-                    la.data.fill_(float(interp))
-
-        lr_baselines = baselines.get("lrs", {})
-        if lr_baselines and bump_cfg.lr_multiplier != 1.0:
-            named_opts = getattr(learner, "_named_optimizers", None) or {}
-            mult = 1.0 + frac * (bump_cfg.lr_multiplier - 1.0)
-            for name, opt in named_opts.items():
-                base_lrs = lr_baselines.get(name)
-                if base_lrs is None:
-                    continue
-                for g, base_lr in zip(opt.param_groups, base_lrs):
-                    g["lr"] = float(base_lr * mult)
-
-    algorithm.learner_group.foreach_learner(apply)
-
-
 def make_decay_loop(exploration_reset: ExplorationResetConfig, event: str):
-    """Return (state, maybe_decay, fire_bump) implementing the decay envelope.
+    """Return ``(state, maybe_decay, fire_bump)`` for one swap event.
 
-    ``maybe_decay`` runs every iteration, decaying a previous bump back to baseline.
-    ``fire_bump`` is called right after a swap; it re-captures baselines (ratcheted) and applies the bump.
+    ``fire_bump(algorithm, iteration)`` raises the exploration parameter on each swap.
+    ``maybe_decay(algorithm, iteration)`` runs every iteration and is PPO-only: it linearly
+    decays a previous entropy bump back to the captured baseline. For SAC it is a no-op
+    (``bump_iter`` is never armed); the temperature is relaxed by SAC's own alpha tuner.
     """
-    state: dict = {"bump_iter": None}
+    state: dict = {"bump_iter": None, "ppo_floor": None}
     fires_here = exploration_reset.fires_on(event)
+    target_log = math.log(exploration_reset.sac_alpha)
+
+    # --- in-learner mutators (run inside each learner via foreach_learner; mutate in place) ---
+    def _raise_sac(learner) -> None:
+        """SAC: raise the live temperature to log(sac_alpha), only where it sits below it."""
+        curr = getattr(learner, "curr_log_alpha", None)
+        if curr is None:
+            return
+        for mid in learner.module.keys():
+            log_alpha = curr[mid]  # nn.Parameter, shape [1]; same tensor the optimiser/loss use
+            if float(log_alpha.item()) < target_log:
+                log_alpha.data.fill_(target_log)
+
+    def _set_ppo(learner, value: float) -> None:
+        """PPO: set the per-module entropy coefficient (read by the loss via get_current_value)."""
+        sched = getattr(learner, "entropy_coeff_schedulers_per_module", None)
+        if sched is None:
+            return
+        for mid in learner.module.keys():
+            sched[mid]._curr_value = float(value)
+
+    def _read_ppo_floor(learner) -> float | None:
+        """Return the pristine configured entropy_coeff, or None when the learner is not PPO."""
+        sched = getattr(learner, "entropy_coeff_schedulers_per_module", None)
+        if sched is None:
+            return None
+        mids = list(learner.module.keys())
+        return float(sched[mids[0]].get_current_value()) if mids else None
 
     def maybe_decay(algorithm, iteration: int) -> None:
+        # PPO-only: decay the in-flight entropy bump back to the captured baseline.
         if not fires_here or state["bump_iter"] is None:
             return
         elapsed = iteration - state["bump_iter"]
+        floor, peak = state["ppo_floor"], exploration_reset.ppo_entropy_coeff
         if elapsed >= exploration_reset.decay_iterations:
-            apply_exploration_level(algorithm, exploration_reset, frac=0.0)
+            value = floor
             state["bump_iter"] = None
-            logger.info("Exploration bump decayed back to baseline (iter=%d).", iteration)
+            logger.info("PPO entropy bump decayed back to baseline %.4g (iter=%d).", floor, iteration)
         else:
-            frac = 1.0 - (elapsed / exploration_reset.decay_iterations)
-            apply_exploration_level(algorithm, exploration_reset, frac=frac)
+            value = floor + (1.0 - elapsed / exploration_reset.decay_iterations) * (peak - floor)
+        algorithm.learner_group.foreach_learner(lambda l: _set_ppo(l, value))
 
     def fire_bump(algorithm, iteration: int) -> None:
         if not fires_here:
             return
-        # ratchet baselines towards the current learner state before the bump (only lowers)
-        capture_baselines(algorithm)
+        # Capture the pristine entropy_coeff once, before the first raise. None ⇒ pure-SAC run.
+        if state["ppo_floor"] is None:
+            results = [
+                r.get()
+                for r in algorithm.learner_group.foreach_learner(_read_ppo_floor).ignore_errors()
+            ]
+            floors = [f for f in results if f is not None]
+            state["ppo_floor"] = floors[0] if floors else None
 
-        def _snapshot(learner):
-            b = getattr(learner, "_exploration_reset_baselines", None) or {}
-            ent = b.get("entropy_coeff")
-            log_alphas = b.get("log_alpha") or {}
-            alpha = math.exp(next(iter(log_alphas.values()))) if log_alphas else None
-            lr = None
-            for vals in (b.get("lrs") or {}).values():
-                if vals:
-                    lr = vals[0]
-                    break
-            return ent, alpha, lr
+        # SAC: raise-only set of the live temperature (no-op for PPO learners).
+        algorithm.learner_group.foreach_learner(_raise_sac)
 
-        snaps = [r.get() for r in algorithm.learner_group.foreach_learner(_snapshot).ignore_errors()]
-        ent_was, alpha_was, lr_was = snaps[0] if snaps else (None, None, None)
-
-        apply_exploration_level(algorithm, exploration_reset, frac=1.0)
-        state["bump_iter"] = iteration
-
-        ent_now = exploration_reset.ppo_entropy_coeff
-        alpha_now = exploration_reset.sac_alpha
-        lr_now = lr_was * exploration_reset.lr_multiplier if lr_was is not None else None
-
-        def _g(v):
-            return "n/a".rjust(10) if v is None else f"{v:10.4g}"
-
-        logger.info(
-            "Exploration bump applied (event=%s, iter=%d, decay over %d iters):\n"
-            "  was:    entropy_coeff=%s  sac_alpha=%s  lr=%s\n"
-            "  actual: entropy_coeff=%s  sac_alpha=%s  lr=%s  (lr_mult=%.3g)",
-            event, iteration, exploration_reset.decay_iterations,
-            _g(ent_was), _g(alpha_was), _g(lr_was),
-            _g(ent_now), _g(alpha_now), _g(lr_now), exploration_reset.lr_multiplier,
-        )
+        # PPO: raise entropy to the peak and arm the decay clock (no-op / unarmed for SAC).
+        if state["ppo_floor"] is not None:
+            algorithm.learner_group.foreach_learner(
+                lambda l: _set_ppo(l, exploration_reset.ppo_entropy_coeff)
+            )
+            state["bump_iter"] = iteration
+            logger.info(
+                "Exploration kick (event=%s, iter=%d): PPO entropy_coeff %.4g -> %.4g, "
+                "decay over %d iters.",
+                event, iteration, state["ppo_floor"], exploration_reset.ppo_entropy_coeff,
+                exploration_reset.decay_iterations,
+            )
+        else:
+            logger.info(
+                "Exploration kick (event=%s, iter=%d): SAC temperature raised to sac_alpha=%.4g "
+                "where below target (auto-relaxed by the alpha tuner).",
+                event, iteration, exploration_reset.sac_alpha,
+            )
 
     return state, maybe_decay, fire_bump
