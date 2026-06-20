@@ -8,6 +8,8 @@ from typing import Literal
 import numpy as np
 import pandas as pd
 
+from adv_building_gym.config.data.season_filter import SeasonFilter
+
 logger = logging.getLogger(__name__)
 
 
@@ -30,6 +32,10 @@ class DataCombinator:
              - ``"each"``: walk through days sequentially, advancing every episode.
              - A date string (e.g. ``"2025-03-15"``): pin every episode to that
                specific calendar day.
+        season: Restricts ``random``/``each`` day selection to one meteorological
+                season (``winter``/``spring``/``summer``/``autumn``/
+                ``spring_autumn``); ``"all"`` (default) disables filtering. A
+                pinned date string ignores this. See ``season_filter.py``.
 
     Final pool = scenarios x variable_combinations.
     If scenarios is empty, only variable combinations are used (and vice versa).
@@ -41,6 +47,7 @@ class DataCombinator:
     swap_every_n_episodes: int = 5
     mode: Literal["cycle", "random"] = "cycle"
     day: str = "random"
+    season: str = "all"
 
     seed: int = 42
     shuffle: bool = True
@@ -48,6 +55,7 @@ class DataCombinator:
     _variants: list[dict[str, str]] = field(default=None, init=False, repr=False)
 
     def __post_init__(self) -> None:
+        self._season_filter = SeasonFilter(self.season)
         self._variants = self._build_variants()
 
     @property
@@ -85,9 +93,9 @@ class DataCombinator:
             rng.shuffle(pool)
 
         logger.info(
-            "Generated %d variant(s) (%d scenario(s) x %d variable combo(s), swap every %d episode(s), mode=%s, day=%s)",
+            "Generated %d variant(s) (%d scenario(s) x %d variable combo(s), swap every %d episode(s), mode=%s, day=%s, season=%s)",
             len(pool), len(self.scenarios), len(variable_combos),
-            self.swap_every_n_episodes, self.mode, self.day,
+            self.swap_every_n_episodes, self.mode, self.day, self.season,
         )
         return pool
 
@@ -158,18 +166,24 @@ class DataCombinator:
             (row_offset, day_mode) where row_offset is the starting row and
             day_mode is the ``day`` value for logging.
         """
+        year = data_start_year if data_start_year is not None else pd.Timestamp.now().year
+
         if self.day == "random":
+            # Restrict the draw to in-season days only (full range when season="all").
+            valid_days = self._season_filter.valid_day_indices(year, max_days)
             if rng is not None:
-                day_index = int(rng.integers(0, max_days))
+                day_index = int(rng.choice(valid_days))
             else:
-                day_index = 0
+                day_index = valid_days[0]
         elif self.day == "each":
-            day_index = episode_count % max_days
+            # Walk sequentially through in-season days only.
+            valid_days = self._season_filter.valid_day_indices(year, max_days)
+            day_index = valid_days[episode_count % len(valid_days)]
         else:
-            # Interpret as a date string — find the matching day index
+            # Interpret as a date string — find the matching day index (season ignored:
+            # an explicitly pinned calendar day always wins).
             day_index = self._date_to_day_index(self.day)
 
-        year = data_start_year if data_start_year is not None else pd.Timestamp.now().year
         jan1 = pd.Timestamp(year=year, month=1, day=1)
         self._day_date = jan1 + pd.Timedelta(days=day_index)
 

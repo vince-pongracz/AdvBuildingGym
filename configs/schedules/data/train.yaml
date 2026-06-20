@@ -20,6 +20,8 @@ years: [2024]
 # [2020, 2021, 2022, 2023, 2024] 
 # [2018, 2019, 2020, 2021, 2022, 2023, 2024]
 
+season: winter # spring, summer, autumn, spring_autumn or "all" (no filtering) -- default is "all"
+
 # Whether to auto-discover and include augmented data files
 include_synthesized: false
 

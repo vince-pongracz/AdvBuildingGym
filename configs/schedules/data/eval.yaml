@@ -14,6 +14,7 @@ day: random        # sequential days for reproducible eval
 
 # Years to include in scenario generation
 years: [2025, 2026]
+season: winter # spring, summer, autumn, spring_autumn or "all" (no filtering) -- default is "all"
 
 # Whether to auto-discover and include synthesised data files
 include_synthesized: false

@@ -97,6 +97,7 @@ def load_data_combinator_config(
         swap_every_n_episodes=cfg["swap_every_n_episodes"],
         mode=cfg["mode"],
         day=cfg["day"],
+        season=cfg.get("season", "all"),
         seed=seed,
         shuffle=shuffle,
     )
