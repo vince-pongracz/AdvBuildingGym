@@ -37,9 +37,11 @@ class DataCombinator:
 
     scenarios: list[dict[str, str]] = field(default_factory=list)
     variable: dict[str, list[str]] = field(default_factory=dict)
+
     swap_every_n_episodes: int = 5
     mode: Literal["cycle", "random"] = "cycle"
     day: str = "random"
+
     seed: int = 42
     shuffle: bool = True
     _day_date = None  # Cached parsed date for day mode
@@ -47,8 +49,6 @@ class DataCombinator:
 
     def __post_init__(self) -> None:
         self._variants = self._build_variants()
-
-    # TODO noprio VP 2026.03.18. : Solve data combinator with a generator function?
 
     @property
     def variants(self) -> list[dict[str, str]]:
@@ -114,20 +114,22 @@ class DataCombinator:
         pool = self.variants
         if not pool:
             return {}
-        idx = self._variant_pool_index(episode_count, rng, force_random=force_random)
+        idx = self._get_variant_pool_index(episode_count, rng, force_random=force_random)
         return pool[idx]
 
-    def _variant_pool_index(
+    def _get_variant_pool_index(
         self,
         episode_count: int,
         rng: np.random.Generator | None = None,
         force_random: bool = False,
     ) -> int:
         """Return the pool index for the given episode count."""
-        pool = self.variants
+        variants_pool = self.variants
         if (force_random or self.mode == "random") and rng is not None:
-            return int(rng.integers(0, len(pool)))
-        return (episode_count // self.swap_every_n_episodes) % len(pool)
+            return int(rng.integers(0, len(variants_pool)))
+        # Cycle through variants every swap_every_n_episodes episodes
+        n_variant_on_the_schedule = episode_count // self.swap_every_n_episodes
+        return n_variant_on_the_schedule % len(variants_pool)
 
     def get_episode_start_offset(
         self,
@@ -185,28 +187,3 @@ class DataCombinator:
         """Convert a date string like '2025-03-15' to a day-of-year index (0-based)."""
         date = pd.Timestamp(date_str)
         return date.day_of_year - 1
-
-    def to_dict(self) -> dict:
-        """Serialize to a JSON-compatible dictionary."""
-        return {
-            "swap_every_n_episodes": self.swap_every_n_episodes,
-            "mode": self.mode,
-            "day": self.day,
-            "seed": self.seed,
-            "shuffle": self.shuffle,
-            "scenarios": self.scenarios,
-            "variable": self.variable,
-        }
-
-    @classmethod
-    def from_dict(cls, d: dict) -> "DataCombinator":
-        """Reconstruct a DataCombinator from a dictionary."""
-        return cls(
-            swap_every_n_episodes=d.get("swap_every_n_episodes", 5),
-            mode=d.get("mode", "cycle"),
-            day=d.get("day", "random"),
-            seed=d.get("seed", 42),
-            shuffle=d.get("shuffle", True),
-            scenarios=d.get("scenarios", []),
-            variable=d.get("variable", {}),
-        )

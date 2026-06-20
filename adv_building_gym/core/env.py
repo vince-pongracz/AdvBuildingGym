@@ -35,7 +35,8 @@ class AdvBuildingGym(gym.Env, DataVariantConsumer):
     """Modular Gymnasium env for building-energy control.
 
     Composes Infrastructure / StateSource / RewardFunction over a fixed control-step
-    loop. Internal Dict action/obs spaces; external wrappers (FlattenAction + RescaleAction)
+    loop. 
+    Internal Dict action/obs spaces; external wrappers (FlattenAction + RescaleAction)
     give the flat ``Box(-1, 1)`` interface.
 
     Data contract — observation vs. info
@@ -229,9 +230,7 @@ class AdvBuildingGym(gym.Env, DataVariantConsumer):
         if variant:
             logger.info(
                 "Episode %d, date %s: data variant %s",
-                self.episode_count,
-                self.data_combinator.get_day_date(),
-                variant,
+                self.episode_count, self.data_combinator.get_day_date(), variant,
             )
 
         self._reset_internal_state()
@@ -367,9 +366,7 @@ class AdvBuildingGym(gym.Env, DataVariantConsumer):
         return (
             {k: np.array(v, copy=True) for k, v in self.state.items()},
             reward,
-            terminated,
-            truncated,
-            info,
+            terminated, truncated, info,
         )
 
     def _execute_actions(self, action) -> None:
