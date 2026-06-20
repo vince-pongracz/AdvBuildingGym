@@ -16,7 +16,7 @@ day: random        # sequential days for reproducible eval
 years: [2025, 2026]
 
 # Whether to auto-discover and include synthesised data files
-include_synthesized: true
+include_synthesized: false
 
 # Scenario source definitions (same pool as training)
 scenario_sources:
@@ -46,6 +46,9 @@ variable:
     - data/ev_usage_profiles/ev_eval_2.csv
     - data/ev_usage_profiles/ev_eval_3.csv
   operator_energy_control:
+    - data/operator_signals/op_constant_20kW.csv
+    - data/operator_signals/op_daytime_boost.csv
+    - data/operator_signals/op_evening_peak_relief.csv
     - data/operator_signals/op_eval_night_charge.csv
     - data/operator_signals/op_eval_two_dip.csv
   desired_temp_in:
