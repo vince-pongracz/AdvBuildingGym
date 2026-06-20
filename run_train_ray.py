@@ -405,6 +405,9 @@ def main():
         "seed": trial.seed,
         "env_config": trial.env_config,
         "data_combinator": trial.data_combinator,
+        # Eval EnvRunners (eval_mode=True via the evaluation_config override) pick this
+        # held-out combinator instead, so in-training eval rounds runs on the eval dataset.
+        "eval_data_combinator": trial.eval_data_combinator,
         "reward_schedule_manager": trial.reward_manager,
     }
     register_env(

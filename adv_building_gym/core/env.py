@@ -65,6 +65,7 @@ class AdvBuildingGym(gym.Env, DataVariantConsumer):
         reward_aggregator: RewardAggregator,
         instance_id: str | None = None,
         render_mode=None,
+        eval_mode: bool = False,
         **kwargs,
     ):
         """env_config: episode length, control step, action-history window.
@@ -134,7 +135,7 @@ class AdvBuildingGym(gym.Env, DataVariantConsumer):
 
         # Eval runner flag: every reset() draws a fresh random (variant, day) for broad
         # coverage, overriding the combinator cadence. Set by the env creators.
-        self.eval_mode: bool = False
+        self.eval_mode: bool = eval_mode
 
         # whether an explicit reset seed was consumed; _maybe_reseed seeds once in eval mode
         self._has_seeded: bool = False

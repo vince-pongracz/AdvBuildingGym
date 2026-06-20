@@ -95,6 +95,9 @@ class TrialConfig:
     training_param_config: TrainingParamConfig
     env_config: EnvConfig
     data_combinator: Optional[DataCombinator]
+    # Held-out eval-split combinator, loaded only when is_training=True so the
+    # in-training evaluation rounds run on the eval dataset (see env_creator).
+    eval_data_combinator: Optional[DataCombinator]
     reward_manager: RewardScheduleManager
     infra_combinator: Optional[InfraCombinator]
     statesource_combinator: Optional[StatesourceCombinator]
@@ -177,6 +180,7 @@ class TrialConfig:
 
         # ---- data combinator (path-based train/eval) ----
         data_combinator: Optional[DataCombinator] = None
+        eval_data_combinator: Optional[DataCombinator] = None
         data_schedule = trial_dict.get("data_schedule")
         if data_schedule:
             split = "train" if is_training else "eval"
@@ -186,17 +190,28 @@ class TrialConfig:
             data_combinator = load_data_combinator_config(
                 cfg_yaml_path=data_schedule_path, default_seed=trial_seed,
             )
+            # During training, also build the eval-split combinator so the in-training
+            # evaluation rounds sample from the held-out eval dataset (wired to the eval
+            # EnvRunners by the env creator, gated on eval_mode). When is_training=False
+            # the standalone eval driver already loads the eval split as data_combinator.
+            if is_training:
+                eval_schedule_path = data_schedule.get("eval")
+                if eval_schedule_path:
+                    eval_data_combinator = load_data_combinator_config(
+                        cfg_yaml_path=eval_schedule_path, default_seed=trial_seed,
+                    )
+                else:
+                    logger.warning(
+                        "Trial config %s: data_schedule.eval not set — in-training "
+                        "evaluation falls back to the training dataset.", label,
+                    )
         elif require_data_schedule:
-            raise ValueError(
-                f"Trial config {label} missing 'data_schedule' (required for training)"
-            )
+            raise ValueError(f"Trial config {label} missing 'data_schedule' (required for training)")
 
         # ---- rewards (required) + optional reward schedule (inlined) ----
         rewards_pool = trial_dict["rewards"]
         if not isinstance(rewards_pool, list) or not rewards_pool:
-            raise ValueError(
-                f"Trial config {label}: 'rewards' must be a non-empty list"
-            )
+            raise ValueError(f"Trial config {label}: 'rewards' must be a non-empty list")
         reward_sch_cfg = trial_dict.get("reward_schedule")
         if reward_sch_cfg is not None and not isinstance(reward_sch_cfg, dict):
             raise ValueError(
@@ -288,6 +303,7 @@ class TrialConfig:
             training_param_config=training_param_config,
             env_config=env_config,
             data_combinator=data_combinator,
+            eval_data_combinator=eval_data_combinator,
             reward_manager=reward_manager,
             infra_combinator=infra_combinator,
             statesource_combinator=statesource_combinator,

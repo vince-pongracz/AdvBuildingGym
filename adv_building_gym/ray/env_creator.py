@@ -53,8 +53,14 @@ def adv_building_env_creator(config: dict) -> gymnasium.Env:
               (mode=OFF returns all rewards).
           Optional keys:
             - ``data_combinator``: Pre-built DataCombinator instance.
+            - ``eval_data_combinator``: Held-out eval DataCombinator; used
+              instead of ``data_combinator`` when ``eval_mode`` is set, so the
+              in-training evaluation rounds sample from the eval dataset.
             - ``log_full_info``: When True, enables deep-copy of named
               state into info["state"] each step (evaluation only).
+            - ``eval_mode``: Set by Ray's evaluation env_config override; routes
+              the env to ``eval_data_combinator`` and fresh-random per-episode
+              sampling.
 
     Returns:
         Wrapped AdvBuildingGym with flat Box(-1, 1) action space.
@@ -80,6 +86,9 @@ def adv_building_env_creator(config: dict) -> gymnasium.Env:
     worker_index = getattr(config, "worker_index", 0)
     vector_index = getattr(config, "vector_index", 0)
     instance_id = f"AdvBuildingGym_w{worker_index}_v{vector_index}"
+    is_eval = config.get("eval_mode", False)
+    if is_eval:
+        instance_id = f"Eval_{instance_id}"
 
     # DEBUG: confirm EnvContext metadata reached here ("MISSING" = dropped earlier)
     logger.info(
@@ -90,14 +99,23 @@ def adv_building_env_creator(config: dict) -> gymnasium.Env:
         type(config).__name__, instance_id,
     )
 
+    # Eval EnvRunners carry eval_mode=True (set via the evaluation_config env_config
+    # override); they sample from the held-out eval combinator when one is supplied,
+    # so the in-training eval rounds run on the eval dataset rather than the train one.
+    data_combinator = config.get("data_combinator")
+    if is_eval and config.get("eval_data_combinator") is not None:
+        data_combinator = config.get("eval_data_combinator")
+        logger.info("env_creator: eval_mode — using eval data_combinator for %s", instance_id)
+
     env = AdvBuildingGym(
         infras=infras,
         statesources=statesources,
         rewards=rewards,
         env_config=env_config,
-        data_combinator=config.get("data_combinator"),
+        data_combinator=data_combinator,
         reward_aggregator=SumRewardAggregator(),
         instance_id=instance_id,
+        eval_mode=is_eval,
     )
     seed = config.get("seed", 21) + worker_index + 1000 * vector_index  # Derive a unique seed per env instance.
     env.reset(seed=seed)
@@ -116,8 +134,6 @@ def adv_building_env_creator(config: dict) -> gymnasium.Env:
     # Set by Ray's evaluation env_config — only eval EnvRunners pass these.
     if config.get("log_full_info", False):
         env.log_full_info = True
-    if config.get("eval_mode", False):
-        env.eval_mode = True
 
     if env_config.hst.enabled:
         env = HistoryWrapper(
