@@ -42,6 +42,7 @@ class LinearEVCharger(Infrastructure):
                 max_charge_time_hrs: float = 24.0,
                 v2g_enabled: bool = True,
                 v2g_playroom: float = 0.1,
+                emit_ctxt: bool = False,
                 ) -> None:
         """Initialize EV Charger infrastructure.
 
@@ -58,6 +59,7 @@ class LinearEVCharger(Infrastructure):
                 disallowed even when both V2G flags are set.
         """
         super().__init__(name, max_power_kW)
+        self.emit_ctxt = emit_ctxt
 
         self.control_step = control_step
         self.max_charge_time_hrs = max_charge_time_hrs
@@ -147,9 +149,10 @@ class LinearEVCharger(Infrastructure):
 
         # Effective V2G = charger.v2g_enabled AND ev_spec.v2g_enabled. Unlike
         # ctxt_ev_schedule_v2g (EV-side only), this is the actionable composite
-        # (0 if unplugged or either side forbids V2G).
-        if "ctxt_evc_v2g_effective" not in state_spaces.keys():
-            state_spaces["ctxt_evc_v2g_effective"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
+        # (0 if unplugged or either side forbids V2G). Policy-only — no code reads it,
+        # so it is gated by emit_ctxt (unlike the other evc_* keys the rewards read).
+        self._publish_ctxt(state_spaces, "ctxt_evc_v2g_effective",
+                            Box(low=0, high=1, shape=(1,), dtype=np.float32))
 
         # Charger-owned EV params the EV rewards read from the observation. Published
         # here (not just the EVState ctxt_ev_schedule_* view) so the reward reads them
@@ -336,7 +339,7 @@ class LinearEVCharger(Infrastructure):
         states["s_evc_target_soc"][0] = np.float32(self.target_soc)
         states["s_evc_connected"][0] = np.float32(1.0 if self.is_connected else 0.0)
         states["ctxt_evc_max_charging_kW"][0] = np.float32(self.effective_max_charging_kW)
-        states["ctxt_evc_v2g_effective"][0] = np.float32(1.0 if self.effective_v2g else 0.0)
+        self._write_ctxt(states, "ctxt_evc_v2g_effective", np.float32(1.0 if self.effective_v2g else 0.0))
         states["ctxt_evc_max_cap_kWh"][0] = np.float32(self.ev_spec.max_cap_kWh if self.is_connected else 0.0)
         states["ctxt_evc_charger_efficiency"][0] = np.float32(self.ev_spec.charger_efficiency if self.is_connected else 0.0)
         states["ctxt_evc_max_charge_time_hrs"][0] = np.float32(self.max_charge_time_hrs)

@@ -106,18 +106,17 @@ Either a constant `max_power_kW` from the env config YAML, or — when an `opera
 
 | Key | Unit at exposure |
 | --- | --- |
-| `s_temp_out_norm` | normalised, scale = `ctxt_temp_abs_max` (°C) |
+| `s_temp_out_norm` | normalised, fixed scale 70 °C (`info["temp_abs_max"]`) |
 | `s_solar_irradiance_norm` | normalised [0,1], scale = `ctxt_solar_irradiance_max` (W/m²) |
 | `s_avg_wind_speed_norm` | normalised [0,1], scale = `ctxt_wind_speed_abs_max` (m/s) |
 | `s_E_price` | normalised [-1,1], scale = `ctxt_E_price_max` (ct/kWh) |
-| `s_temp_in_norm` | normalised (÷ `ctxt_temp_abs_max`, °C) |
+| `s_temp_in_norm` | normalised, fixed scale 70 °C (`info["temp_abs_max"]`) |
 | `s_sim_hour` | normalised hour-of-day, (sim_hour mod 24) / 24, range [0, 1] |
 
 ### Context / scale factors (`ctxt_*`, static within an episode)
 
 | Key | Unit |
 | --- | --- |
-| `ctxt_temp_abs_max` | °C |
 | `ctxt_solar_irradiance_max` | W/m² |
 | `ctxt_wind_speed_abs_max` | m/s |
 | `ctxt_E_price_max` | ct/kWh |

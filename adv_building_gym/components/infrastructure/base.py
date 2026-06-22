@@ -3,14 +3,14 @@ from collections import OrderedDict
 from typing import Any, ClassVar, Dict, Literal, Set
 
 from adv_building_gym.core.env_sync import EnvSync
-from adv_building_gym.components.registry import Serializable
+from adv_building_gym.components.context_emitter import ContextEmitter
 
 logger = logging.getLogger(__name__)
 
 PowerFlow = Literal["consumer", "generator", "bidirectional"]
 
 
-class Infrastructure(Serializable):
+class Infrastructure(ContextEmitter):
     """Base infrastructure component.
 
     Sync state lives in ``self.sync`` (``EnvSync``), exposed via pass-through

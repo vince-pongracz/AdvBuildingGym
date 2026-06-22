@@ -5,24 +5,29 @@ import numpy as np
 from gymnasium.spaces import Box
 
 from .base import Infrastructure
+from ..statesources.forecastable import Forecastable
 from adv_building_gym.components.registry import ComponentRegistry
 
 logger = logging.getLogger(__name__)
 
 
-class WindTurbine(Infrastructure):
+class WindTurbine(Infrastructure, Forecastable):
     """Wind turbine (uncontrolled generator).
 
-    Converts normalised wind speed (``avg_wind_speed_norm`` from WeatherDataSource)
-    to power via a cubic power curve with cut-in/rated/cut-out thresholds; no policy input.
+    Converts raw wind speed (m/s, read from ``info["raw_wind_speed_ms"]`` published by
+    WeatherDataSource) to power via a cubic power curve with cut-in/rated/cut-out
+    thresholds; no policy input. The policy observes only the resulting
+    ``s_wind_power_norm`` (production as a fraction of ``rated_power_kW``).
     Link: https://en.wikipedia.org/wiki/Wind_turbine_design#Power_curve
+
+    Forecastable: ``s_fc_wind_power_norm`` applies the same power curve to the weather
+    source's future wind speed (obtained via ``info["_weather_source"]``).
     """
 
     POWER_FLOW = "generator"
 
     _exclude_params: ClassVar[Set[str]] = {
-        'iteration', 'wind_speed_raw',
-        'current_production_kW', 'wind_speed_abs_max'
+        'iteration', 'wind_speed_raw', 'current_production_kW'
     }
 
     def __init__(self,
@@ -32,6 +37,7 @@ class WindTurbine(Infrastructure):
                 cut_in_speed_ms: float = 3.0,
                 rated_speed_ms: float = 10.0,
                 cut_out_speed_ms: float = 25.0,
+                emit_ctxt: bool = False,
                 ) -> None:
         """Initialize wind turbine infrastructure.
 
@@ -49,6 +55,7 @@ class WindTurbine(Infrastructure):
                 Link: https://webstore.iec.ch/en/publication/5433
         """
         super().__init__(name, max_power_kW)
+        self.emit_ctxt = emit_ctxt
 
         if cut_in_speed_ms >= rated_speed_ms:
             raise ValueError("cut_in_speed must be less than rated_speed.")
@@ -60,32 +67,30 @@ class WindTurbine(Infrastructure):
         self.rated_speed = rated_speed_ms
         self.cut_out_speed = cut_out_speed_ms
 
-        # Scale factor (m/s) for avg_wind_speed_norm; read at runtime from
-        # states["ctxt_wind_speed_abs_max"] (WeatherDataSource).
-        self.wind_speed_abs_max: float = 1.0
-
         # State variables
-        self.wind_speed_raw = 0.0          # Denormalised wind speed (m/s)
+        self.wind_speed_raw = 0.0          # Wind speed (m/s, from info)
         self.current_production_kW = 0.0   # Power produced (kW)
+        # Weather source captured from info each update_state; used for power forecasts.
+        self._weather_source = None
 
     def setup_spaces(self,
                     state_spaces,
                     action_spaces):
-        """Register rated-power context only; wind speed obs comes from WeatherDataSource, no action."""
-        # Raw rated power (kW) — static per episode.
-        if "ctxt_wind_rated_power_kW" not in state_spaces.keys():
-            state_spaces["ctxt_wind_rated_power_kW"] = Box(low=0, high=np.inf, shape=(1,), dtype=np.float32)
+        """Register normalised production + rated-power context; no action (wind-driven)."""
+        # Normalised production [0, 1] (fraction of rated_power_kW) — the only
+        # weather-derived observation the policy sees for wind.
+        if "s_wind_power_norm" not in state_spaces.keys():
+            state_spaces["s_wind_power_norm"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
+        # Raw rated power (kW) — policy-only conditioning, gated by emit_ctxt;
+        # lets the policy recover absolute power from the normalised obs.
+        self._publish_ctxt(state_spaces, "ctxt_wind_rated_power_kW",
+                        Box(low=0, high=np.inf, shape=(1,), dtype=np.float32))
 
         return state_spaces, action_spaces
 
     def exec_action(self, actions: Dict, states: Dict, info=None) -> None:
-        """Denormalise wind speed, then apply the cubic power curve."""
-        wind_norm = 0.0
-        if "s_avg_wind_speed_norm" in states:
-            wind_norm = float(states["s_avg_wind_speed_norm"][0])
-
-        # denormalise to m/s
-        self.wind_speed_raw = wind_norm * self.wind_speed_abs_max
+        """Read raw wind speed (m/s) from info, then apply the cubic power curve."""
+        self.wind_speed_raw = float(info.get("raw_wind_speed_ms", 0.0)) if info is not None else 0.0
 
         # cubic curve P ∝ v³ between cut-in and rated (Betz's law)
         # Link: https://en.wikipedia.org/wiki/Betz%27s_law
@@ -121,12 +126,15 @@ class WindTurbine(Infrastructure):
             return 0.0
 
     def update_state(self, states: Dict, info=None) -> None:
-        """Read wind speed scale factor from state and publish power bounds."""
+        """Publish normalised production, rated power, and power bounds."""
         super().update_state(states, info)
 
-        if "ctxt_wind_speed_abs_max" in states:
-            self.wind_speed_abs_max = float(states["ctxt_wind_speed_abs_max"][0])
-        states["ctxt_wind_rated_power_kW"][0] = np.float32(self.rated_power_kW)
+        # Capture the weather source for forecast() (future wind-speed look-ahead).
+        if info is not None:
+            self._weather_source = info.get("_weather_source")
+        wind_power_norm = self.current_production_kW / self.rated_power_kW if self.rated_power_kW > 0 else 0.0
+        states["s_wind_power_norm"][0] = np.float32(np.clip(wind_power_norm, 0.0, 1.0))
+        self._write_ctxt(states, "ctxt_wind_rated_power_kW", np.float32(self.rated_power_kW))
 
     def reset(self, states: Dict, info=None) -> None:
         """Clear per-episode wind/production readouts."""
@@ -144,6 +152,18 @@ class WindTurbine(Infrastructure):
             "raw_wind_speed": self.wind_speed_raw,
             "raw_wind_production_kW": self.current_production_kW,
         }
+
+    def forecast_keys(self) -> tuple[str, ...]:
+        return ("s_fc_wind_power_norm",)
+
+    def forecast(self, selected_future_steps: list[int]) -> dict[str, list[float]]:
+        """Normalised wind production at the future weather rows (same curve as the live obs)."""
+        n = len(selected_future_steps)
+        if self._weather_source is None or self.rated_power_kW <= 0:
+            return {"s_fc_wind_power_norm": [0.0] * n}
+        future_wind = self._weather_source.raw_weather_forecast(selected_future_steps)["wind_ms"]
+        out = [self._power_curve(float(v)) / self.rated_power_kW for v in future_wind]
+        return {"s_fc_wind_power_norm": [float(np.clip(p, 0.0, 1.0)) for p in out]}
 
 
 # register with ComponentRegistry

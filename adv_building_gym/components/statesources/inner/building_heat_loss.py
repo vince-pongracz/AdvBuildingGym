@@ -7,7 +7,7 @@ from gymnasium.spaces import Box
 
 from ..base import StateSource
 from adv_building_gym.components.registry import ComponentRegistry
-from adv_building_gym._common.constants import SLOWDOWN_TERM
+from adv_building_gym._common.constants import SLOWDOWN_TERM, TEMP_ABS_MAX_CELSIUS
 
 logger = logging.getLogger(__name__)
 
@@ -32,9 +32,11 @@ class BuildingHeatLoss(StateSource):
                 name: str,
                 K: float,
                 mC: float,
-                timestep: float = 300) -> None:
+                timestep: float = 300,
+                emit_ctxt: bool = False) -> None:
         """K: heat transfer coefficient [W/K]; mC: thermal mass [J/K]; timestep: seconds."""
         super().__init__(name=name)
+        self.emit_ctxt = emit_ctxt
         self.K = K
         self.mC = mC
         self.timestep = timestep
@@ -43,16 +45,16 @@ class BuildingHeatLoss(StateSource):
     def setup_spaces(self,
                     state_spaces: OrderedDict,
                     action_spaces: OrderedDict) -> tuple[OrderedDict, OrderedDict]:
-        """Register temp_in_norm/temp_out_norm and the building K/mC context."""
-        # ensure temperature states exist (may be created by other components)
-        if "s_temp_in_norm" not in state_spaces:
-            state_spaces["s_temp_in_norm"] = Box(low=-1, high=1, shape=(1,), dtype=np.float32)
-        if "s_temp_out_norm" not in state_spaces:
-            state_spaces["s_temp_out_norm"] = Box(low=-1, high=1, shape=(1,), dtype=np.float32)
+        """Register the building K/mC context only.
 
+        Indoor and outdoor temperature are both shared on the info channel
+        (info["temp_in_norm"] / info["temp_out_norm"]), not observations — the policy
+        sees the comfort error (s_temp_error_norm, published by InsideTemperature) instead.
+        """
         # Static building physics — context, changes only on a building swap.
-        if "ctxt_building_K" not in state_spaces:
-            state_spaces["ctxt_building_K"] = Box(low=0, high=np.inf, shape=(1,), dtype=np.float32)
+        # K is policy-only conditioning (gated by emit_ctxt); mC is functional —
+        # HP reads ctxt_building_mC for its 1R1C update, so it is always published.
+        self._publish_ctxt(state_spaces, "ctxt_building_K", Box(low=0, high=np.inf, shape=(1,), dtype=np.float32))
         if "ctxt_building_mC" not in state_spaces:
             state_spaces["ctxt_building_mC"] = Box(low=0, high=np.inf, shape=(1,), dtype=np.float32)
 
@@ -65,11 +67,12 @@ class BuildingHeatLoss(StateSource):
         # Paper: EKF based self-adaptive thermal model for a passive house
         # Link: https://www.sciencedirect.com/science/article/pii/S0378778812003039?via%3Dihub
         # 1R1C (SI): Q_transfer[W] = K*(Tout_raw - Tin_raw); dT_raw[K] = SLOWDOWN_TERM*dt*Q/mC.
-        # s_temp_in_norm is normalised by temp_abs_max (WeatherDataSource), so denormalise,
-        # apply physics, then renormalise the increment.
-        Tin_norm = states["s_temp_in_norm"][0]
-        Tout_norm = states["s_temp_out_norm"][0]
-        temp_abs_max = float(states["ctxt_temp_abs_max"][0]) if "ctxt_temp_abs_max" in states else 60.0
+        # Indoor and outdoor temperature both live on the info channel (normalised by
+        # temp_abs_max); denormalise, apply physics, then renormalise the increment.
+        Tin_norm = float(info.get("temp_in_norm", 0.0)) if info is not None else 0.0
+        Tout_norm = float(info.get("temp_out_norm", 0.0)) if info is not None else 0.0
+        # Fixed temperature normalisation scale from the info channel (WeatherDataSource).
+        temp_abs_max = float(info["temp_abs_max"]) if info is not None and "temp_abs_max" in info else TEMP_ABS_MAX_CELSIUS
 
         Tin_raw = Tin_norm * temp_abs_max
         Tout_raw = Tout_norm * temp_abs_max
@@ -81,18 +84,17 @@ class BuildingHeatLoss(StateSource):
         dT_raw = SLOWDOWN_TERM * self.timestep * Q_transfer / self.mC
         dTemp_norm = dT_raw / temp_abs_max if temp_abs_max > 0 else 0.0
 
-        # Apply heat loss to indoor temperature
-        new_temp = Tin_norm + dTemp_norm
-
-        # Clip to observation space bounds and ensure float32
-        states["s_temp_in_norm"][0] = np.float32(np.clip(new_temp, -1.0, 1.0))
+        # Apply heat loss to indoor temperature, clip to the ±1 normalised bounds.
+        new_temp = float(np.clip(Tin_norm + dTemp_norm, -1.0, 1.0))
+        if info is not None:
+            info["temp_in_norm"] = new_temp
 
         # Cache raw indoor temp after heat loss. Runs after HP, so this final value
         # wins in RawStateTracker (infras collected before statesources).
-        self.temp_in_raw = float(states["s_temp_in_norm"][0]) * temp_abs_max
+        self.temp_in_raw = new_temp * temp_abs_max
 
-        # publish static building physics
-        states["ctxt_building_K"][0] = np.float32(self.K)
+        # publish static building physics (K policy-only/gated; mC functional, always on)
+        self._write_ctxt(states, "ctxt_building_K", np.float32(self.K))
         states["ctxt_building_mC"][0] = np.float32(self.mC)
 
     def get_raw_values(self) -> dict[str, float]:

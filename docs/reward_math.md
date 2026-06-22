@@ -25,7 +25,8 @@ Let the temperature error in °C be
 
 $$ d = (s_{\text{temp\_in\_norm}} - s_{\text{desired\_temp\_in\_norm}}) \cdot c_{\text{temp\_abs\_max}} $$
 
-where `c_temp_abs_max = ctxt_temp_abs_max` (default 60 °C). With constants
+where `c_temp_abs_max = info["temp_abs_max"]`, a fixed 70 °C scale published by
+`WeatherDataSource` on the info channel (not data-driven). With constants
 `exp_scale = 2.0` (denote $E$) and `x_scale = 1.4` (denote $\alpha$):
 
 **Precision driver** (sharp peak near setpoint, clipped to be non-negative):

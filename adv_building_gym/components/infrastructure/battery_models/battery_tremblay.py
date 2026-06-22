@@ -108,6 +108,7 @@ class BatteryTremblay(Infrastructure):
                  # Operating limits -- prevent battery damage
                  soc_min: float,  # Hardware minimum SoC (clipping floor)
                  soc_max: float,  # Hardware maximum SoC (clipping ceiling)
+                 emit_ctxt: bool = False,  # publish policy-only ctxt_* (generalisation runs)
                  ) -> None:
         # Rated pack power is DERIVED from the pack's own limits, not passed in.
         # P_rated = V_nominal * I_max, where V_nominal = E0 * n_series and I_max is
@@ -120,6 +121,7 @@ class BatteryTremblay(Infrastructure):
         # NOTE VP 2026.06.14.: C-rate [1/h], cell_capacity_Ah [Ah]
         # → max current (A) limit from chemistry and wiring.
         super().__init__(name, self.nominal_V * self.max_current_A / 1000.0)
+        self.emit_ctxt = emit_ctxt
 
         self.cell_capacity_Ah = cell_capacity_Ah
         self.max_charge_A = max_charge_A
@@ -223,10 +225,11 @@ class BatteryTremblay(Infrastructure):
             state_spaces["s_battery_soc"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
 
         # Capacity (kWh) — constant hardware parameter.
-        if "ctxt_battery_capacity_kWh" not in state_spaces.keys():
-            state_spaces["ctxt_battery_capacity_kWh"] = Box(low=0, high=np.inf, shape=(1,), dtype=np.float32)
-        if "ctxt_battery_max_power_kW" not in state_spaces.keys():
-            state_spaces["ctxt_battery_max_power_kW"] = Box(low=0, high=np.inf, shape=(1,), dtype=np.float32)
+        # Capacity (kWh) and power (kW) — policy-only conditioning, gated by emit_ctxt.
+        self._publish_ctxt(state_spaces, "ctxt_battery_capacity_kWh",
+                            Box(low=0, high=np.inf, shape=(1,), dtype=np.float32))
+        self._publish_ctxt(state_spaces, "ctxt_battery_max_power_kW",
+                            Box(low=0, high=np.inf, shape=(1,), dtype=np.float32))
 
         return state_spaces, action_spaces
 
@@ -364,8 +367,8 @@ class BatteryTremblay(Infrastructure):
         # (self.actual_V), not the fixed nominal_V nameplate: capacity = max_cap_Ah * V,
         # power ceiling = V * max_current_A. Both track the live operating point.
         # NOTE VP 2026.06.14.: They are not static anymore
-        states["ctxt_battery_capacity_kWh"][0] = np.float32(self.max_cap_Ah * self.actual_V / KW_TO_W)
-        states["ctxt_battery_max_power_kW"][0] = np.float32(self.actual_V * self.max_current_A / KW_TO_W)
+        self._write_ctxt(states, "ctxt_battery_capacity_kWh", np.float32(self.max_cap_Ah * self.actual_V / KW_TO_W))
+        self._write_ctxt(states, "ctxt_battery_max_power_kW", np.float32(self.actual_V * self.max_current_A / KW_TO_W))
 
     def reset(self, states: Dict, info=None) -> None:
         """Reset stored charge and derived voltage/current/power to __init__ values each

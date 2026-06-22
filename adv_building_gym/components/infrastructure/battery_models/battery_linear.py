@@ -40,6 +40,7 @@ class BatteryLinear(Infrastructure):
                 soc_min: float,
                 soc_max: float,
                 start_soc_jitter: float = 0.0,
+                emit_ctxt: bool = False,
                 ) -> None:
         """Initialize linear battery model.
 
@@ -56,6 +57,7 @@ class BatteryLinear(Infrastructure):
                 keeps the deterministic ``start_soc_percentage``.
         """
         super().__init__(name, max_power_kW)
+        self.emit_ctxt = emit_ctxt
 
         if start_soc_jitter < 0.0:
             raise ValueError("start_soc_jitter must be non-negative.")
@@ -76,11 +78,11 @@ class BatteryLinear(Infrastructure):
         if "s_battery_soc" not in state_spaces.keys():
             state_spaces["s_battery_soc"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
 
-        # Capacity (kWh) and power (kW) — constant hardware parameters
-        if "ctxt_battery_capacity_kWh" not in state_spaces.keys():
-            state_spaces["ctxt_battery_capacity_kWh"] = Box(low=0, high=np.inf, shape=(1,), dtype=np.float32)
-        if "ctxt_battery_power_kW" not in state_spaces.keys():
-            state_spaces["ctxt_battery_power_kW"] = Box(low=0, high=np.inf, shape=(1,), dtype=np.float32)
+        # Capacity (kWh) and power (kW) — policy-only conditioning, gated by emit_ctxt.
+        self._publish_ctxt(state_spaces, "ctxt_battery_capacity_kWh",
+                           Box(low=0, high=np.inf, shape=(1,), dtype=np.float32))
+        self._publish_ctxt(state_spaces, "ctxt_battery_power_kW",
+                           Box(low=0, high=np.inf, shape=(1,), dtype=np.float32))
 
         return state_spaces, action_spaces
 
@@ -118,8 +120,8 @@ class BatteryLinear(Infrastructure):
     def update_state(self, states: Dict, info=None) -> None:
         super().update_state(states, info)
         states["s_battery_soc"][0] = np.float32(self.soc)
-        states["ctxt_battery_capacity_kWh"][0] = np.float32(self.max_cap_kWh)
-        states["ctxt_battery_power_kW"][0] = np.float32(self.max_power_kW)
+        self._write_ctxt(states, "ctxt_battery_capacity_kWh", np.float32(self.max_cap_kWh))
+        self._write_ctxt(states, "ctxt_battery_power_kW", np.float32(self.max_power_kW))
 
     def reset(self, states: Dict, info=None) -> None:
         """Reset SoC to start_soc each episode (base would carry it over).

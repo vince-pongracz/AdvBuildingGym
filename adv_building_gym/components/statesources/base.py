@@ -4,14 +4,14 @@ from typing import ClassVar, Optional, Set
 import pandas as pd
 
 from adv_building_gym.core.env_sync import EnvSync
-from adv_building_gym.components.registry import Serializable
+from adv_building_gym.components.context_emitter import ContextEmitter
 from adv_building_gym._common.lifecycle import ReloadObserver
 from .csv_loader import CsvLoader
 
 logger = logging.getLogger(__name__)
 
 
-class StateSource(Serializable):
+class StateSource(ContextEmitter):
     """Base class for env data sources.
 
     Sync state lives in ``self.sync`` (``EnvSync``);
@@ -92,7 +92,7 @@ class StateSource(Serializable):
         """
 
     def _run_post_load(self) -> None:
-        """Notify ReloadObserver mixins (e.g. Forecastable), then run subclass post-processing.
+        """Notify ReloadObserver mixins (e.g. CsvLookahead), then run subclass post-processing.
 
         Wired as the CsvLoader ``on_reload`` callback, firing after every read.
         """

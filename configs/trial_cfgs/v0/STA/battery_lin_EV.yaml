@@ -15,9 +15,9 @@ env_meta:
     tracked_keys:
     - s_battery_soc
     - s_evc_soc
-    - s_temp_in_norm
-    - s_temp_out_norm
-    - s_solar_irradiance_norm
+    - s_temp_error_norm
+    - s_pv_power_norm
+    - s_wind_power_norm
     offsets:
     - -1
     - -2
@@ -49,7 +49,6 @@ training_params:
 statesources:
 - class: EnergyPriceDataSource
   name: E_price
-  normalise: abs_min_max
   # max_calc_mode options:
   #   mean              - mean of raw baseprice over the loaded series
   #   median            - median of raw baseprice
@@ -60,7 +59,6 @@ statesources:
   percentile: 0.75  # consulted only when max_calc_mode == "percentile"
 - class: WeatherDataSource
   name: weather
-  normalise: abs_min_max
 - class: InsideTemperature
   name: desired_temp_in
 - class: DesiredUserEnergyNeed

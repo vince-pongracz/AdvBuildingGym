@@ -8,14 +8,15 @@ from gymnasium.spaces import Box
 
 from ..base import StateSource
 from ..csv_loader import CsvLoader
-from ..forecastable import Forecastable
+from ..csv_lookahead import CsvLookahead
 from adv_building_gym.components.registry import ComponentRegistry
+from adv_building_gym._common.constants import TEMP_ABS_MAX_CELSIUS
 from adv_building_gym._common.normalisation import Normalisation, normalise_with_scale_factor
 
 logger = logging.getLogger(__name__)
 
 
-class WeatherDataSource(StateSource, Forecastable):
+class WeatherDataSource(StateSource, CsvLookahead):
     """Ambient temperature, wind speed, and solar irradiance from a preprocessed weather CSV.
 
     Units (raw, before runtime normalisation):
@@ -33,13 +34,13 @@ class WeatherDataSource(StateSource, Forecastable):
     # normalise is an enum, need special handling for serialization
     _context_params: ClassVar[Set[str]] = {'control_step'}
     _exclude_params: ClassVar[Set[str]] = {
-        'temp_abs_max', 'temp_out_raw',
+        'temp_out_raw',
         'wind_speed_abs_max', 'wind_speed_raw',
         'sun_shine_abs_max', 'sun_shine_raw',
     }
 
     def __init__(self, name: str, ds_path: str | None = None,
-                normalise: Normalisation | str | None = Normalisation.ABS_MIN_MAX_SCALING) -> None:
+                normalise: Normalisation | str | None = Normalisation.MAX_ABS_SCALING) -> None:
         super().__init__(name=name)
 
         self.normalise = Normalisation.init(normalise)  # Store for serialization
@@ -73,10 +74,16 @@ class WeatherDataSource(StateSource, Forecastable):
                         )
                     self.ts[col] = self.ts[col].fillna(0)
 
+        # Temperature uses a FIXED normalisation scale (TEMP_ABS_MAX_CELSIUS, not the
+        # per-variant data maximum) so s_temp_out_norm has an identical scale across every
+        # weather variant. Irradiance and wind stay data-driven (their scale factors are
+        # exposed separately and used to reconstruct raw W/m² and m/s).
+        if "temp_amb" in self.ts.columns:
+            self.ts["s_temp_out_norm"] = (self.ts["temp_amb"] / TEMP_ABS_MAX_CELSIUS).astype(np.float32)
+
         # Normalise raw columns + derive scale factors for raw↔norm conversion.
         # cols = { raw_col: (norm_col, scale_attr) }
         cols = {
-            "temp_amb": ("s_temp_out_norm", "temp_abs_max"),
             "sun_shine": ("s_solar_irradiance_norm", "sun_shine_abs_max"),
             "avg_wind_speed": ("s_avg_wind_speed_norm", "wind_speed_abs_max"),
         }
@@ -104,24 +111,16 @@ class WeatherDataSource(StateSource, Forecastable):
                     action_spaces: OrderedDict
                     ) -> tuple[OrderedDict, OrderedDict]:
 
-        if "s_temp_out_norm" not in state_spaces.keys():
-            state_spaces["s_temp_out_norm"] = Box(low=-1, high=1, shape=(1,), dtype=np.float32)
-        if "s_solar_irradiance_norm" not in state_spaces.keys():
-            state_spaces["s_solar_irradiance_norm"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
-        if "s_avg_wind_speed_norm" not in state_spaces.keys():
-            state_spaces["s_avg_wind_speed_norm"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
         # Day-of-year of the current row, [0, 1]; recomputed per step for midnight crossings.
         if "s_date" not in state_spaces.keys():
             state_spaces["s_date"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
 
-        # Scale factors — set on data load; reconstruct raw = norm * scale.
-        if "ctxt_temp_abs_max" not in state_spaces.keys():
-            state_spaces["ctxt_temp_abs_max"] = Box(low=0, high=np.inf, shape=(1,), dtype=np.float32)
-        if "ctxt_wind_speed_abs_max" not in state_spaces.keys():
-            state_spaces["ctxt_wind_speed_abs_max"] = Box(low=0, high=np.inf, shape=(1,), dtype=np.float32)
-        # Solar scale (W/m²): raw = s_solar_irradiance_norm * ctxt_solar_irradiance_max.
-        if "ctxt_solar_irradiance_max" not in state_spaces.keys():
-            state_spaces["ctxt_solar_irradiance_max"] = Box(low=0, high=np.inf, shape=(1,), dtype=np.float32)
+        # The temperature normalisation scale is a fixed constant (TEMP_ABS_MAX_CELSIUS),
+        # not a data-driven per-variant factor, so it is no longer published as a ctxt_*
+        # observation. It is handed to the temperature consumers on the info channel
+        # (info["temp_abs_max"], see update_state). Weather drivers themselves (outdoor
+        # temperature, irradiance, wind speed) are NOT observations either: the policy sees
+        # the *effects* instead (s_temp_error_norm, s_pv_power_norm, s_wind_power_norm).
 
         return state_spaces, action_spaces
 
@@ -134,32 +133,36 @@ class WeatherDataSource(StateSource, Forecastable):
         row = self.ts.iloc[min(self.effective_index, len(self.ts) - 1)]
         temp_out_norm = float(row["s_temp_out_norm"])
         self.temp_out_raw = float(row["temp_amb"])
-        solar_irradiance_norm = float(row.get("s_solar_irradiance_norm", 0.0))
-        avg_wind_speed_norm = float(row.get("s_avg_wind_speed_norm", 0.0))
         self.wind_speed_raw = float(row.get("avg_wind_speed", 0.0))
         self.sun_shine_raw = float(row.get("sun_shine", 0.0))
 
-        states["s_temp_out_norm"][0] = np.float32(temp_out_norm)
-        states["s_solar_irradiance_norm"][0] = np.float32(solar_irradiance_norm)
-        states["s_avg_wind_speed_norm"][0] = np.float32(avg_wind_speed_norm)
         states["s_date"][0] = np.float32(row.get("s_date", 0.0))
 
-        # scale factors — constant per episode, change only on a new data variant
-        states["ctxt_temp_abs_max"][0] = np.float32(self.temp_abs_max) # type: ignore
-        states["ctxt_wind_speed_abs_max"][0] = np.float32(self.wind_speed_abs_max) # type: ignore
-        states["ctxt_solar_irradiance_max"][0] = np.float32(self.sun_shine_abs_max)
+        # Hand the weather drivers to their consumers via the shared info channel — none
+        # of them are policy observations. Outdoor temperature (normalised) → BuildingHeatLoss
+        # physics; raw irradiance (W/m²) and wind speed (m/s) → the generators' power curves.
+        # A self-reference lets the generators query the future-weather look-ahead in forecast().
+        # Read at the next step, mirroring the previous obs-buffer one-step structure.
+        if info is not None:
+            # Fixed temperature normalisation scale (°C) for every temperature consumer
+            # (HP / BuildingHeatLoss / InsideTemperature / temp rewards). Constant, not
+            # data-driven; this is the single publication point on the shared channel.
+            info["temp_abs_max"] = TEMP_ABS_MAX_CELSIUS
+            info["temp_out_norm"] = temp_out_norm
+            info["raw_solar_irradiance_W_m2"] = self.sun_shine_raw
+            info["raw_wind_speed_ms"] = self.wind_speed_raw
+            info["_weather_source"] = self
 
-    def forecast_keys(self) -> tuple[str, ...]:
-        return ("s_fc_temp_out_norm", "s_fc_solar_irradiance_norm", "s_fc_avg_wind_speed_norm")
-
-    def forecast(self, selected_future_steps: list[int]) -> dict[str, list[float]]:
-        if self.ts is None:
-            return {k: [0.0] * len(selected_future_steps) for k in self.forecast_keys()}
-        idx = self.effective_index
+    # No weather driver is a policy observation, so the weather source publishes no
+    # s_fc_* keys and is not Forecastable. It still feeds the generators' power forecasts
+    # via raw_weather_forecast() below (see SolarPanel / WindTurbine.forecast), using the
+    # CsvLookahead mixin's cached future-row reads.
+    def raw_weather_forecast(self, selected_future_steps: list[int]) -> dict[str, list[float]]:
+        """Future raw irradiance (W/m²) and wind speed (m/s) for the generator power
+        forecasts — values at ``effective_index + step`` for each requested offset."""
         return {
-            "s_fc_temp_out_norm": self._csv_forecast(self.ts, idx, "s_temp_out_norm", selected_future_steps),
-            "s_fc_solar_irradiance_norm": self._csv_forecast(self.ts, idx, "s_solar_irradiance_norm", selected_future_steps),
-            "s_fc_avg_wind_speed_norm": self._csv_forecast(self.ts, idx, "s_avg_wind_speed_norm", selected_future_steps),
+            "solar_W_m2": self._csv_forecast(self.ts, self.effective_index, "sun_shine", selected_future_steps),
+            "wind_ms": self._csv_forecast(self.ts, self.effective_index, "avg_wind_speed", selected_future_steps),
         }
 
     def get_raw_values(self) -> dict[str, float]:

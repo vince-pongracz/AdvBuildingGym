@@ -8,6 +8,7 @@ from gymnasium.spaces import Box
 from ..base import StateSource
 from ..csv_loader import CsvLoader
 from ..forecastable import Forecastable
+from ..csv_lookahead import CsvLookahead
 from adv_building_gym.components.registry import ComponentRegistry
 from adv_building_gym._common.normalisation import Normalisation, normalise_with_scale_factor
 
@@ -20,7 +21,7 @@ SOURCE_COLUMN: str = "hh_consumption_kW"
 NORM_COLUMN: str = "desired_energy_need_norm"
 
 
-class DesiredUserEnergyNeed(StateSource, Forecastable):
+class DesiredUserEnergyNeed(StateSource, Forecastable, CsvLookahead):
     """Desired user energy need from the ``hh_consumption_kW`` CSV column.
 
     Abs-min-max normalised to [0, 1], exposed as ``s_desired_energy_need``
@@ -34,7 +35,7 @@ class DesiredUserEnergyNeed(StateSource, Forecastable):
     _exclude_params: ClassVar[Set[str]] = {'consumption_max'}
 
     def __init__(self, name: str, ds_path: str | None = None,
-                normalise: Normalisation | str | None = Normalisation.ABS_MIN_MAX_SCALING) -> None:
+                normalise: Normalisation | str | None = Normalisation.MAX_ABS_SCALING) -> None:
         super().__init__(name=name)
 
         self.normalise = Normalisation.init(normalise)

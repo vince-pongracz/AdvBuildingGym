@@ -8,18 +8,20 @@ from gymnasium.spaces import Box
 from ..base import StateSource
 from ..csv_loader import CsvLoader
 from ..forecastable import Forecastable
+from ..csv_lookahead import CsvLookahead
 from adv_building_gym.components.registry import ComponentRegistry
+from adv_building_gym._common.constants import TEMP_ABS_MAX_CELSIUS
 
 logger = logging.getLogger(__name__)
 
-class InsideTemperature(StateSource, Forecastable):
+class InsideTemperature(StateSource, Forecastable, CsvLookahead):
     """Data source for desired inside temperature setpoint."""
 
     def __init__(self, name: str, ds_path: str | None = None) -> None:
         super().__init__(name=name)
         self.desired_temp_in_raw: float = 0.0  # Raw desired temperature (°C)
-        # cached temp_abs_max from last update_state — forecast() has no state dict access
-        self._last_temp_abs_max: float = 60.0
+        # cached temp_abs_max from last update_state — forecast() has no info channel access
+        self._last_temp_abs_max: float = TEMP_ABS_MAX_CELSIUS
 
         self.loader = CsvLoader(ds_path, on_reload=self._run_post_load)
         if ds_path is not None:
@@ -44,25 +46,29 @@ class InsideTemperature(StateSource, Forecastable):
                     state_spaces: OrderedDict,
                     action_spaces: OrderedDict
                     ) -> tuple[OrderedDict, OrderedDict]:
-        """Setup observation spaces for desired user temperature."""
-        
-        if "s_desired_temp_in_norm" not in state_spaces.keys():
-            state_spaces["s_desired_temp_in_norm"] = Box(low=-1, high=1, shape=(1,), dtype=np.float32)
+        """Setup observation space: the comfort error (indoor temp − setpoint).
+
+        Collapses the former {s_temp_in_norm, s_desired_temp_in_norm} pair into a single
+        normalised error in [-1, 1] (the control-relevant signal). The absolute indoor
+        temperature is the integration variable on the info channel; the absolute setpoint
+        is not exposed (the policy sees only its deviation from it).
+        """
+        if "s_temp_error_norm" not in state_spaces.keys():
+            state_spaces["s_temp_error_norm"] = Box(low=-1, high=1, shape=(1,), dtype=np.float32)
 
         return state_spaces, action_spaces
 
-    def update_state(self, states, info=None) -> None:
-        """Update desired temperature; raw °C normalised at runtime with temp_abs_max
-        (same scale as temp_in_norm / temp_out_norm) so rewards see comparable values."""
+    def _desired_temp_in_norm(self, states, info=None) -> float:
+        """Setpoint for the current iteration, normalised by temp_abs_max (same scale as
+        the indoor/outdoor temperatures). Caches temp_abs_max for forecast()."""
         if self.ts is None:
             raise RuntimeError(
                 f"InsideTemperature '{self.name}': no CSV loaded. The DataCombinator "
                 "must push a desired_temp_in variant before update_state is called."
             )
-
-        # temp scale from WeatherDataSource (60 °C fallback)
-        temp_abs_max: float = float(states["ctxt_temp_abs_max"][0]) if "ctxt_temp_abs_max" in states else 60.0
-        self._last_temp_abs_max = temp_abs_max if temp_abs_max != 0 else 60.0
+        # Fixed temperature normalisation scale from the info channel (WeatherDataSource).
+        temp_abs_max: float = float(info["temp_abs_max"]) if info is not None and "temp_abs_max" in info else TEMP_ABS_MAX_CELSIUS
+        self._last_temp_abs_max = temp_abs_max if temp_abs_max != 0 else TEMP_ABS_MAX_CELSIUS
 
         # single-day profile: index by time-of-day so it repeats daily (ignores row_offset)
         arr = self._forecast_array_cache.get(self._raw_column)
@@ -72,27 +78,36 @@ class InsideTemperature(StateSource, Forecastable):
         idx = self.iteration % arr.shape[0]
         raw_temp = float(arr[idx])
         self.desired_temp_in_raw = raw_temp
-        # Normalise on the same scale as temp_out_norm / temp_in_norm
         desired_temp_in_norm = raw_temp / temp_abs_max if temp_abs_max != 0 else 0.0
+        return float(np.clip(desired_temp_in_norm, -1.0, 1.0))
 
-        # Ensure float32 dtype and clip to bounds
-        desired_temp_in_norm = np.float32(np.clip(desired_temp_in_norm, -1.0, 1.0))
-        states["s_desired_temp_in_norm"][0] = desired_temp_in_norm
+    def update_state(self, states, info=None) -> None:
+        """Publish the comfort error (indoor temp − setpoint), normalised in [-1, 1].
+
+        Indoor temperature is read from the shared info channel (info["temp_in_norm"],
+        owned by HP + BuildingHeatLoss). As an exogenous source this runs last in the
+        step, so it sees the resulting indoor temperature (s')."""
+        desired_temp_in_norm = self._desired_temp_in_norm(states, info)
+        temp_in_norm = float(info.get("temp_in_norm", 0.0)) if info is not None else 0.0
+        error_norm = float(np.clip(temp_in_norm - desired_temp_in_norm, -1.0, 1.0))
+        states["s_temp_error_norm"][0] = np.float32(error_norm)
 
     def reset(self, states, info=None) -> None:
-        """Populate desired temperature and seed temp_in_norm near setpoint (small random offset)."""
-        self.update_state(states, info)
-        if "s_temp_in_norm" in states and "s_desired_temp_in_norm" in states:
-            # ±2 °C in normalised space (2/60 ≈ 0.033 at default 60 °C)
-            temp_abs_max = float(states["ctxt_temp_abs_max"][0]) if "ctxt_temp_abs_max" in states else 60.0
-            max_offset_norm = 2.0 / temp_abs_max if temp_abs_max != 0 else 0.0
-            # offset from env rng (info["_rng"], deterministic per-worker; standalone fallback)
-            rng = (info.get("_rng") if info else None) or np.random.default_rng()
-            variance = rng.uniform(-max_offset_norm, max_offset_norm)
-            
-            states["s_temp_in_norm"][0] = np.float32(np.clip(
-                states["s_desired_temp_in_norm"][0] + variance, -1.0, 1.0
-            ))
+        """Seed the indoor temperature near the setpoint (±2 °C) on the info channel and
+        publish the initial comfort error."""
+        desired_temp_in_norm = self._desired_temp_in_norm(states, info)
+        # ±2 °C in normalised space (2/70 ≈ 0.029 at the fixed 70 °C scale)
+        temp_abs_max = self._last_temp_abs_max
+        max_offset_norm = 2.0 / temp_abs_max if temp_abs_max != 0 else 0.0
+        # offset from env rng (info["_rng"], deterministic per-worker; standalone fallback)
+        rng = (info.get("_rng") if info else None) or np.random.default_rng()
+        variance = rng.uniform(-max_offset_norm, max_offset_norm)
+        temp_in_seed = float(np.clip(desired_temp_in_norm + variance, -1.0, 1.0))
+        if info is not None:
+            info["temp_in_norm"] = temp_in_seed
+
+        error_norm = float(np.clip(temp_in_seed - desired_temp_in_norm, -1.0, 1.0))
+        states["s_temp_error_norm"][0] = np.float32(error_norm)
 
     def forecast_keys(self) -> tuple[str, ...]:
         return ("s_fc_desired_temp_in_norm",)
@@ -105,7 +120,7 @@ class InsideTemperature(StateSource, Forecastable):
         if arr is None:
             arr = self.ts[self._raw_column].to_numpy()
             self._forecast_array_cache[self._raw_column] = arr
-        scale = self._last_temp_abs_max if self._last_temp_abs_max != 0 else 60.0
+        scale = self._last_temp_abs_max if self._last_temp_abs_max != 0 else TEMP_ABS_MAX_CELSIUS
         idxs = (np.asarray(selected_future_steps, dtype=np.int64) + self.iteration) % arr.shape[0]
         vals = np.clip(arr[idxs] / scale, -1.0, 1.0)
         return {"s_fc_desired_temp_in_norm": vals.tolist()}

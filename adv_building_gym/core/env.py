@@ -98,7 +98,7 @@ class AdvBuildingGym(gym.Env, DataVariantConsumer):
         self._rng: np.random.Generator = np.random.default_rng()
 
         # Build obs/action spaces from components. Time-varying signals are normalised;
-        # raw scale factors (temp_abs_max, E_price_max) are unnormalised for reconstruction.
+        # raw scale factors (e.g. E_price_max) are unnormalised for reconstruction.
         observation_space: OrderedDict = OrderedDict()
         action_space: OrderedDict = OrderedDict()
 

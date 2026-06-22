@@ -11,7 +11,6 @@ logger = logging.getLogger(__name__)
 class Normalisation(Enum):
     """Normalisation types"""
     MAX_ABS_SCALING = "max_abs"
-    ABS_MIN_MAX_SCALING = "abs_min_max"
     MIN_MAX_SCALING = "min_max"
     STANDARDISATION = "std"
 
@@ -41,13 +40,10 @@ def normalise_with_scale_factor(
 ) -> tuple[pd.Series, float]:
     """Normalise a Series, returning (normalised, scale_factor) — the divided-out denominator.
 
-    ``raw ≈ norm * scale`` for symmetric methods (ABS_MIN_MAX, MAX_ABS); MIN_MAX offsets by
-    min, STANDARDISATION by mean. scale is 1.0 when *method* is None.
+    ``raw ≈ norm * scale`` for MAX_ABS; MIN_MAX offsets by min, STANDARDISATION by mean.
+    scale is 1.0 when *method* is None.
     """
     match method:
-        case Normalisation.ABS_MIN_MAX_SCALING:
-            scale = float(max(abs(series.min()), abs(series.max()))) or 1.0
-            return _safe_divide(series, scale), scale
         case Normalisation.MAX_ABS_SCALING:
             scale = float(series.abs().max()) or 1.0
             return _safe_divide(series, scale), scale
@@ -66,8 +62,6 @@ def normalise_with_scale_factor(
 def get_scale_factor(series: pd.Series, method: Normalisation | None) -> float:
     """The denominator normalisation would divide by (scalar only, no full normalisation)."""
     match method:
-        case Normalisation.ABS_MIN_MAX_SCALING:
-            return float(max(abs(series.min()), abs(series.max()))) or 1.0
         case Normalisation.MAX_ABS_SCALING:
             return float(series.abs().max()) or 1.0
         case Normalisation.MIN_MAX_SCALING:

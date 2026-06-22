@@ -4,6 +4,7 @@ import numpy as np
 
 from ..base import RewardFunction
 from adv_building_gym.components.registry import ComponentRegistry
+from adv_building_gym._common.constants import TEMP_ABS_MAX_CELSIUS
 
 logger = logging.getLogger(__name__)
 
@@ -11,8 +12,9 @@ logger = logging.getLogger(__name__)
 class TempRewardV0(RewardFunction):
     """Bounded temperature comfort reward (V0), range (-1, 1].
 
-    ``d = |T_in - T_set|`` °C (from normalised state via ``ctxt_temp_abs_max``, default 60).
-    Peaks +1 at d=0 (precision driver ``2*exp(-|1.4 d|)-1``) and decreases towards -1 as d grows.
+    ``d = |T_in - T_set|`` °C (from the normalised error, scaled by the fixed
+    ``info["temp_abs_max"]``). Peaks +1 at d=0 (precision driver ``2*exp(-|1.4 d|)-1``)
+    and decreases towards -1 as d grows.
     """
 
     def __init__(self, weight: float, name: str = "temp_reward_v0") -> None:
@@ -21,16 +23,16 @@ class TempRewardV0(RewardFunction):
         self.exp_scale:float = 2.0
 
     @staticmethod
-    def _diff_celsius(state, next_state) -> float:
-        # Resulting indoor temperature (s') vs the setpoint the agent observed (s).
-        actual_temp = float(next_state["s_temp_in_norm"][0])
-        desired_temp = float(state["s_desired_temp_in_norm"][0])
-        diff_norm = actual_temp - desired_temp
-        temp_abs_max = float(next_state["ctxt_temp_abs_max"][0]) if "ctxt_temp_abs_max" in next_state else 60.0
-        return diff_norm * temp_abs_max
+    def _diff_celsius(next_state, info) -> float:
+        # Signed comfort error (indoor temp − setpoint) at s', from the single
+        # s_temp_error_norm observation published by InsideTemperature. The fixed
+        # temperature scale is read from the info channel (WeatherDataSource).
+        error_norm = float(next_state["s_temp_error_norm"][0])
+        temp_abs_max = float(info["temp_abs_max"]) if info is not None and "temp_abs_max" in info else TEMP_ABS_MAX_CELSIUS
+        return error_norm * temp_abs_max
 
     def get_reward(self, actions, state, next_state, info: dict | None = None) -> float:
-        d_celsius = self._diff_celsius(state, next_state)
+        d_celsius = self._diff_celsius(next_state, info)
         
         reward_precision_driver = self.exp_scale * float(np.exp(-abs(self.x_scale * d_celsius))) - 1.0
         x_nullpoint_pos = -1.0 / self.x_scale * np.log(1.0 / self.exp_scale)

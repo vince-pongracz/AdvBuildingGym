@@ -16,7 +16,7 @@ class EconomicReward(RewardFunction):
     ``net_power_kW`` means EXPORT (feeding into the grid); negative means
     IMPORT (drawing from the grid).
 
-    Reward sign matrix (``E_price`` ∈ [-1, 1] after ABS_MIN_MAX scaling of
+    Reward sign matrix (``E_price`` ∈ [-1, 1] after MAX_ABS scaling of
     ``baseprice``, which may itself be negative on spot markets):
 
         consume at positive price → negative reward (cost)

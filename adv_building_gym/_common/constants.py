@@ -14,6 +14,11 @@ KJ_PER_KWH: int = 3600
 W_PER_KW: float = 1000.0
 KW_TO_W: float = W_PER_KW
 
+# Fixed temperature normalisation scale (°C). All temperatures (indoor, outdoor,
+# setpoint) are normalised by this constant rather than a per-variant data maximum,
+# so the normalised scale is identical across every weather variant and every year's data.
+TEMP_ABS_MAX_CELSIUS: float = 70.0
+
 # Safety cap against non-terminating eval episodes. Shared by the RLlib eval
 # runner and the rule-based eval driver so both abort runaway episodes alike.
 MAX_STEPS_PER_EPISODE: int = 1000

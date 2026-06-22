@@ -57,8 +57,8 @@ class HouseholdEnergyConsumers(Infrastructure):
         The peak scale (``ctxt_hh_consumption_max``) is owned/published by
         DesiredUserEnergyNeed, so it is not declared here.
         """
-        if "s_hh_consumption_norm" not in state_spaces:
-            state_spaces["s_hh_consumption_norm"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
+        if "s_desired_energy_need" not in state_spaces:
+            state_spaces["s_desired_energy_need"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
 
         return state_spaces, action_spaces
 
@@ -81,19 +81,9 @@ class HouseholdEnergyConsumers(Infrastructure):
         self._effective_peak_kW = self._resolve_peak_kW(states)
         self.current_consumption_kW = self.consumption_norm * self._effective_peak_kW
 
-        # write normalised consumption as read-only output (positive = consumption)
-        # NOTE VP 2026.05.07.: It's not really needed to be an action...
-        # it could be a state as well... -- but later if user sets it dynamically?
-        # then it's maybe still a state...
-        if "a_hh_consumption" not in actions:
-            actions["a_hh_consumption"] = np.array([self.consumption_norm], dtype=np.float32)
-        else:
-            actions["a_hh_consumption"][0] = self.consumption_norm
-
     def update_state(self, states: Dict, info=None) -> None:
         """Write current normalized consumption into states for observation."""
-        super().update_state(states, info)
-        states["s_hh_consumption_norm"][0] = np.float32(self.consumption_norm)
+        states["s_desired_energy_need"] = np.array([self.consumption_norm], dtype=np.float32)
 
     def reset(self, states: Dict, info=None) -> None:
         """Clear per-episode consumption readouts and refresh the effective peak.

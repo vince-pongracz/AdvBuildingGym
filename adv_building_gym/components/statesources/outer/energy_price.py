@@ -8,13 +8,14 @@ from gymnasium.spaces import Box
 from ..base import StateSource
 from ..csv_loader import CsvLoader
 from ..forecastable import Forecastable
+from ..csv_lookahead import CsvLookahead
 from adv_building_gym.components.registry import ComponentRegistry
 from adv_building_gym._common.normalisation import Normalisation, normalise_with_scale_factor
 
 logger = logging.getLogger(__name__)
 
 
-class EnergyPriceDataSource(StateSource, Forecastable):
+class EnergyPriceDataSource(StateSource, Forecastable, CsvLookahead):
     """Data source for energy pricing information."""
 
     # price_max and dynamic_max_norm{,_ep} are derived from data, don't serialize
@@ -26,17 +27,18 @@ class EnergyPriceDataSource(StateSource, Forecastable):
     _VALID_MAX_CALC_MODES: ClassVar[Set[str]] = {"mean", "median", "percentile", "mean_above_median"}
 
     def __init__(self, name: str, ds_path: str | None = None,
-                normalise: Normalisation | str | None = Normalisation.ABS_MIN_MAX_SCALING,
+                normalise: Normalisation | str | None = Normalisation.MAX_ABS_SCALING,
                 dynamic_max_price_calc: bool = False,
                 max_calc_mode: str | None = None,
                 percentile: float = 0.75,
-                episode_length: int = 288) -> None:
+                episode_length: int = 288,
+                emit_ctxt: bool = False) -> None:
         """Data source for energy pricing information.
 
         Args:
             name: Source identifier.
             ds_path: Optional CSV path; pushed later via DataCombinator.reload.
-            normalise: Normalisation method for s_E_price (default ABS_MIN_MAX
+            normalise: Normalisation method for s_E_price (default MAX_ABS
                 against the raw baseprice peak).
             dynamic_max_price_calc: If True, populate ctxt_E_price_dynamic_max
                 with a data-driven price denominator in s_E_price's normalised
@@ -52,6 +54,7 @@ class EnergyPriceDataSource(StateSource, Forecastable):
                 max_calc_mode == "percentile".
         """
         super().__init__(name=name)
+        self.emit_ctxt = emit_ctxt
 
         self.normalise = Normalisation.init(normalise)
 
@@ -125,21 +128,31 @@ class EnergyPriceDataSource(StateSource, Forecastable):
             return 1.0
         return max(chosen_raw / self.price_max, 1e-6)
 
+    def _dynamic_price_divisor(self) -> float:
+        """Price denominator that stretches s_E_price to span more of [-1, 1].
+
+        Blends the full-series statistic (0.3) with the per-episode-window one (0.7) —
+        the exact rescaling the economic rewards used to apply via the
+        ctxt_E_price_dynamic_max{,_ep} observations. Baking it into s_E_price here lets
+        those ctxt keys be dropped while every price consumer (reward or policy) sees the
+        same stretched signal. Both factors are 1.0 (no-op) when dynamic_max_price_calc
+        is disabled.
+        """
+        divisor = self.dynamic_max_norm * 0.3 + self.dynamic_max_norm_ep * 0.7
+        return divisor if divisor != 0 else 1.0
+
     def setup_spaces(self,
                     state_spaces,
                     action_spaces) -> tuple:
 
+        # s_E_price already embeds the dynamic-max rescaling (see _dynamic_price_divisor),
+        # so the ctxt_E_price_dynamic_max{,_ep} observations are no longer published.
         if "s_E_price" not in state_spaces.keys():
             state_spaces["s_E_price"] = Box(low=-1, high=1, shape=(1,), dtype=np.float32)
 
-        # Max price (ct/kWh) — changes per data variant; reconstruct raw = norm * this.
-        if "ctxt_E_price_max" not in state_spaces.keys():
-            state_spaces["ctxt_E_price_max"] = Box(low=-np.inf, high=np.inf, shape=(1,), dtype=np.float32)
-        if "ctxt_E_price_dynamic_max" not in state_spaces.keys():
-            state_spaces["ctxt_E_price_dynamic_max"] = Box(low=-np.inf, high=np.inf, shape=(1,), dtype=np.float32)
-        # Same statistic, over the episode window [row_offset, +episode_length]; refreshed in reset().
-        if "ctxt_E_price_dynamic_max_ep" not in state_spaces.keys():
-            state_spaces["ctxt_E_price_dynamic_max_ep"] = Box(low=-np.inf, high=np.inf, shape=(1,), dtype=np.float32)
+        # Max price (ct/kWh) — policy-only conditioning, gated by emit_ctxt;
+        # reconstruct raw = norm * this.
+        self._publish_ctxt(state_spaces, "ctxt_E_price_max", Box(low=-np.inf, high=np.inf, shape=(1,), dtype=np.float32))
 
         return state_spaces, action_spaces
 
@@ -150,16 +163,14 @@ class EnergyPriceDataSource(StateSource, Forecastable):
                 "must push an E_price variant before update_state is called."
             )
         row = self.ts.iloc[min(self.effective_index, len(self.ts) - 1)]
-        energy_price = float(row["E_price_norm"])
         self.baseprice_raw = float(row["baseprice"])
 
-        states["s_E_price"][0] = np.float32(energy_price)
+        # Stretch the normalised price by the dynamic-max divisor (no-op when disabled),
+        # then clip to the [-1, 1] observation bounds.
+        energy_price = float(row["E_price_norm"]) / self._dynamic_price_divisor()
+        states["s_E_price"][0] = np.float32(np.clip(energy_price, -1.0, 1.0))
         # Max price (ct/kWh) — constant per episode, changes per data variant.
-        states["ctxt_E_price_max"][0] = np.float32(self.price_max)
-        # data-driven denominator in s_E_price's frame (1.0 when disabled)
-        states["ctxt_E_price_dynamic_max"][0] = np.float32(self.dynamic_max_norm)
-        # same statistic over the episode window; refreshed in reset()
-        states["ctxt_E_price_dynamic_max_ep"][0] = np.float32(self.dynamic_max_norm_ep)
+        self._write_ctxt(states, "ctxt_E_price_max", np.float32(self.price_max))
 
     def reset(self, states, info=None) -> None:
         if self.ts is not None:
@@ -176,8 +187,11 @@ class EnergyPriceDataSource(StateSource, Forecastable):
     def forecast(self, selected_future_steps: list[int]) -> dict[str, list[float]]:
         if self.ts is None:
             return {"s_fc_E_price": [0.0] * len(selected_future_steps)}
+        # Apply the same dynamic-max rescaling + clipping as the live s_E_price.
+        divisor = self._dynamic_price_divisor()
+        raw_fc = self._csv_forecast(self.ts, self.effective_index, "E_price_norm", selected_future_steps)
         return {
-            "s_fc_E_price": self._csv_forecast(self.ts, self.effective_index, "E_price_norm", selected_future_steps),
+            "s_fc_E_price": [float(np.clip(v / divisor, -1.0, 1.0)) for v in raw_fc],
         }
 
     @property

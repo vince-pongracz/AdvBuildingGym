@@ -1,9 +1,10 @@
 """ForecastWrapper — augment the Dict observation space with future-step values.
 
-Queries each StateSource's ``forecast(selected_future_steps)`` and adds the returned
-``s_fc_<var>`` arrays to the obs Dict each step. ``forecast_steps`` are positive
-control-step offsets (sorted, deduped). 
-Applied AFTER HistoryWrapper so forecasts stay untouched.
+Queries each ``Forecastable`` component's ``forecast(selected_future_steps)`` and adds
+the returned ``s_fc_<var>`` arrays to the obs Dict each step. 
+Both statesources (e.g. weather/price look-ahead) and infrastructure (e.g. PV / wind power, derived from the
+future weather they read off the info channel) may be Forecastable. 
+``forecast_steps`` are positive control-step offsets (sorted, deduped).
 """
 
 from __future__ import annotations
@@ -42,9 +43,12 @@ class ForecastWrapper(gymnasium.ObservationWrapper):
         self._forecast_steps_list: list[int] = list(steps)
         self._n: int = len(self._forecast_steps_list)
 
-        # only the Forecastable subset of the inner env's statesources
+        # the Forecastable subset of the inner env's components (statesources first so
+        # weather/price look-ahead is registered before infra-derived forecasts like
+        # PV/wind power, which read the same future weather)
+        inner = env.unwrapped
         self._forecasters: tuple[Forecastable, ...] = tuple(
-            ds for ds in env.unwrapped.statesources if isinstance(ds, Forecastable)
+            c for c in (*inner.statesources, *inner.infras) if isinstance(c, Forecastable)
         )
 
         # discover s_fc_* keys via the static contract (well-defined before any CSV load)
