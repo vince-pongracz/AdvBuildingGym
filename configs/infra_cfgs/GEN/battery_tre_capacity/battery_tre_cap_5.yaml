@@ -7,7 +7,7 @@ infras:
 - class: BatteryTremblay
   name: battery
   emit_ctxt: true
-  cell_capacity_Ah: 5.0
+  cell_capacity_Ah: 6.1
   max_charge_A: 48.0
   start_soc: 0.3
   max_charge_rate: 1.5
