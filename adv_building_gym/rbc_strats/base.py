@@ -20,6 +20,7 @@ from adv_building_gym.components.infrastructure.battery_models.battery_linear im
 from adv_building_gym.components.infrastructure.battery_models.battery_tremblay import BatteryTremblay
 from adv_building_gym.components.infrastructure.solar_panel import SolarPanel
 from adv_building_gym.components.infrastructure.wind_turbine import WindTurbine
+from adv_building_gym.components.statesources.outer.energy_dyn_price import EnergyPriceDynDataSource
 from adv_building_gym.components.statesources.outer.energy_price import EnergyPriceDataSource
 from adv_building_gym.core.env import AdvBuildingGym
 from . import _strategy_utils as utils
@@ -28,6 +29,7 @@ logger = logging.getLogger(__name__)
 
 BATTERY_CLASSES = (BatteryLinear, BatteryTremblay)
 RENEWABLE_CLASSES = (SolarPanel, WindTurbine)
+PRICE_SOURCE_CLASSES = (EnergyPriceDataSource, EnergyPriceDynDataSource)
 
 
 def in_time_window(hour: float, start: float, end: float) -> bool:
@@ -60,7 +62,7 @@ class RuleBasedStrategy:
         self.battery = next((i for i in env.infras if isinstance(i, BATTERY_CLASSES)), None)
         self.renewable_names = [i.name for i in env.infras if isinstance(i, RENEWABLE_CLASSES)]
         self.price_source = next(
-            (ds for ds in env.statesources if isinstance(ds, EnergyPriceDataSource)), None,
+            (ds for ds in env.statesources if isinstance(ds, PRICE_SOURCE_CLASSES)), None,
         )
 
         if self.requires_battery and self.battery is None:
@@ -70,7 +72,7 @@ class RuleBasedStrategy:
             )
         if self.requires_price and self.price_source is None:
             raise ValueError(
-                f"Strategy '{self.name}' requires an EnergyPriceDataSource; "
+                f"Strategy '{self.name}' requires an EnergyPriceDataSource or EnergyPriceDynDataSource; "
                 f"trial has: {[type(ds).__name__ for ds in env.statesources]}"
             )
 
@@ -120,7 +122,7 @@ class RuleBasedStrategy:
     # ------------------------------------------------------------------ price
     def _episode_median_baseprice(self) -> float:
         """Median of the raw ``baseprice`` over the episode window — the same
-        slice [row_offset, +episode_length] EnergyPriceDataSource bills with.
+        slice [row_offset, +episode_length] the price source bills with.
         Requires a price source (``requires_price``); raw day-ahead prices are
         public, so reading the window upfront is a fair heuristic."""
         ts = self.price_source.ts

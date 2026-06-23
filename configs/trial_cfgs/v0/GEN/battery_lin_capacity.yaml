@@ -30,7 +30,7 @@ env_meta:
 
 training_params:
   common:
-    evaluation_interval: 4
+    evaluation_interval: 10
     evaluation_duration: 10
     episode_lookback_horizon_steps: 120
     max_episodes_to_run: 7000
@@ -50,12 +50,13 @@ training_params:
 statesources:
 - class: EnergyPriceDataSource
   name: E_price
-  # max_calc_mode options:
-  #   mean              - mean of raw baseprice over the loaded series
+  # Price normalisation: s_E_price = clip(raw_price / divisor, -1, 1). The divisor blends the
+  # max_calc_mode statistic over the whole series (0.3) and the per-episode window (0.7):
+  #   mean              - mean of raw baseprice
   #   median            - median of raw baseprice
-  #   percentile        - quantile of raw baseprice at `percentile` (e.g. 0.75)
-  #   mean_above_median - mean of raw baseprice values strictly above the median
-  dynamic_max_price_calc: true
+  #   percentile        - quantile at `percentile` (e.g. 0.75)
+  #   mean_above_median - mean of raw baseprice strictly above the series median
+  # For the 1-day windowed (next-24h max) normalisation use class EnergyPriceDynDataSource.
   max_calc_mode: mean
   percentile: 0.75  # consulted only when max_calc_mode == "percentile"
 - class: WeatherDataSource

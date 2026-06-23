@@ -1,5 +1,5 @@
 statesources:
-- class: EnergyPriceDataSource
+- class: EnergyPriceDynDataSource
   name: E_price
 - class: WeatherDataSource
   name: weather

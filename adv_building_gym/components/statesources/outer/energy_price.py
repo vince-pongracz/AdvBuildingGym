@@ -10,78 +10,69 @@ from ..csv_loader import CsvLoader
 from ..forecastable import Forecastable
 from ..csv_lookahead import CsvLookahead
 from adv_building_gym.components.registry import ComponentRegistry
-from adv_building_gym._common.normalisation import Normalisation, normalise_with_scale_factor
 
 logger = logging.getLogger(__name__)
 
 
 class EnergyPriceDataSource(StateSource, Forecastable, CsvLookahead):
-    """Data source for energy pricing information."""
+    """Energy-price data source with a year-based price divisor.
 
-    # price_max and dynamic_max_norm{,_ep} are derived from data, don't serialize
-    _exclude_params: ClassVar[Set[str]] = {'price_max', 'baseprice_raw', 'dynamic_max_norm', 'dynamic_max_norm_ep'}
+    The CSV is never rescaled and s_E_price is not clipped. Each step exposes
+    ``s_E_price = raw_baseprice / divisor``. The divisor is a blend of the ``max_calc_mode``
+    statistic over the whole series (weight 0.3) and over the per-episode window (0.7), refreshed
+    each ``reset()`` so the scale tracks the episode's local price level while staying anchored to
+    the full-series level.
 
-    # episode_length is supplied from env context (EnvConfig.EPISODE_LENGTH).
+    For the 1-day windowed (next-24h max) normalisation use ``EnergyPriceDynDataSource`` instead.
+
+    The divisor (raw ct/kWh) is published as ``ctxt_E_price_max`` only when ``emit_ctxt`` is set,
+    so the policy can condition on the price scale (``raw = s_E_price * ctxt_E_price_max``).
+    """
+
+    # episode_length comes from env context (EnvConfig.EPISODE_LENGTH); it sizes the per-episode
+    # window used by the blend.
     _context_params: ClassVar[Set[str]] = {"episode_length"}
 
     _VALID_MAX_CALC_MODES: ClassVar[Set[str]] = {"mean", "median", "percentile", "mean_above_median"}
 
-    def __init__(self, name: str, ds_path: str | None = None,
-                normalise: Normalisation | str | None = Normalisation.MAX_ABS_SCALING,
-                dynamic_max_price_calc: bool = False,
-                max_calc_mode: str | None = None,
-                percentile: float = 0.75,
-                episode_length: int = 288,
-                emit_ctxt: bool = False) -> None:
-        """Data source for energy pricing information.
+    # Blend weights (full series vs. per-episode window) restoring the earlier
+    # _dynamic_price_divisor behaviour so the divisor tracks the episode's local price level.
+    _SERIES_BLEND_WEIGHT: ClassVar[float] = 0.3
+    _EPISODE_BLEND_WEIGHT: ClassVar[float] = 0.7
 
-        Args:
+    def __init__(self, name: str, ds_path: str | None = None,
+                max_calc_mode: str = "mean",
+                percentile: float = 0.75,
+                emit_ctxt: bool = False,
+                episode_length: int = 288) -> None:
+        """Args:
             name: Source identifier.
             ds_path: Optional CSV path; pushed later via DataCombinator.reload.
-            normalise: Normalisation method for s_E_price (default MAX_ABS
-                against the raw baseprice peak).
-            dynamic_max_price_calc: If True, populate ctxt_E_price_dynamic_max
-                with a data-driven price denominator in s_E_price's normalised
-                frame. If False (default), the ctxt is fixed at 1.0 so any
-                consumer dividing by it is a no-op.
-            max_calc_mode: Selects the statistic used when
-                dynamic_max_price_calc is True. One of:
-                  mean              — mean of raw baseprice over the loaded series
-                  median            — median of raw baseprice
-                  percentile        — quantile of raw baseprice at `percentile`
-                  mean_above_median — mean of raw baseprice values strictly above the median
-            percentile: Quantile in (0, 1); consulted only when
-                max_calc_mode == "percentile".
+            max_calc_mode: Statistic blended into the price divisor (magnitude taken, so it stays
+                positive even for negative-price data). One of:
+                  mean / median     — over the whole series and the per-episode window
+                  percentile        — `percentile` quantile
+                  mean_above_median — mean of values above the median
+            percentile: Quantile in (0, 1); used only when max_calc_mode == "percentile".
+            emit_ctxt: Also publish ctxt_E_price_max (the active divisor) for policy conditioning.
+            episode_length: Episode length in steps (context-injected); sizes the blend window.
         """
         super().__init__(name=name)
-        self.emit_ctxt = emit_ctxt
 
-        self.normalise = Normalisation.init(normalise)
+        if max_calc_mode not in self._VALID_MAX_CALC_MODES:
+            raise ValueError(f"max_calc_mode must be one of {sorted(self._VALID_MAX_CALC_MODES)}; got {max_calc_mode!r}.")
+        if max_calc_mode == "percentile" and not (0.0 < percentile < 1.0):
+            raise ValueError(f"percentile must be in (0, 1) when max_calc_mode='percentile'; got {percentile}.")
 
-        if dynamic_max_price_calc:
-            if max_calc_mode not in self._VALID_MAX_CALC_MODES:
-                raise ValueError(
-                    f"max_calc_mode must be one of {sorted(self._VALID_MAX_CALC_MODES)} "
-                    f"when dynamic_max_price_calc=True; got {max_calc_mode!r}."
-                )
-            if max_calc_mode == "percentile" and not (0.0 < percentile < 1.0):
-                raise ValueError(
-                    f"percentile must be in (0, 1) when max_calc_mode='percentile'; got {percentile}."
-                )
-
-        self.dynamic_max_price_calc = bool(dynamic_max_price_calc)
         self.max_calc_mode = max_calc_mode
+        self.emit_ctxt = bool(emit_ctxt)
         self.percentile = float(percentile)
-        self.episode_length = int(episode_length)
+        self.episode_length: int = episode_length
 
-        self.price_max: float = 1.0
-        # Denominator (in s_E_price's normalised frame) used by downstream
-        # rewards / policy ctxt. 1.0 means "no rescaling".
-        # `dynamic_max_norm` is computed once per CSV (full series);
-        # `dynamic_max_norm_ep` is recomputed each episode on the
-        # [row_offset, row_offset + episode_length] window.
-        self.dynamic_max_norm: float = 1.0
-        self.dynamic_max_norm_ep: float = 1.0
+        # Raw-unit divisors for s_E_price. `series_divisor` is the full-series statistic (set at
+        # load); `price_divisor` is the active blended value (set per episode at reset).
+        self.series_divisor: float = 1.0
+        self.price_divisor: float = 1.0
 
         # Raw baseprice (ct/kWh) for the current step — updated by update_state.
         self.baseprice_raw: float = 0.0
@@ -91,67 +82,51 @@ class EnergyPriceDataSource(StateSource, Forecastable, CsvLookahead):
             logger.info("Use data file: %s", ds_path)
 
     def _post_load_data_processing(self) -> None:
-        """Normalise the baseprice column and cache the raw maximum."""
-        assert self.ts is not None, "self.ts was None. self.ts should be set by CsvLoader before _post_load_data_processing is called."
+        """Validate the baseprice column and cache the full-series divisor.
+
+        reset() blends this with the per-episode-window statistic; it is also the pre-reset baseline.
+        """
+        assert self.ts is not None, "self.ts must be set by CsvLoader before _post_load_data_processing."
 
         if "baseprice" not in self.ts.columns:
-            raise ValueError(
-                f"EnergyPriceDataSource '{self.name}': CSV '{self.ds_path}' has no "
-                "'baseprice' column."
-            )
+            raise ValueError(f"EnergyPriceDataSource '{self.name}': CSV '{self.ds_path}' has no 'baseprice' column.")
 
-        self.ts["E_price_norm"], self.price_max = normalise_with_scale_factor(self.ts["baseprice"], self.normalise)
-        self.dynamic_max_norm = self._compute_dynamic_max_norm(self.ts["baseprice"])
+        self.series_divisor = self._compute_divisor(self.ts["baseprice"])
+        self.price_divisor = self.series_divisor
 
-    def _compute_dynamic_max_norm(self, baseprice: pd.Series) -> float:
-        """Price denominator in s_E_price's frame (1.0 when disabled/empty → no-op divisor).
+    def _compute_divisor(self, baseprice: pd.Series) -> float:
+        """Positive divisor for the baseprice slice (1.0 when empty).
 
-        Picks a statistic over the raw baseprice slice and rescales by price_max.
+        Takes the magnitude of the max_calc_mode statistic, so it stays positive for
+        negative-price data.
         """
-        if not self.dynamic_max_price_calc or baseprice.empty:
+        if baseprice.empty:
             return 1.0
         match self.max_calc_mode:
             case "mean":
-                chosen_raw = float(baseprice.mean())
+                chosen = float(baseprice.mean())
             case "median":
-                chosen_raw = float(baseprice.median())
+                chosen = float(baseprice.median())
             case "percentile":
-                chosen_raw = float(baseprice.quantile(self.percentile))
+                chosen = float(baseprice.quantile(self.percentile))
             case "mean_above_median":
                 med = float(baseprice.median())
                 above = baseprice[baseprice > med]
-                chosen_raw = float(above.mean()) if not above.empty else med
+                chosen = float(above.mean()) if not above.empty else med
             case _:
                 # Already validated in __init__; defensive fallback.
                 return 1.0
-        if not self.price_max:
-            return 1.0
-        return max(chosen_raw / self.price_max, 1e-6)
+        return max(abs(chosen), 1e-6)
 
-    def _dynamic_price_divisor(self) -> float:
-        """Price denominator that stretches s_E_price to span more of [-1, 1].
+    def _normalise(self, raw: float) -> float:
+        """Scale a raw baseprice by the active divisor (not clipped)."""
+        return float(raw / self.price_divisor)
 
-        Blends the full-series statistic (0.3) with the per-episode-window one (0.7) —
-        the exact rescaling the economic rewards used to apply via the
-        ctxt_E_price_dynamic_max{,_ep} observations. Baking it into s_E_price here lets
-        those ctxt keys be dropped while every price consumer (reward or policy) sees the
-        same stretched signal. Both factors are 1.0 (no-op) when dynamic_max_price_calc
-        is disabled.
-        """
-        divisor = self.dynamic_max_norm * 0.3 + self.dynamic_max_norm_ep * 0.7
-        return divisor if divisor != 0 else 1.0
+    def setup_spaces(self, state_spaces, action_spaces) -> tuple:
+        if "s_E_price" not in state_spaces:
+            state_spaces["s_E_price"] = Box(low=-np.inf, high=np.inf, shape=(1,), dtype=np.float32)
 
-    def setup_spaces(self,
-                    state_spaces,
-                    action_spaces) -> tuple:
-
-        # s_E_price already embeds the dynamic-max rescaling (see _dynamic_price_divisor),
-        # so the ctxt_E_price_dynamic_max{,_ep} observations are no longer published.
-        if "s_E_price" not in state_spaces.keys():
-            state_spaces["s_E_price"] = Box(low=-1, high=1, shape=(1,), dtype=np.float32)
-
-        # Max price (ct/kWh) — policy-only conditioning, gated by emit_ctxt;
-        # reconstruct raw = norm * this.
+        # Price divisor (raw ct/kWh) — policy-only conditioning, gated by emit_ctxt. raw = s_E_price * this.
         self._publish_ctxt(state_spaces, "ctxt_E_price_max", Box(low=-np.inf, high=np.inf, shape=(1,), dtype=np.float32))
 
         return state_spaces, action_spaces
@@ -162,23 +137,24 @@ class EnergyPriceDataSource(StateSource, Forecastable, CsvLookahead):
                 f"EnergyPriceDataSource '{self.name}': no CSV loaded. The DataCombinator "
                 "must push an E_price variant before update_state is called."
             )
-        row = self.ts.iloc[min(self.effective_index, len(self.ts) - 1)]
-        self.baseprice_raw = float(row["baseprice"])
+        idx = min(self.effective_index, len(self.ts) - 1)
+        self.baseprice_raw = float(self.ts["baseprice"].iloc[idx])
 
-        # Stretch the normalised price by the dynamic-max divisor (no-op when disabled),
-        # then clip to the [-1, 1] observation bounds.
-        energy_price = float(row["E_price_norm"]) / self._dynamic_price_divisor()
-        states["s_E_price"][0] = np.float32(np.clip(energy_price, -1.0, 1.0))
-        # Max price (ct/kWh) — constant per episode, changes per data variant.
-        self._write_ctxt(states, "ctxt_E_price_max", np.float32(self.price_max))
+        states["s_E_price"][0] = np.float32(self._normalise(self.baseprice_raw))
+        # No-op unless ctxt_E_price_max was published (emit_ctxt).
+        self._write_ctxt(states, "ctxt_E_price_max", np.float32(self.price_divisor))
 
     def reset(self, states, info=None) -> None:
         if self.ts is not None:
-            # recompute the within-episode dynamic max (row_offset already set by env)
+            # Blend the full-series statistic with the per-episode-window one
+            # (restores the earlier _dynamic_price_divisor behaviour).
             start = self.row_offset
             end = min(start + self.episode_length, len(self.ts))
-            window = self.ts["baseprice"].iloc[start:end]
-            self.dynamic_max_norm_ep = self._compute_dynamic_max_norm(window)
+            episode_divisor = self._compute_divisor(self.ts["baseprice"].iloc[start:end])
+            self.price_divisor = max(
+                self._SERIES_BLEND_WEIGHT * self.series_divisor + self._EPISODE_BLEND_WEIGHT * episode_divisor,
+                1e-6,
+            )
         self.update_state(states, info)
 
     def forecast_keys(self) -> tuple[str, ...]:
@@ -187,28 +163,16 @@ class EnergyPriceDataSource(StateSource, Forecastable, CsvLookahead):
     def forecast(self, selected_future_steps: list[int]) -> dict[str, list[float]]:
         if self.ts is None:
             return {"s_fc_E_price": [0.0] * len(selected_future_steps)}
-        # Apply the same dynamic-max rescaling + clipping as the live s_E_price.
-        divisor = self._dynamic_price_divisor()
-        raw_fc = self._csv_forecast(self.ts, self.effective_index, "E_price_norm", selected_future_steps)
+        # Same divisor as the live s_E_price.
+        raw_fc = self._csv_forecast(self.ts, self.effective_index, "baseprice", selected_future_steps)
         return {
-            "s_fc_E_price": [float(np.clip(v / divisor, -1.0, 1.0)) for v in raw_fc],
+            "s_fc_E_price": [self._normalise(v) for v in raw_fc],
         }
-
-    @property
-    def E_price_max_raw(self) -> float:
-        """Raw (unnormalised) maximum energy price."""
-        return float(self.price_max)
 
     def get_raw_values(self) -> dict[str, float]:
         return {
             "raw_E_price": self.baseprice_raw
         }
-
-    def _get_serialize_value(self, param_name: str, value):
-        """Handle enum serialization for normalise parameter."""
-        if param_name == 'normalise' and isinstance(value, Normalisation):
-            return value.value
-        return super()._get_serialize_value(param_name, value)
 
 
 # register with ComponentRegistry

@@ -13,6 +13,7 @@ from .inner import BuildingHeatLoss
 from .outer import (
     DesiredUserEnergyNeed,
     EnergyPriceDataSource,
+    EnergyPriceDynDataSource,
     EVState,
     InsideTemperature,
     OperatorEnergyControl,
@@ -26,6 +27,7 @@ __all__ = [
     "EVState",
     "InsideTemperature",
     "EnergyPriceDataSource",
+    "EnergyPriceDynDataSource",
     "OperatorEnergyControl",
     "WeatherDataSource",
 ]

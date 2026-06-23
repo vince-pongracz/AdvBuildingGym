@@ -26,7 +26,7 @@ class PriceTracker:
         baseprice_ct_per_kWh: float | None,
     ) -> tuple[float, float]:
         """Add this step's cost. Returns (net_consumption_kW, cost_EUR);
-        no-op when ``baseprice_ct_per_kWh`` is None (no EnergyPriceDataSource)."""
+        no-op when ``baseprice_ct_per_kWh`` is None (no price source)."""
         if baseprice_ct_per_kWh is None:
             return 0.0, 0.0
 

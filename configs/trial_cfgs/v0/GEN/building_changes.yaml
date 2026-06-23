@@ -30,7 +30,7 @@ env_meta:
 
 training_params:
   common:
-    evaluation_interval: 4
+    evaluation_interval: 10
     evaluation_duration: 10
     episode_lookback_horizon_steps: 120
     max_episodes_to_run: 7000

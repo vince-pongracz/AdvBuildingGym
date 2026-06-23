@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 
 from adv_building_gym._common.episode_date import date_column, resolve_episode_date
+from adv_building_gym.components.statesources.outer.energy_dyn_price import EnergyPriceDynDataSource
 from adv_building_gym.components.statesources.outer.energy_price import EnergyPriceDataSource
 from adv_building_gym.components.statesources.outer.weather import WeatherDataSource
 
@@ -23,7 +24,7 @@ logger = logging.getLogger(__name__)
 # price are full-year 5-min series (the longest sources) and both carry a per-row
 # timestamp column, so they alone fix the number of selectable days and the data's
 # start year. Anything else is only a defensive fallback.
-_REFERENCE_TYPES: tuple[type, ...] = (WeatherDataSource, EnergyPriceDataSource)
+_REFERENCE_TYPES: tuple[type, ...] = (WeatherDataSource, EnergyPriceDataSource, EnergyPriceDynDataSource)
 
 
 def _reference_source(

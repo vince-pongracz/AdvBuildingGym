@@ -95,9 +95,9 @@ class PriceMedianStrategy(RuleBasedStrategy):
     only by the SoC headrooms.
 
     Uses the raw ``baseprice`` series the env bills with (core/env.py
-    _current_baseprice_ct_per_kWh); the evening observation boost in
-    EnergyPriceDataSource does not affect billing. Day-ahead prices are
-    public, so reading the episode window upfront is a fair heuristic.
+    _current_baseprice_ct_per_kWh); the price source's s_E_price normalisation
+    does not affect billing. Day-ahead prices are public, so reading the episode
+    window upfront is a fair heuristic.
     """
 
     name: ClassVar[str] = "price_median"
