@@ -46,6 +46,8 @@ training_params:
     training_intensity: 32
     learning_starts_after_n_episodes: 50
 statesources:
+- class: DateSource
+  name: date
 - class: EnergyPriceDynDataSource
   name: E_price
 - class: WeatherDataSource
@@ -101,10 +103,9 @@ infras:
 - class: WindTurbine
   name: wind_turbine
   max_power_kW: 5.0
-  rated_power_kW: 5.0
-  cut_in_speed: 3.0
-  rated_speed: 12.0
-  cut_out_speed: 25.0
+  cut_in_speed_ms: 3.0
+  rated_speed_ms: 12.0
+  cut_out_speed_ms: 25.0
 - class: HouseholdEnergyConsumers
   name: hh_consumers
   peak_consumption_kW: 8.0
@@ -161,23 +162,23 @@ reward_schedule:
   start_weights: uniform
   first_swap_after_n_episodes: 100
   on_rewards:
-  - name: TempReward
+  - name: TempRewardV0
     w_low: 0.8
-  - name: LongTermEconomicReward
+  - name: LongTermEconomicRewardV0
     w_low: 0.2
-  - name: MinimiseEnergyConsumptionReward
+  - name: MinimiseEnergyConsumptionRewardV0
     w_low: 0.1
-  - name: OperatorEnergyControlReward
+  - name: OperatorEnergyControlRewardV0
     w_low: 0.2
-  - name: BatteryTargetReward
+  - name: BatteryTargetRewardV0
     w_low: 0.5
-  - name: BatteryMgmtReward
+  - name: BatteryMgmtRewardV0
     w_low: 0.6
-  - name: EVChargingReward
+  - name: EVChargingRewardV0
     w_low: 0.5
-  - name: EVChargingOnTimeReward
+  - name: EVChargingOnTimeRewardV0
     w_low: 0.5
-  - name: ActionSmoothnessReward
+  - name: ActionSmoothnessRewardV0
     w_low: 0.3
 
 data_schedule:

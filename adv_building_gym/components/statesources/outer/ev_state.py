@@ -11,13 +11,14 @@ from adv_building_gym._common.constants import SECONDS_PER_HOUR
 
 from ..base import StateSource
 from ..csv_loader import CsvLoader
+from ..reloadable import CsvReloadable
 from adv_building_gym.components.registry import ComponentRegistry
 from ...infrastructure.ev_charger.ev_spec import EvSpec
 
 logger = logging.getLogger(__name__)
 
 
-class EVState(StateSource):
+class EVState(StateSource, CsvReloadable):
     """Reads an EV usage profile CSV and drives charger connect/disconnect events.
 
     The CSV has the following columns:
@@ -78,6 +79,10 @@ class EVState(StateSource):
         self._events = []
         self._event_lookup = {}
         self._parse_events()
+
+        # The CSV is fully digested into _events / _event_lookup; 
+        # no column read at runtime, drop them all.
+        self._keep_ts_columns(set())
 
     def _parse_events(self) -> None:
         """Parse the CSV DataFrame into a sorted event list."""

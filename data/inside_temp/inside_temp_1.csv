@@ -1,4 +1,4 @@
-timestamp,desired_temp_in [°C]
+timestamp,desired_temp_in
 2025-01-01 00:00:00,18.5
 2025-01-01 00:05:00,18.5
 2025-01-01 00:10:00,18.5

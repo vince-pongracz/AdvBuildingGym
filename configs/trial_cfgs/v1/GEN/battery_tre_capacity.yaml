@@ -46,6 +46,8 @@ training_params:
     training_intensity: 32
     learning_starts_after_n_episodes: 50
 statesources:
+- class: DateSource
+  name: date
 - class: EnergyPriceDynDataSource
   name: E_price
 - class: WeatherDataSource

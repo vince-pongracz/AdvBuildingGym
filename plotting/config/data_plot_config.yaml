@@ -54,14 +54,14 @@ price:
 desired_temp_in:
   # Desired indoor temperature profiles (single-day templates, 5-min resolution).
   # Each file is one occupancy/comfort profile.  All are overlaid in a single plot.
-  # Columns: timestamp, desired_temp_in [°C]
+  # Columns: timestamp, desired_temp_in
   dir: data/inside_temp
   files:
     - inside_temp_0.csv
     - inside_temp_1.csv
     - inside_temp_2.csv
   timestamp_col: timestamp
-  value_col: "desired_temp_in [°C]"
+  value_col: "desired_temp_in"
 
 user_energy_need:
   # Household electricity consumption profiles (per-year files, 5-min resolution).

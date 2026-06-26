@@ -100,15 +100,18 @@ class StateSource(ContextEmitter):
             self.on_reload()
         self._post_load_data_processing()
 
-    def reload(self, ds_path: str) -> None:
-        """Load a new time-series file (delegates to ``self.loader``); non-file-backed sources raise."""
-        if self.loader is None:
-            raise TypeError(
-                f"{type(self).__name__} '{self.name}' is not a file-backed source "
-                "and does not support reload()."
-            )
-        self.loader.reload(ds_path)
-        logger.debug("StateSource '%s' reloaded from %s", self.name, ds_path)
+    def _keep_ts_columns(self, keep: set[str]) -> None:
+        """Drop every ``self.ts`` column outside *keep*, in place.
+
+        Frees the raw CSV columns a source has already digested in
+        ``_post_load_data_processing`` (each step reads only a few). Mutates in place
+        because ``ts`` is a read-only pass-through to the loader; no-op without a frame.
+        """
+        if self.ts is None:
+            return
+        drop_cols = [col for col in self.ts.columns if col not in keep]
+        if drop_cols:
+            self.ts.drop(columns=drop_cols, inplace=True)
 
     def setup_spaces(self,
                     state_spaces,

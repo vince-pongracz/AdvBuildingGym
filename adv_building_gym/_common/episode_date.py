@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional
+from typing import Optional
 
 import pandas as pd
 
 from adv_building_gym._common.constants import SECONDS_PER_DAY
-
-if TYPE_CHECKING:
-    from adv_building_gym.components.statesources import StateSource
+from adv_building_gym._common.date_provider import DateProvider
 
 # Per-row timestamp columns recognised in reference CSVs, in priority order.
 # Weather CSVs label it "timestamp"; price CSVs label it "start".
@@ -25,18 +23,16 @@ def date_column(df: pd.DataFrame) -> Optional[str]:
 
 
 def resolve_episode_date(
-    date_ref_source: Optional["StateSource"],
+    date_source: Optional[DateProvider],
     row_offset: int,
     control_step: int,
 ) -> str:
-    """Date string for *row_offset* read from *date_ref_source*'s timestamp column,
-    else a ``"day-N"`` fallback (uses control_step for the day index)."""
-    if date_ref_source is not None and date_ref_source.ts is not None:
-        ts = date_ref_source.ts
-        col = date_column(ts)
-        if col is not None and row_offset < len(ts):
-            return str(pd.to_datetime(ts.iloc[row_offset][col]).date())
+    """Date string for *row_offset* from the *date_source*, else a ``"day-N"`` fallback."""
+    if date_source is not None:
+        date = date_source.date_at(row_offset)
+        if date is not None:
+            return date
 
-    # Fallback: day-of-year index when no dated reference source is available
+    # Fallback: day-of-year index when no dated source is available
     steps_per_day = int(SECONDS_PER_DAY / control_step)
     return f"day-{row_offset // steps_per_day}"

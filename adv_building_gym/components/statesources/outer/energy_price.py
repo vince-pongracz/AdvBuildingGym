@@ -9,12 +9,13 @@ from ..base import StateSource
 from ..csv_loader import CsvLoader
 from ..forecastable import Forecastable
 from ..csv_lookahead import CsvLookahead
+from ..reloadable import CsvReloadable
 from adv_building_gym.components.registry import ComponentRegistry
 
 logger = logging.getLogger(__name__)
 
 
-class EnergyPriceDataSource(StateSource, Forecastable, CsvLookahead):
+class EnergyPriceDataSource(StateSource, Forecastable, CsvLookahead, CsvReloadable):
     """Energy-price data source with a year-based price divisor.
 
     The CSV is never rescaled and s_E_price is not clipped. Each step exposes
@@ -39,6 +40,9 @@ class EnergyPriceDataSource(StateSource, Forecastable, CsvLookahead):
     # _dynamic_price_divisor behaviour so the divisor tracks the episode's local price level.
     _SERIES_BLEND_WEIGHT: ClassVar[float] = 0.3
     _EPISODE_BLEND_WEIGHT: ClassVar[float] = 0.7
+
+    # Lookahead channel -> CSV column (drives Lookahead.lookahead and forecast()).
+    _lookahead_columns: ClassVar[dict[str, str]] = {"baseprice": "baseprice"}
 
     def __init__(self, name: str, ds_path: str | None = None,
                 max_calc_mode: str = "mean",
@@ -93,6 +97,9 @@ class EnergyPriceDataSource(StateSource, Forecastable, CsvLookahead):
 
         self.series_divisor = self._compute_divisor(self.ts["baseprice"])
         self.price_divisor = self.series_divisor
+
+        # update_state / reset / forecast only ever read 'baseprice'; drop the rest.
+        self._keep_ts_columns({"baseprice"})
 
     def _compute_divisor(self, baseprice: pd.Series) -> float:
         """Positive divisor for the baseprice slice (1.0 when empty).
@@ -161,19 +168,14 @@ class EnergyPriceDataSource(StateSource, Forecastable, CsvLookahead):
         return ("s_fc_E_price",)
 
     def forecast(self, selected_future_steps: list[int]) -> dict[str, list[float]]:
-        if self.ts is None:
-            return {"s_fc_E_price": [0.0] * len(selected_future_steps)}
-        # Same divisor as the live s_E_price.
-        raw_fc = self._csv_forecast(self.ts, self.effective_index, "baseprice", selected_future_steps)
-        return {
-            "s_fc_E_price": [self._normalise(v) for v in raw_fc],
-        }
+        # s_fc_E_price = normalised baseprice lookahead (same divisor as the live s_E_price).
+        raw_fc = self.lookahead(selected_future_steps)["baseprice"]
+        return {"s_fc_E_price": [self._normalise(v) for v in raw_fc]}
 
     def get_raw_values(self) -> dict[str, float]:
         return {
             "raw_E_price": self.baseprice_raw
         }
-
 
 # register with ComponentRegistry
 ComponentRegistry.register('statesource', EnergyPriceDataSource)

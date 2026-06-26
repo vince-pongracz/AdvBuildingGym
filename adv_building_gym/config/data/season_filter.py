@@ -8,27 +8,13 @@ touching the day-selection cadence.
 from __future__ import annotations
 
 import logging
-from typing import Final
 
 import numpy as np
 import pandas as pd
 
+from adv_building_gym._common.season import ALL_SEASONS, SEASON_MONTHS as _SEASON_MONTHS
+
 logger = logging.getLogger(__name__)
-
-# Meteorological seasons by month (Northern hemisphere): each season is a whole
-# calendar quarter, unlike the astronomical seasons that start at the solstices.
-# Link: https://www.ncei.noaa.gov/news/meteorological-versus-astronomical-seasons
-_SEASON_MONTHS: Final[dict[str, frozenset[int]]] = {
-    "winter": frozenset({12, 1, 2}),
-    "spring": frozenset({3, 4, 5}),
-    "summer": frozenset({6, 7, 8}),
-    "autumn": frozenset({9, 10, 11}),
-}
-# Composite seasons -- unions of the base seasons above.
-_SEASON_MONTHS["spring_autumn"] = _SEASON_MONTHS["spring"] | _SEASON_MONTHS["autumn"]
-
-# Sentinel season meaning "no filtering" (every available day is selectable).
-ALL_SEASONS: Final[str] = "all"
 
 
 class SeasonFilter:

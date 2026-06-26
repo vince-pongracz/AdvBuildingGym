@@ -1,4 +1,6 @@
-from typing import Any, Dict, Optional
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any, Dict, Optional
 from collections import OrderedDict
 import logging
 
@@ -7,11 +9,6 @@ from gymnasium import spaces
 from gymnasium.spaces import Dict as SDict
 import numpy as np
 
-from adv_building_gym.config.data.data_combinator import DataCombinator
-from adv_building_gym.components.statesources import StateSource
-from adv_building_gym.components.rewards import RewardFunction, RewardAggregator, SumRewardAggregator
-from adv_building_gym.components.infrastructure import Infrastructure
-
 from adv_building_gym._common.warning_filters import setup_warning_filters
 from adv_building_gym._common.constants import SECONDS_PER_HOUR
 from adv_building_gym.core.data_variant import DataVariantConsumer
@@ -19,8 +16,18 @@ from adv_building_gym.core._data_variant_manager import DataVariantManager
 from adv_building_gym.core._energy_tracker import EnergyTracker
 from adv_building_gym.core._price_tracker import PriceTracker
 from adv_building_gym.core._raw_state_tracker import RawStateTracker
+from adv_building_gym.core._reload_dispatcher import ReloadDispatcher
+from adv_building_gym.core.forecast_wrapper import canonise_forecast_steps
 
-from adv_building_gym.config.env.env_config import EnvConfig
+if TYPE_CHECKING:
+    # Annotation-only — kept out of runtime so core never imports components/config
+    # (the dependency direction is components/config → core, never the reverse). The
+    # concrete components/config objects are injected through __init__.
+    from adv_building_gym.config.data.data_combinator import DataCombinator
+    from adv_building_gym.config.env.env_config import EnvConfig
+    from adv_building_gym.components.statesources import StateSource
+    from adv_building_gym.components.rewards import RewardFunction, RewardAggregator
+    from adv_building_gym.components.infrastructure import Infrastructure
 
 # Logging configuration
 logging.basicConfig(
@@ -109,6 +116,8 @@ class AdvBuildingGym(gym.Env, DataVariantConsumer):
 
         self.statesources = statesources
         self._partition_statesources()
+        self._reload_dispatcher = ReloadDispatcher()
+        self._reload_dispatcher.register_all(self.statesources)
         for ds in self.statesources:
             ds.setup_spaces(observation_space, action_space)
 
@@ -125,7 +134,7 @@ class AdvBuildingGym(gym.Env, DataVariantConsumer):
             self.state[state_name] = np.zeros(shape=state_space.shape, dtype=state_space.dtype)
 
         # shared inter-component data not in the obs space (raw kWh/kW/°C, EV schedule)
-        self._component_info: dict = {}
+        self._info: dict = {}
 
         # Native Dict action space — each key maps to the component's real bounds.
         self.action_space = SDict(action_space)
@@ -195,11 +204,15 @@ class AdvBuildingGym(gym.Env, DataVariantConsumer):
             raise ValueError(f"Statesource names must match. Old: {old_names}, New: {new_names}")
         self.statesources = statesources
         self._partition_statesources()
+        self._reload_dispatcher.register_all(self.statesources)
         logger.info("Statesources swapped: %s", [s.name for s in statesources])
 
     def _partition_statesources(self) -> None:
-        """Split statesources by ``UPDATE_PHASE`` into endogenous (run before reward) and
-        exogenous (advance to next row after); order preserved within each group."""
+        """Split statesources by ``UPDATE_PHASE`` into 
+        - endogenous (run before reward)
+        - exogenous (advance to next row after)
+        
+        Call order preserved within each group."""
         self._endogenous_statesources = [s for s in self.statesources if s.UPDATE_PHASE == "endogenous"]
         self._exogenous_statesources = [s for s in self.statesources if s.UPDATE_PHASE != "endogenous"]
 
@@ -210,10 +223,8 @@ class AdvBuildingGym(gym.Env, DataVariantConsumer):
         return self.action_space
 
     def apply_data_variant(self, variant: dict[str, str]) -> None:
-        """Reload statesources whose names appear in *variant*."""
-        for state_src in self.statesources:
-            if state_src.name in variant:
-                state_src.reload(variant[state_src.name])
+        """Reload the Reloadable statesources named in *variant* (via the dispatcher)."""
+        self._reload_dispatcher.dispatch(variant)
 
     # ------------------------------------------------------------------
     # reset()
@@ -236,9 +247,9 @@ class AdvBuildingGym(gym.Env, DataVariantConsumer):
 
         self._reset_internal_state()
         self._sync_components(row_offset)
-        self._populate_initial_observations()
+        self._publish_initial_observations()
         for rf in self.reward_functors:
-            rf.on_reset(self.state, info=self._component_info)
+            rf.on_reset(self.state, info=self._info)
 
         info = self._build_reset_info(seed, variant)
         return {k: np.array(v, copy=True) for k, v in self.state.items()}, info
@@ -281,21 +292,29 @@ class AdvBuildingGym(gym.Env, DataVariantConsumer):
             else:
                 logger.debug("Unidentified type: %s", type(v))
 
-        self._component_info.clear()
+        self._info.clear()
 
     def _sync_components(self, row_offset: int) -> None:
         for sync in self.infras + self.statesources:
             sync.synchronise(self.iteration, row_offset)
 
-    def _populate_initial_observations(self) -> None:
+    def _publish_initial_observations(self) -> None:
         """Let statesources and infras publish their initial observations."""
         # publish env rng on the shared channel so components (e.g. InsideTemperature)
         # draw per-episode randomness from the same per-worker stream
-        self._component_info["_rng"] = self._rng
+        self._info["_rng"] = self._rng
+        # relay the episode date so date-aware sources (e.g. the seasonal Fix tariff) read it
+        self._info["episode_date"] = self._variant_manager.episode_date
+        # When the ForecastWrapper is active, publish the canonical look-ahead step set so
+        # Lookahead producers (WeatherDataSource) pre-compute exactly the future raw values the
+        # Forecastable consumers (SolarPanel/WindTurbine) need — same count, one source of truth.
+        if self.env_config.forecast.enabled:
+            # NOTE VP 2026.06.24.: Tuple because immutability needed
+            self._info["forecast_steps"] = tuple(canonise_forecast_steps(self.env_config.forecast.steps))
         for ds in self.statesources:
-            ds.reset(states=self.state, info=self._component_info)
+            ds.reset(states=self.state, info=self._info)
         for infr in self.infras:
-            infr.reset(self.state, info=self._component_info)
+            infr.reset(self.state, info=self._info)
 
     def _build_reset_info(self, seed: int | None, variant: dict | None) -> dict:
         info = {
@@ -318,13 +337,13 @@ class AdvBuildingGym(gym.Env, DataVariantConsumer):
         # start from current state so statesources can read bookkeeping keys (e.g. "iteration")
         state = OrderedDict(self.state) if isinstance(self.state, OrderedDict) else OrderedDict()
         for ds in self.statesources:
-            ds.update_state(states=state, info=self._component_info)
+            ds.update_state(states=state, info=self._info)
         return state
 
     def is_done(self) -> bool:
         # Ends on (a) natural horizon or (b) any reward's Phase-1 terminate vote,
         # consolidated into _component_info["terminated"] before get_reward runs.
-        if self._component_info.get("terminated", False):
+        if self._info.get("terminated", False):
             return True
         return bool(self.iteration >= self.env_config.EPISODE_LENGTH)
 
@@ -339,18 +358,19 @@ class AdvBuildingGym(gym.Env, DataVariantConsumer):
         state = {k: np.array(v, copy=True) for k, v in self.state.items()}
 
         self._execute_actions(action)        # exec_action reads observed row[t]
-        self._advance_time_and_sync()        # iteration++, sim_hour, synchronise
         self._update_endogenous()            # infras + inner statesources -> action outcomes (still row[t] exogenous)
 
-        # power/price under observed row[t]: price tracker reads baseprice_raw pre-advance
+        # power under observed row[t] (rewards read net_power_kW)
         total_power_kW, power_breakdown = self._compute_power_breakdown(action)
-
+        self._track_E_costs(power_breakdown)
+        
+        self._advance_time_and_sync()        # iteration++, sim_hour, synchronise
         self._update_exogenous()             # outer statesources -> row[t+1]; self.state is now s'
 
         self._publish_step_info(action, total_power_kW)
         # Phase 1: termination pre-pass — consolidate verdicts into info["terminated"]
         # before any get_reward, so aggregated rewards (LTER) read a definitive flag.
-        self._component_info["terminated"] = self._compute_termination(action, state)
+        self._info["terminated"] = self._compute_termination(action, state)
         # Phase 2: reward aggregation over the full (s, a, s') transition
         reward, reward_breakdown = self._compute_rewards(action, state)
 
@@ -372,7 +392,7 @@ class AdvBuildingGym(gym.Env, DataVariantConsumer):
 
     def _execute_actions(self, action) -> None:
         for infr in self.infras:
-            infr.exec_action(action, self.state, info=self._component_info)
+            infr.exec_action(action, self.state, info=self._info)
 
     def _advance_time_and_sync(self) -> None:
         # increment iteration, then synchronise so update_state reads the new row
@@ -387,18 +407,18 @@ class AdvBuildingGym(gym.Env, DataVariantConsumer):
     def _update_endogenous(self) -> None:
         # within-step transition under observed row[t]: infras apply effects, then
         # endogenous physics (BuildingHeatLoss). Reset power-bound accumulators first.
-        self._component_info["max_consumption_kW"] = 0.0
-        self._component_info["max_production_kW"] = 0.0
+        self._info["max_consumption_kW"] = 0.0
+        self._info["max_production_kW"] = 0.0
         for infr in self.infras:
-            infr.update_state(self.state, info=self._component_info)
+            infr.update_state(self.state, info=self._info)
         for ds in self._endogenous_statesources:
-            ds.update_state(states=self.state, info=self._component_info)
+            ds.update_state(states=self.state, info=self._info)
 
     def _update_exogenous(self) -> None:
         # advance external series to row[t+1] (after reward); synchronise already moved
         # the effective index, so these read the new row
         for ds in self._exogenous_statesources:
-            ds.update_state(states=self.state, info=self._component_info)
+            ds.update_state(states=self.state, info=self._info)
 
     def _compute_power_breakdown(self, action) -> tuple[float, dict[str, tuple[float, float]]]:
         power_breakdown = {
@@ -406,16 +426,15 @@ class AdvBuildingGym(gym.Env, DataVariantConsumer):
             for infra in self.infras
         }
         total_power_kW, _energy_kWh = self._energy_tracker.add_step_E_contribution(power_breakdown)
-        self._price_tracker.add_step_contribution(power_breakdown, self._current_baseprice_ct_per_kWh())
         return total_power_kW, power_breakdown
 
-    def _current_baseprice_ct_per_kWh(self) -> float | None:
-        # duck-type (avoid circular import); statesource caches baseprice_raw each tick
-        for ds in self.statesources:
-            price = getattr(ds, "baseprice_raw", None)
-            if price is not None:
-                return float(price)
-        return None
+    def _track_E_costs(self, power_breakdown) -> None:
+        """Realised price (ct/kWh) of the observed state s, from the merged raw values
+        (``None`` when no price source is present → billing no-ops)."""
+        # Price to bill is the observed state's (s) realised price, captured before any advance;
+        # billing itself runs last (final accounting).
+        price_in_s = self._raw_state_tracker.collect(self.statesources, self.infras).get("raw_E_price")
+        self._price_tracker.add_step_contribution(power_breakdown, price_in_s)
 
     def _publish_step_info(
         self,
@@ -424,12 +443,12 @@ class AdvBuildingGym(gym.Env, DataVariantConsumer):
     ) -> None:
         # rewards read these from _component_info (no infra references). power_breakdown
         # is emitted only on the returned step info, not here.
-        self._component_info["net_power_kW"] = total_power_kW
-        self._component_info["episode_length"] = self.env_config.EPISODE_LENGTH
-        self._component_info["iteration"] = self.iteration
-        self._component_info["control_step_s"] = self.env_config.CONTROL_STEP
+        self._info["net_power_kW"] = total_power_kW
+        self._info["episode_length"] = self.env_config.EPISODE_LENGTH
+        self._info["iteration"] = self.iteration
+        self._info["control_step_s"] = self.env_config.CONTROL_STEP
         # expose the termination toggle so rewards can gate terminal-only branches
-        self._component_info["allow_early_termination"] = self.env_config.allow_early_termination
+        self._info["allow_early_termination"] = self.env_config.allow_early_termination
         # info["terminated"] is set later by _compute_termination() (Phase 1)
 
     def _compute_termination(self, action, state) -> bool:
@@ -440,17 +459,17 @@ class AdvBuildingGym(gym.Env, DataVariantConsumer):
         if not self.env_config.allow_early_termination:
             return False
         for rf in self.reward_functors:
-            if rf.should_terminate(action, state, self.state, self._component_info):
+            if rf.should_terminate(action, state, self.state, self._info):
                 return True
         return False
 
     def _compute_rewards(self, action, state) -> tuple[float, dict[str, float]]:
         # fresh per-step diagnostics channel (rewards populate; EpisodeMetricsCallback
         # sums per episode); cleared so values don't leak from the previous step
-        self._component_info["reward_diagnostics"] = {}
+        self._info["reward_diagnostics"] = {}
         # full transition: state = s (observed), self.state = s' (resulting)
         return self._reward_aggregator.aggregate(
-            self.reward_functors, action, state, self.state, self._component_info,
+            self.reward_functors, action, state, self.state, self._info,
         )
 
     def _guard_finite_state(self) -> None:
@@ -475,7 +494,7 @@ class AdvBuildingGym(gym.Env, DataVariantConsumer):
             "action": action,
             "reward": reward,
             "reward_breakdown": reward_breakdown,
-            "reward_diagnostics": self._component_info.get("reward_diagnostics", {}),
+            "reward_diagnostics": self._info.get("reward_diagnostics", {}),
             "cum_E_kWh": self._energy_tracker.cum_E_kWh,
             "cum_price_EUR": self._price_tracker.cum_price_EUR,
             "net_power_kW": total_power_kW,

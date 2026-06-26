@@ -3,12 +3,11 @@ from collections import OrderedDict
 from typing import ClassVar, Set
 
 import numpy as np
-import pandas as pd
-from gymnasium.spaces import Box
 
 from ..base import StateSource
 from ..csv_loader import CsvLoader
 from ..csv_lookahead import CsvLookahead
+from ..reloadable import CsvReloadable
 from adv_building_gym.components.registry import ComponentRegistry
 from adv_building_gym._common.constants import TEMP_ABS_MAX_CELSIUS
 from adv_building_gym._common.normalisation import Normalisation, normalise_with_scale_factor
@@ -16,7 +15,7 @@ from adv_building_gym._common.normalisation import Normalisation, normalise_with
 logger = logging.getLogger(__name__)
 
 
-class WeatherDataSource(StateSource, CsvLookahead):
+class WeatherDataSource(StateSource, CsvLookahead, CsvReloadable):
     """Ambient temperature, wind speed, and solar irradiance from a preprocessed weather CSV.
 
     Units (raw, before runtime normalisation):
@@ -24,11 +23,9 @@ class WeatherDataSource(StateSource, CsvLookahead):
         - ``avg_wind_speed`` / ``raw_wind_speed`` : m/s
         - ``sun_shine`` / ``raw_solar_irradiance``: W/m² (mean over the 5-min step)
 
-    Both DWD and Zenodo/WPuQ preprocessing pipelines emit ``sun_shine`` in W/m²
-    (DWD is converted from J/cm² per 10 min in ``dwd_preprocess.py``;
-    Zenodo is native W/m²). The ``ctxt_solar_irradiance_max`` context entry
-    is the scale factor used to recover the raw W/m² from the normalised
-    ``s_solar_irradiance_norm ∈ [0, 1]`` observation.
+    Both DWD and Zenodo/WPuQ pipelines emit ``sun_shine`` in W/m² (DWD converted from
+    J/cm² per 10 min in ``dwd_preprocess.py``; Zenodo native). ``ctxt_solar_irradiance_max``
+    is the scale factor recovering raw W/m² from ``s_solar_irradiance_norm ∈ [0, 1]``.
     """
 
     # normalise is an enum, need special handling for serialization
@@ -39,6 +36,12 @@ class WeatherDataSource(StateSource, CsvLookahead):
         'sun_shine_abs_max', 'sun_shine_raw',
     }
 
+    # Lookahead channels feeding the generators' power forecasts (logical key -> CSV column).
+    _lookahead_columns: ClassVar[dict[str, str]] = {
+        "solar_W_m2": "sun_shine",
+        "wind_ms": "avg_wind_speed",
+    }
+
     def __init__(self, name: str, ds_path: str | None = None,
                 normalise: Normalisation | str | None = Normalisation.MAX_ABS_SCALING) -> None:
         super().__init__(name=name)
@@ -47,9 +50,14 @@ class WeatherDataSource(StateSource, CsvLookahead):
         # Raw values for get_raw_values() — updated each step
         self.temp_out_raw: float = 0.0
         self.wind_speed_raw: float = 0.0
-        # Solar irradiance (W/m², 5-min mean); both DWD and Zenodo/WPuQ CSVs deliver W/m².
+        # Solar irradiance (W/m², 5-min mean).
         self.sun_shine_raw: float = 0.0
         self.sun_shine_abs_max: float = 0.0
+
+        # Owned look-ahead channel (logical key -> future raw values), updated in place and
+        # republished on info["raw_weather_forecast"] each step. Generators hold a reference to
+        # THIS dict only and still see the row[t+1] look-ahead written after their own update_state.
+        self._weather_forecast: dict[str, list[float]] = {}
 
         # loader auto-fires _run_post_load after each read; attrs it needs MUST be set above.
         self.loader = CsvLoader(ds_path, on_reload=self._run_post_load)
@@ -74,10 +82,10 @@ class WeatherDataSource(StateSource, CsvLookahead):
                         )
                     self.ts[col] = self.ts[col].fillna(0)
 
-        # Temperature uses a FIXED normalisation scale (TEMP_ABS_MAX_CELSIUS, not the
-        # per-variant data maximum) so s_temp_out_norm has an identical scale across every
-        # weather variant. Irradiance and wind stay data-driven (their scale factors are
-        # exposed separately and used to reconstruct raw W/m² and m/s).
+        # Temperature uses a FIXED scale (TEMP_ABS_MAX_CELSIUS, not the per-variant max) so
+        # s_temp_out_norm is identical across weather variants. 
+        # Irradiance and wind are data-driven 
+        # (scale factors exposed separately to reconstruct raw W/m² and m/s).
         if "temp_amb" in self.ts.columns:
             self.ts["s_temp_out_norm"] = (self.ts["temp_amb"] / TEMP_ABS_MAX_CELSIUS).astype(np.float32)
 
@@ -95,34 +103,16 @@ class WeatherDataSource(StateSource, CsvLookahead):
                 if scale_attr is not None:
                     setattr(self, scale_attr, scale_factor)
 
-        # Day-of-year normalised to [0, 1] (divisor = year length; leap → 366)
-        if "timestamp" in self.ts.columns:
-            ts_parsed = pd.to_datetime(self.ts["timestamp"], utc=True, errors="coerce")
-            year_length = np.where(ts_parsed.dt.is_leap_year, 366.0, 365.0)
-            self.ts["s_date"] = ((ts_parsed.dt.dayofyear - 1) / year_length).astype(np.float32)
-        else:
-            if self.is_new_data_source:
-                logger.warning("WeatherDataSource '%s': no 'timestamp' column — s_date set to 0.", self.name)
-            self.ts["s_date"] = np.float32(0.0)
+        # Each step reads raw temp_amb / sun_shine / avg_wind_speed (the latter two also feed the
+        # generators' lookahead) plus the fixed-scale s_temp_out_norm. The irradiance/wind norm
+        # columns are unused, so drop them with the rest of the CSV.
+        self._keep_ts_columns({"temp_amb", "sun_shine", "avg_wind_speed", "s_temp_out_norm"})
 
-
-    def setup_spaces(self,
-                    state_spaces: OrderedDict,
-                    action_spaces: OrderedDict
-                    ) -> tuple[OrderedDict, OrderedDict]:
-
-        # Day-of-year of the current row, [0, 1]; recomputed per step for midnight crossings.
-        if "s_date" not in state_spaces.keys():
-            state_spaces["s_date"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
-
-        # The temperature normalisation scale is a fixed constant (TEMP_ABS_MAX_CELSIUS),
-        # not a data-driven per-variant factor, so it is no longer published as a ctxt_*
-        # observation. It is handed to the temperature consumers on the info channel
-        # (info["temp_abs_max"], see update_state). Weather drivers themselves (outdoor
-        # temperature, irradiance, wind speed) are NOT observations either: the policy sees
-        # the *effects* instead (s_temp_error_norm, s_pv_power_norm, s_wind_power_norm).
-
-        return state_spaces, action_spaces
+    # The temperature scale is a fixed constant (TEMP_ABS_MAX_CELSIUS), not a per-variant
+    # factor, so it is not published as a ctxt_* observation but handed to consumers via
+    # info["temp_abs_max"] (see update_state). The weather drivers (outdoor temp, irradiance,
+    # wind) are not observations either: the policy sees the *effects* (s_temp_error_norm,
+    # s_pv_power_norm, s_wind_power_norm).
 
     def update_state(self, states, info=None) -> None:
         if self.ts is None:
@@ -136,34 +126,33 @@ class WeatherDataSource(StateSource, CsvLookahead):
         self.wind_speed_raw = float(row.get("avg_wind_speed", 0.0))
         self.sun_shine_raw = float(row.get("sun_shine", 0.0))
 
-        states["s_date"][0] = np.float32(row.get("s_date", 0.0))
-
-        # Hand the weather drivers to their consumers via the shared info channel — none
-        # of them are policy observations. Outdoor temperature (normalised) → BuildingHeatLoss
-        # physics; raw irradiance (W/m²) and wind speed (m/s) → the generators' power curves.
-        # A self-reference lets the generators query the future-weather look-ahead in forecast().
-        # Read at the next step, mirroring the previous obs-buffer one-step structure.
+        # Hand the weather drivers to consumers via the shared info channel — none are policy
+        # observations. Outdoor temp (norm) → BuildingHeatLoss physics; raw irradiance (W/m²)
+        # and wind speed (m/s) → the generators' power curves.
         if info is not None:
-            # Fixed temperature normalisation scale (°C) for every temperature consumer
-            # (HP / BuildingHeatLoss / InsideTemperature / temp rewards). Constant, not
-            # data-driven; this is the single publication point on the shared channel.
+            # Fixed temp scale (°C) for every temp consumer (HP / BuildingHeatLoss /
+            # InsideTemperature / temp rewards). Constant; single publication point.
             info["temp_abs_max"] = TEMP_ABS_MAX_CELSIUS
             info["temp_out_norm"] = temp_out_norm
             info["raw_solar_irradiance_W_m2"] = self.sun_shine_raw
             info["raw_wind_speed_ms"] = self.wind_speed_raw
-            info["_weather_source"] = self
 
-    # No weather driver is a policy observation, so the weather source publishes no
-    # s_fc_* keys and is not Forecastable. It still feeds the generators' power forecasts
-    # via raw_weather_forecast() below (see SolarPanel / WindTurbine.forecast), using the
-    # CsvLookahead mixin's cached future-row reads.
-    def raw_weather_forecast(self, selected_future_steps: list[int]) -> dict[str, list[float]]:
-        """Future raw irradiance (W/m²) and wind speed (m/s) for the generator power
-        forecasts — values at ``effective_index + step`` for each requested offset."""
-        return {
-            "solar_W_m2": self._csv_forecast(self.ts, self.effective_index, "sun_shine", selected_future_steps),
-            "wind_ms": self._csv_forecast(self.ts, self.effective_index, "avg_wind_speed", selected_future_steps),
-        }
+            # When forecasting is active, pre-compute future RAW weather (W/m², m/s) over the
+            # canonical step set and publish it as a plain channel, so generators read
+            # info["raw_weather_forecast"][<channel>] instead of calling lookahead() here. Length
+            # matches the consumers' query: both derive from info["forecast_steps"] =
+            # canonise_forecast_steps(env_config.forecast.steps).
+            steps = info.get("forecast_steps")
+            if steps:
+                # Update the owned forecast dict IN PLACE (stable identity), then republish it.
+                # Generators capture only this sub-dict; in-place mutation lets their earlier
+                # reference (captured in _update_endogenous) reflect the row[t+1] look-ahead.
+                self._weather_forecast.clear()
+                self._weather_forecast.update(self.lookahead(list(steps)))
+                info["raw_weather_forecast"] = self._weather_forecast
+
+    # Weather drivers are not policy observations. 
+    # Generators consume future irradiance/wind from info["raw_weather_forecast"]
 
     def get_raw_values(self) -> dict[str, float]:
         return {

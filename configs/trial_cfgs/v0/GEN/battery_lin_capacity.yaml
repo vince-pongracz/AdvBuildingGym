@@ -48,6 +48,8 @@ training_params:
     learning_starts_after_n_episodes: 50
 
 statesources:
+- class: DateSource
+  name: date
 - class: EnergyPriceDataSource
   name: E_price
   # Price normalisation: s_E_price = clip(raw_price / divisor, -1, 1). The divisor blends the

@@ -9,6 +9,7 @@ from ..base import StateSource
 from ..csv_loader import CsvLoader
 from ..forecastable import Forecastable
 from ..csv_lookahead import CsvLookahead
+from ..reloadable import CsvReloadable
 from adv_building_gym.components.registry import ComponentRegistry
 from adv_building_gym._common.normalisation import Normalisation, normalise_with_scale_factor
 
@@ -21,7 +22,7 @@ SOURCE_COLUMN: str = "hh_consumption_kW"
 NORM_COLUMN: str = "desired_energy_need_norm"
 
 
-class DesiredUserEnergyNeed(StateSource, Forecastable, CsvLookahead):
+class DesiredUserEnergyNeed(StateSource, Forecastable, CsvLookahead, CsvReloadable):
     """Desired user energy need from the ``hh_consumption_kW`` CSV column.
 
     Abs-min-max normalised to [0, 1], exposed as ``s_desired_energy_need``
@@ -55,6 +56,10 @@ class DesiredUserEnergyNeed(StateSource, Forecastable, CsvLookahead):
             )
 
         self.ts[NORM_COLUMN], self.consumption_max = normalise_with_scale_factor(self.ts[SOURCE_COLUMN], self.normalise)
+
+        # Only the normalised column is read each step (the raw kW peak is cached in
+        # consumption_max); drop the raw source column and any other CSV columns.
+        self._keep_ts_columns({NORM_COLUMN})
 
     def setup_spaces(self, state_spaces: OrderedDict, action_spaces: OrderedDict) -> tuple[OrderedDict, OrderedDict]:
         """Setup observation spaces for desired user energy need."""

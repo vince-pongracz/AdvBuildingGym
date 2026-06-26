@@ -57,17 +57,20 @@ training_params:
     critic_lr: 3.0e-5
 
 statesources:
-- class: EnergyPriceDataSource
+- class: DateSource
+  name: date
+- class: EnergyPriceFixDataSource
   name: E_price
-  # Price normalisation: s_E_price = clip(raw_price / divisor, -1, 1). The divisor blends the
-  # max_calc_mode statistic over the whole series (0.3) and the per-episode window (0.7):
-  #   mean              - mean of raw baseprice
-  #   median            - median of raw baseprice
-  #   percentile        - quantile at `percentile` (e.g. 0.75)
-  #   mean_above_median - mean of raw baseprice strictly above the series median
-  # For the 1-day windowed (next-24h max) normalisation use class EnergyPriceDynDataSource.
-  max_calc_mode: mean
-  percentile: 0.75  # consulted only when max_calc_mode == "percentile"
+  # Synthetic 3-level time-of-use tariff (no CSV), selected by the episode's season.
+  #   schedules       - maps a season (winter/spring/summer/autumn) or the catch-all "all" to a
+  #                     {off_peak_price, mid_price, peak_price, off_peak_hours, peak_hours} block
+  #                     ([start, end) hours, may wrap midnight). Omitted here -> built-in default:
+  #                     off-peak 18 / mid 28 / peak 40 ct/kWh, off-peak 0-6h, peak 17-21h.
+  #   default_season  - fallback season when the episode's season has no schedule.
+  #   emit_ctxt       - also publish ctxt_E_price_max (the divisor) for policy conditioning.
+  # s_E_price = baseprice / divisor, divisor = largest level magnitude across all schedules.
+  default_season: summer
+  emit_ctxt: false
 - class: WeatherDataSource
   name: weather
 - class: InsideTemperature
@@ -78,8 +81,6 @@ statesources:
   name: building_heat_loss
   K: 20
   mC: 300
-- class: EVState
-  name: ev_schedule
 - class: OperatorEnergyControl
   name: operator_energy_control
   max_power_kW: 20.0
@@ -101,10 +102,9 @@ infras:
 - class: WindTurbine
   name: wind_turbine
   max_power_kW: 5.0
-  rated_power_kW: 5.0
-  cut_in_speed: 3.0
-  rated_speed: 12.0
-  cut_out_speed: 25.0
+  cut_in_speed_ms: 3.0
+  rated_speed_ms: 12.0
+  cut_out_speed_ms: 25.0
 - class: HouseholdEnergyConsumers
   name: hh_consumers
   peak_consumption_kW: 8.0

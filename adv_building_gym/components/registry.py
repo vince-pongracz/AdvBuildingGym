@@ -81,6 +81,11 @@ def _get_serialize_value(param_name: str, value: Any) -> Any:
         if isinstance(value, Serializable):
             return value.to_dict()
 
+        # Handle dicts of serializable values (recurse on values)
+        if isinstance(value, dict):
+            serialized = {k: _get_serialize_value(param_name, v) for k, v in value.items()}
+            return {k: v for k, v in serialized.items() if v is not None} or None
+
         # Skip non-serializable types by default
         logger.debug(
             "Skipping non-serializable param %s of type %s",

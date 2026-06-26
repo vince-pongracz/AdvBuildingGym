@@ -11,9 +11,11 @@ logging.basicConfig(
 from .base import StateSource
 from .inner import BuildingHeatLoss
 from .outer import (
+    DateSource,
     DesiredUserEnergyNeed,
     EnergyPriceDataSource,
     EnergyPriceDynDataSource,
+    EnergyPriceFixDataSource,
     EVState,
     InsideTemperature,
     OperatorEnergyControl,
@@ -23,11 +25,13 @@ from .outer import (
 __all__ = [
     "StateSource",
     "BuildingHeatLoss",
+    "DateSource",
     "DesiredUserEnergyNeed",
     "EVState",
     "InsideTemperature",
     "EnergyPriceDataSource",
     "EnergyPriceDynDataSource",
+    "EnergyPriceFixDataSource",
     "OperatorEnergyControl",
     "WeatherDataSource",
 ]

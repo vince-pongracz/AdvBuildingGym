@@ -94,10 +94,9 @@ class PriceMedianStrategy(RuleBasedStrategy):
     power while above — regardless of renewables or time of day, bounded
     only by the SoC headrooms.
 
-    Uses the raw ``baseprice`` series the env bills with (core/env.py
-    _current_baseprice_ct_per_kWh); the price source's s_E_price normalisation
-    does not affect billing. Day-ahead prices are public, so reading the episode
-    window upfront is a fair heuristic.
+    Uses the raw ``baseprice`` (``get_raw_values()["raw_E_price"]``) the env bills with;
+    the price source's s_E_price normalisation does not affect billing. Day-ahead prices
+    are public, so reading the episode window upfront is a fair heuristic.
     """
 
     name: ClassVar[str] = "price_median"
@@ -114,9 +113,8 @@ class PriceMedianStrategy(RuleBasedStrategy):
         logger.debug("Episode median baseprice: %.4f ct/kWh", self.median_price)
 
     def _decide(self, obs: dict, last_info: dict | None) -> dict[str, np.ndarray]:
-        # baseprice_raw is refreshed by the source's update_state each tick,
-        # so it is current (prices are known ahead — no measurement lag).
-        price = getattr(self.price_source, "baseprice_raw", None)
+        # current price (known ahead — no measurement lag)
+        price = self._current_baseprice()
         if price is None:
             return self.zero_action()
         if price < self.median_price:
@@ -165,9 +163,8 @@ class ScaledPriceMedianStrategy(RuleBasedStrategy):
         logger.debug("Episode median baseprice: %.4f ct/kWh", self.median_price)
 
     def _decide(self, obs: dict, last_info: dict | None) -> dict[str, np.ndarray]:
-        # baseprice_raw is refreshed by the source's update_state each tick,
-        # so it is current (prices are known ahead — no measurement lag).
-        price = getattr(self.price_source, "baseprice_raw", None)
+        # current price (known ahead — no measurement lag)
+        price = self._current_baseprice()
         if price is None:
             return self.zero_action()
         # Scale the rated power by the fraction; the fraction helpers still clamp
@@ -240,7 +237,7 @@ class PriceMedianAutarky(RuleBasedStrategy):
                 return self._battery_action(self._battery_value(headroom_kW, charging=False))
             return self.zero_action()
 
-        price = getattr(self.price_source, "baseprice_raw", None)
+        price = self._current_baseprice()
         if price is None:
             return self.zero_action()
         # Below median: charge at full headroom (price-based charge).

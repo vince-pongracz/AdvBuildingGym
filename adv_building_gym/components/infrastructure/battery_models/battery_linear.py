@@ -63,7 +63,8 @@ class BatteryLinear(Infrastructure):
             raise ValueError("start_soc_jitter must be non-negative.")
 
         self.max_cap_kWh = max_cap_kWh
-        self.start_soc = start_soc_percentage
+        # Attribute name matches the ctor param so Serializable.to_dict round-trips it.
+        self.start_soc_percentage = start_soc_percentage
         self.start_soc_jitter = start_soc_jitter
         self.soc = start_soc_percentage
         self.control_step = control_step
@@ -129,7 +130,7 @@ class BatteryLinear(Infrastructure):
         With ``start_soc_jitter`` > 0, perturb by a uniform offset from the env rng
         (info["_rng"], deterministic per-worker; standalone fallback), then clip.
         """
-        self.soc = self.start_soc
+        self.soc = self.start_soc_percentage
         if self.start_soc_jitter > 0.0:
             rng = (info.get("_rng") if info else None) or np.random.default_rng()
             self.soc += rng.uniform(-self.start_soc_jitter, self.start_soc_jitter)

@@ -48,6 +48,8 @@ training_params:
     learning_starts_after_n_episodes: 50
 
 statesources:
+- class: DateSource
+  name: date
 - class: EnergyPriceDynDataSource
   name: E_price
 - class: WeatherDataSource
@@ -125,15 +127,15 @@ infra_schedule:
   swap_every_n_episodes: 100
   configs:
     train:
-    - configs/infra_cfgs/GEN/battery_lin_capacity/battery_lin_cap_1.yaml
-    - configs/infra_cfgs/GEN/battery_lin_capacity/battery_lin_cap_2.yaml
-    - configs/infra_cfgs/GEN/battery_lin_capacity/battery_lin_cap_3.yaml
-    - configs/infra_cfgs/GEN/battery_lin_capacity/battery_lin_cap_4.yaml
-    - configs/infra_cfgs/GEN/battery_lin_capacity/battery_lin_cap_5.yaml
+    - configs/infra_cfgs/GEN/battery_lin_capacity_so/battery_lin_cap_1.yaml
+    - configs/infra_cfgs/GEN/battery_lin_capacity_so/battery_lin_cap_2.yaml
+    - configs/infra_cfgs/GEN/battery_lin_capacity_so/battery_lin_cap_3.yaml
+    - configs/infra_cfgs/GEN/battery_lin_capacity_so/battery_lin_cap_4.yaml
+    - configs/infra_cfgs/GEN/battery_lin_capacity_so/battery_lin_cap_5.yaml
     eval:
-    - configs/infra_cfgs/GEN/battery_lin_capacity/battery_lin_cap_eval_1.yaml
-    - configs/infra_cfgs/GEN/battery_lin_capacity/battery_lin_cap_eval_2.yaml
-    - configs/infra_cfgs/GEN/battery_lin_capacity/battery_lin_cap_eval_3.yaml
+    - configs/infra_cfgs/GEN/battery_lin_capacity_so/battery_lin_cap_eval_1.yaml
+    - configs/infra_cfgs/GEN/battery_lin_capacity_so/battery_lin_cap_eval_2.yaml
+    - configs/infra_cfgs/GEN/battery_lin_capacity_so/battery_lin_cap_eval_3.yaml
 
 statesource_schedule: null
 

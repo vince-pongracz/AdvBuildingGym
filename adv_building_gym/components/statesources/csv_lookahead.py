@@ -1,32 +1,47 @@
-"""CsvLookahead mixin: cached future-row CSV reads, kept separate from ``Forecastable``.
+"""CsvLookahead — CSV-backed implementation of ``Lookahead`` (cached future-row reads).
 
-A component may need lookahead reads WITHOUT publishing forecasts itself — e.g.
-``WeatherDataSource`` supplies future irradiance/wind to the generators' power forecasts
-but exposes no ``s_fc_*`` of its own. Such a source uses ``CsvLookahead`` and is *not*
-``Forecastable`` (see ``forecastable.py`` for the publishing interface).
+Hosts declare ``_lookahead_columns`` (logical channel → CSV column) and mix this in as
+``class Foo(StateSource, [Forecastable,] CsvLookahead)``. CSV-free sources implement ``Lookahead``
+directly instead.
 """
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import ClassVar, Optional
 
 import numpy as np
 import pandas as pd
 
+from .lookahead import Lookahead
 
-class CsvLookahead:
-    """Mixin: cached future-row CSV reads (``_csv_forecast``), independent of ``Forecastable``.
 
-    Owns ``_forecast_array_cache`` (init via cooperative ``super().__init__()``). Satisfies
-    ``ReloadObserver`` via ``on_reload`` (called after each CSV reload to drop cached views).
-    Declare hosts as ``class Foo(StateSource, [Forecastable,] CsvLookahead)`` (data class first)
-    so ``super().__init__(name=...)`` reaches ``StateSource``.
+class CsvLookahead(Lookahead):
+    """Implements ``Lookahead`` by reading ``self.ts`` at ``self.effective_index + step``.
+
+    Host contract: request ``ts`` and ``effective_index`` as pass-through properties. 
+    The annotations below declare that dependency without creating attributes.
     """
+
+    # Host-provided (StateSource pass-throughs): the CSV frame and the current row index.
+    ts: Optional[pd.DataFrame]
+    effective_index: int
+
+    # Logical channel -> CSV column. Hosts override; empty means no lookahead channels.
+    _lookahead_columns: ClassVar[dict[str, str]] = {}
 
     def __init__(self) -> None:
         super().__init__()
-        # numpy views of CSV columns by name; built lazily in _csv_forecast, cleared on reload
+        # numpy views of CSV columns, built lazily, cleared on reload
         self._forecast_array_cache: dict[str, np.ndarray] = {}
+
+    def lookahead_keys(self) -> tuple[str, ...]:
+        return tuple(self._lookahead_columns.keys())
+
+    def lookahead(self, steps: list[int]) -> dict[str, list[float]]:
+        return {
+            key: self._csv_forecast(self.ts, self.effective_index, column, steps)
+            for key, column in self._lookahead_columns.items()
+        }
 
     def on_reload(self) -> None:
         """Drop cached column views after a CSV reload (ReloadObserver protocol)."""
@@ -39,10 +54,7 @@ class CsvLookahead:
         column: str,
         selected_future_steps: list[int],
     ) -> list[float]:
-        """Read ``ts[column]`` at ``effective_index + step`` for each step, zero-filling
-        out-of-range / ``ts is None``. ``ts``/``effective_index`` passed in to stay decoupled
-        from the host layout. Vectorised via numpy advanced indexing.
-        """
+        """Read ``ts[column]`` at ``effective_index + step`` per step; zero-fill OOR / ``ts is None``."""
         if ts is None or column not in ts.columns:
             return [0.0] * len(selected_future_steps)
         arr = self._forecast_array_cache.get(column)

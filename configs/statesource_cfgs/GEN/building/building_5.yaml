@@ -1,4 +1,6 @@
 statesources:
+- class: DateSource
+  name: date
 - class: EnergyPriceDynDataSource
   name: E_price
 - class: WeatherDataSource

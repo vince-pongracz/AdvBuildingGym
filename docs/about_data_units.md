@@ -76,7 +76,7 @@ Files: `data/inside_temp/inside_temp_*.csv`
 | Column | Unit | Description |
 | --- | --- | --- |
 | `timestamp` | datetime (5-min) | Step time |
-| `desired_temp_in [°C]` | °C | Setpoint for indoor air |
+| `desired_temp_in` | °C | Setpoint for indoor air |
 
 Read by `InsideTemperature`; fallback alias accepted: `desired_temp_in` (also °C).
 

@@ -1,8 +1,12 @@
 """Raw (unnormalised) physical-value collection extracted from AdvBuildingGym."""
-from typing import Dict, Iterable
+from __future__ import annotations
 
-from adv_building_gym.components.infrastructure import Infrastructure
-from adv_building_gym.components.statesources import StateSource
+from typing import TYPE_CHECKING, Dict, Iterable
+
+if TYPE_CHECKING:
+    # Annotation-only: core must not import components at runtime.
+    from adv_building_gym.components.infrastructure import Infrastructure
+    from adv_building_gym.components.statesources import StateSource
 
 
 class RawStateTracker:

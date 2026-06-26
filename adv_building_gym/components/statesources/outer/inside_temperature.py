@@ -9,12 +9,13 @@ from ..base import StateSource
 from ..csv_loader import CsvLoader
 from ..forecastable import Forecastable
 from ..csv_lookahead import CsvLookahead
+from ..reloadable import CsvReloadable
 from adv_building_gym.components.registry import ComponentRegistry
 from adv_building_gym._common.constants import TEMP_ABS_MAX_CELSIUS
 
 logger = logging.getLogger(__name__)
 
-class InsideTemperature(StateSource, Forecastable, CsvLookahead):
+class InsideTemperature(StateSource, Forecastable, CsvLookahead, CsvReloadable):
     """Data source for desired inside temperature setpoint."""
 
     def __init__(self, name: str, ds_path: str | None = None) -> None:
@@ -30,16 +31,16 @@ class InsideTemperature(StateSource, Forecastable, CsvLookahead):
     def _post_load_data_processing(self) -> None:
         """Detect the raw temperature column; normalisation is deferred to update_state
         (to reuse temp_abs_max from WeatherDataSource)."""
-        # expected column: "desired_temp_in [°C]" or "desired_temp_in"
-        if "desired_temp_in [°C]" in self.ts.columns:
-            self._raw_column = "desired_temp_in [°C]"
-        elif "desired_temp_in" in self.ts.columns:
+        # expected column: "desired_temp_in" or "desired_temp_in"
+        if "desired_temp_in" in self.ts.columns:
             self._raw_column = "desired_temp_in"
         else:
-            raise ValueError(
-                f"InsideTemperature '{self.name}': CSV '{self.ds_path}' has no "
-                "'desired_temp_in [°C]' or 'desired_temp_in' column."
-            )
+            raise ValueError(f"InsideTemperature '{self.name}': CSV '{self.ds_path}' has no 'desired_temp_in' column.")
+
+        # Only the raw setpoint column is read.
+        # Normalisation is deferred to update_state / forecast)
+        # Drop other CSV columns.
+        self._keep_ts_columns({self._raw_column})
 
     # NOTE VP 2026.03.24. : Choosing the inside_temperature profile should depend on the date -- or on user interaction, but this part comes later, keep it in the TODO comment
     def setup_spaces(self,

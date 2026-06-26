@@ -47,6 +47,8 @@ training_params:
     learning_starts_after_n_episodes: 50
 
 statesources:
+- class: DateSource
+  name: date
 - class: EnergyPriceDataSource
   name: E_price
   # Price normalisation: s_E_price = clip(raw_price / divisor, -1, 1). The divisor blends the
@@ -97,10 +99,9 @@ infras:
 - class: WindTurbine
   name: wind_turbine
   max_power_kW: 5.0
-  rated_power_kW: 5.0
-  cut_in_speed: 3.0
-  rated_speed: 12.0
-  cut_out_speed: 25.0
+  cut_in_speed_ms: 3.0
+  rated_speed_ms: 12.0
+  cut_out_speed_ms: 25.0
 - class: HouseholdEnergyConsumers
   name: hh_consumers
   peak_consumption_kW: 8.0

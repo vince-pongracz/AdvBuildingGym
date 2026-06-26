@@ -19,8 +19,9 @@ class SolarPanel(Infrastructure, Forecastable):
     output ``P[kW] = G*A*η/1000`` clipped to ``max_power_kW``. 
     The policy observes only the resulting ``s_pv_power_norm`` (the production as a fraction of ``max_power_kW``), not the raw weather feature.
 
-    Forecastable: ``s_fc_pv_power_norm`` applies the same curve to the weather source's
-    future irradiance (obtained via ``info["_weather_source"]``).
+    Forecastable: ``s_fc_pv_power_norm`` applies the same curve to the future irradiance
+    that WeatherDataSource publishes on ``info["raw_weather_forecast"]`` (a plain data
+    channel).
     """
 
     POWER_FLOW = "generator"
@@ -51,8 +52,10 @@ class SolarPanel(Infrastructure, Forecastable):
         self.pv_efficiency = pv_efficiency
         self.panel_area_m2 = panel_area_m2
         self.control_step = control_step
-        # Weather source captured from info each update_state; used for power forecasts.
-        self._weather_source = None
+        # Reference to WeatherDataSource's stable forecast channel (info["raw_weather_forecast"]),
+        # captured each update_state — NOT the whole info dict. forecast() reads the future raw
+        # irradiance from it.
+        self._weather_forecast: dict[str, list[float]] | None = None
 
     def _power_from_irradiance(self, irradiance_W_m2: float) -> float:
         """P[kW] = G[W/m²] * A[m²] * η / 1000, clipped to max_power_kW."""
@@ -87,9 +90,11 @@ class SolarPanel(Infrastructure, Forecastable):
     def update_state(self, states: Dict, info=None) -> None:
         """Publish normalised production + static peak power into the observable state."""
         super().update_state(states, info)
-        # Capture the weather source for forecast() (future irradiance look-ahead).
+        # Capture only the weather-forecast channel for forecast() (not the whole info dict).
+        # WeatherDataSource updates this dict in place later in the step, so the reference
+        # reflects the row[t+1] look-ahead by the time forecast() runs.
         if info is not None:
-            self._weather_source = info.get("_weather_source")
+            self._weather_forecast = info.get("raw_weather_forecast")
         # Production as a fraction of capacity; efficiency/area are baked into this value.
         pv_power_norm = self.current_production_kW / self.max_power_kW if self.max_power_kW > 0 else 0.0
         states["s_pv_power_norm"][0] = np.float32(np.clip(pv_power_norm, 0.0, 1.0))
@@ -115,11 +120,23 @@ class SolarPanel(Infrastructure, Forecastable):
         return ("s_fc_pv_power_norm",)
 
     def forecast(self, selected_future_steps: list[int]) -> dict[str, list[float]]:
-        """Normalised PV production at the future weather rows (same curve as the live obs)."""
+        """Normalised PV production at the future weather rows (same curve as the live obs).
+
+        Reads the future raw irradiance from ``info["raw_weather_forecast"]["solar_W_m2"]``
+        (published by WeatherDataSource over ``info["forecast_steps"]``), so the count matches
+        ``selected_future_steps`` by construction.
+        """
         n = len(selected_future_steps)
-        if self._weather_source is None or self.max_power_kW <= 0:
+        forecast = self._weather_forecast
+        if forecast is None or self.max_power_kW <= 0:
             return {"s_fc_pv_power_norm": [0.0] * n}
-        future_irradiance = self._weather_source.raw_weather_forecast(selected_future_steps)["solar_W_m2"]
+        future_irradiance = forecast.get("solar_W_m2", [])
+        if len(future_irradiance) != n:
+            raise ValueError(
+                f"SolarPanel '{self.name}': published weather forecast has "
+                f"{len(future_irradiance)} step(s) but {n} were requested — "
+                "info['forecast_steps'] must equal the ForecastWrapper step set."
+            )
         out = [self._power_from_irradiance(float(g)) / self.max_power_kW for g in future_irradiance]
         return {"s_fc_pv_power_norm": [float(np.clip(p, 0.0, 1.0)) for p in out]}
 
