@@ -72,7 +72,7 @@ class HP(Infrastructure):
 
         return state_spaces, action_spaces
 
-    def exec_action(self, actions, states, info=None) -> None:
+    def exec_action(self, actions, states, info: dict) -> None:
         # a_hp in [-1, 1]: negative=cool, positive=heat.
         hp_action = float(np.atleast_1d(actions["a_hp"])[0])
         energy = abs(hp_action)
@@ -111,7 +111,7 @@ class HP(Infrastructure):
         # envelope params on a single owner.
         mC = float(states["ctxt_building_mC"][0])
         # Fixed temperature normalisation scale from the info channel (WeatherDataSource).
-        temp_abs_max = float(info["temp_abs_max"]) if info is not None and "temp_abs_max" in info else TEMP_ABS_MAX_CELSIUS
+        temp_abs_max = float(info["temp_abs_max"]) if "temp_abs_max" in info else TEMP_ABS_MAX_CELSIUS
 
         # 1R1C update (SI): dT_raw [K] = SLOWDOWN_TERM * dt * q_hp_W / mC.
         # q_hp converted kW->W; SLOWDOWN_TERM is the dynamical slowdown (see constants.py).
@@ -123,7 +123,7 @@ class HP(Infrastructure):
         # Indoor temperature: shared integration variable on the info channel
         # (info["temp_in_norm"]), not an observation — the policy sees the comfort error
         # (s_temp_error_norm) instead. Check if the change would clip at the ±1 bounds.
-        current_temp_norm = float(info.get("temp_in_norm", 0.0)) if info is not None else 0.0
+        current_temp_norm = float(info.get("temp_in_norm", 0.0))
         new_temp_norm = current_temp_norm + dTemp_norm
 
         if new_temp_norm > 1.0 or new_temp_norm < -1.0:
@@ -152,22 +152,21 @@ class HP(Infrastructure):
             self.temp_in_norm_change = dTemp_norm
             self.actual_power_kW = energy * self.max_power_kW
 
-    def update_state(self, states, info=None) -> None:
+    def update_state(self, states, info: dict) -> None:
         super().update_state(states, info)
 
         # Apply the HP's thermal effect to the shared indoor temperature on info.
-        current_temp_norm = float(info.get("temp_in_norm", 0.0)) if info is not None else 0.0
+        current_temp_norm = float(info.get("temp_in_norm", 0.0))
         new_temp: float = current_temp_norm + self.temp_in_norm_change  # clip ensured in exec_action
-        if info is not None:
-            info["temp_in_norm"] = new_temp
+        info["temp_in_norm"] = new_temp
         self._write_ctxt(states, "ctxt_hp_max_power_kW", np.float32(self.max_power_kW))
 
         # Cache raw indoor temp after this component's heat. BuildingHeatLoss
         # re-derives it later; collected after infras, so its value wins.
-        temp_abs_max = float(info["temp_abs_max"]) if info is not None and "temp_abs_max" in info else TEMP_ABS_MAX_CELSIUS
+        temp_abs_max = float(info["temp_abs_max"]) if "temp_abs_max" in info else TEMP_ABS_MAX_CELSIUS
         self.temp_in_raw = new_temp * temp_abs_max
 
-    def reset(self, states, info=None) -> None:
+    def reset(self, states, info: dict) -> None:
         """Clear per-episode transient state before publishing initial obs."""
         self.temp_in_norm = 0
         self.temp_in_norm_change = 0

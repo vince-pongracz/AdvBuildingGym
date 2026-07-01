@@ -53,7 +53,7 @@ class DateSource(StateSource, CsvReloadable):
             state_spaces["s_date"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
         return state_spaces, action_spaces
 
-    def update_state(self, states, info=None) -> None:
+    def update_state(self, states, info: dict) -> None:
         if self.ts is None:
             raise RuntimeError(
                 f"DateSource '{self.name}': no CSV loaded. The DataCombinator must push a "

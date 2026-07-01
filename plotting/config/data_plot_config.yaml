@@ -101,9 +101,10 @@ figure:
   # squeeze the plot area. Increase for taller y-axes.
   overview_height: 750
   # EV schedule height grows with the number of lanes; this is the floor.
-  ev_min_height: 250
-  # Extra pixels added per EV profile lane on top of the base height.
-  ev_lane_px: 50
+  ev_min_height: 300
+  # Extra pixels added per EV profile lane on top of the base height. Sized so
+  # each lane is tall enough for the two-line on-bar label to stay readable.
+  ev_lane_px: 75
 
 output:
   dir: plotting/out/data_plots

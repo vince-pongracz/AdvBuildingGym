@@ -73,7 +73,7 @@ class DesiredUserEnergyNeed(StateSource, Forecastable, CsvLookahead, CsvReloadab
 
         return state_spaces, action_spaces
 
-    def update_state(self, states, info=None) -> None:
+    def update_state(self, states, info: dict) -> None:
         """Update desired energy need state based on current iteration."""
         if self.ts is None:
             raise RuntimeError(

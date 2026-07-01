@@ -59,7 +59,7 @@ class InsideTemperature(StateSource, Forecastable, CsvLookahead, CsvReloadable):
 
         return state_spaces, action_spaces
 
-    def _desired_temp_in_norm(self, states, info=None) -> float:
+    def _desired_temp_in_norm(self, states, info: dict) -> float:
         """Setpoint for the current iteration, normalised by temp_abs_max (same scale as
         the indoor/outdoor temperatures). Caches temp_abs_max for forecast()."""
         if self.ts is None:
@@ -68,7 +68,7 @@ class InsideTemperature(StateSource, Forecastable, CsvLookahead, CsvReloadable):
                 "must push a desired_temp_in variant before update_state is called."
             )
         # Fixed temperature normalisation scale from the info channel (WeatherDataSource).
-        temp_abs_max: float = float(info["temp_abs_max"]) if info is not None and "temp_abs_max" in info else TEMP_ABS_MAX_CELSIUS
+        temp_abs_max: float = float(info["temp_abs_max"]) if "temp_abs_max" in info else TEMP_ABS_MAX_CELSIUS
         self._last_temp_abs_max = temp_abs_max if temp_abs_max != 0 else TEMP_ABS_MAX_CELSIUS
 
         # single-day profile: index by time-of-day so it repeats daily (ignores row_offset)
@@ -82,18 +82,18 @@ class InsideTemperature(StateSource, Forecastable, CsvLookahead, CsvReloadable):
         desired_temp_in_norm = raw_temp / temp_abs_max if temp_abs_max != 0 else 0.0
         return float(np.clip(desired_temp_in_norm, -1.0, 1.0))
 
-    def update_state(self, states, info=None) -> None:
+    def update_state(self, states, info: dict) -> None:
         """Publish the comfort error (indoor temp − setpoint), normalised in [-1, 1].
 
         Indoor temperature is read from the shared info channel (info["temp_in_norm"],
         owned by HP + BuildingHeatLoss). As an exogenous source this runs last in the
         step, so it sees the resulting indoor temperature (s')."""
         desired_temp_in_norm = self._desired_temp_in_norm(states, info)
-        temp_in_norm = float(info.get("temp_in_norm", 0.0)) if info is not None else 0.0
+        temp_in_norm = float(info.get("temp_in_norm", 0.0))
         error_norm = float(np.clip(temp_in_norm - desired_temp_in_norm, -1.0, 1.0))
         states["s_temp_error_norm"][0] = np.float32(error_norm)
 
-    def reset(self, states, info=None) -> None:
+    def reset(self, states, info: dict) -> None:
         """Seed the indoor temperature near the setpoint (±2 °C) on the info channel and
         publish the initial comfort error."""
         desired_temp_in_norm = self._desired_temp_in_norm(states, info)
@@ -101,11 +101,10 @@ class InsideTemperature(StateSource, Forecastable, CsvLookahead, CsvReloadable):
         temp_abs_max = self._last_temp_abs_max
         max_offset_norm = 2.0 / temp_abs_max if temp_abs_max != 0 else 0.0
         # offset from env rng (info["_rng"], deterministic per-worker; standalone fallback)
-        rng = (info.get("_rng") if info else None) or np.random.default_rng()
+        rng = info.get("_rng") or np.random.default_rng()
         variance = rng.uniform(-max_offset_norm, max_offset_norm)
         temp_in_seed = float(np.clip(desired_temp_in_norm + variance, -1.0, 1.0))
-        if info is not None:
-            info["temp_in_norm"] = temp_in_seed
+        info["temp_in_norm"] = temp_in_seed
 
         error_norm = float(np.clip(temp_in_seed - desired_temp_in_norm, -1.0, 1.0))
         states["s_temp_error_norm"][0] = np.float32(error_norm)

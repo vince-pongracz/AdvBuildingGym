@@ -269,7 +269,7 @@ class LinearEVCharger(Infrastructure):
             logger.debug("EV schedule: DISCONNECT")
             self.set_ev_connected(connected=False)
 
-    def exec_action(self, actions: Dict, states: Dict, info=None) -> None:
+    def exec_action(self, actions: Dict, states: Dict, info: dict) -> None:
         """Execute charging/discharging action."""
         # apply any EV schedule change first (read from the ctxt_ev_schedule_* obs keys)
         self._check_schedule(states)
@@ -332,7 +332,7 @@ class LinearEVCharger(Infrastructure):
         actions["a_lin_ev_charger"][0] = np.float32(action)
         self.actual_power_kW = action * eff_max_kW
 
-    def update_state(self, states: Dict, info=None) -> None:
+    def update_state(self, states: Dict, info: dict) -> None:
         """Update observable state."""
         super().update_state(states, info)
         states["s_evc_soc"][0] = np.float32(self.soc)
@@ -377,7 +377,7 @@ class LinearEVCharger(Infrastructure):
         feasible = (1.0 if self._session_active else 0.0) if self.is_connected else 0.5
         states["s_evc_session_target_feasible"][0] = np.float32(feasible)
 
-    def reset(self, states: Dict, info=None) -> None:
+    def reset(self, states: Dict, info: dict) -> None:
         """Reset to a fresh, disconnected state; EVState re-connects on step 1 if needed."""
         self.ev_spec = None
         self.soc = 0.0

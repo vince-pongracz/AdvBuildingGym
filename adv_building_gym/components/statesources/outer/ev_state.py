@@ -149,7 +149,7 @@ class EVState(StateSource, CsvReloadable):
 
         return state_spaces, action_spaces
 
-    def update_state(self, states, info=None) -> None:
+    def update_state(self, states, info: dict) -> None:
         """Publish the EV-side schedule spec to the observation, evaluated at the current
         iteration (zeroed when no EV is scheduled). Writes nothing to info."""
         event = self._event_lookup.get(self.iteration)

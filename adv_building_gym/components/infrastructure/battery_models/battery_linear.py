@@ -87,7 +87,7 @@ class BatteryLinear(Infrastructure):
 
         return state_spaces, action_spaces
 
-    def exec_action(self, actions: Dict, states: Dict, info=None) -> None:
+    def exec_action(self, actions: Dict, states: Dict, info: dict) -> None:
         """Linear charge/discharge. action in [-1, 1] (fraction of max_power_kW):
         positive=charge (consume), negative=discharge (export)."""
         action = float(np.atleast_1d(actions["a_battery"])[0])
@@ -106,6 +106,8 @@ class BatteryLinear(Infrastructure):
         old_soc = self.soc
         new_soc = self.soc + delta_soc
         self.soc = float(np.clip(new_soc, self.soc_min, self.soc_max))
+        if not np.isclose(self.soc,new_soc):
+            info["action_overstep"] = info.get("action_overstep", 0) + 1
 
         # actual energy transferred (may be SoC-limited)
         actual_delta_soc = self.soc - old_soc
@@ -118,13 +120,14 @@ class BatteryLinear(Infrastructure):
         actual_action = self.actual_power_kW / self.max_power_kW if self.max_power_kW > 0 else 0.0
         actions["a_battery"] = np.array([np.float32(actual_action)], dtype=np.float32)
 
-    def update_state(self, states: Dict, info=None) -> None:
+
+    def update_state(self, states: Dict, info: dict) -> None:
         super().update_state(states, info)
         states["s_battery_soc"][0] = np.float32(self.soc)
         self._write_ctxt(states, "ctxt_battery_capacity_kWh", np.float32(self.max_cap_kWh))
         self._write_ctxt(states, "ctxt_battery_power_kW", np.float32(self.max_power_kW))
 
-    def reset(self, states: Dict, info=None) -> None:
+    def reset(self, states: Dict, info: dict) -> None:
         """Reset SoC to start_soc each episode (base would carry it over).
 
         With ``start_soc_jitter`` > 0, perturb by a uniform offset from the env rng
@@ -132,7 +135,7 @@ class BatteryLinear(Infrastructure):
         """
         self.soc = self.start_soc_percentage
         if self.start_soc_jitter > 0.0:
-            rng = (info.get("_rng") if info else None) or np.random.default_rng()
+            rng = info.get("_rng") or np.random.default_rng()
             self.soc += rng.uniform(-self.start_soc_jitter, self.start_soc_jitter)
         self.soc = float(np.clip(self.soc, self.soc_min, self.soc_max))
         

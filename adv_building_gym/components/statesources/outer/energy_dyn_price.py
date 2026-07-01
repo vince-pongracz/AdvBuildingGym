@@ -107,7 +107,7 @@ class EnergyPriceDynDataSource(StateSource, Forecastable, CsvLookahead, CsvReloa
 
         return state_spaces, action_spaces
 
-    def update_state(self, states, info=None) -> None:
+    def update_state(self, states, info: dict) -> None:
         if self.ts is None:
             raise RuntimeError(
                 f"EnergyPriceDynDataSource '{self.name}': no CSV loaded. The DataCombinator "
@@ -119,7 +119,7 @@ class EnergyPriceDynDataSource(StateSource, Forecastable, CsvLookahead, CsvReloa
         states["s_E_price"][0] = np.float32(self._normalise(self.baseprice_raw))
         self._write_ctxt(states, "ctxt_E_price_max", np.float32(self.price_divisor))
 
-    def reset(self, states, info=None) -> None:
+    def reset(self, states, info: dict) -> None:
         if self.ts is not None:
             # Windowed: |baseprice| max over the next 24h, capped at the episode length so we
             # never normalise against prices outside the episode.

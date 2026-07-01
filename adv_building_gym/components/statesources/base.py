@@ -119,11 +119,11 @@ class StateSource(ContextEmitter):
         """Setup observation and action spaces. Implement in derived classes."""
         return state_spaces, action_spaces
 
-    def update_state(self, states, info: dict | None = None) -> None:
+    def update_state(self, states, info: dict) -> None:
         """Update observable state for the current iteration (implement in subclasses)."""
         pass
 
-    def reset(self, states, info: dict | None = None) -> None:
+    def reset(self, states, info: dict) -> None:
         """Populate initial state at episode start (after reloads).
 
         Once per episode in place of update_state(); default delegates to it.

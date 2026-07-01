@@ -86,7 +86,7 @@ class Infrastructure(ContextEmitter):
         """Set target for infrastructure component."""
         pass
 
-    def exec_action(self, actions: Dict, states: Dict, info: dict | None = None) -> None:
+    def exec_action(self, actions: Dict, states: Dict, info: dict) -> None:
         """Execute the component's action.
 
         actions: action dict by component name. states: observable state
@@ -94,7 +94,7 @@ class Infrastructure(ContextEmitter):
         """
         pass
 
-    def update_state(self, states: Dict, info: dict | None = None) -> None:
+    def update_state(self, states: Dict, info: dict) -> None:
         """Update observable state (after exec_action; no actions here).
 
         Subclasses must call ``super().update_state(states, info)`` for
@@ -102,17 +102,15 @@ class Infrastructure(ContextEmitter):
         """
         info = self._publish_power_bounds(info)
 
-    def reset(self, states: Dict, info: dict | None = None) -> None:
+    def reset(self, states: Dict, info: dict) -> None:
         """Populate initial state at episode start (after data reloads).
 
         Called once per episode in place of update_state(); default delegates to it.
         """
         self.update_state(states, info)
 
-    def _publish_power_bounds(self, info: dict | None = None) -> dict:
-        """Accumulate this component's directional power bounds into *info* (new dict if None)."""
-        if info is None:
-            info = {}
+    def _publish_power_bounds(self, info: dict) -> dict:
+        """Accumulate this component's directional power bounds into *info*."""
         info["max_consumption_kW"] = info.get("max_consumption_kW", 0.0) + self.max_consumption_kW
         info["max_production_kW"] = info.get("max_production_kW", 0.0) + self.max_production_kW
         return info

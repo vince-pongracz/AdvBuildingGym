@@ -13,14 +13,17 @@ logger = logging.getLogger(__name__)
 class HouseholdEnergyConsumers(Infrastructure):
     """Passive household consumer (no policy action).
 
-    Converts the normalised ``desired_energy_need`` signal (from DesiredUserEnergyNeed)
-    to physical kW and writes it read-only into ``actions['a_hh_consumption']`` (0=none,
-    1=peak) so rewards can account for it. Positive = consumption from grid.
+    Reads the normalised ``s_desired_energy_need`` signal (in [0, 1], published by
+    DesiredUserEnergyNeed) and scales it to physical kW (``current_consumption_kW``),
+    exposed via ``get_E`` as the consumption term. ``update_state`` republishes the
+    normalised signal as the ``s_desired_energy_need`` observation. Positive =
+    consumption drawn from grid.
 
-    The peak scale is the dataset's own max published by DesiredUserEnergyNeed as
-    ``ctxt_hh_consumption_max`` (so ``kW = norm * data_max`` recovers the raw load and
-    varies per data variant). ``peak_consumption_kW`` is only a fallback for configs
-    with no DesiredUserEnergyNeed source (synthetic profile path).
+    The peak scale is the dataset max published by DesiredUserEnergyNeed as
+    ``ctxt_hh_consumption_max`` (``kW = norm * data_max``), which varies per data
+    variant. ``peak_consumption_kW`` is only a fallback peak used when no
+    ``ctxt_hh_consumption_max`` is published; a synthetic time-of-day profile likewise
+    replaces ``s_desired_energy_need`` when that signal is absent.
     """
 
     POWER_FLOW = "consumer"
@@ -62,11 +65,12 @@ class HouseholdEnergyConsumers(Infrastructure):
 
         return state_spaces, action_spaces
 
-    def exec_action(self, actions: Dict, states: Dict, info=None) -> None:
-        """Compute consumption and write it into actions.
+    def exec_action(self, actions: Dict, states: Dict, info: dict) -> None:
+        """Compute and store the current consumption.
 
         Reads ``s_desired_energy_need`` (DesiredUserEnergyNeed); falls back to a
-        synthetic time-of-day profile if absent.
+        synthetic time-of-day profile if absent. Scales the normalised signal to kW
+        (``current_consumption_kW``) by the effective peak from ``_resolve_peak_kW``.
         """
         # read normalised consumption signal
         if "s_desired_energy_need" in states:
@@ -81,11 +85,11 @@ class HouseholdEnergyConsumers(Infrastructure):
         self._effective_peak_kW = self._resolve_peak_kW(states)
         self.current_consumption_kW = self.consumption_norm * self._effective_peak_kW
 
-    def update_state(self, states: Dict, info=None) -> None:
+    def update_state(self, states: Dict, info: dict) -> None:
         """Write current normalized consumption into states for observation."""
         states["s_desired_energy_need"] = np.array([self.consumption_norm], dtype=np.float32)
 
-    def reset(self, states: Dict, info=None) -> None:
+    def reset(self, states: Dict, info: dict) -> None:
         """Clear per-episode consumption readouts and refresh the effective peak.
 
         Statesources reset before infras, so ``ctxt_hh_consumption_max`` is already
@@ -96,7 +100,7 @@ class HouseholdEnergyConsumers(Infrastructure):
         self._effective_peak_kW = self._resolve_peak_kW(states)
         # Bind to env rng (info["_rng"]) so fallback noise shares the
         # deterministic per-worker stream; standalone fallback otherwise.
-        self._rng = (info.get("_rng") if info else None) or np.random.default_rng()
+        self._rng = info.get("_rng") or np.random.default_rng()
         super().reset(states, info)
 
     @property
@@ -114,7 +118,7 @@ class HouseholdEnergyConsumers(Infrastructure):
         return self.peak_consumption_kW
 
     def _synthetic_consumption(self, states: Dict) -> float:
-        """Stepped time-of-day profile (matches DesiredUserEnergyNeed) plus Gaussian noise."""
+        """Stepped time-of-day profile plus Gaussian noise."""
         # s_sim_hour is published by the env in [0, 1] (hour-of-day / 24).
         sim_hour = float(states.get("s_sim_hour", np.zeros(1, dtype=np.float32))[0]) * 24.0
 

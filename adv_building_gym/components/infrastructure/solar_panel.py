@@ -79,28 +79,27 @@ class SolarPanel(Infrastructure, Forecastable):
         return state_spaces, action_spaces
 
 
-    def exec_action(self, actions: Dict, states: Dict, info=None) -> None:
+    def exec_action(self, actions: Dict, states: Dict, info: dict) -> None:
         """Compute solar production from raw irradiance (W/m², from info; no policy input)."""
 
         # Raw global irradiance (W/m²) handed over by WeatherDataSource on the info channel.
         # Irradiance is a flux, so power is independent of control_step.
-        self.irradiance_W_m2 = float(info.get("raw_solar_irradiance_W_m2", 0.0)) if info is not None else 0.0
+        self.irradiance_W_m2 = float(info.get("raw_solar_irradiance_W_m2", 0.0))
         self.current_production_kW = self._power_from_irradiance(self.irradiance_W_m2)
 
-    def update_state(self, states: Dict, info=None) -> None:
+    def update_state(self, states: Dict, info: dict) -> None:
         """Publish normalised production + static peak power into the observable state."""
         super().update_state(states, info)
         # Capture only the weather-forecast channel for forecast() (not the whole info dict).
         # WeatherDataSource updates this dict in place later in the step, so the reference
         # reflects the row[t+1] look-ahead by the time forecast() runs.
-        if info is not None:
-            self._weather_forecast = info.get("raw_weather_forecast")
+        self._weather_forecast = info.get("raw_weather_forecast")
         # Production as a fraction of capacity; efficiency/area are baked into this value.
         pv_power_norm = self.current_production_kW / self.max_power_kW if self.max_power_kW > 0 else 0.0
         states["s_pv_power_norm"][0] = np.float32(np.clip(pv_power_norm, 0.0, 1.0))
         self._write_ctxt(states, "ctxt_solar_max_power_kW", np.float32(self.max_power_kW))
 
-    def reset(self, states: Dict, info=None) -> None:
+    def reset(self, states: Dict, info: dict) -> None:
         """Clear per-episode irradiance/production readouts."""
         self.irradiance_W_m2 = 0.0
         self.current_production_kW = 0.0

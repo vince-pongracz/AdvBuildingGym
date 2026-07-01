@@ -60,7 +60,7 @@ class BuildingHeatLoss(StateSource):
 
         return state_spaces, action_spaces
 
-    def update_state(self, states: OrderedDict, info=None) -> None:
+    def update_state(self, states: OrderedDict, info: dict) -> None:
         """Update indoor temperature with envelope heat loss/gain (after infra exec_action)."""
 
         # NOTE VP 2026.01.14. : Reference to the 1R1C thermal model
@@ -69,10 +69,10 @@ class BuildingHeatLoss(StateSource):
         # 1R1C (SI): Q_transfer[W] = K*(Tout_raw - Tin_raw); dT_raw[K] = SLOWDOWN_TERM*dt*Q/mC.
         # Indoor and outdoor temperature both live on the info channel (normalised by
         # temp_abs_max); denormalise, apply physics, then renormalise the increment.
-        Tin_norm = float(info.get("temp_in_norm", 0.0)) if info is not None else 0.0
-        Tout_norm = float(info.get("temp_out_norm", 0.0)) if info is not None else 0.0
+        Tin_norm = float(info.get("temp_in_norm", 0.0))
+        Tout_norm = float(info.get("temp_out_norm", 0.0))
         # Fixed temperature normalisation scale from the info channel (WeatherDataSource).
-        temp_abs_max = float(info["temp_abs_max"]) if info is not None and "temp_abs_max" in info else TEMP_ABS_MAX_CELSIUS
+        temp_abs_max = float(info["temp_abs_max"]) if "temp_abs_max" in info else TEMP_ABS_MAX_CELSIUS
 
         Tin_raw = Tin_norm * temp_abs_max
         Tout_raw = Tout_norm * temp_abs_max
@@ -86,8 +86,7 @@ class BuildingHeatLoss(StateSource):
 
         # Apply heat loss to indoor temperature, clip to the ±1 normalised bounds.
         new_temp = float(np.clip(Tin_norm + dTemp_norm, -1.0, 1.0))
-        if info is not None:
-            info["temp_in_norm"] = new_temp
+        info["temp_in_norm"] = new_temp
 
         # Cache raw indoor temp after heat loss. Runs after HP, so this final value
         # wins in RawStateTracker (infras collected before statesources).

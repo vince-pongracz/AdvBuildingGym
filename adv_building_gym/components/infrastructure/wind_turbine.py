@@ -98,9 +98,9 @@ class WindTurbine(Infrastructure, Forecastable):
 
         return state_spaces, action_spaces
 
-    def exec_action(self, actions: Dict, states: Dict, info=None) -> None:
+    def exec_action(self, actions: Dict, states: Dict, info: dict) -> None:
         """Read raw wind speed (m/s) from info, then apply the power curve."""
-        self.wind_speed_raw = float(info.get("raw_wind_speed_ms", 0.0)) if info is not None else 0.0
+        self.wind_speed_raw = float(info.get("raw_wind_speed_ms", 0.0))
 
         # P = a + b*v^k between cut-in and rated (k=3 -> cubic by default)
         # Critical analysis of methods for mathematical modelling of wind turbines
@@ -136,20 +136,19 @@ class WindTurbine(Infrastructure, Forecastable):
             # safety shutdown above cut-out
             return 0.0
 
-    def update_state(self, states: Dict, info=None) -> None:
+    def update_state(self, states: Dict, info: dict) -> None:
         """Publish normalised production, rated power, and power bounds."""
         super().update_state(states, info)
 
         # Capture only the weather-forecast channel for forecast() -- not the whole info dict.
         # WeatherDataSource updates this dict in place later in the step, so the reference
         # reflects the row[t+1] look-ahead by the time forecast() runs.
-        if info is not None:
-            self._weather_forecast = info.get("raw_weather_forecast")
+        self._weather_forecast = info.get("raw_weather_forecast")
         wind_power_norm = self.current_production_kW / self.max_power_kW if self.max_power_kW > 0 else 0.0
         states["s_wind_power_norm"][0] = np.float32(np.clip(wind_power_norm, 0.0, 1.0))
         self._write_ctxt(states, "ctxt_wind_rated_power_kW", np.float32(self.max_power_kW))
 
-    def reset(self, states: Dict, info=None) -> None:
+    def reset(self, states: Dict, info: dict) -> None:
         """Clear per-episode wind/production readouts."""
         self.wind_speed_raw = 0.0
         self.current_production_kW = 0.0

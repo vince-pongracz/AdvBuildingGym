@@ -376,8 +376,13 @@ def build_user_energy_need_figure(
 
 def build_ev_schedule_figure(
     profile_frames: dict[str, pd.DataFrame],
+    title: str | None = None,
 ) -> go.Figure:
-    """Create a timeline bar chart showing EV plug-in windows with SOC annotations."""
+    """Create a timeline bar chart showing EV plug-in windows with SOC annotations.
+
+    *title* overrides the auto-generated "EV charging schedule — N profiles"
+    heading (used to label split train/eval figures).
+    """
     fig = go.Figure()
 
     for idx, (label, df) in enumerate(profile_frames.items()):
@@ -418,6 +423,22 @@ def build_ev_schedule_figure(
             if pd.notna(start_soc) and pd.notna(target_soc):
                 soc_text = f"SOC {start_soc:.0%}\u2192{target_soc:.0%}"
 
+            # On-bar annotation: SOC transition plus the EV's headline specs
+            # (max charging power and battery capacity).
+            annot_parts = []
+            if soc_text:
+                annot_parts.append(soc_text)
+            spec_bits = []
+            if pd.notna(charge_kw):
+                spec_bits.append(f"{charge_kw:.1f} kW")
+            if pd.notna(cap_kwh):
+                spec_bits.append(f"{cap_kwh:.0f} kWh")
+            if spec_bits:
+                annot_parts.append(" \u00b7 ".join(spec_bits))
+            # Wrap onto two lines (SOC / specs) so the label fits inside the
+            # bar instead of overflowing short windows onto the white canvas.
+            annot_text = "<br>".join(annot_parts)
+
             hover_parts = [
                 f"<b>{label}</b>",
                 f"Plug-in: {hhmm_in}  Departure: {hhmm_out}",
@@ -435,7 +456,7 @@ def build_ev_schedule_figure(
                 x=[plug_in_min, depart_min],
                 y=[y_pos, y_pos],
                 mode="lines",
-                line=dict(color=color, width=16),
+                line=dict(color=color, width=30),
                 name=label,
                 legendgroup=label,
                 showlegend=first_bar,
@@ -443,10 +464,10 @@ def build_ev_schedule_figure(
             ))
             first_bar = False
 
-            if soc_text:
+            if annot_text:
                 fig.add_annotation(
                     x=mid_min, y=y_pos,
-                    text=soc_text,
+                    text=annot_text,
                     showarrow=False,
                     font=dict(size=10, color="white"),
                     yshift=0,
@@ -454,16 +475,30 @@ def build_ev_schedule_figure(
 
             i += 1
 
+        if first_bar:
+            # No plug-in sessions in this profile — label the empty lane so an
+            # idle EV reads as intentional rather than a rendering gap.
+            fig.add_annotation(
+                x=720, y=y_pos,
+                text="— no charging sessions —",
+                showarrow=False,
+                font=dict(size=10, color="rgba(120,120,120,0.75)"),
+            )
+
     ev_labels = list(profile_frames.keys())
     apply_day_xaxis(fig)
     fig.update_yaxes(
         tickvals=list(range(len(ev_labels))),
         ticktext=ev_labels,
         title_text="EV profile",
+        # Pin the range so every lane is framed — autorange would otherwise
+        # trim a bottom/top lane that has no bars (e.g. an always-idle profile).
+        range=[-0.5, len(ev_labels) - 0.5] if ev_labels else None,
     )
 
     n = len(ev_labels)
-    title = f"EV charging schedule \u2014 {n} profile{'s' if n != 1 else ''}"
+    if title is None:
+        title = f"EV charging schedule \u2014 {n} profile{'s' if n != 1 else ''}"
     fig_cfg = get_data_figure_config()
     min_h = int(fig_cfg.get("ev_min_height", 250))
     lane_px = int(fig_cfg.get("ev_lane_px", 50))

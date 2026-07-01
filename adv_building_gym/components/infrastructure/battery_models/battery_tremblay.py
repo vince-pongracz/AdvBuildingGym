@@ -282,7 +282,7 @@ class BatteryTremblay(Infrastructure):
         guards numeric spikes from the (Q - it) denominator at SoC extremes."""
         return float(np.clip(self._terminal_V_raw(soc, pack_current), 0.0, self.max_terminal_V))
 
-    def exec_action(self, actions: Dict, states: Dict, info=None) -> None:
+    def exec_action(self, actions: Dict, states: Dict, info: dict) -> None:
         """Charge/discharge via the Tremblay model. action in [-1, 1] (fraction of the
         per-step directional power ceiling): positive=charge (consume), negative=discharge
         (export).
@@ -360,7 +360,7 @@ class BatteryTremblay(Infrastructure):
         actual_action = float(np.clip(actual_action, -1.0, 1.0))
         actions["a_battery"] = np.array([np.float32(actual_action)], dtype=np.float32)
 
-    def update_state(self, states: Dict, info=None) -> None:
+    def update_state(self, states: Dict, info: dict) -> None:
         super().update_state(states, info)
         states["s_battery_soc"][0] = np.float32(self.soc)
         # Publish the real computed energy / power at the realised terminal voltage
@@ -370,7 +370,7 @@ class BatteryTremblay(Infrastructure):
         self._write_ctxt(states, "ctxt_battery_capacity_kWh", np.float32(self.max_cap_Ah * self.actual_V / KW_TO_W))
         self._write_ctxt(states, "ctxt_battery_max_power_kW", np.float32(self.actual_V * self.max_current_A / KW_TO_W))
 
-    def reset(self, states: Dict, info=None) -> None:
+    def reset(self, states: Dict, info: dict) -> None:
         """Reset stored charge and derived voltage/current/power to __init__ values each
         episode (base would carry the charge over)."""
         self.cap_Ah = self.start_soc * self.max_cap_Ah

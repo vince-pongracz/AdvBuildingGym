@@ -173,7 +173,7 @@ class OperatorEnergyControl(StateSource, Forecastable, CsvReloadable):
 
         return state_spaces, action_spaces
 
-    def update_state(self, states, info=None) -> None:
+    def update_state(self, states, info: dict) -> None:
         """Hold the last step-change limit; reset to the fallback at the start of each
         simulated day so the sparse profile repeats daily (EVState-style event hold)."""
         day_index = self.iteration % self._steps_per_day

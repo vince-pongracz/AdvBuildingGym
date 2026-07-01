@@ -138,7 +138,7 @@ class EnergyPriceDataSource(StateSource, Forecastable, CsvLookahead, CsvReloadab
 
         return state_spaces, action_spaces
 
-    def update_state(self, states, info=None) -> None:
+    def update_state(self, states, info: dict) -> None:
         if self.ts is None:
             raise RuntimeError(
                 f"EnergyPriceDataSource '{self.name}': no CSV loaded. The DataCombinator "
@@ -151,7 +151,7 @@ class EnergyPriceDataSource(StateSource, Forecastable, CsvLookahead, CsvReloadab
         # No-op unless ctxt_E_price_max was published (emit_ctxt).
         self._write_ctxt(states, "ctxt_E_price_max", np.float32(self.price_divisor))
 
-    def reset(self, states, info=None) -> None:
+    def reset(self, states, info: dict) -> None:
         if self.ts is not None:
             # Blend the full-series statistic with the per-episode-window one
             # (restores the earlier _dynamic_price_divisor behaviour).

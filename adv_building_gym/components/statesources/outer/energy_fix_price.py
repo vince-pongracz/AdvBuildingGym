@@ -2,7 +2,7 @@
 
 import logging
 from dataclasses import dataclass
-from typing import ClassVar, Sequence, Set
+from typing import ClassVar, Set
 
 import numpy as np
 from gymnasium.spaces import Box
@@ -10,118 +10,138 @@ from gymnasium.spaces import Box
 from ..base import StateSource
 from ..forecastable import Forecastable
 from ..lookahead import Lookahead
-from adv_building_gym.components.registry import ComponentRegistry
+from adv_building_gym.components.registry import ComponentRegistry, Serializable
 from adv_building_gym._common.constants import SECONDS_PER_HOUR
 from adv_building_gym._common.season import season_for_month
 
 logger = logging.getLogger(__name__)
 
 
-def _validate_window(window: Sequence[int], field: str) -> list[int]:
-    """Validate a ``[start, end)`` hour window (each 0-24); return it as an int list
-    (a list, not a tuple, so ``Serializable.to_dict`` round-trips it)."""
-    seq = [int(h) for h in window]
-    if len(seq) != 2:
-        raise ValueError(f"{field} must be a [start, end) pair; got {window!r}.")
-    start, end = seq
-    if not (0 <= start <= 24 and 0 <= end <= 24):
-        raise ValueError(f"{field} hours must be within 0-24; got {window!r}.")
-    return seq
-
-
-def _in_window(hour: float, window: list[int]) -> bool:
-    """Whether ``hour`` is in ``[start, end)``, wrapping midnight when start > end."""
-    start, end = window
-    if start <= end:
-        return start <= hour < end
-    return hour >= start or hour < end
+def _hhmm_to_hours(value: str) -> float:
+    """Fractional hour-of-day for an ``"HH:MM"`` (or bare ``"HH"``) string, validated to [0, 24]."""
+    hh, _, mm = str(value).partition(":")
+    hours = int(hh) + (int(mm) / 60.0 if mm else 0.0)
+    if not 0.0 <= hours <= 24.0:
+        raise ValueError(f"PriceBand bound must be within 00:00-24:00; got {value!r}.")
+    return hours
 
 
 @dataclass(frozen=True)
-class _TouSchedule:
-    """3-level time-of-use tariff: peak wins over off-peak on overlap, else mid."""
+class PriceBand(Serializable):
+    """A time-of-use price band: ``price`` (ct/kWh) applies while the time-of-day is in
+    ``[start, end)``, where ``start``/``end`` are ``"HH:MM"`` strings (minute resolution,
+    wrapping past midnight when ``start > end``).
 
-    off_peak_price: float
-    mid_price: float
-    peak_price: float
-    off_peak_hours: list[int]
-    peak_hours: list[int]
+    Subclasses ``Serializable`` so a list of bands round-trips through ``Serializable.to_dict``
+    (plain dicts inside a list are dropped by the serialiser)."""
 
-    def level_for_hour(self, hour: float) -> float:
-        if _in_window(hour, self.peak_hours):
-            return self.peak_price
-        if _in_window(hour, self.off_peak_hours):
-            return self.off_peak_price
-        return self.mid_price
+    start: str
+    end: str
+    price: float
 
-    @property
-    def level_magnitudes(self) -> tuple[float, ...]:
-        return (abs(self.off_peak_price), abs(self.mid_price), abs(self.peak_price))
+    def __post_init__(self) -> None:
+        _hhmm_to_hours(self.start)  # raises on a malformed / out-of-range bound
+        _hhmm_to_hours(self.end)
+
+    @classmethod
+    def from_mapping(cls, mapping: "PriceBand | dict") -> "PriceBand":
+        """Build from a band instance or a ``{start, end, price}`` mapping; any ``class`` key
+        left over from a serialised round-trip is ignored."""
+        if isinstance(mapping, PriceBand):
+            return mapping
+        return cls(start=str(mapping["start"]), end=str(mapping["end"]), price=float(mapping["price"]))
+
+    def contains(self, hour: float) -> bool:
+        """Whether ``hour`` (fractional hour-of-day) falls in ``[start, end)``, wrapping midnight."""
+        start, end = _hhmm_to_hours(self.start), _hhmm_to_hours(self.end)
+        if start <= end:
+            return start <= hour < end
+        return hour >= start or hour < end
+
+
+# A schedule is a plain ``{"default_price": float, "bands": list[PriceBand]}`` block — also the
+# config / serialised shape, so it is the single source of truth (no parallel representation).
+Schedule = dict
 
 
 class EnergyPriceFixDataSource(StateSource, Forecastable, Lookahead):
-    """Synthetic 3-level time-of-use tariff selected by the episode's season (no CSV).
+    """Synthetic multi-level time-of-use tariff selected by the episode's season (no CSV).
 
     ``schedules`` maps a season (winter/spring/summer/autumn) or the catch-all ``"all"`` to a
-    ``{off_peak_price, mid_price, peak_price, off_peak_hours, peak_hours}`` block (each window is
-    ``[start, end)`` hours, may wrap midnight). The episode season comes from
-    ``info["episode_date"]`` (published by DateSource); a missing season falls back to ``"all"``
-    then ``default_season``.
+    ``{default_price, bands}`` block, where ``bands`` is a list of ``{start, end, price}`` entries
+    (``start``/``end`` are ``"HH:MM"`` times in 00:00-24:00, may wrap midnight). The first band
+    covering the time-of-day wins; hours outside every band fall back to ``default_price`` — so
+    off-peak / mid / peak is just two bands plus a default, and richer schedules add bands. The
+    episode season comes from ``info["episode_date"]`` (published by DateSource); a missing season
+    falls back to ``"all"`` then ``default_season``.
 
-    ``s_E_price = baseprice / divisor`` (not clipped); the divisor is the largest level magnitude
-    across all schedules — a stable per-run scale, published as ``ctxt_E_price_max`` only when
-    ``emit_ctxt`` is set. Hour of day = ``(effective_index * timestep / 3600) mod 24``.
+    ``s_E_price = baseprice / divisor`` (not clipped); the divisor is the largest band/default price
+    magnitude across all schedules — a stable per-run scale, published as ``ctxt_E_price_max`` only
+    when ``emit_ctxt`` is set. Hour of day = ``(effective_index * timestep / 3600) mod 24``.
     """
 
     _context_params: ClassVar[Set[str]] = {"timestep"}
 
+    # Built-in default reproduces the legacy 3-level tariff: peak 40 ct/kWh (17:00-21:00), off-peak
+    # 18 ct/kWh (00:00-06:00), and a 28 ct/kWh default for every other hour. Peak is listed first so
+    # it wins on overlap (matching the previous "peak beats off-peak" rule).
     _DEFAULT_SCHEDULE: ClassVar[dict] = {
-        "off_peak_price": 18.0, "mid_price": 28.0, "peak_price": 40.0,
-        "off_peak_hours": [0, 6], "peak_hours": [17, 21],
+        "default_price": 28.0,
+        "bands": (
+            PriceBand("17:00", "21:00", 40.0),
+            PriceBand("00:00", "06:00", 18.0),
+        ),
     }
 
     def __init__(self, name: str,
                 schedules: dict | None = None,
-                default_season: str = "winter",
+                default_season: str = "summer",
                 emit_ctxt: bool = False,
                 timestep: float = 300.0) -> None:
         super().__init__(name=name)
 
-        self.schedules = schedules if schedules else {"all": dict(self._DEFAULT_SCHEDULE)}
+        raw = schedules or {"all": dict(self._DEFAULT_SCHEDULE)}
+        # Canonical, round-trip-safe form (band dicts -> PriceBand); read directly by Serializable.to_dict.
+        self.schedules = {season: self._normalise_schedule(block) for season, block in raw.items()}
         self.default_season = str(default_season)
         self.emit_ctxt = bool(emit_ctxt)
         self.timestep = float(timestep)
 
-        self._schedules = {season: self._build(block) for season, block in self.schedules.items()}
-
-        # Fixed divisor: largest level magnitude across all schedules (stable per-run scale).
-        self.price_divisor: float = max(
-            1e-6, max(mag for s in self._schedules.values() for mag in s.level_magnitudes)
-        )
+        # Fixed divisor: largest price magnitude across all schedules (stable per-run scale).
+        self.price_divisor: float = max(1e-6, max(
+            abs(price)
+            for sch in self.schedules.values()
+            for price in (sch["default_price"], *(band.price for band in sch["bands"]))
+        ))
 
         self._active = self._select_schedule(self.default_season)
         # Raw baseprice (ct/kWh) of the current step — read for billing via get_raw_values.
         self.baseprice_raw: float = 0.0
 
     @staticmethod
-    def _build(block: dict) -> _TouSchedule:
-        return _TouSchedule(
-            off_peak_price=float(block["off_peak_price"]),
-            mid_price=float(block["mid_price"]),
-            peak_price=float(block["peak_price"]),
-            off_peak_hours=_validate_window(block["off_peak_hours"], "off_peak_hours"),
-            peak_hours=_validate_window(block["peak_hours"], "peak_hours"),
-        )
+    def _normalise_schedule(block: dict) -> Schedule:
+        return {
+            "default_price": float(block["default_price"]),
+            "bands": [PriceBand.from_mapping(band) for band in block.get("bands", [])],
+        }
 
-    def _select_schedule(self, season: str) -> _TouSchedule:
+    @staticmethod
+    def _price_for_hour(schedule: Schedule, hour: float) -> float:
+        """First band covering ``hour`` wins; hours outside every band fall back to default_price."""
+        for band in schedule["bands"]:
+            if band.contains(hour):
+                return band.price
+        return schedule["default_price"]
+
+    def _select_schedule(self, season: str) -> Schedule:
         for key in (season, "all", self.default_season):
-            if key in self._schedules:
-                return self._schedules[key]
-        return next(iter(self._schedules.values()))
+            if key in self.schedules:
+                return self.schedules[key]
+        return next(iter(self.schedules.values()))
 
-    def _episode_season(self, info: dict | None) -> str:
+    def _episode_season(self, info: dict) -> str:
         """Season from ``info['episode_date']`` (ISO ``YYYY-MM-DD``), else ``default_season``."""
-        date = (info or {}).get("episode_date")
+        date = info.get("episode_date")
         parts = str(date).split("-") if date else []
         if len(parts) == 3 and parts[0].isdigit() and len(parts[0]) == 4:
             return season_for_month(int(parts[1]))
@@ -139,13 +159,13 @@ class EnergyPriceFixDataSource(StateSource, Forecastable, Lookahead):
         self._publish_ctxt(state_spaces, "ctxt_E_price_max", Box(low=-np.inf, high=np.inf, shape=(1,), dtype=np.float32))
         return state_spaces, action_spaces
 
-    def reset(self, states, info=None) -> None:
+    def reset(self, states, info: dict) -> None:
         """Pick this episode's schedule from its season, then publish the first observation."""
         self._active = self._select_schedule(self._episode_season(info))
         self.update_state(states, info)
 
-    def update_state(self, states, info=None) -> None:
-        self.baseprice_raw = self._active.level_for_hour(self._hour_of_day(self.effective_index))
+    def update_state(self, states, info: dict) -> None:
+        self.baseprice_raw = self._price_for_hour(self._active, self._hour_of_day(self.effective_index))
         states["s_E_price"][0] = np.float32(self._normalise(self.baseprice_raw))
         self._write_ctxt(states, "ctxt_E_price_max", np.float32(self.price_divisor))
 
@@ -155,7 +175,7 @@ class EnergyPriceFixDataSource(StateSource, Forecastable, Lookahead):
 
     def lookahead(self, steps: list[int]) -> dict[str, list[float]]:
         return {"baseprice": [
-            self._active.level_for_hour(self._hour_of_day(self.effective_index + s)) for s in steps
+            self._price_for_hour(self._active, self._hour_of_day(self.effective_index + s)) for s in steps
         ]}
 
     # ----- Forecastable -----

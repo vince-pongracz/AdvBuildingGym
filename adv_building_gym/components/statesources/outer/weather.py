@@ -114,7 +114,7 @@ class WeatherDataSource(StateSource, CsvLookahead, CsvReloadable):
     # wind) are not observations either: the policy sees the *effects* (s_temp_error_norm,
     # s_pv_power_norm, s_wind_power_norm).
 
-    def update_state(self, states, info=None) -> None:
+    def update_state(self, states, info: dict) -> None:
         if self.ts is None:
             raise RuntimeError(
                 f"WeatherDataSource '{self.name}': no CSV loaded. The DataCombinator "
@@ -129,27 +129,20 @@ class WeatherDataSource(StateSource, CsvLookahead, CsvReloadable):
         # Hand the weather drivers to consumers via the shared info channel — none are policy
         # observations. Outdoor temp (norm) → BuildingHeatLoss physics; raw irradiance (W/m²)
         # and wind speed (m/s) → the generators' power curves.
-        if info is not None:
-            # Fixed temp scale (°C) for every temp consumer (HP / BuildingHeatLoss /
-            # InsideTemperature / temp rewards). Constant; single publication point.
-            info["temp_abs_max"] = TEMP_ABS_MAX_CELSIUS
-            info["temp_out_norm"] = temp_out_norm
-            info["raw_solar_irradiance_W_m2"] = self.sun_shine_raw
-            info["raw_wind_speed_ms"] = self.wind_speed_raw
+        # Fixed temp scale (°C) for every temp consumer. Constant; single publication point.
+        info["temp_abs_max"] = TEMP_ABS_MAX_CELSIUS
+        info["temp_out_norm"] = temp_out_norm
+        info["raw_solar_irradiance_W_m2"] = self.sun_shine_raw
+        info["raw_wind_speed_ms"] = self.wind_speed_raw
 
-            # When forecasting is active, pre-compute future RAW weather (W/m², m/s) over the
-            # canonical step set and publish it as a plain channel, so generators read
-            # info["raw_weather_forecast"][<channel>] instead of calling lookahead() here. Length
-            # matches the consumers' query: both derive from info["forecast_steps"] =
-            # canonise_forecast_steps(env_config.forecast.steps).
-            steps = info.get("forecast_steps")
-            if steps:
-                # Update the owned forecast dict IN PLACE (stable identity), then republish it.
-                # Generators capture only this sub-dict; in-place mutation lets their earlier
-                # reference (captured in _update_endogenous) reflect the row[t+1] look-ahead.
-                self._weather_forecast.clear()
-                self._weather_forecast.update(self.lookahead(list(steps)))
-                info["raw_weather_forecast"] = self._weather_forecast
+        # When forecasting is active, pre-compute future RAW weather (W/m², m/s) over the
+        # canonical step set and publish it as a plain channel, so generators read
+        # info["raw_weather_forecast"][<channel>].
+        steps = info.get("forecast_steps")
+        if steps:
+            self._weather_forecast.clear()
+            self._weather_forecast.update(self.lookahead(list(steps)))
+            info["raw_weather_forecast"] = self._weather_forecast
 
     # Weather drivers are not policy observations. 
     # Generators consume future irradiance/wind from info["raw_weather_forecast"]
