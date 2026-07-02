@@ -75,28 +75,28 @@ class TempReward(RewardFunction):
         # InsideTemperature; the fixed temperature scale comes from the info channel
         # (WeatherDataSource), falling back to the module constant when absent.
         error_norm = float(next_state["s_temp_error_norm"][0])
-        temp_abs_max = float(info["temp_abs_max"]) if info is not None and "temp_abs_max" in info else TEMP_ABS_MAX_CELSIUS
+        temp_abs_max = float(info["temp_abs_max"]) if "temp_abs_max" in info else TEMP_ABS_MAX_CELSIUS
         return error_norm * temp_abs_max
 
-    def should_terminate(self, actions, state, next_state, info: dict | None = None) -> bool:
+    def should_terminate(self, actions, state, next_state, info: dict) -> bool:
         diff_celsius = abs(self._temp_error_celsius(next_state, info))
         if diff_celsius > self.terminate_diff_celsius:
             logger.info(
                 "[%s] terminal step: |T_in - T_set| = %.2f °C > %.2f °C (step %s)",
                 self.name, diff_celsius, self.terminate_diff_celsius,
-                info.get("iteration") if info else "?",
+                info.get("iteration", "?"),
             )
             return True
         return False
 
-    def get_reward(self, actions, state, next_state, info: dict | None = None) -> float:
+    def get_reward(self, actions, state, next_state, info: dict) -> float:
         # Signed comfort error in °C (+ve = too hot); the absolute value drives the curve.
         temp_error_celsius = self._temp_error_celsius(next_state, info)
         diff_celsius = abs(temp_error_celsius)
 
         # Hard band: should_terminate already voted to end; emit terminal penalty.
         # Skipped when early termination is disabled (the curve still signals strongly).
-        allow_term = info.get("allow_early_termination", True) if info is not None else True
+        allow_term = info.get("allow_early_termination", True)
         if allow_term and diff_celsius > self.terminate_diff_celsius:
             return self.weight * self.terminate_penalty
 

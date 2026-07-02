@@ -34,9 +34,7 @@ from adv_building_gym.config.trial_config import TrialConfig
 from adv_building_gym.core.env import AdvBuildingGym
 from adv_building_gym.rbc_strats import STRATEGY_REGISTRY
 
-# Ray-free import: adv_building_gym/ray/__init__.py and ray/utils/__init__.py are
-# plain package markers; only ray/evaluation/__init__.py eagerly imports RLlib.
-from adv_building_gym.ray.utils.trajectory_collector import TrajectoryCollector
+from adv_building_gym._common.trajectory_collector import TrajectoryCollector
 
 setup_warning_filters()
 

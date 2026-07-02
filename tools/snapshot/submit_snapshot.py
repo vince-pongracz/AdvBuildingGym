@@ -62,11 +62,12 @@ logger = logging.getLogger("submit_snapshot")
 KIND_SPECS: dict[str, tuple[str, str]] = {
     "train":        ("slurm_train_ray.sh",     "run_train_ray.py"),
     "train-cpu":    ("slurm_train_ray_cpu.sh", "run_train_ray.py"),
-    "eval":         ("slurm_eval_ray.sh",      "run_eval_ray.py"),
-    "eval-rbc":     ("slurm_eval_rbc.sh",      "run_eval_rule_based.py"),
     "train-ma":     ("slurm_train_ma.sh",      "rl_ma_train.py"),
     "train-sb":     ("slurm_train_sb.sh",      "run_train_sb.py"),
     "train-sb-cpu": ("slurm_train_sb_cpu.sh",  "run_train_sb.py"),
+    "eval":         ("slurm_eval_ray.sh",      "run_eval_ray.py"),
+    "eval-rbc":     ("slurm_eval_rbc.sh",      "run_eval_rule_based.py"),
+    "eval-sb":      ("slurm_eval_sb.sh",       "run_eval_sb.py"),
 }
 
 
@@ -98,7 +99,7 @@ def _read_manifest(snapshot_dir: Path) -> dict:
         return json.load(f)
 
 
-def _find_latest_train_checkpoint(snapshot_dir: Path) -> str | None:
+def _find_latest_ray_train_checkpoint(snapshot_dir: Path) -> str | None:
     """Look for a Ray checkpoint inside this snapshot's train run(s).
 
     Returns the absolute path of the most recent checkpoint root (marked by
@@ -120,6 +121,38 @@ def _find_latest_train_checkpoint(snapshot_dir: Path) -> str | None:
         return None
     candidates.sort(key=lambda e: e[0], reverse=True)
     return str(candidates[0][1].resolve())
+
+
+def _find_latest_sb_train_model(snapshot_dir: Path) -> str | None:
+    """Look for an SB3 model (.zip) inside this snapshot's SB train run(s).
+
+    Prefers the most recent ``best/best_model.zip`` under
+    ``<snapshot>/runs/train_sb*/models/`` (what the SB eval callback saves),
+    else the most recent ``.zip`` there. Returns None if no SB training run
+    exists yet. Mirrors ``_find_latest_train_checkpoint`` for the Ray side.
+    """
+    runs_dir = snapshot_dir / "runs"
+    if not runs_dir.exists():
+        return None
+    best_models: list[tuple[float, Path]] = []
+    other_zips: list[tuple[float, Path]] = []
+    for train_dir in sorted(runs_dir.glob("train_sb*")):
+        models_dir = train_dir / "models"
+        if not models_dir.exists():
+            continue
+        for root, _, files in os.walk(models_dir):
+            for name in files:
+                if not name.endswith(".zip"):
+                    continue
+                path = Path(root) / name
+                bucket = best_models if name == "best_model.zip" else other_zips
+                bucket.append((os.path.getmtime(path), path))
+    # Prefer best_model.zip; fall back to any checkpoint/final .zip.
+    pool = best_models or other_zips
+    if not pool:
+        return None
+    pool.sort(key=lambda e: e[0], reverse=True)
+    return str(pool[0][1].resolve())
 
 
 # ---------------------------------------------------------------------------
@@ -249,18 +282,24 @@ def _build_plan(
     if "--trial" not in args:
         args = ["--trial", str(effective_trial_path), *args]
 
-    # For eval re-runs without --checkpoint, auto-discover the latest
-    # training checkpoint inside this snapshot. resolve_checkpoint_path()
-    # in the eval script would otherwise search from CWD=<run_dir>/models/
-    # which is empty.
-    if kind == "eval" and "--checkpoint" not in args:
-        ckpt = checkpoint_override or _find_latest_train_checkpoint(snapshot_dir)
+    # For eval re-runs without --checkpoint, auto-discover the latest training
+    # checkpoint inside this snapshot. The eval scripts would otherwise search
+    # from CWD=<run_dir>/models/ (empty). Ray eval wants a checkpoint dir
+    # (rllib_checkpoint.json marker); SB eval wants a .zip model.
+    if kind in ("eval", "eval-sb") and "--checkpoint" not in args:
+        if checkpoint_override:
+            ckpt = checkpoint_override
+        elif kind == "eval-sb":
+            ckpt = _find_latest_sb_train_model(snapshot_dir)
+        else:
+            ckpt = _find_latest_ray_train_checkpoint(snapshot_dir)
         if ckpt:
             args = [*args, "--checkpoint", ckpt]
         else:
             logger.warning(
-                "No --checkpoint provided and no train run found in %s; the "
-                "eval script will need to find a checkpoint itself.", snapshot_dir,
+                "No --checkpoint provided and no %s train run found in %s; the "
+                "eval script will need to find a checkpoint itself.",
+                "SB" if kind == "eval-sb" else "Ray", snapshot_dir,
             )
 
     return SubmissionPlan(

@@ -28,10 +28,10 @@ class TempRewardV0(RewardFunction):
         # s_temp_error_norm observation published by InsideTemperature. The fixed
         # temperature scale is read from the info channel (WeatherDataSource).
         error_norm = float(next_state["s_temp_error_norm"][0])
-        temp_abs_max = float(info["temp_abs_max"]) if info is not None and "temp_abs_max" in info else TEMP_ABS_MAX_CELSIUS
+        temp_abs_max = float(info["temp_abs_max"]) if "temp_abs_max" in info else TEMP_ABS_MAX_CELSIUS
         return error_norm * temp_abs_max
 
-    def get_reward(self, actions, state, next_state, info: dict | None = None) -> float:
+    def get_reward(self, actions, state, next_state, info: dict) -> float:
         d_celsius = self._diff_celsius(next_state, info)
         
         reward_precision_driver = self.exp_scale * float(np.exp(-abs(self.x_scale * d_celsius))) - 1.0
@@ -62,13 +62,11 @@ class TempRewardV0(RewardFunction):
         reward = float(np.clip(reward, -1.0, 1.0))
         return self.weight * reward
 
-    def _publish_diagnostics(self, info: dict | None, *, violated: bool, in_area: bool) -> None:
+    def _publish_diagnostics(self, info: dict, *, violated: bool, in_area: bool) -> None:
         """Record per-step 0/1 flags into ``info["reward_diagnostics"]`` (cleared each pass).
 
         Summed per episode by EpisodeMetricsCallback; cumulative per round by EvalStateActionCallback.
         """
-        if info is None:
-            return
         diag = info.setdefault("reward_diagnostics", {})
         diag[f"{self.name}/slow_driver_violated"] = float(violated)
         diag[f"{self.name}/slow_driver_in_area"] = float(in_area)

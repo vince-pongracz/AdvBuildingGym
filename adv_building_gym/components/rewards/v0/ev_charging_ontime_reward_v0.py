@@ -1,14 +1,11 @@
 """EV charging progress reward function (V0)."""
 
-import logging
 from typing import Dict
 
 import numpy as np
 
 from ..base import RewardFunction
 from adv_building_gym.components.registry import ComponentRegistry
-
-logger = logging.getLogger(__name__)
 
 
 class EVChargingOnTimeRewardV0(RewardFunction):
@@ -43,14 +40,10 @@ class EVChargingOnTimeRewardV0(RewardFunction):
         super().__init__(weight, name)
         self.harsh_penalty = harsh_penalty
 
-    def get_reward(self, actions: Dict, state: Dict, next_state: Dict, info: dict | None = None) -> float:
+    def get_reward(self, actions: Dict, state: Dict, next_state: Dict, info: dict) -> float:
         ev_connected = next_state["s_evc_connected"][0]
 
         if ev_connected < 0.5:
-            return 0.0
-
-        if info is None:
-            logger.warning("EVChargingOnTimeRewardV0: info dict is None, returning 0")
             return 0.0
 
         current_soc = next_state["s_evc_soc"][0]

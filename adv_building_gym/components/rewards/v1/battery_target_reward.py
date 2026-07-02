@@ -29,7 +29,7 @@ class BatteryTargetReward(RewardFunction):
         self.min_pct = float(min_pct)
         self.max_pct = float(max_pct)
 
-    def get_reward(self, actions, state, next_state, info: dict | None = None) -> float:
+    def get_reward(self, actions, state, next_state, info: dict) -> float:
         soc = float(next_state["s_battery_soc"][0])  # resulting SoC (s')
 
         if self.min_pct <= soc <= self.max_pct:

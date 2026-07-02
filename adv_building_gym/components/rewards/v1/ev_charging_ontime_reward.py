@@ -1,14 +1,11 @@
 """EV charging progress reward function."""
 
-import logging
 from typing import Dict
 
 import numpy as np
 
 from ..base import RewardFunction
 from adv_building_gym.components.registry import ComponentRegistry
-
-logger = logging.getLogger(__name__)
 
 
 class EVChargingOnTimeReward(RewardFunction):
@@ -34,16 +31,12 @@ class EVChargingOnTimeReward(RewardFunction):
         
     # TODO noprio VP 2026.03.25. : Check whether pydispatcher could be used instead of info objects...
 
-    def get_reward(self, actions: Dict, state: Dict, next_state: Dict, info: dict | None = None) -> float:
+    def get_reward(self, actions: Dict, state: Dict, next_state: Dict, info: dict) -> float:
         """EV charging progress reward. EV signals (SoC, target, remaining time) from
         ``next_state``; charger params from ``info``. Returns 0 if unplugged."""
         ev_connected = next_state["s_evc_connected"][0]
 
         if ev_connected < 0.5:
-            return 0.0
-
-        if info is None:
-            logger.warning("EVChargingOnTimeReward: info dict is None, returning 0")
             return 0.0
 
         current_soc = next_state["s_evc_soc"][0]

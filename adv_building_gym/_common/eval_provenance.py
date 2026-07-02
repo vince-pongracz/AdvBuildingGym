@@ -7,7 +7,7 @@ from pathlib import Path
 
 import yaml
 
-from .git_info import git_commit, git_is_dirty
+from adv_building_gym._common.git_info import git_commit, git_is_dirty
 
 logger = logging.getLogger(__name__)
 

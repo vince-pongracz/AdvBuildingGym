@@ -84,9 +84,7 @@ class OperatorEnergyControlReward(RewardFunction):
         net_power_kW = float(info.get("net_power_kW", 0.0))
         return abs(net_power_kW) / operator_limit_kW
 
-    def should_terminate(self, actions, state, next_state, info: dict | None = None) -> bool:
-        if info is None:
-            return False
+    def should_terminate(self, actions, state, next_state, info: dict) -> bool:
         # operator limit from state (static ctxt); net_power_kW from info
         ratio = self._compute_ratio(state, info)
         if ratio is None:
@@ -103,12 +101,8 @@ class OperatorEnergyControlReward(RewardFunction):
             return True
         return False
 
-    def get_reward(self, actions, state, next_state, info: dict | None = None) -> float:
+    def get_reward(self, actions, state, next_state, info: dict) -> float:
         """Calculate reward based on grid power consumption vs operator limit."""
-        if info is None:
-            logger.warning("OperatorEnergyControlReward: info dict is None, returning 0")
-            return 0.0
-
         ratio = self._compute_ratio(state, info)
         if ratio is None:
             logger.error("E usage ratio can't be computed")

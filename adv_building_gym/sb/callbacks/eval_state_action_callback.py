@@ -105,6 +105,9 @@ class SBEvalStateActionCallback(BaseCallback):
         trial_name: For the sub-run dir suffix (mirrors Ray's
             ``iter_NNNNNN_<trial_suffix>/`` naming).
         deterministic: Passed to ``self.model.predict``. Default True.
+        after_eval_callback: Optional child callback fired after each eval round (mirrors
+            SB3 ``EvalCallback``'s ``callback_after_eval``). It sees the fresh eval via
+            ``self.parent.last_mean_reward``; returning False aborts ``model.learn``.
     """
 
     def __init__(
@@ -117,6 +120,7 @@ class SBEvalStateActionCallback(BaseCallback):
         n_eval_episodes: int = 2,
         trial_name: Optional[str] = None,
         deterministic: bool = True,
+        after_eval_callback: Optional[BaseCallback] = None,
         verbose: int = 1,
     ):
         super().__init__(verbose)
@@ -130,12 +134,21 @@ class SBEvalStateActionCallback(BaseCallback):
         self._deterministic = bool(deterministic)
         self._best_mean_reward: float = -np.inf
         self._eval_round = 0
+        self._after_eval_callback = after_eval_callback
+        # Latest eval mean reward, read by after_eval_callback (e.g. SBEarlyStoppingCallback).
+        self.last_mean_reward: float = -np.inf
         os.makedirs(self._best_dir, exist_ok=True)
         os.makedirs(self._eval_trajectories_root, exist_ok=True)
 
     # ---------------------------------------------------------------
-    # SB3 callback hook
+    # SB3 callback hooks
     # ---------------------------------------------------------------
+
+    def _init_callback(self) -> None:
+        # Wire the after-eval child so it shares the model and can reach us via `.parent`.
+        if self._after_eval_callback is not None:
+            self._after_eval_callback.parent = self
+            self._after_eval_callback.init_callback(self.model)
 
     def _on_step(self) -> bool:
         if self.eval_freq <= 0 or self.n_calls % self.eval_freq != 0:
@@ -148,9 +161,14 @@ class SBEvalStateActionCallback(BaseCallback):
 
         self._eval_round += 1
         mean_reward = float(np.mean(stats.returns))
+        self.last_mean_reward = mean_reward
         self._emit_eval_scalars(stats, mean_reward)
         self._write_trajectory_subrun(stats.trajectory_buffer)
         self._maybe_save_best(mean_reward)
+
+        # Fire the after-eval child (e.g. early stopping); False aborts model.learn().
+        if self._after_eval_callback is not None:
+            return self._after_eval_callback.on_step()
         return True
 
     # ---------------------------------------------------------------

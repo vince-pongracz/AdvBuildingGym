@@ -46,7 +46,7 @@ class EVChargingRewardV0(RewardFunction):
         self.min_curve_violation_penalty = min_curve_violation_penalty
         self._session_steps: int = 0
 
-    def on_reset(self, states, info: dict | None = None) -> None:
+    def on_reset(self, states, info: dict) -> None:
         self._session_steps = 0
 
     def _resolve_signed(self, override: float | None, sign: int, magnitude: int) -> float:
@@ -56,7 +56,7 @@ class EVChargingRewardV0(RewardFunction):
             return float(override)
         return float(sign * max(magnitude, 1))
 
-    def get_reward(self, actions, state, next_state, info: dict | None = None) -> float:
+    def get_reward(self, actions, state, next_state, info: dict) -> float:
         # Disconnect this step (connected s → not s'). Charger zeroes s_evc_soc on detach,
         # so judge the SoC reached before leaving (both from ``state``) vs target.
         was_connected = float(state["s_evc_connected"][0]) >= 0.5

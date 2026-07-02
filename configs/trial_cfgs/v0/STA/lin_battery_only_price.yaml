@@ -30,12 +30,21 @@ env_meta:
 
 training_params:
   common:
-    evaluation_interval: 10
-    evaluation_duration: 10
     episode_lookback_horizon_steps: 6
-    max_episodes_to_run: 7000
     clip_actions_to_env_bounds: true
     gamma: 0.997
+    evaluation:
+      interval: 10
+      duration: 10
+    max_episodes_to_run: 7000
+    # Early stopping on the held-out eval return, in episode units; disabled if
+    # patience_episodes <= 0. Keeps a running (EMA) average of eval scores and stops when no
+    # fresh eval beats that average for patience_episodes episodes. Patience spans several rounds.
+    early_stop:
+      patience_episodes: 1500   # stop if no eval beats the running avg for this many episodes
+      smoothing_window: 5       # EMA span in eval rounds (alpha = 2/(span+1))
+      min_delta: 0.0            # margin a new eval must clear the running avg by to "improve"
+      grace_episodes: 1000       # never stop before this many episodes (warmup guard)
   ppo:
     episodes_per_iteration: 10
     minibatch_size: 64
@@ -77,10 +86,6 @@ statesources:
   name: desired_temp_in
 - class: DesiredUserEnergyNeed
   name: user_energy_need
-- class: BuildingHeatLoss
-  name: building_heat_loss
-  K: 20
-  mC: 300
 - class: OperatorEnergyControl
   name: operator_energy_control
   max_power_kW: 20.0

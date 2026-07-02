@@ -51,11 +51,7 @@ class OperatorEnergyControlRewardV0(RewardFunction):
         net_power_kW = float(info.get("net_power_kW", 0.0))
         return abs(net_power_kW) / operator_limit_kW
 
-    def get_reward(self, actions, state, next_state, info: dict | None = None) -> float:
-        if info is None:
-            logger.warning("OperatorEnergyControlRewardV0: info dict is None, returning 0")
-            return 0.0
-
+    def get_reward(self, actions, state, next_state, info: dict) -> float:
         # Operator limit is a static per-episode ctxt; read it from observed s.
         ratio = self._compute_ratio(state, info)
         if ratio is None:

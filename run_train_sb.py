@@ -21,13 +21,11 @@ The same trial YAML drives both drivers. SB3-side notes:
 
 from __future__ import annotations
 
-import argparse
 import datetime
 import json
 import logging
 import os
 import time
-from argparse import Namespace
 from pathlib import Path
 
 import torch
@@ -38,6 +36,8 @@ from adv_building_gym._common.warning_filters import setup_warning_filters
 from adv_building_gym._common.startup_log import log_startup_banner
 
 from adv_building_gym.sb.training import sb_common_model_setup, sb_select_model
+
+from run_train_util import parse_cli_args, trial_to_args_namespace
 
 logging.basicConfig(
     level=logging.INFO,
@@ -50,51 +50,17 @@ setup_warning_filters()
 
 
 # ---------------------------------------------------------------------------
-# CLI parsing
+# Entry point
 # ---------------------------------------------------------------------------
 
-def _parse_cli_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
+def main() -> None:
+    cli_args = parse_cli_args(
         description=(
             "Train an RL agent on AdvBuildingGym with Stable-Baselines3. "
             "The trial YAML bundles algorithm, env topology, hyperparameters, "
             "and schedules — the same file that drives run_train_ray.py."
         ),
     )
-    parser.add_argument(
-        "--trial", type=str, required=True,
-        help="Path to trial config YAML (e.g. configs/trial_cfgs/trial_cfg_1_sac.yaml)",
-    )
-    parser.add_argument(
-        "--cpu", action="store_true",
-        help="Smoke-test mode: bypass the GPU requirement and run on CPU.",
-    )
-    return parser.parse_args()
-
-
-def _trial_to_args_namespace(trial: TrialConfig) -> Namespace:
-    """Build a Namespace so log_startup_banner sees the same shape as Ray."""
-    return Namespace(
-        algorithm=trial.algorithm,
-        episodes=trial.training_param_config.max_episodes_to_run,
-        seed=trial.seed,
-        metric=trial.metric,
-        # Single cadence knob: eval + checkpoint share training_params.common.evaluation_interval.
-        checkpoint_frequency_iterations=trial.training_param_config.evaluation_interval,
-        log_trajectories=trial.log_trajectories,
-        num_envs=trial.num_envs,
-        grad_train=trial.grad_train,
-        trial_name=trial.trial_name,
-        trial_path=str(trial.source_path) if trial.source_path else None,
-    )
-
-
-# ---------------------------------------------------------------------------
-# Entry point
-# ---------------------------------------------------------------------------
-
-def main() -> None:
-    cli_args = _parse_cli_args()
     trial = TrialConfig.load(cli_args.trial)
     logger.info("Trial '%s' loaded from %s", trial.trial_name, trial.source_path)
 
@@ -143,7 +109,7 @@ def main() -> None:
     )
 
     log_startup_banner(
-        args=_trial_to_args_namespace(trial),
+        args=trial_to_args_namespace(trial),
         env_config=trial.env_config,
         training_param_config=trial.training_param_config,
         reward_manager=trial.reward_manager,

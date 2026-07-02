@@ -15,6 +15,36 @@ import yaml
 
 logger = logging.getLogger(__name__)
 
+
+@dataclass
+class EvaluationConfig:
+    """Evaluation cadence shared by both drivers."""
+
+    # Eval cadence in iterations (RLlib evaluation_interval); checkpoints align to it
+    # so each lands on a fresh-eval iteration (ranked by eval return).
+    interval: int = 10
+    # Episodes per evaluation round (RLlib evaluation_duration, unit=episodes; also the
+    # SB driver's n_eval_episodes), so both drivers average over the same number of episodes.
+    duration: int = 10
+
+
+@dataclass
+class EarlyStoppingConfig:
+    """Early stopping on the held-out eval metric, in episode units. 
+    Disabled unless ``patience_episodes > 0``. 
+    A running (EMA/Polyak) average of the eval scores is kept;
+    stop when no fresh eval beats that average (by > ``min_delta``) for ``patience_episodes``
+    episodes. Because the eval metric only refreshes each eval round, set ``patience_episodes``
+    to span several rounds. See adv_building_gym/_common/early_stopping.py.
+    """
+
+    patience_episodes: int = 0
+    min_delta: float = 0.0
+    grace_episodes: int = 0
+    # EMA span in eval rounds (alpha = 2/(smoothing_window+1)); also the warmup sample count.
+    smoothing_window: int = 30
+
+
 @dataclass
 class TrainingParamConfig(LoggableConfig):
     """Training hyperparameters, split by algorithm where semantics differ.
@@ -23,7 +53,6 @@ class TrainingParamConfig(LoggableConfig):
     timesteps), SGD over ``ppo_minibatch_size`` mini-batches.
     SAC (off-policy): samples ``sac_replay_batch_size`` transitions per gradient step.
     ``sac_training_intensity`` sets UTD ≈ intensity / batch_size (e.g. 128 with batch 256 → UTD≈0.5).
-    Link: https://arxiv.org/abs/1802.09477
     """
 
     episode_lookback_horizon_steps: int = 120
@@ -37,12 +66,10 @@ class TrainingParamConfig(LoggableConfig):
     # Rolling window for episode_return_mean smoothing (RLlib metrics_num_episodes_for_smoothing
     # and the SB3 best-by-metric deque), so both drivers score over the same recent episodes.
     episode_return_mean_window: int = 30
-    # Eval cadence in iterations (RLlib evaluation_interval); checkpoints align to it
-    # so each lands on a fresh-eval iteration (ranked by eval return).
-    evaluation_interval: int = 10
-    # Episodes per evaluation round (RLlib evaluation_duration, unit=episodes; also the
-    # SB driver's n_eval_episodes), so both drivers average over the same number of episodes.
-    evaluation_duration: int = 10
+    # Eval cadence (interval in iterations, duration in episodes), shared by both drivers.
+    evaluation: EvaluationConfig = field(default_factory=EvaluationConfig)
+    # Early stopping on the held-out eval metric (disabled unless patience_episodes > 0).
+    early_stopping: EarlyStoppingConfig = field(default_factory=EarlyStoppingConfig)
 
     ppo_episodes_per_iteration: int = 25
     ppo_minibatch_size: int = 128 # Rllib default
@@ -86,6 +113,14 @@ class TrainingParamConfig(LoggableConfig):
                     f"and no default_seed was supplied"
                 )
             flat["seed"] = default_seed
+        # ``common.evaluation`` / ``common.early_stop`` arrive as nested dicts; build their
+        # dataclasses (an unknown sub-key raises TypeError loudly). Absent → dataclass default.
+        eval_section = flat.pop("evaluation", None)
+        if eval_section is not None:
+            flat["evaluation"] = EvaluationConfig(**eval_section)
+        early_stop_section = flat.pop("early_stop", None)
+        if early_stop_section is not None:
+            flat["early_stopping"] = EarlyStoppingConfig(**early_stop_section)
         config = TrainingParamConfig(**flat)
         config._source_file = source_label
         # config.log_values()  # Uncomment if log_values is a method
@@ -96,8 +131,9 @@ class TrainingParamConfig(LoggableConfig):
         """Load training config from a YAML file.
 
         Sections ``common``/``ppo``/``sac`` are flattened with the algorithm prefix
-        (``ppo.episodes_per_iteration`` → ``ppo_episodes_per_iteration``). Seed: YAML's
-        ``common.seed`` wins, else ``default_seed`` (the trial seed).
+        (``ppo.episodes_per_iteration`` → ``ppo_episodes_per_iteration``). The nested
+        ``common.evaluation`` / ``common.early_stop`` blocks build ``EvaluationConfig`` /
+        ``EarlyStoppingConfig``. Seed: YAML's ``common.seed`` wins, else ``default_seed``.
         """
         with open(path, "r") as cfg_file:
             tparam_cfg = yaml.safe_load(cfg_file)

@@ -77,9 +77,7 @@ class EVChargingReward(RewardFunction):
         success = abs(achieved_soc - target_soc) <= self.disconnect_soc_tolerance
         return True, success
 
-    def should_terminate(self, actions, state, next_state, info: dict | None = None) -> bool:
-        if info is None:
-            return False
+    def should_terminate(self, actions, state, next_state, info: dict) -> bool:
         # Disconnect judgement: a detach this step ends the episode on failure.
         just_disconnected, success = self._disconnect_verdict(state, next_state)
         if just_disconnected:
@@ -104,8 +102,8 @@ class EVChargingReward(RewardFunction):
                 return True
         return False
 
-    def get_reward(self, actions, state, next_state, info: dict | None = None) -> float:
-        allow_term = info.get("allow_early_termination", True) if info is not None else True
+    def get_reward(self, actions, state, next_state, info: dict) -> float:
+        allow_term = info.get("allow_early_termination", True)
 
         # Disconnect first: judge SoC reached before detach vs target. Skipped when
         # early termination is off (terminal success/failure don't fit a soft stream);

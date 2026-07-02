@@ -12,11 +12,9 @@ import sys
 import time
 import datetime
 import logging
-from argparse import Namespace
 from pathlib import Path
 
 import json
-import argparse
 import torch
 
 import ray
@@ -33,7 +31,10 @@ from adv_building_gym.ray.callbacks import EVAL_SCORE_KEY, CHECKPOINT_NUM_TO_KEE
 from adv_building_gym._common.json_encoder import CustomJSONEncoder
 from adv_building_gym._common.resource_check_util import SlurmResources
 from adv_building_gym.ray.utils.ray_utils import make_trial_dirname_creator
+from adv_building_gym.ray.utils.early_stopping import build_stop_criteria
 from adv_building_gym._common.startup_log import log_startup_banner
+
+from run_train_util import parse_cli_args, trial_to_args_namespace
 
 logging.basicConfig(
     level=logging.INFO,
@@ -65,51 +66,6 @@ os.environ.update(RUNTIME_ENV_VARS)
 setup_warning_filters()
 
 logger.info("Runtime environment variables for Ray workers: %s", RUNTIME_ENV_VARS)
-
-
-# ---------------------------------------------------------------------------
-# CLI parsing
-# ---------------------------------------------------------------------------
-
-def _parse_cli_args() -> argparse.Namespace:
-    """The trial config is the only input — every run parameter lives in it."""
-    parser = argparse.ArgumentParser(
-        description=(
-            "Train an RL agent on AdvBuildingGym. The trial YAML "
-            "bundles algorithm, env topology, hyperparameters, and schedules."
-        ),
-    )
-    parser.add_argument(
-        "--trial", type=str, required=True,
-        help="Path to trial config YAML (e.g. configs/trial_cfgs/trial_cfg_1.yaml)",
-    )
-    parser.add_argument(
-        "--cpu", action="store_true",
-        help="Smoke-test mode: bypass the GPU requirement and run learner on CPU.",
-    )
-    return parser.parse_args()
-
-
-def _trial_to_args_namespace(trial: TrialConfig) -> Namespace:
-    """Build a Namespace mirroring the legacy CLI args.
-
-    The startup banner and helpers were authored against an argparse
-    Namespace; this preserves that interface without re-plumbing every
-    helper.
-    """
-    return Namespace(
-        algorithm=trial.algorithm,
-        episodes=trial.training_param_config.max_episodes_to_run,
-        seed=trial.seed,
-        metric=trial.metric,
-        # Checkpoint cadence is tied to the eval cadence (see _build_tuner).
-        checkpoint_frequency_iterations=trial.training_param_config.evaluation_interval,
-        log_trajectories=trial.log_trajectories,
-        num_envs=trial.num_envs,
-        grad_train=trial.grad_train,
-        trial_name=trial.trial_name,
-        trial_path=str(trial.source_path) if trial.source_path else None,
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -158,7 +114,7 @@ def _init_ray(cpu_only: bool = False) -> SlurmResources:
         "Initializing Ray with cpus=%s gpus=%s (from SLURM/CUDA env)",
         slurm_resources.num_cpus, slurm_resources.num_gpus,
     )
-    ray.init(
+    out = ray.init(
         num_cpus=slurm_resources.num_cpus,
         num_gpus=slurm_resources.num_gpus,
         ignore_reinit_error=True,
@@ -262,12 +218,13 @@ def _build_progress_reporter(algorithm: str) -> CLIReporter:
     )
 
 
-def _build_tuner(trial: TrialConfig, metric: str, param_space, run_name, storage_path, checkpoint_freq_iterations, trial_name: str | None = None):
+def _build_tuner(trial: TrialConfig, metric: str, param_space, run_name, storage_path, 
+                checkpoint_freq_iterations, trial_name: str | None = None):
     """Build the ``tune.Tuner`` for the chosen algorithm."""
-    stop_criteria = {
-        # New API stack: lifetime episodes (1 episode = 1 day at 5-min control step).
-        "env_runners/num_episodes_lifetime": trial.training_param_config.max_episodes_to_run,
-    }
+    # Hard episode cap (1 episode = 1 day at 5-min control step) plus optional
+    # episode-unit early stopping on the held-out eval metric. When early stopping is
+    # disabled this is the legacy single-key dict; enabled → a CombinedStopper.
+    stop_criteria = build_stop_criteria(trial.training_param_config, metric, mode="max")
     progress_reporter = _build_progress_reporter(trial.algorithm)
 
     # Ray's algorithm registry is case-sensitive: "PPO"/"SAC" are all-caps,
@@ -375,11 +332,14 @@ def _dump_all_results(results) -> None:
 
 def main():
     """Parse the trial path, load all configs upfront, and run training."""
-    cli_args = _parse_cli_args()
-    trial = TrialConfig.load(cli_args.trial)
-    logger.info(
-        "Trial '%s' loaded from %s", trial.trial_name, trial.source_path,
+    cli_args = parse_cli_args(
+        description=(
+            "Train an RL agent on AdvBuildingGym. The trial YAML "
+            "bundles algorithm, env topology, hyperparameters, and schedules."
+        ),
     )
+    trial = TrialConfig.load(cli_args.trial)
+    logger.info("Trial '%s' loaded from %s", trial.trial_name, trial.source_path)
 
     # Initialise singleton component instances exactly once (driver only).
     # Triggers CSV parsing here; Ray workers go through factory methods.
@@ -390,7 +350,7 @@ def main():
     if not metric.startswith("evaluation/"):
         metric = f"evaluation/env_runners/{metric}"
 
-    args = _trial_to_args_namespace(trial)
+    args = trial_to_args_namespace(trial)
     args.metric = metric  # banner uses the resolved metric
 
     slurm_resources = _init_ray(cpu_only=cli_args.cpu)
@@ -420,11 +380,10 @@ def main():
     # fresh-eval iteration and can be ranked by eval return (best-N retention).
     tuner = _build_tuner(
         trial, metric, algo_cfg_param_space, run_name, storage_path,
-        trial.training_param_config.evaluation_interval,
+        trial.training_param_config.evaluation.interval,
         trial_name=trial.trial_name,
     )
 
-    experiment_path = os.path.join(storage_path, run_name)
     log_startup_banner(
         args=args,
         env_config=trial.env_config,
@@ -434,7 +393,7 @@ def main():
         infra_combinator=trial.infra_combinator,
         slurm_resources=slurm_resources,
         run_name=run_name,
-        experiment_path=experiment_path,
+        experiment_path=os.path.join(storage_path, run_name),
         storage_path=storage_path,
         seed=trial.seed,
         exec_date=exec_date_dt,

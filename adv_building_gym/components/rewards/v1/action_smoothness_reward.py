@@ -78,14 +78,14 @@ class ActionSmoothnessReward(RewardFunction):
         # Resolved on first get_reward() call.
         self._n_action_keys: int = 0
 
-    def on_reset(self, states, info: dict | None = None) -> None:
+    def on_reset(self, states, info: dict) -> None:
         """Zero buffers and reset write heads at episode start (allocations retained)."""
         for buf in self._buffers.values():
             buf.fill(0.0)
         for key in list(self._head.keys()):
             self._head[key] = 0
 
-    def get_reward(self, actions: dict, state: dict, next_state: dict, info: dict | None = None) -> float:
+    def get_reward(self, actions: dict, state: dict, next_state: dict, info: dict) -> float:
         if self._n_action_keys == 0:
             self._n_action_keys = len(actions)
 

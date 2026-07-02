@@ -40,15 +40,11 @@ class MinimiseEnergyConsumptionRewardV0(RewardFunction):
                 return value
         return self.reference_power_kW
 
-    def on_reset(self, states, info: dict | None = None) -> None:
+    def on_reset(self, states, info: dict) -> None:
         self._step = 0
         self._accumulated_norm = 0.0
 
-    def get_reward(self, actions, state, next_state, info: dict | None = None) -> float:
-        if info is None:
-            logger.warning("MinimiseEnergyConsumptionRewardV0: info dict is None, returning 0")
-            return 0.0
-
+    def get_reward(self, actions, state, next_state, info: dict) -> float:
         episode_length = info.get("episode_length")
         if episode_length is None:
             logger.warning("MinimiseEnergyConsumptionRewardV0: missing episode_length in info, returning 0")

@@ -15,7 +15,7 @@ from ray.rllib.callbacks.callbacks import RLlibCallback
 from ray.rllib.env.single_agent_episode import SingleAgentEpisode
 
 from adv_building_gym._common.json_encoder import CustomJSONEncoder
-from ..utils.trajectory_utils import extract_trajectory_from_infos, write_episode_to_hdf5
+from adv_building_gym._common.trajectory_utils import extract_trajectory_from_infos, write_episode_to_hdf5
 
 logger = logging.getLogger(__name__)
 

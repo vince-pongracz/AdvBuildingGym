@@ -423,8 +423,10 @@ A practical heuristic for the YAML weight column:
 ## Adding a new reward
 
 1. Create a subclass of `RewardFunction` in a new file under `rewards/`.
-2. Implement `get_reward(actions, state, next_state, info=None) -> float`
-   returning `weight * raw`.
+2. Implement `get_reward(actions, state, next_state, info) -> float`
+   returning `weight * raw`. `info` is always the shared dict — check key
+   membership (e.g. `if "temp_abs_max" in info`) before accessing keys that
+   may be absent; do not guard against `info` being `None`.
 3. Keep the raw per-step reward inside `[-1, 1]`. Bounded rewards make
    weight tuning predictable and keep SAC critic targets stable —
    terminal one-shots should not be order(s) of magnitude larger than

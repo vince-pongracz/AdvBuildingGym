@@ -88,8 +88,7 @@ def sb_select_model(
         )
         logger.info(
             "PPO built: n_steps=%d (per env), batch_size=%d, n_epochs=%d",
-            n_steps, training_config.ppo_minibatch_size,
-            training_config.ppo_num_epochs,
+            n_steps, training_config.ppo_minibatch_size, training_config.ppo_num_epochs,
         )
         return model
 
@@ -98,7 +97,6 @@ def sb_select_model(
         learning_starts = episode_length * training_config.sac_learning_starts_after_n_episodes
 
         # UTD parity with RLlib's training_intensity knob.
-        # Link: https://arxiv.org/abs/1802.09477
         intensity = training_config.sac_training_intensity
         if intensity is None:
             gradient_steps = 1

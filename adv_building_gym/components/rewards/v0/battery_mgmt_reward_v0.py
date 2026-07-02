@@ -26,11 +26,11 @@ class BatteryMgmtRewardV0(RewardFunction):
         self.scale: float = float(scale)
         self.episode_start_soc: float = 0.0
 
-    def on_reset(self, states, info: dict | None = None) -> None:
+    def on_reset(self, states, info: dict) -> None:
         self.episode_start_soc = float(states["s_battery_soc"][0])
 
-    def get_reward(self, actions, state, next_state, info: dict | None = None) -> float:
-        if info is None or not info.get("terminated", False):
+    def get_reward(self, actions, state, next_state, info: dict) -> float:
+        if not info.get("terminated", False):
             return 0.0
 
         episode_length = float(info.get("episode_length", 1))

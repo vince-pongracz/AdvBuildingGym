@@ -12,7 +12,7 @@ Schema (top-level keys, ordered):
     algorithm: ppo|sac|dreamerv3
     seed: 42
     metric: episode_return_mean | achieved_reward
-    # Eval + checkpoint cadence is a single knob: training_params.common.evaluation_interval
+    # Eval + checkpoint cadence is a single knob: training_params.common.evaluation.interval
     # (checkpoints are taken on eval iterations; see run_train_ray._build_tuner).
     log_trajectories: false
     num_envs: 1

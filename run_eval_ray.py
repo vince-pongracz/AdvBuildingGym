@@ -12,16 +12,16 @@ can have multi-entry ``configs.eval`` at a time (enforced by
 ``TrialConfig`` at load).
 """
 
-import argparse
 import datetime
 import logging
-import os
 import sys
 
 from adv_building_gym.config.trial_config import TrialConfig
 from adv_building_gym.ray.evaluation import evaluate_model
 from adv_building_gym.ray.utils.checkpoint_finder import resolve_checkpoint_path
 from adv_building_gym.ray.utils.warning_filters import setup_warning_filters
+
+from run_eval_util import parse_eval_args, generate_trajectory_plots
 
 # Apply warning filters
 setup_warning_filters()
@@ -35,108 +35,19 @@ logging.basicConfig(
 logger = logging.getLogger("main")
 
 
-def parse_args() -> argparse.Namespace:
-    """Parse command-line arguments."""
-    parser = argparse.ArgumentParser(
-        description="Evaluate Ray/RLlib trained models on AdvBuildingGym",
-    )
-    parser.add_argument(
-        "--trial", type=str, required=True,
-        help="Path to trial config YAML (e.g. configs/trial_cfgs/trial_cfg_1.yaml). "
-            "For eval, the trial's reward_schedule should point at the eval rewards "
-            "and data_schedule (if set) at the held-out eval data.",
-    )
-    parser.add_argument(
-        "--checkpoint", type=str, default=None,
-        help="Path to Ray checkpoint directory. If not provided, searches for the best checkpoint.",
-    )
-    parser.add_argument(
-        "--episodes", type=int, default=10,
-        help="Number of evaluation episodes",
-    )
-    parser.add_argument(
-        "--output-dir", type=str, default="eval_results",
-        help="Directory to save evaluation results",
-    )
-    parser.add_argument(
-        "--no-save", action="store_true", help="Don't save results to file",
-    )
-    parser.add_argument(
-        "--data-mode", type=str, default=None,
-        choices=["cycle", "random"],
-        help="Override variant selection mode (cycle=round-robin, random)",
-    )
-    parser.add_argument(
-        "--data-day", type=str, default=None,
-        help="Override day mode: 'each', 'random', or a date string like '2022-07-15'",
-    )
-    parser.add_argument(
-        "--plot", action="store_true", default=False,
-        help="Plot the best episode's trajectory after evaluation (implies trajectory logging)",
-    )
-    parser.add_argument(
-        "--plot-all", action="store_true", default=True,
-        help="Plot all episodes' trajectories after evaluation (implies trajectory logging)",
-    )
-    parser.add_argument(
-        "--stochastic", action="store_true", default=False,
-        help="Sample actions from the squashed-Gaussian policy instead of "
-            "taking tanh(mean). Per-episode torch RNG is seeded from the trial seed.",
-    )
-    args = parser.parse_args()
-
-    logger.info("CMD: %s", " ".join(sys.argv))
-    return args
-
-
-def _generate_plots(results, args, logger) -> None:
-    """Render trajectory plots for the just-completed evaluate_model() run."""
-    if not (args.plot or args.plot_all) or args.no_save:
-        return
-    import h5py
-
-    actual_output_dir = results.output_dir or args.output_dir
-    hdf5_path = os.path.join(actual_output_dir, "trajectories.hdf5")
-    if not os.path.isfile(hdf5_path):
-        logger.warning("No trajectories.hdf5 found at %s — skipping plots.", hdf5_path)
-        return
-
-    from plotting.traj_plotting.trajectory_plot import generate_all_plots
-
-    plot_dir = os.path.join(actual_output_dir, "plots")
-
-    if args.plot_all:
-        with h5py.File(hdf5_path, "r") as hf:
-            episode_ids = list(hf.keys())
-        dashboard_dir = os.path.join(plot_dir, "dashboards")
-        total_paths: list[str] = []
-        for ep_id in episode_ids:
-            ep_label = f"ep_{ep_id}"
-            ep_plot_dir = os.path.join(plot_dir, ep_label)
-            paths = generate_all_plots(
-                hdf5_path=hdf5_path,
-                episode_id=ep_id,
-                output_dir=ep_plot_dir,
-                file_prefix=ep_label,
-                dashboard_dir=dashboard_dir,
-            )
-            total_paths.extend(paths)
-        logger.info(
-            "Generated %d plot files for %d episodes in %s",
-            len(total_paths), len(episode_ids), plot_dir,
-        )
-    else:
-        paths = generate_all_plots(
-            hdf5_path=hdf5_path,
-            output_dir=plot_dir,
-            file_prefix="ep_best",
-        )
-        logger.info("Generated %d plot files in %s", len(paths), plot_dir)
-
-
 def main() -> None:
     """Parse arguments, load the trial config, and run evaluation."""
-    args = parse_args()
+    args = parse_eval_args(
+        description="Evaluate Ray/RLlib trained models on AdvBuildingGym",
+        checkpoint_help=(
+            "Path to Ray checkpoint directory. If not provided, searches for the best checkpoint."
+        ),
+        stochastic_help=(
+            "Sample actions from the squashed-Gaussian policy instead of "
+            "taking tanh(mean). Per-episode torch RNG is seeded from the trial seed."
+        ),
+        logger=logger,
+    )
 
     # Eval may run with or without a data schedule.  For reward_schedule we
     # require it (the trial must declare which rewards to evaluate against).
@@ -251,7 +162,7 @@ def main() -> None:
             all_results.append((subdir, results))
             logger.info("Evaluation pass %d/%d completed.", idx + 1, n_iters)
 
-            _generate_plots(results, args, logger)
+            generate_trajectory_plots(results, args, logger)
 
         if n_iters > 1:
             logger.info("=" * 70)

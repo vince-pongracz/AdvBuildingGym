@@ -42,16 +42,12 @@ class LongTermEconomicReward(RewardFunction):
                 return value
         return self.reference_power_kW
     
-    def on_reset(self, states, info: dict | None = None) -> None:
+    def on_reset(self, states, info: dict) -> None:
         self._step = 0
         self._accumulated_usage_price_norm = 0.0
         self._sum_net_power_kW = 0.0
 
-    def get_reward(self, actions, state, next_state, info: dict | None = None) -> float:
-        if info is None:
-            logger.warning("LongTermEconomicReward: info dict is None, returning 0")
-            return 0.0
-
+    def get_reward(self, actions, state, next_state, info: dict) -> float:
         episode_length = info.get("episode_length")
         if episode_length is None:
             logger.warning("LongTermEconomicReward: missing episode_length in info, returning 0")

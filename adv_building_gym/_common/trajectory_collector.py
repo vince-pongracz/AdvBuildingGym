@@ -11,7 +11,7 @@ import os
 import numpy as np
 
 from adv_building_gym._common.json_encoder import CustomJSONEncoder
-from adv_building_gym.ray.utils.trajectory_utils import extract_trajectory_from_infos, write_episode_to_hdf5
+from adv_building_gym._common.trajectory_utils import extract_trajectory_from_infos, write_episode_to_hdf5
 
 logger = logging.getLogger(__name__)
 

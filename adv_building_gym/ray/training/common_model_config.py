@@ -243,9 +243,9 @@ def common_model_setup(
     # so TUNE_DISABLE_STRICT_METRIC_CHECKING must be set in the driver (run_train_ray.py).
     config.evaluation(
         # evaluation_num_env_runners=1, # not important for now
-        evaluation_interval=training_config.evaluation_interval,  # RLlib default: None
+        evaluation_interval=training_config.evaluation.interval,  # RLlib default: None
         evaluation_duration_unit="episodes",  # RLlib default
-        evaluation_duration=training_config.evaluation_duration,  # RLlib default: 10
+        evaluation_duration=training_config.evaluation.duration,  # RLlib default: 10
         evaluation_parallel_to_training=False,  # RLlib default
         evaluation_config=AlgorithmConfig.overrides(env_config=eval_env_config),
     )
@@ -262,7 +262,7 @@ def common_model_setup(
     # callbacks read num_env_runners (set by resource_setup), so run after it
     register_callbacks(
         config,
-        checkpoint_interval=training_config.evaluation_interval,
+        checkpoint_interval=training_config.evaluation.interval,
         metrics_base_dir=metrics_base_dir,
         log_trajectories=log_trajectories,
         reward_schedule_manager=reward_schedule_manager,

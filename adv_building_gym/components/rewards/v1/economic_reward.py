@@ -66,13 +66,9 @@ class EconomicReward(RewardFunction):
                 return value
         return self.reference_power_kW
 
-    def get_reward(self, actions, state, next_state, info: dict | None = None) -> float:
+    def get_reward(self, actions, state, next_state, info: dict) -> float:
         # Price the agent observed and acted under (s), not the next row.
         current_energy_price = float(state["s_E_price"][0])
-
-        if info is None:
-            logger.warning("EconomicReward: info dict is None, returning 0")
-            return 0.0
 
         net_power_kW = info.get("net_power_kW")
         if net_power_kW is None:

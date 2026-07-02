@@ -31,7 +31,7 @@ class MinimiseEnergyConsumptionReward(RewardFunction):
             raise ValueError("threshold_kWh must be non-negative.")
         self.threshold_kWh = threshold_kWh
 
-    def get_reward(self, actions, state, next_state, info: dict | None = None) -> float:
+    def get_reward(self, actions, state, next_state, info: dict) -> float:
         # TODO VP 2026.06.08.: Implement it
         return 0.0
 
