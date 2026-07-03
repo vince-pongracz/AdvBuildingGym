@@ -293,7 +293,7 @@ for the full reference.
 
 > **Normalisation note.** Preprocessing only emits raw-unit CSVs; runtime
 > normalisation is handled inside the statesources (`WeatherDataSource`,
-> `EnergyPriceDataSource`), which compute scale factors from the loaded series
+> `EnergyPriceYearDynDataSource`), which compute scale factors from the loaded series
 > and expose them via `ctxt_*` keys.
 
 Per-year `<YEAR>_missing_entries.txt` reports list days with `-999` values.

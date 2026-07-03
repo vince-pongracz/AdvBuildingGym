@@ -16,7 +16,7 @@ State sources that represent **external constraints or signals**, driven by time
 
 - `InsideTemperature` — desired indoor temperature setpoint
 - `WeatherDataSource` — outdoor temperature from weather data
-- `EnergyPriceDataSource` — energy market price signal
+- `EnergyPriceYearDynDataSource` — energy market price signal
 - `EVState` — EV connect/disconnect schedule (from CSV)
 - `OperatorEnergyControl` — grid operator power limits
 - `DesiredUserEnergyNeed` — user energy consumption profile

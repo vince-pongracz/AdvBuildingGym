@@ -84,7 +84,7 @@ $$ \tilde p = \frac{s_{\text{E\_price}}}{0.7\,\text{dyn\_max} + 0.3\,\text{dyn\_
 
 $$ \text{per\_step} = \mathrm{clip}\!\left(\frac{P_{\text{net}} \cdot \tilde p}{P_{\text{ref}}},\,-1,\,1\right), \qquad A \mathrel{+}= \text{per\_step},\quad n \mathrel{+}= 1 $$
 
-**How the `dyn_max` context scalars are computed** (`EnergyPriceDataSource`).
+**How the `dyn_max` context scalars are computed** (`EnergyPriceYearDynDataSource`).
 Both default to **1.0** (no-op) unless `dynamic_max_price_calc = True`. When
 enabled, a statistic of the raw baseprice slice $b$ — `mean` / `median` /
 `percentile(q)` / `mean_above_median`, per `max_calc_mode` — is rescaled into

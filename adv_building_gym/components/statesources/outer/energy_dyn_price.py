@@ -16,7 +16,7 @@ from adv_building_gym._common.constants import SECONDS_PER_DAY
 logger = logging.getLogger(__name__)
 
 
-class EnergyPriceDynDataSource(StateSource, Forecastable, CsvLookahead, CsvReloadable):
+class EnergyPriceDayDynDataSource(StateSource, Forecastable, CsvLookahead, CsvReloadable):
     """Energy-price data source with a dynamic 1-day (next-24h) price divisor.
 
     The CSV is never rescaled and s_E_price is not clipped. Each step exposes
@@ -25,7 +25,7 @@ class EnergyPriceDynDataSource(StateSource, Forecastable, CsvLookahead, CsvReloa
     ``SECONDS_PER_DAY / control_step`` steps, capped at the episode length so the window never
     extends past the episode.
 
-    For the year-based (whole-series blend) normalisation use ``EnergyPriceDataSource`` instead.
+    For the year-based (whole-series blend) normalisation use ``EnergyPriceYearDynDataSource`` instead.
 
     The divisor (raw ct/kWh) is always published as ``ctxt_E_price_max`` because the price scale
     changes every episode, so the policy must condition on it (``raw = s_E_price * ctxt_E_price_max``).
@@ -77,7 +77,7 @@ class EnergyPriceDynDataSource(StateSource, Forecastable, CsvLookahead, CsvReloa
         assert self.ts is not None, "self.ts must be set by CsvLoader before _post_load_data_processing."
 
         if "baseprice" not in self.ts.columns:
-            raise ValueError(f"EnergyPriceDynDataSource '{self.name}': CSV '{self.ds_path}' has no 'baseprice' column.")
+            raise ValueError(f"EnergyPriceDayDynDataSource '{self.name}': CSV '{self.ds_path}' has no 'baseprice' column.")
 
         self.series_divisor = self._compute_divisor(self.ts["baseprice"])
         self.price_divisor = self.series_divisor
@@ -110,7 +110,7 @@ class EnergyPriceDynDataSource(StateSource, Forecastable, CsvLookahead, CsvReloa
     def update_state(self, states, info: dict) -> None:
         if self.ts is None:
             raise RuntimeError(
-                f"EnergyPriceDynDataSource '{self.name}': no CSV loaded. The DataCombinator "
+                f"EnergyPriceDayDynDataSource '{self.name}': no CSV loaded. The DataCombinator "
                 "must push an E_price variant before update_state is called."
             )
         idx = min(self.effective_index, len(self.ts) - 1)
@@ -142,4 +142,4 @@ class EnergyPriceDynDataSource(StateSource, Forecastable, CsvLookahead, CsvReloa
         }
 
 # register with ComponentRegistry
-ComponentRegistry.register('statesource', EnergyPriceDynDataSource)
+ComponentRegistry.register('statesource', EnergyPriceDayDynDataSource)

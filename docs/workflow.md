@@ -154,7 +154,7 @@ env_meta: configs/env_meta/default.yaml        # EPISODE_LENGTH, control_step
 |---|---|---|
 | `configs/env_meta/*.yaml` | `EPISODE_LENGTH`, `control_step` | Steps per episode (`288` = 24 h) and seconds per step (`300`) |
 | `configs/infras/*.yaml` | `infras: [...]` | Controllable devices: HP, BatteryTremblay/Linear, LinearEVCharger, SolarPanel, WindTurbine, HouseholdEnergyConsumers — each entry is `{class, name, ...params}` |
-| `configs/statesources/*.yaml` | `statesources: [...]` | Observation providers: WeatherDataSource, EnergyPriceDataSource, InsideTemperature, DesiredUserEnergyNeed, BuildingHeatLoss (carries the 1R1C envelope params `K`, `mC`), EVState, OperatorEnergyControl |
+| `configs/statesources/*.yaml` | `statesources: [...]` | Observation providers: WeatherDataSource, EnergyPriceYearDynDataSource, InsideTemperature, DesiredUserEnergyNeed, BuildingHeatLoss (carries the 1R1C envelope params `K`, `mC`), EVState, OperatorEnergyControl |
 
 **What is NOT in the env config:**
 - **Rewards** — composed separately via `configs/reward_cfg/reward_schedule_*.yaml`

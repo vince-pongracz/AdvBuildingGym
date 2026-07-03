@@ -54,7 +54,7 @@ runs both at construction and on every reload:
 | StateSource | `_post_load_data_processing()` |
 |---|---|
 | `WeatherDataSource` | normalise temperature column via `self.normalise` strategy |
-| `EnergyPriceDataSource` | cache `price_max`; normalise `baseprice` → `E_price_norm` |
+| `EnergyPriceYearDynDataSource` | cache `price_max`; normalise `baseprice` → `E_price_norm` |
 | `EVState` | reset runtime state and re-parse connect/disconnect events |
 | `InsideTemperature` | detect column name and normalise to `[-1, 1]` |
 
