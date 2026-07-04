@@ -32,8 +32,14 @@ class EpisodeStat:
     data_variant: dict[str, str] | None = None
     episode_date: str | None = None
 
+    # Battery metrics (rule-based eval only; None when no battery is present)
+    start_battery_soc: float | None = None
+    final_battery_soc: float | None = None
+    battery_charged_kWh: float | None = None
+    battery_discharged_kWh: float | None = None
+
     def to_dict(self) -> dict:
-        """Return a plain dict (JSON-serialisable)."""
+        """Return a plain dict (JSON-serialisable); None-valued optionals are omitted."""
         d = {
             "episode": self.episode,
             "length": self.length,
@@ -47,6 +53,11 @@ class EpisodeStat:
             d["data_variant"] = self.data_variant
         if self.episode_date is not None:
             d["episode_date"] = self.episode_date
+        for key in ("start_battery_soc", "final_battery_soc",
+                    "battery_charged_kWh", "battery_discharged_kWh"):
+            value = getattr(self, key)
+            if value is not None:
+                d[key] = value
         return d
 
 

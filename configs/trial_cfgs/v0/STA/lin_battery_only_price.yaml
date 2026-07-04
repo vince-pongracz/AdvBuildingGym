@@ -48,7 +48,7 @@ training_params:
   ppo:
     episodes_per_iteration: 10
     minibatch_size: 64
-    num_epochs: 20
+    num_epochs: 10
   sac:
     episodes_to_keep_in_replay_buffer: 500
     n_step_return: 3

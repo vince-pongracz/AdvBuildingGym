@@ -27,12 +27,14 @@ import numpy as np
 import pandas as pd
 
 from adv_building_gym._common.constants import MAX_STEPS_PER_EPISODE, SECONDS_PER_HOUR
+from adv_building_gym._common.eval_results import EpisodeStat
 from adv_building_gym._common.json_encoder import CustomJSONEncoder
 from adv_building_gym._common.warning_filters import setup_warning_filters
 from adv_building_gym.components.rewards import SumRewardAggregator
 from adv_building_gym.config.trial_config import TrialConfig
 from adv_building_gym.core.env import AdvBuildingGym
 from adv_building_gym.rbc_strats import STRATEGY_REGISTRY
+from adv_building_gym.rbc_strats.base import RuleBasedStrategy
 
 from adv_building_gym._common.trajectory_collector import TrajectoryCollector
 
@@ -140,7 +142,7 @@ def build_env(env_config, data_combinator) -> AdvBuildingGym:
     return env
 
 
-def make_strategy(strategy_name: str, env: AdvBuildingGym, args: argparse.Namespace):
+def make_strategy(strategy_name: str, env: AdvBuildingGym, args: argparse.Namespace) -> RuleBasedStrategy:
     """Instantiate a strategy with its CLI-configured parameters."""
     kwargs: dict = {"preserve_start_soc": args.preserve_start_soc}
     if strategy_name == "self_coverage":
@@ -149,9 +151,10 @@ def make_strategy(strategy_name: str, env: AdvBuildingGym, args: argparse.Namesp
     return STRATEGY_REGISTRY[strategy_name](env, **kwargs)
 
 
-def run_episode(env: AdvBuildingGym, strategy, collector: TrajectoryCollector | None,
-                episode_seed: int) -> dict:
-    """Run one episode; returns the per-episode stats dict."""
+def run_episode(env: AdvBuildingGym, strategy: RuleBasedStrategy,
+                collector: TrajectoryCollector | None,
+                episode_num: int, episode_seed: int) -> EpisodeStat:
+    """Run one episode; returns the per-episode stats."""
     obs, reset_info = env.reset(seed=episode_seed)
     strategy.reset(obs)
     if collector is not None:
@@ -184,45 +187,47 @@ def run_episode(env: AdvBuildingGym, strategy, collector: TrajectoryCollector | 
         length += 1
         done = terminated or truncated
 
-    final_soc = float(strategy.battery.soc) if strategy.battery is not None else None
-    return {
-        "length": length,
-        "total_reward": total_reward,
-        "cum_E_kWh": float(info.get("cum_E_kWh", 0.0)),
-        "cum_price_EUR": float(info.get("cum_price_EUR", 0.0)),
-        "seed": episode_seed,
-        "data_variant": reset_info.get("data_variant"),
-        "episode_date": reset_info.get("episode_date"),
-        "start_battery_soc": strategy.start_soc if strategy.battery is not None else None,
-        "final_battery_soc": final_soc,
-        "battery_charged_kWh": battery_charged_kWh if battery_name is not None else None,
-        "battery_discharged_kWh": battery_discharged_kWh if battery_name is not None else None,
-    }
+    has_battery = strategy.battery is not None
+    return EpisodeStat(
+        episode=episode_num,
+        length=length,
+        total_reward=total_reward,
+        # single deterministic pass — no separate discounted/achieved distinction
+        achieved_reward=total_reward,
+        seed=episode_seed,
+        cum_E_kWh=float(info.get("cum_E_kWh", 0.0)),
+        cum_price_EUR=float(info.get("cum_price_EUR", 0.0)),
+        data_variant=reset_info.get("data_variant"),
+        episode_date=reset_info.get("episode_date"),
+        start_battery_soc=float(strategy.start_soc) if has_battery else None,
+        final_battery_soc=float(strategy.battery.soc) if has_battery else None,
+        battery_charged_kWh=battery_charged_kWh if has_battery else None,
+        battery_discharged_kWh=battery_discharged_kWh if has_battery else None,
+    )
 
 
-def evaluate_strategy(strategy, env: AdvBuildingGym, args: argparse.Namespace,
+def evaluate_strategy(strategy: RuleBasedStrategy, env: AdvBuildingGym, args: argparse.Namespace,
                     trial_name: str, seed: int, out_dir: str | None) -> dict:
     """Run --episodes episodes for one strategy; write summary/CSV/trajectories."""
     save = out_dir is not None
     collector = TrajectoryCollector(env) if save else None
 
-    episode_stats: list[dict] = []
+    episode_stats: list[EpisodeStat] = []
     start_time = time.time()
     for ep in range(args.episodes):
         # 1-based episode label to match run_eval_ray.py: episode N uses seed+ (N-1),
         # so RBC episode K and RL episode K share the same seed -> same data variant/date.
         episode_num = ep + 1
         episode_seed = seed + ep
-        stat = run_episode(env, strategy, collector, episode_seed)
-        stat = {"episode": episode_num, **stat}
+        stat = run_episode(env, strategy, collector, episode_num, episode_seed)
         episode_stats.append(stat)
         logger.info(
             "[%s] episode %d/%d: reward=%.4f length=%d cum_E_kWh=%.3f cum_price_EUR=%.4f "
             "battery_charged_kWh=%s battery_discharged_kWh=%s",
-            strategy.name, episode_num, args.episodes, stat["total_reward"],
-            stat["length"], stat["cum_E_kWh"], stat["cum_price_EUR"],
-            f"{stat['battery_charged_kWh']:.3f}" if stat["battery_charged_kWh"] is not None else "n/a",
-            f"{stat['battery_discharged_kWh']:.3f}" if stat["battery_discharged_kWh"] is not None else "n/a",
+            strategy.name, episode_num, args.episodes, stat.total_reward,
+            stat.length, stat.cum_E_kWh, stat.cum_price_EUR,
+            f"{stat.battery_charged_kWh:.3f}" if stat.battery_charged_kWh is not None else "n/a",
+            f"{stat.battery_discharged_kWh:.3f}" if stat.battery_discharged_kWh is not None else "n/a",
         )
         if collector is not None:
             collector.on_episode_end(
@@ -232,7 +237,7 @@ def evaluate_strategy(strategy, env: AdvBuildingGym, args: argparse.Namespace,
             collector.save_json(os.path.join(out_dir, "trajectories", f"{episode_num}_trajectory.json"))
             collector.save_hdf5(os.path.join(out_dir, "trajectories.hdf5"), episode_id=str(episode_num))
 
-    rewards = [s["total_reward"] for s in episode_stats]
+    rewards = [s.total_reward for s in episode_stats]
     strategy_params: dict = {"preserve_start_soc": args.preserve_start_soc}
     if strategy.name == "self_coverage":
         strategy_params["evening_start"] = args.evening_start
@@ -260,20 +265,20 @@ def evaluate_strategy(strategy, env: AdvBuildingGym, args: argparse.Namespace,
         "std_reward": float(np.std(rewards)),
         "min_reward": float(np.min(rewards)),
         "max_reward": float(np.max(rewards)),
-        "mean_cum_E_kWh": float(np.mean([s["cum_E_kWh"] for s in episode_stats])),
-        "std_cum_E_kWh": float(np.std([s["cum_E_kWh"] for s in episode_stats])),
-        "mean_cum_price_EUR": float(np.mean([s["cum_price_EUR"] for s in episode_stats])),
-        "std_cum_price_EUR": float(np.std([s["cum_price_EUR"] for s in episode_stats])),
-        "episodes": episode_stats,
+        "mean_cum_E_kWh": float(np.mean([s.cum_E_kWh for s in episode_stats])),
+        "std_cum_E_kWh": float(np.std([s.cum_E_kWh for s in episode_stats])),
+        "mean_cum_price_EUR": float(np.mean([s.cum_price_EUR for s in episode_stats])),
+        "std_cum_price_EUR": float(np.std([s.cum_price_EUR for s in episode_stats])),
+        "episodes": [s.to_dict() for s in episode_stats],
     }
     if strategy.battery is not None:
-        summary["mean_battery_charged_kWh"] = float(np.mean([s["battery_charged_kWh"] for s in episode_stats]))
-        summary["mean_battery_discharged_kWh"] = float(np.mean([s["battery_discharged_kWh"] for s in episode_stats]))
+        summary["mean_battery_charged_kWh"] = float(np.mean([s.battery_charged_kWh for s in episode_stats]))
+        summary["mean_battery_discharged_kWh"] = float(np.mean([s.battery_discharged_kWh for s in episode_stats]))
 
     if save:
         with open(os.path.join(out_dir, "summary.json"), "w", encoding="utf-8") as f:
             json.dump(summary, f, cls=CustomJSONEncoder, indent=4)
-        pd.DataFrame(episode_stats).to_csv(os.path.join(out_dir, "episodes.csv"), index=False)
+        pd.DataFrame([s.to_dict() for s in episode_stats]).to_csv(os.path.join(out_dir, "episodes.csv"), index=False)
         logger.info("[%s] results saved to %s", strategy.name, out_dir)
     return summary
 

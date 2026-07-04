@@ -47,7 +47,7 @@ def compute_resource_allocation(
 
     if local_learner:
         num_learners = 0
-        num_gpus_per_learner = 1 if slurm_resources.num_gpus > 0 else 0
+        num_gpus_per_learner = (slurm_resources.num_gpus or 1) if slurm_resources.num_gpus > 0 else 0
         num_cpus_per_learner = 0
         learner_total_cpus = 0
     else:

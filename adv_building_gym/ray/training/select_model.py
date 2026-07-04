@@ -75,6 +75,10 @@ def select_model(
             # training_intensity = replayed/sampled steps; UTD = intensity / batch_size.
             # Default [1, 1] round-robin gives UTD ≈ 0.001; standard SAC uses ≈ 1.0.
             # Link: https://arxiv.org/abs/1802.09477
+            # Known quirk (verified on Ray 2.52.1, unchanged on master): calculate_rr_weights
+            # divides by num_env_runners + 1 although only the remote runners sample, so the
+            # realized replayed/sampled ratio is intensity * (N + 1) / N for N runners.
+            # Link: ray/rllib/algorithms/dqn/dqn.py::calculate_rr_weights
             training_intensity=training_config.sac_training_intensity,  # RLlib default: None
             num_steps_sampled_before_learning_starts=training_config.sac_learning_starts_after_n_episodes * episode_length, # Warm up replay buffer with N episodes before learning starts.
             # grad_clip mitigates but doesn't fully prevent NaN: if the loss is NaN/Inf

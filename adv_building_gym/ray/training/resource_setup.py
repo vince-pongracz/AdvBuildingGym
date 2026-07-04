@@ -2,18 +2,21 @@
 
 Runs between ``select_model`` and ``common_model_setup`` — the only place touching
 resource settings: splits the SLURM CPU/GPU budget into learner/driver/env-runner shares,
-resolves the algorithm-specific env-runner count (DreamerV3 → 0, PPO → train-batch cap),
-applies ``config.learners`` / ``config.env_runners``, and validates against SLURM.
+resolves the algorithm-specific env-runner count (DreamerV3 → 0, PPO → all CPUs up to one
+runner per episode, rounding the train batch up to whole sampling rounds), applies
+``config.learners`` / ``config.env_runners``, and validates against SLURM.
 ``common_model_setup`` reads back the resolved ``config.num_env_runners``.
 """
 
 import logging
+import math
 
 from ray.rllib.algorithms.algorithm_config import AlgorithmConfig
 
 from adv_building_gym.config.env.env_config import EnvConfig
 from adv_building_gym.config.training.training_param_config import TrainingParamConfig
 from adv_building_gym._common.resource_check_util import (
+    ResourceAllocation,
     SlurmResources,
     compute_resource_allocation,
     validate_resource_allocation,
@@ -33,8 +36,7 @@ def resolve_num_env_runners(
     - DreamerV3 (Ray ≤ 2.52.x): force 0 remote runners — training_step reads env spaces off
       the driver-local runner, which has no env when remote runners exist. Fixed in Ray 2.53.0.
       Link: https://github.com/ray-project/ray/issues/56749
-    - PPO: cap to ``train_batch_size_per_learner * num_learners / episode_length`` so episodes
-      aren't over-collected (RLlib validates total_train_batch_size ≈ runners × fragment_length).
+    - PPO: full budget, capped at one runner per episode; see ``_resolve_ppo_env_runners``.
     - Others: full budget.
     """
     algo = type(config).__name__
@@ -48,21 +50,35 @@ def resolve_num_env_runners(
         return 0
 
     if algo == "PPOConfig":
-        train_batch = getattr(config, "train_batch_size_per_learner", None)
-        if train_batch:
-            total_batch = train_batch * num_learners
-            target_env_runners = max(1, total_batch // episode_length)
-            if resource_env_runners > target_env_runners:
-                logger.warning(
-                    "Reducing num_env_runners %d -> %d to match PPO total_train_batch_size=%d "
-                    "(per_learner=%d x num_learners=%d) at rollout_fragment_length=%d. "
-                    "Surplus CPUs will be left idle.",
-                    resource_env_runners, target_env_runners, total_batch,
-                    train_batch, num_learners, episode_length,
-                )
-                return target_env_runners
+        return _resolve_ppo_env_runners(
+            config, resource_env_runners, episode_length, num_learners,
+        )
 
     return resource_env_runners
+
+def _resolve_ppo_env_runners(
+    config: AlgorithmConfig,
+    resource_env_runners: int,
+    episode_length: int,
+    num_learners: int,
+) -> int:
+    """Use the full CPU budget (max one runner per episode); round the train batch up to
+    whole sampling rounds — each round polls ALL runners for one complete episode, and
+    RLlib rejects a train batch that is not a multiple of runners × episode_length.
+    """
+    # A local learner (num_learners=0) counts as one, mirroring RLlib's total_train_batch_size.
+    learners = num_learners or 1
+    episodes_per_iteration = max(1, config.train_batch_size_per_learner * learners // episode_length)
+    num_env_runners = min(resource_env_runners, episodes_per_iteration)
+
+    episodes_aligned = math.ceil(episodes_per_iteration / num_env_runners) * num_env_runners
+    if episodes_aligned != episodes_per_iteration:
+        logger.warning(
+            "PPO: raising episodes/iteration %d -> %d (next multiple of %d env runners).",
+            episodes_per_iteration, episodes_aligned, num_env_runners,
+        )
+        config.training(train_batch_size_per_learner=episodes_aligned * episode_length // learners)
+    return num_env_runners
 
 
 def resource_setup(
@@ -76,7 +92,7 @@ def resource_setup(
     Sets learner/env-runner resources and the algorithm-specific env-runner count, then
     validates against SLURM. ``common_model_setup`` later reads back ``config.num_env_runners``.
     """
-    allocation = compute_resource_allocation(slurm_resources, training_config.local_learner)
+    allocation: ResourceAllocation = compute_resource_allocation(slurm_resources, training_config.local_learner)
 
     # num_env_runners is algorithm-specific; overwrite the budget with the resolved count
     allocation.num_env_runners = resolve_num_env_runners(
