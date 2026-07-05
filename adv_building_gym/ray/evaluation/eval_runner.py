@@ -11,6 +11,7 @@ import signal
 import time
 from pathlib import Path
 
+import gymnasium
 import numpy as np
 import ray
 import torch
@@ -24,7 +25,6 @@ from adv_building_gym.core.env import AdvBuildingGym
 from adv_building_gym.ray.env_creator import wrap_action_space
 from adv_building_gym.components.rewards import SumRewardAggregator
 from ray.rllib.connectors.common import AddObservationsFromEpisodesToBatch
-from ray.rllib.connectors.env_to_module import FlattenObservations
 from adv_building_gym.ray.training.rl_module_inference import (
     infer_action,
     load_rl_module,
@@ -54,6 +54,49 @@ def _batch_state(state):
     if isinstance(state, torch.Tensor):
         return state.unsqueeze(0)
     return state
+
+
+def _detect_snapshot_root() -> Path | None:
+    """Root of the snapshot bundle this code runs from, or None for the live repo.
+
+    Snapshot mode is signalled by ``SNAPSHOT_DIR`` (exported by
+    slurm_scripts/util/snapshot_mode.sh); direct invocations of snapshot code
+    are detected by the ``snapshot.zip`` marker above the frozen ``code/`` dir.
+    """
+    env_root = os.environ.get("SNAPSHOT_DIR")
+    if env_root:
+        return Path(env_root).resolve()
+    for parent in Path(__file__).resolve().parents:
+        if (parent / "snapshot.zip").exists():
+            return parent
+    return None
+
+
+def _enforce_checkpoint_containment(checkpoint_path: str) -> None:
+    """Refuse checkpoint/code pairings across snapshot boundaries.
+
+    The flat obs feature order is a property of the training CODE, not of the
+    checkpoint (connector era = sorted keys, env-wrapper era = Dict key order),
+    so a checkpoint is only valid with the code that produced it: snapshot code
+    may only evaluate checkpoints under its own snapshot dir, and the live repo
+    may not evaluate checkpoints that live inside any snapshot bundle.
+    """
+    ckpt = Path(checkpoint_path).resolve()
+    snapshot_root = _detect_snapshot_root()
+    if snapshot_root is not None:
+        if snapshot_root not in ckpt.parents:
+            raise ValueError(
+                f"Snapshot code ({snapshot_root}) may only evaluate checkpoints from its "
+                f"own runs, but got {ckpt}. Evaluate that checkpoint with the code that "
+                "trained it (its own snapshot, or the live repo for live-trained runs)."
+            )
+    elif any((parent / "snapshot.zip").exists() for parent in ckpt.parents):
+        raise ValueError(
+            f"Live-repo eval refuses the snapshot checkpoint {ckpt}: the obs-flattening "
+            "layout is a property of the training code, so this checkpoint must be "
+            "evaluated by its own snapshot's code, e.g. "
+            "python -m tools.snapshot.submit_snapshot --kind eval on that snapshot."
+        )
 
 
 def evaluate_model(
@@ -88,7 +131,8 @@ def evaluate_model(
         save_results: Whether to persist results to disk.
         output_dir: Directory for result files.
         log_trajectories: Whether to save per-step trajectory JSON.
-        algorithm_hint: Algorithm name for metadata (informational only).
+        algorithm_hint: Algorithm name for result metadata (obs flattening is
+            env-side for all algorithms, so no per-algorithm branching here).
         timeout_seconds: Maximum wall-clock seconds before aborting.
         data_combinator: Optional DataCombinator for variant scheduling.
         stochastic: If True, sample actions from the squashed-Gaussian policy
@@ -98,6 +142,10 @@ def evaluate_model(
     Returns:
         ``EvalResults`` with per-episode stats and summary.
     """
+    # A checkpoint is only valid with the code that trained it (obs feature order
+    # is a code property) — fail fast before any Ray/module loading.
+    _enforce_checkpoint_containment(checkpoint_path)
+
     # eval MUST use the same hst settings as training or obs dimensions diverge.
 
     # timestamped subdir so eval runs don't collide; caller may share a fixed `run_stamp`
@@ -197,16 +245,37 @@ def evaluate_model(
 
     env = wrap_action_space(base_env)
 
-    # mirrors the training connector pipeline so the flat obs dim matches the checkpoint:
-    # FlattenObservations (needs input spaces at construction; rewrites the episode's last
-    # obs to a flat tensor) + AddObservationsFromEpisodesToBatch (copies it into batch[OBS]).
-    pipeline = [
-        FlattenObservations(
-            input_observation_space=base_env.observation_space,
-            input_action_space=env.action_space,
-        ),
-        AddObservationsFromEpisodesToBatch(),
-    ]
+    # Mirrors the training env chain: obs flattening is env-side for all algorithms
+    # (outermost FlattenObservation, Dict key order — see adv_building_env_creator),
+    # so the pipeline only copies the already-flat obs into batch[OBS].
+    env = gymnasium.wrappers.FlattenObservation(env)
+    logger.info(
+        "eval_runner: FlattenObservation applied (outermost; flat obs shape=%s)", env.observation_space.shape,
+    )
+    pipeline = [AddObservationsFromEpisodesToBatch()]
+
+    # Era guard: checkpoints trained with the old connector-side FlattenObservations
+    # carry an all-infinite module obs space (the connector recomputes Box(-inf, inf));
+    # their feature order (sorted keys) is a permutation of the env-side order (Dict
+    # key order), so the dim check below would pass while every feature is misplaced.
+    module_obs_space = rl_module.observation_space
+    if (
+        isinstance(module_obs_space, gymnasium.spaces.Box)
+        and np.all(np.isinf(module_obs_space.low))
+        and np.all(np.isinf(module_obs_space.high))
+        and not (np.all(np.isinf(env.observation_space.low)) and np.all(np.isinf(env.observation_space.high)))
+    ):
+        layout_mismatch_message = (
+            "Checkpoint's module obs space has all-infinite bounds — it was trained "
+            "with the old connector-side flattening (sorted key order). Env-side "
+            "flattening uses the Dict key order, so features would be PERMUTED and "
+            "eval results invalid. Evaluate this checkpoint with the code/snapshot "
+            "that trained it."
+        )
+        if os.environ.get("ADVBG_ALLOW_OBS_LAYOUT_MISMATCH") == "1":
+            logger.warning("%s (ADVBG_ALLOW_OBS_LAYOUT_MISMATCH=1 set — proceeding anyway)", layout_mismatch_message)
+        else:
+            raise ValueError(layout_mismatch_message + " Set ADVBG_ALLOW_OBS_LAYOUT_MISMATCH=1 to override.")
 
     # check spaces after the pipeline is built so the model dim is compared against the
     # post-connector flat size (incl. s_hst_<key>), not the raw env obs
@@ -249,9 +318,10 @@ def evaluate_model(
                 collector.reset()
                 collector.on_reset(reset_info)
 
-            # persistent episode buffer; the connector pipeline reads the latest obs each step
+            # persistent episode buffer; the pipeline copies the latest (already flat)
+            # obs into batch[OBS] each step.
             sa_episode = SingleAgentEpisode(
-                observation_space=base_env.observation_space,
+                observation_space=env.observation_space,
                 action_space=base_env.action_space,
                 observations=[obs],
             )
@@ -281,6 +351,7 @@ def evaluate_model(
                     stochastic=stochastic,
                     generator=action_generator,
                     state_in=state_in,
+                    is_first=(episode_length == 0),
                 )
 
                 next_obs, reward, terminated, truncated, step_info = env.step(raw_action)

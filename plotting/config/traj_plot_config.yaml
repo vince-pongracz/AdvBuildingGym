@@ -9,6 +9,7 @@ states:
   # ``ctxt_`` (static physical context) is automatically excluded.
   skip_keys:
     - s_sim_hour
+    - s_sim_time
 
   # Groups of state keys that share a single plot.
   # Each entry is a list of keys rendered together.

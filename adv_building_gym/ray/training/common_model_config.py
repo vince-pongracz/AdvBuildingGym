@@ -6,13 +6,16 @@ import logging
 from ray.rllib.algorithms.algorithm_config import AlgorithmConfig
 
 from adv_building_gym.config.env.env_config import EnvConfig
-# History stacking is in HistoryWrapper (env wrapper); pipelines only need FlattenObservations.
+# Single-agent obs flattening is env-side (FlattenObservation in the env creator);
+# FlattenObservations connector: only for the multi-agent driver.
 from ray.rllib.connectors.env_to_module import FlattenObservations
 
 from adv_building_gym.ray.callbacks import (
     create_eval_score_promote_on_train_result_cb,
     create_exploration_monitor_on_train_result_cb,
     create_infra_schedule_on_train_result_cb,
+    create_iter_end_logging_on_train_result_cb,
+    create_iter_start_logging_cb,
     create_iter_timing_on_train_result_cb,
     create_reward_switch_on_train_result_cb,
     make_episode_metrics_cb_class,
@@ -89,7 +92,13 @@ def register_callbacks(
     # Data-variant schedule is NOT wired here — selection is env-side
     # (AdvBuildingGym.reset → DataVariantManager); an iteration-boundary push
     # was overwritten by the next reset(). See core/_data_variant_manager.py.
+    # one shared start-logger: registered under on_algorithm_init ("Iteration 1: start")
+    # and appended LAST to on_train_result ("Iteration N+1: start"), so every other
+    # callback's log output lands between the "end N" and "start N+1" markers
+    iter_start_logging_cb = create_iter_start_logging_cb()
     on_train_result_fns = [
+        # end marker first: logs "Iteration N: end" right after step() returned
+        create_iter_end_logging_on_train_result_cb(),
         # mirror eval return to a flat result key so Tune's checkpoint_score_attribute
         # can rank checkpoints (slashed keys are ignored); logs save/keep/evict each iter
         create_eval_score_promote_on_train_result_cb(checkpoint_interval=checkpoint_interval),
@@ -147,8 +156,12 @@ def register_callbacks(
             len(statesource_combinator.config_paths),
         )
 
+    # start marker last, after the schedule swaps — they take effect for iteration N+1
+    on_train_result_fns.append(iter_start_logging_cb)
+
     callback_kwargs = {
         "on_train_result": _compose_on_train_result(*on_train_result_fns),
+        "on_algorithm_init": iter_start_logging_cb,
     }
 
     # register class callbacks (run in list order) + callable callbacks
@@ -167,6 +180,7 @@ def common_model_setup(
     exploration_reset: ExplorationResetConfig | None = None,
     exec_date: datetime.datetime | None = None,
     trial_name: str | None = None,
+    flatten_observations_env_side: bool = False,
 ):
     """Apply common, algorithm-independent RLlib config (API stack, env, debugging/reporting/
     framework, sampling connectors, evaluation, logger, callbacks).
@@ -181,6 +195,12 @@ def common_model_setup(
         metrics_base_dir: Base directory for episode metrics (default: "ep_metrics")
         log_trajectories: When True, save full per-step trajectory JSON
             during evaluation episodes (via episode callback).
+        flatten_observations_env_side: When True (the single-agent driver — env
+            creator applies an outermost FlattenObservation wrapper),
+            connector-side FlattenObservations pieces are skipped (obs already a
+            flat Box). Leave False only for envs the gymnasium single-agent wrapper
+            cannot wrap (the multi-agent driver) — those still flatten in the
+            connector pipeline.
 
     Note:
         Data-variant selection is env-side (the combinator is wired to the
@@ -189,8 +209,8 @@ def common_model_setup(
     Returns:
         Algorithm config
     """
-    # obs_space omitted (FlattenObservations handles it); action_space omitted
-    # (env_creator's FlattenAction + RescaleAction give RLlib a flat Box(-1, 1)).
+    # obs_space omitted (env-side FlattenObservation — or the MA connector — handles it);
+    # action_space omitted (FlattenAction + RescaleAction give RLlib a flat Box(-1, 1)).
     # Link: https://docs.ray.io/en/latest/rllib/env-to-module-connector.html
 
     # TODO VP 2026.03.18. : Check each setting here and at SAC/PPO
@@ -222,18 +242,24 @@ def common_model_setup(
     config.log_gradients = False # RLlib default: False
     # NOTE VP 2026.01.08. : about ray and rllib concept https://docs.ray.io/en/latest/rllib/key-concepts.html
     config.training(gamma=training_config.gamma) # RLlib default: 0.99
-    # Sampling (env queries, policy, trajectories) — no GPU. History stacking is in
-    # HistoryWrapper, so the pipeline only needs FlattenObservations. Env-runner count
-    # and resource shares are set later in resource_setup; here only sampling behaviour.
+    # Sampling (env queries, policy, trajectories) — no GPU. Env-runner count and
+    # resource shares are set later in resource_setup; here only sampling behaviour.
     config.env_runners(
-        rollout_fragment_length=env_config.EPISODE_LENGTH, # Collect complete episodes before returning to learner.
         episode_lookback_horizon=training_config.episode_lookback_horizon_steps,  # RLlib default: 1
-        env_to_module_connector=lambda env, spaces, device: [FlattenObservations()],  # type: ignore
     )
-    # mirror the env-to-module pipeline on the learner side so batches flatten to the same dim
-    config.training(
-        learner_connector=lambda obs_sp, act_sp: [FlattenObservations()],  # type: ignore
-    )
+    # Single-agent envs already emit a flat Box (env-side FlattenObservation, Dict
+    # key order); adding the connectors would re-flatten every stored episode obs per
+    # step for nothing. Only the multi-agent driver still flattens connector-side
+    # (sorted key order) — the two flat layouts are permutations of each other, so a
+    # checkpoint only matches the mechanism it trained on.
+    if not flatten_observations_env_side:
+        config.env_runners(
+            env_to_module_connector=lambda env, spaces, device: [FlattenObservations()],  # type: ignore
+        )
+        # mirror the env-to-module pipeline on the learner side so batches flatten to the same dim
+        config.training(
+            learner_connector=lambda obs_sp, act_sp: [FlattenObservations()],  # type: ignore
+        )
     # Eval runs the policy without exploration noise (unbiased selection signal; no gradients).
     # Eval EnvRunners get log_full_info=True (info["state"] for the eval trajectory callback)
     # and eval_mode=True (each episode draws a fresh random (variant, day)). Training unaffected.

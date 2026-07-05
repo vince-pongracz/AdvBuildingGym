@@ -66,6 +66,8 @@ WHITELIST_FILES = (
     "rl_ma_train.py",
     "run_train_sb.py",
     "run_eval_sb.py",
+    "run_train_util.py",
+    "run_eval_util.py",
 )
 
 # Names skipped anywhere inside the bundled tree.

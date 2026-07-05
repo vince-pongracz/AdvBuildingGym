@@ -2,6 +2,7 @@
 
 import logging
 
+import numpy as np
 from ray.rllib.algorithms.ppo import PPOConfig
 from ray.rllib.algorithms.sac import SACConfig
 from ray.rllib.algorithms.dreamerv3 import DreamerV3Config
@@ -9,6 +10,7 @@ from ray.rllib.algorithms.dreamerv3 import DreamerV3Config
 # Use SAC instead - similar off-policy algorithm with entropy regularization.
 from ray.rllib.core.rl_module.default_model_config import DefaultModelConfig
 
+from adv_building_gym.config.env.env_config import EnvConfig
 from adv_building_gym.config.training.training_param_config import TrainingParamConfig
 
 logger = logging.getLogger(__name__)
@@ -16,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 def select_model(
     algorithm: str,
-    episode_length: int,
+    env_config: EnvConfig,
     training_config: TrainingParamConfig,
 ):
     """Build the algorithm-specific config (ppo/sac/dreamerv3) with its hyperparameters.
@@ -24,13 +26,14 @@ def select_model(
     Caller then passes it to common_model_setup() for env/resources/callbacks.
     """
 
+    env_episode_length = env_config.EPISODE_LENGTH
     # Algorithm-specific configuration
     if algorithm == "ppo":
         config = PPOConfig()
         # PPO on-policy: collect a full batch, then multiple SGD epochs over it.
         # train_batch_size_per_learner = timesteps/iteration (ppo_episodes_per_iteration ×
         # episode_length); minibatch_size = SGD mini-batch within each epoch.
-        ppo_batch_timesteps = training_config.ppo_episodes_per_iteration * episode_length
+        ppo_batch_timesteps = training_config.ppo_episodes_per_iteration * env_episode_length
         config.training(
             # lr left at RLlib default: 5e-5
             train_batch_size_per_learner=ppo_batch_timesteps,  # RLlib default: 4000
@@ -42,6 +45,10 @@ def select_model(
             use_kl_loss=True,  # RLlib default
             # NOTE VP 2026.01.12. : tune these and other hyperparameters later -- using tune
         )
+        config.env_runners(
+            rollout_fragment_length=env_config.EPISODE_LENGTH
+        ) # Collect complete episodes before returning to learner.
+
 
     elif algorithm == "sac":
         config = SACConfig()
@@ -61,7 +68,7 @@ def select_model(
             # Link: https://github.com/ray-project/ray/issues/50966
             replay_buffer_config={
                 "type": "EpisodeReplayBuffer",
-                "capacity": episode_length * training_config.sac_episodes_to_keep_in_replay_buffer,
+                "capacity": env_episode_length * training_config.sac_episodes_to_keep_in_replay_buffer,
             },
             # SAC-specific hyperparameters
             twin_q=True,  # Use twin Q-networks to reduce overestimation bias. RLlib default
@@ -80,13 +87,17 @@ def select_model(
             # realized replayed/sampled ratio is intensity * (N + 1) / N for N runners.
             # Link: ray/rllib/algorithms/dqn/dqn.py::calculate_rr_weights
             training_intensity=training_config.sac_training_intensity,  # RLlib default: None
-            num_steps_sampled_before_learning_starts=training_config.sac_learning_starts_after_n_episodes * episode_length, # Warm up replay buffer with N episodes before learning starts.
+            num_steps_sampled_before_learning_starts=training_config.sac_learning_starts_after_n_episodes * env_episode_length, # Warm up replay buffer with N episodes before learning starts.
             # grad_clip mitigates but doesn't fully prevent NaN: if the loss is NaN/Inf
             # (extreme Q from reward spikes) it reaches weights first. Root fix = bounded
             # per-step rewards (~[-1, 1]). See slurm job 1624328 (crash iter 48,
             # "normal expects all elements of std >= 0.0").
             # grad_clip=1.0,  # RLlib default: None
         )
+        config.env_runners(
+            rollout_fragment_length=144
+        ) # Collect complete episodes before returning to learner.
+        
     elif algorithm == "dreamerv3":
         config = DreamerV3Config()
         # DreamerV3 model-based off-policy: world model (RSSM) fit on batch_length_T sequences,
@@ -104,7 +115,7 @@ def select_model(
             critic_lr=training_config.dreamerv3_critic_lr,
             replay_buffer_config={
                 "type": "EpisodeReplayBuffer",
-                "capacity": episode_length * training_config.dreamerv3_episodes_to_keep_in_replay_buffer,
+                "capacity": env_episode_length * training_config.dreamerv3_episodes_to_keep_in_replay_buffer,
             },
         )
     else:

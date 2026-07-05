@@ -68,18 +68,31 @@ training_params:
 statesources:
 - class: DateSource
   name: date
-- class: EnergyPriceFixDataSource
+# - class: EnergyPriceFixDataSource
+#   name: E_price
+#   # Synthetic multi-level time-of-use tariff (no CSV), selected by the episode's season.
+#   #   schedules       - maps a season (winter/spring/summer/autumn) or the catch-all "all" to a
+#   #                     {default_price, bands} block. bands is a list of {start, end, price}
+#   #                     entries (start/end are "HH:MM" times in 00:00-24:00, may wrap midnight);
+#   #                     the first band covering the time-of-day wins, else default_price.
+#   #   default_season  - fallback season when the episode's season has no schedule.
+#   #   emit_ctxt       - also publish ctxt_E_price_max (the divisor) for policy conditioning.
+#   # s_E_price = baseprice / divisor, divisor = largest level magnitude across all schedules.
+#   default_season: summer
+#   emit_ctxt: false
+#   # Explicit form of the built-in default tariff (under "all" -> used every season).
+#   schedules:
+#     all:
+#       default_price: 28.0                                # 28 ct/kWh outside every band
+#       bands:
+#         - {start: "17:00", end: "21:00", price: 40.0}    # evening peak (listed first -> wins on overlap)
+#         - {start: "00:00", end: "06:00", price: 18.0}    # overnight off-peak
+- class: EnergyPriceDayDynDataSource     # alternative: real market price (CSV) with 1-day windowed norm
   name: E_price
-  # Synthetic 3-level time-of-use tariff (no CSV), selected by the episode's season.
-  #   schedules       - maps a season (winter/spring/summer/autumn) or the catch-all "all" to a
-  #                     {off_peak_price, mid_price, peak_price, off_peak_hours, peak_hours} block
-  #                     ([start, end) hours, may wrap midnight). Omitted here -> built-in default:
-  #                     off-peak 18 / mid 28 / peak 40 ct/kWh, off-peak 0-6h, peak 17-21h.
-  #   default_season  - fallback season when the episode's season has no schedule.
-  #   emit_ctxt       - also publish ctxt_E_price_max (the divisor) for policy conditioning.
-  # s_E_price = baseprice / divisor, divisor = largest level magnitude across all schedules.
-  default_season: summer
-  emit_ctxt: false
+  # Dynamic 1-day price normalisation: s_E_price = raw_baseprice / divisor, where the divisor is
+  # |baseprice| max over the next-24h window (capped at the episode length), recomputed each reset.
+  # ds_path is pushed per-episode by the DataCombinator (keyed by name "E_price"); episode_length
+  # and timestep are context-injected from env_meta. ctxt_E_price_max is always published.
 - class: WeatherDataSource
   name: weather
 - class: InsideTemperature

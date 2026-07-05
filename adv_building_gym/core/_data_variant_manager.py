@@ -40,6 +40,7 @@ class DataVariantManager:
 
     def begin_episode(self) -> None:
         self.episode_count += 1
+        logger.info(f"Starting episode: {self.episode_count}")
 
     def select_variant(
         self,

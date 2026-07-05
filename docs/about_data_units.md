@@ -111,7 +111,7 @@ Either a constant `max_power_kW` from the env config YAML, or — when an `opera
 | `s_avg_wind_speed_norm` | normalised [0,1], scale = `ctxt_wind_speed_abs_max` (m/s) |
 | `s_E_price` | normalised [-1,1], scale = `ctxt_E_price_max` (ct/kWh) |
 | `s_temp_in_norm` | normalised, fixed scale 70 °C (`info["temp_abs_max"]`) |
-| `s_sim_hour` | normalised hour-of-day, (sim_hour mod 24) / 24, range [0, 1] |
+| `s_sim_time` | normalised hour-of-day, (sim_time mod 24) / 24, range [0, 1] |
 
 ### Context / scale factors (`ctxt_*`, static within an episode)
 

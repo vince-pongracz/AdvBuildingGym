@@ -407,7 +407,7 @@ settings. Edit this (not Python code) when adding new statesources or infrastruc
 
 ```yaml
 states:
-  skip_keys: [E_price_max, sim_hour, _temp_abs_max]   # omit from plots
+  skip_keys: [E_price_max, sim_time, _temp_abs_max]   # omit from plots
   grouped_keys:                                         # share a subplot
     - [battery_pct, ]
     - [temp_in_norm, desired_temp_in_norm, temp_out_norm]

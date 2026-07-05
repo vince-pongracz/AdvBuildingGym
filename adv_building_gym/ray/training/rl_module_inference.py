@@ -27,6 +27,7 @@ def infer_action(
     stochastic: bool = False,
     generator: torch.Generator | None = None,
     state_in: dict | None = None,
+    is_first: bool = False,
 ) -> tuple[np.ndarray, dict]:
     """Forward inference on a single (flat) observation.
 
@@ -49,14 +50,30 @@ def infer_action(
         state_in: Recurrent state dict produced by a previous call's
             ``state_out`` (or by ``rl_module.get_initial_state()`` at the
             start of an episode). Pass ``{}`` for stateless modules.
+        is_first: True on the first inference of an episode (the reset
+            observation). DreamerV3 requires ``batch["is_first"]`` to reset
+            its recurrent state (training adds it via AddIsFirstsToBatch);
+            PPO/SAC modules ignore the extra key.
 
     Returns:
         Tuple of (action, state_out). ``action`` is a numpy array (or
         Python scalar for 0-d outputs). ``state_out`` is ``{}`` for
         stateless modules.
     """
+    obs_tensor = torch.as_tensor(flat_obs, dtype=torch.float32)
+    # DreamerV3's world model folds a time rank (obs must be [B, T=1, ...]; training
+    # inserts AddTimeDimToBatchAndZeroPad); PPO/SAC encoders take [B, ...].
+    # Link: ray/rllib/algorithms/dreamerv3/torch/models/world_model.py (compute_posterior_z)
+    if hasattr(rl_module, "dreamer_model"):
+        obs_tensor = obs_tensor.reshape(1, 1, -1)
+    else:
+        obs_tensor = obs_tensor.unsqueeze(0)
     batch: dict = {
-        Columns.OBS: torch.as_tensor(flat_obs, dtype=torch.float32).unsqueeze(0),
+        Columns.OBS: obs_tensor,
+        # Same encoding as AddIsFirstsToBatch: one float per batch item (shape (B,)),
+        # 1.0 only on the episode's reset step (DreamerV3 resets its recurrent state
+        # on it via einsum("b...,b->b...") masking).
+        "is_first": torch.tensor([1.0 if is_first else 0.0], dtype=torch.float32),
     }
     if state_in:
         # RLlib convention: STATE_IN is a (nested) dict of tensors already batched on axis 0;
@@ -84,8 +101,9 @@ def infer_action(
             else:
                 raw_action = torch.tanh(action_mean).numpy()
         else:
-            # DreamerV3 returns sampled actions directly under Columns.ACTIONS.
-            raw_action = output[Columns.ACTIONS].squeeze(0).numpy()
+            # DreamerV3 returns actions directly under Columns.ACTIONS, shaped
+            # (B=1, T=1, act_dim); reshape(-1) drops batch/time ranks either way.
+            raw_action = output[Columns.ACTIONS].reshape(-1).numpy()
 
         if isinstance(raw_action, np.ndarray) and raw_action.ndim == 0:
             raw_action = raw_action.item()

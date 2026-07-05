@@ -119,16 +119,16 @@ class HouseholdEnergyConsumers(Infrastructure):
 
     def _synthetic_consumption(self, states: Dict) -> float:
         """Stepped time-of-day profile plus Gaussian noise."""
-        # s_sim_hour is published by the env in [0, 1] (hour-of-day / 24).
-        sim_hour = float(states.get("s_sim_hour", np.zeros(1, dtype=np.float32))[0]) * 24.0
+        # s_sim_time is published by the env in [0, 1] (time within episode).
+        sim_time = float(states.get("s_sim_time", np.zeros(1, dtype=np.float32))[0]) * 24.0
 
-        if sim_hour < 6:
+        if sim_time < 6:
             base = 0.2   # Low demand during night
-        elif sim_hour < 9:
+        elif sim_time < 9:
             base = 0.6   # Morning peak
-        elif sim_hour < 17:
+        elif sim_time < 17:
             base = 0.4   # Daytime moderate
-        elif sim_hour < 21:
+        elif sim_time < 21:
             base = 0.8   # Evening peak
         else:
             base = 0.3   # Late evening

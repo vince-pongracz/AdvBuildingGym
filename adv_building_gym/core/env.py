@@ -121,8 +121,8 @@ class AdvBuildingGym(gym.Env, DataVariantConsumer):
         for ds in self.statesources:
             ds.setup_spaces(observation_space, action_space)
 
-        # env-owned hour-of-day [0, 1] (sim_hour mod 24 / 24); depends only on iteration × control_step
-        observation_space["s_sim_hour"] = spaces.Box(low=0.0, high=1.0, shape=(1,), dtype=np.float32)
+        # env-owned hour-of-day [0, 1]; depends only on iteration and EPISODE_LENGTH
+        observation_space["s_sim_time"] = spaces.Box(low=0.0, high=np.inf, shape=(1,), dtype=np.float32)
 
         self.reward_functors = rewards
 
@@ -282,7 +282,7 @@ class AdvBuildingGym(gym.Env, DataVariantConsumer):
 
     def _reset_internal_state(self) -> None:
         self.iteration = 0
-        self.sim_hour = 0
+        self.sim_time = 0
         self._energy_tracker.reset()
         self._price_tracker.reset()
         # Re-zero observation arrays in place (preserves dtype/shape).
@@ -364,7 +364,7 @@ class AdvBuildingGym(gym.Env, DataVariantConsumer):
         total_power_kW, power_breakdown = self._compute_power_breakdown(action)
         self._track_E_costs(power_breakdown)
         
-        self._advance_time_and_sync()        # iteration++, sim_hour, synchronise
+        self._advance_time_and_sync()        # iteration++, sim_time, synchronise
         self._update_exogenous()             # outer statesources -> row[t+1]; self.state is now s'
 
         self._publish_step_info(action, total_power_kW)
@@ -398,8 +398,8 @@ class AdvBuildingGym(gym.Env, DataVariantConsumer):
         # increment iteration, then synchronise so update_state reads the new row
         # (synchronising after update_state used to lag exogenous sources 2 iterations)
         self.iteration += 1
-        self.sim_hour = self.iteration * self.env_config.CONTROL_STEP / SECONDS_PER_HOUR
-        self.state["s_sim_hour"][0] = np.float32((self.sim_hour % 24.0) / 24.0)
+        self.sim_time = self.iteration / self.env_config.EPISODE_LENGTH
+        self.state["s_sim_time"][0] = np.float32(self.sim_time)
 
         for sync in self.infras + self.statesources:
             sync.synchronise(self.iteration)

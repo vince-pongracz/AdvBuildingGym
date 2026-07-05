@@ -134,7 +134,7 @@ def _build_algo_config(args, trial: TrialConfig, slurm_resources, exec_date_dt):
     # 1. Algorithm-specific config (hyperparameters + RLModule).
     algo_config = select_model(
         algorithm=trial.algorithm,
-        episode_length=trial.env_config.EPISODE_LENGTH,
+        env_config=trial.env_config,
         training_config=trial.training_param_config,
     )
     # 2. Resource-dependent config (learner/env-runner resources + count, validation).
@@ -158,6 +158,10 @@ def _build_algo_config(args, trial: TrialConfig, slurm_resources, exec_date_dt):
         exploration_reset=trial.exploration_reset,
         exec_date=exec_date_dt,
         trial_name=trial.trial_name,
+        # adv_building_env_creator always flattens obs env-side (outermost
+        # FlattenObservation), so the connector-side flatteners are skipped.
+        # TODO noprio VP 2026.07.05.: Only kept for the MA driver
+        flatten_observations_env_side=True,
     )
     param_space = algo_config.to_dict()
 

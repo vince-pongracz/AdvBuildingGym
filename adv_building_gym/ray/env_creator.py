@@ -40,7 +40,7 @@ def merge_env_context(base: dict, cfg):
 
 
 def adv_building_env_creator(config: dict) -> gymnasium.Env:
-    """Create a wrapped AdvBuildingGym (flat Box(-1, 1) action space) for Ray Tune.
+    """Create a wrapped AdvBuildingGym (flat Box(-1, 1) action space, flat Box obs) for Ray Tune.
 
     Builds FRESH components each call so parallel env_runners don't share state.
     Args:
@@ -63,8 +63,16 @@ def adv_building_env_creator(config: dict) -> gymnasium.Env:
               sampling.
 
     Returns:
-        Wrapped AdvBuildingGym with flat Box(-1, 1) action space.
+        Wrapped AdvBuildingGym with flat Box(-1, 1) action space and flat Box obs.
     """
+    
+    # NOTE VP 2026.07.05.: Observation flattening is env-side for ALL algorithms: the LAST (outermost)
+    # wrapper is ``gymnasium.wrappers.FlattenObservation``, so no connector-side
+    # flattener is needed (see ``common_model_setup(flatten_observations_env_side=True)``).
+    # Flat feature order = the Dict space's key order (gymnasium flatten iterates
+    # ``spaces.items()``) — NOT the sorted order RLlib's FlattenObservations connector
+    # produced; checkpoints are only compatible with the mechanism they trained on.
+    
     env_config = config.get("env_config")
     if env_config is None:
         raise ValueError(
@@ -154,7 +162,21 @@ def adv_building_env_creator(config: dict) -> gymnasium.Env:
             list(env_config.forecast.steps),
         )
 
-    return wrap_action_space(env)
+    env = wrap_action_space(env)
+
+    # Env-side obs flattening for ALL algorithms; MUST stay the outermost wrapper
+    # Required by DreamerV3, it reads env.single_observation_space directly
+    # (Dict spaces have shape=None and crash do_symlog_obs).
+    # Link: ray/rllib/algorithms/dreamerv3/utils/__init__.py (do_symlog_obs)
+    # gymnasium's flatten_space/flatten both iterate the Dict space's spaces.items(),
+    # so flat values keep the Dict's key order, aligned with the flat space bounds.
+    # Link: gymnasium/spaces/utils.py (_flatten_dict / _flatten_space_dict)
+    env = gymnasium.wrappers.FlattenObservation(env)
+    logger.info(
+        "env_creator: FlattenObservation applied (outermost; flat obs shape=%s)", env.observation_space.shape,
+    )
+
+    return env
 
 
 def adv_building_ma_env_creator(config: dict):
@@ -166,9 +188,7 @@ def adv_building_ma_env_creator(config: dict):
     """
     env_config = config.get("env_config")
     if env_config is None:
-        raise ValueError(
-            "adv_building_ma_env_creator: 'env_config' missing from creator config."
-        )
+        raise ValueError("adv_building_ma_env_creator: 'env_config' missing from creator config.")
 
     infras = env_config.create_infras()
     statesources = env_config.create_statesources()
@@ -217,6 +237,5 @@ def adv_building_ma_env_creator(config: dict):
     if env_config.forecast.enabled:
         raise NotImplementedError("ForecastWrapper is not supported in the multi-agent env creator.")
 
-    logger.info("ma_env_creator: instance_id=%s agents=%s",
-                instance_id, env.possible_agents)
+    logger.info("ma_env_creator: instance_id=%s agents=%s", instance_id, env.possible_agents)
     return env

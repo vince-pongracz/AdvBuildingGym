@@ -233,7 +233,7 @@ The four controllers (`PIDController`, `PIController`, `MPCController`, `FuzzyCo
 
 ### 7.2 State Space Registration
 
-The `sim_hour` observation space is registered identically in 4 different state sources:
+The `sim_time` observation space is registered identically in 4 different state sources:
 
 - `statesources/outer/weather.py:116-118`
 - `statesources/outer/energy_price.py:49-51`
