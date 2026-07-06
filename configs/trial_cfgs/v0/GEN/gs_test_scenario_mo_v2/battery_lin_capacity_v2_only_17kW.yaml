@@ -1,4 +1,4 @@
-trial_name: gen_battery_lin_nomo_wo_17kW
+trial_name: gen_battery_lin_nomo_only_17kW
 algorithm: sac
 seed: 42
 metric: episode_return_mean
@@ -26,7 +26,7 @@ env_meta:
 
   forecast_env_wrapper:
     enabled: true
-    forecast_steps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+    forecast_steps: [1, 2, 3, 4, 5, 6, 12, 24, 36, 48]
 
 training_params:
   common:
@@ -103,10 +103,7 @@ infra_schedule:
   swap_every_n_episodes: 100
   configs:
     train:
-    - configs/infra_cfgs/GEN/battery_lin_capacity_v2/battery_lin_cap_1.yaml
-    - configs/infra_cfgs/GEN/battery_lin_capacity_v2/battery_lin_cap_2.yaml
-    - configs/infra_cfgs/GEN/battery_lin_capacity_v2/battery_lin_cap_3.yaml
-    - configs/infra_cfgs/GEN/battery_lin_capacity_v2/battery_lin_cap_5.yaml
+    - configs/infra_cfgs/GEN/battery_lin_capacity_v2/battery_lin_cap_4.yaml
     eval:
     - configs/infra_cfgs/GEN/battery_lin_capacity_v2/battery_lin_cap_eval_1.yaml
     - configs/infra_cfgs/GEN/battery_lin_capacity_v2/battery_lin_cap_eval_2.yaml

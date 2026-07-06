@@ -1,0 +1,11 @@
+seeds: [42, 43, 44, 45, 46, 70, 71, 140, 141]
+snapshots:
+  # - snapshots/20260703_004926_sta_lin_battery_only_price_sac
+  # - snapshots/20260704_144904_sta_lin_battery_only_price_ppo
+  # - snapshots/20260704_183007_sta_lin_battery_only_price_dreamerv3
+  # - snapshots/20260704_215559_sta_lin_battery_only_price_sac_gam099
+  # - snapshots/20260704_215614_sta_lin_battery_only_price_ppo_gam099
+  # - snapshots/20260705_153845_sta_lin_battery_only_price_sac_short_rfl
+  - snapshots/20260705_234931_sta_lin_battery_only_price_rbc_base
+kind: eval-rbc
+episodes: 10

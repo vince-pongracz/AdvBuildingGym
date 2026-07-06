@@ -82,9 +82,11 @@ def parse_eval_args(
 def generate_trajectory_plots(results, args: argparse.Namespace, logger: logging.Logger) -> None:
     """Render trajectory plots for a just-completed eval run (Ray or SB).
 
-    Reads ``<results.output_dir>/trajectories.hdf5`` and writes per-episode
-    plots (plus a shared dashboard for ``--plot-all``). No-op when neither
-    ``--plot`` nor ``--plot-all`` is set, or ``--no-save`` suppressed the HDF5.
+    Reads ``<results.output_dir>/trajectories.hdf5`` and writes a per-episode
+    dashboard for each episode under ``--plot-all`` (the dashboard already
+    embeds every figure group, so the redundant per-group HTML files are
+    skipped). No-op when neither ``--plot`` nor ``--plot-all`` is set, or
+    ``--no-save`` suppressed the HDF5.
     """
     if not (args.plot or args.plot_all) or args.no_save:
         return
@@ -114,11 +116,12 @@ def generate_trajectory_plots(results, args: argparse.Namespace, logger: logging
                 output_dir=ep_plot_dir,
                 file_prefix=ep_label,
                 dashboard_dir=dashboard_dir,
+                episode_plots=False,
             )
             total_paths.extend(paths)
         logger.info(
-            "Generated %d plot files for %d episodes in %s",
-            len(total_paths), len(episode_ids), plot_dir,
+            "Generated %d dashboard files for %d episodes in %s",
+            len(total_paths), len(episode_ids), dashboard_dir,
         )
     else:
         paths = generate_all_plots(

@@ -51,17 +51,29 @@ training_params:
 statesources:
 - class: DateSource
   name: date
-- class: EnergyPriceDataSource
+- class: EnergyPriceDayDynDataSource
   name: E_price
-  # Price normalisation: s_E_price = clip(raw_price / divisor, -1, 1). The divisor blends the
-  # max_calc_mode statistic over the whole series (0.3) and the per-episode window (0.7):
-  #   mean              - mean of raw baseprice
-  #   median            - median of raw baseprice
-  #   percentile        - quantile at `percentile` (e.g. 0.75)
-  #   mean_above_median - mean of raw baseprice strictly above the series median
-  # For the 1-day windowed (next-24h max) normalisation use class EnergyPriceDynDataSource.
-  max_calc_mode: mean
-  percentile: 0.75  # consulted only when max_calc_mode == "percentile"
+  # Dynamic 1-day price divisor: s_E_price = raw_baseprice / divisor, where divisor is the
+  # |raw baseprice| max over the NEXT 24h window (one day = SECONDS_PER_DAY / control_step steps,
+  # capped at the episode length), recomputed each reset() (per episode / per day). Always publishes
+  # ctxt_E_price_max (the per-episode divisor) so the policy can condition on the scale
+  # (raw = s_E_price * ctxt_E_price_max). episode_length / timestep are context-injected; there are
+  # no max_calc_mode / percentile params.
+  # For the whole-series blended normalisation use class EnergyPriceYearDynDataSource.
+# - class: EnergyPriceFixDataSource
+#   name: E_price
+#   # Synthetic multi-level time-of-use tariff (no CSV), selected by the episode's season.
+#   #   schedules       - maps a season (winter/spring/summer/autumn) or the catch-all "all" to a
+#   #                     {default_price, bands} block. bands is a list of {start, end, price}
+#   #                     entries (start/end are "HH:MM" times in 00:00-24:00, may wrap midnight);
+#   #                     the first band covering the time-of-day wins, else default_price. Omitted
+#   #                     here -> built-in default: peak 40 (17:00-21:00), off-peak 18 (00:00-06:00),
+#   #                     default 28 ct/kWh.
+#   #   default_season  - fallback season when the episode's season has no schedule.
+#   #   emit_ctxt       - also publish ctxt_E_price_max (the divisor) for policy conditioning.
+#   # s_E_price = baseprice / divisor, divisor = largest level magnitude across all schedules.
+#   default_season: summer
+#   emit_ctxt: false
 - class: WeatherDataSource
   name: weather
 - class: InsideTemperature

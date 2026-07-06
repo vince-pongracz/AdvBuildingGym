@@ -50,7 +50,7 @@ class RuleBasedStrategy:
     requires_battery: ClassVar[bool] = False
     requires_price: ClassVar[bool] = False
 
-    def __init__(self, env: AdvBuildingGym, *, preserve_start_soc: bool = True):
+    def __init__(self, env: AdvBuildingGym, *, preserve_start_soc: bool = False):
         """preserve_start_soc: forbid ending an episode with less SoC than it started
         (caps every discharge at the episode-start SoC floor)."""
         self.env = env
@@ -63,7 +63,7 @@ class RuleBasedStrategy:
         self.renewable_names = [i.name for i in env.infras if isinstance(i, RENEWABLE_CLASSES)]
         self.price_source = next(
             (ds for ds in env.statesources
-             if isinstance(ds, Lookahead) and PRICE_LOOKAHEAD_KEY in ds.lookahead_keys()),
+            if isinstance(ds, Lookahead) and PRICE_LOOKAHEAD_KEY in ds.lookahead_keys()),
             None,
         )
 

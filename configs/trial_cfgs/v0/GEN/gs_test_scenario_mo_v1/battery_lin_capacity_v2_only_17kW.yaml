@@ -1,4 +1,4 @@
-trial_name: gen_battery_lin_nomo_all
+trial_name: gen_battery_lin_capacity_v2
 algorithm: sac
 seed: 42
 metric: episode_return_mean
@@ -26,7 +26,7 @@ env_meta:
 
   forecast_env_wrapper:
     enabled: true
-    forecast_steps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+    forecast_steps: [1, 2, 3, 4, 5, 6, 12, 24, 36, 48]
 
 training_params:
   common:
@@ -72,10 +72,16 @@ statesources:
 infras: null
 
 rewards:
+- class_name: TempRewardV0
+  weight: 1.0
+  params: {}
 - class_name: LongTermEconomicRewardV0
   weight: 1.0
   params:
     reference_power_kW: 22.0
+- class_name: MinimiseEnergyConsumptionRewardV0
+  weight: 1.0
+  params: {}
 - class_name: OperatorEnergyControlRewardV0
   weight: 1.0
   params:
@@ -91,6 +97,15 @@ rewards:
   weight: 1.0
   params:
     scale: 0.5
+- class_name: EVChargingRewardV0
+  weight: 1.0
+  params:
+    diff_threshold: 0.02
+    soc_diff_multiplier: 5.0
+    disconnect_soc_tolerance: 0.05
+- class_name: EVChargingOnTimeRewardV0
+  weight: 1.0
+  params: {}
 - class_name: ActionSmoothnessRewardV0
   weight: 1.0
   params:
@@ -103,11 +118,7 @@ infra_schedule:
   swap_every_n_episodes: 100
   configs:
     train:
-    - configs/infra_cfgs/GEN/battery_lin_capacity_v2/battery_lin_cap_1.yaml
-    - configs/infra_cfgs/GEN/battery_lin_capacity_v2/battery_lin_cap_2.yaml
-    - configs/infra_cfgs/GEN/battery_lin_capacity_v2/battery_lin_cap_3.yaml
     - configs/infra_cfgs/GEN/battery_lin_capacity_v2/battery_lin_cap_4.yaml
-    - configs/infra_cfgs/GEN/battery_lin_capacity_v2/battery_lin_cap_5.yaml
     eval:
     - configs/infra_cfgs/GEN/battery_lin_capacity_v2/battery_lin_cap_eval_1.yaml
     - configs/infra_cfgs/GEN/battery_lin_capacity_v2/battery_lin_cap_eval_2.yaml

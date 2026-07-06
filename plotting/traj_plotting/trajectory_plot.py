@@ -55,6 +55,7 @@ def generate_all_plots(
     manifest_path: str | None = None,
     config_path: str | None = None,
     dashboard_dir: str | None = None,
+    episode_plots: bool = True,
 ) -> list[str]:
     """Load an episode, generate all figure groups, save to output_dir.
 
@@ -73,6 +74,10 @@ def generate_all_plots(
         dashboard_dir: Directory for the aggregated dashboard HTML. None = write
             it inside ``output_dir`` (default). Multi-episode callers point this
             at a shared ``dashboards/`` dir sitting beside the ``ep_*`` dirs.
+        episode_plots: Whether to also write the per-group figure files (states,
+            actions, rewards, ...) into output_dir. The dashboard already embeds
+            every figure, so callers that only need the dashboard can pass False
+            to skip these redundant per-episode files entirely.
 
     Returns:
         List of saved file paths.
@@ -83,7 +88,8 @@ def generate_all_plots(
 
     if output_dir is None:
         output_dir = str(get_output_root() / ep_id)
-    os.makedirs(output_dir, exist_ok=True)
+    if episode_plots:
+        os.makedirs(output_dir, exist_ok=True)
 
     all_figures: dict[str, list[go.Figure]] = {
         "states": plot_states(episode),
@@ -117,6 +123,9 @@ def generate_all_plots(
             config_path=config_path,
         )
         saved.append(dashboard_path)
+
+    if not episode_plots:
+        return saved
 
     # Ensure Chrome/Chromium is available for static image export (svg/png/pdf).
     # Kaleido v1+ requires Chrome; this downloads it once to ~/.cache if missing.

@@ -81,9 +81,9 @@ class BatteryLinear(Infrastructure):
 
         # Capacity (kWh) and power (kW) — policy-only conditioning, gated by emit_ctxt.
         self._publish_ctxt(state_spaces, "ctxt_battery_capacity_kWh",
-                           Box(low=0, high=np.inf, shape=(1,), dtype=np.float32))
+                        Box(low=0, high=np.inf, shape=(1,), dtype=np.float32))
         self._publish_ctxt(state_spaces, "ctxt_battery_power_kW",
-                           Box(low=0, high=np.inf, shape=(1,), dtype=np.float32))
+                        Box(low=0, high=np.inf, shape=(1,), dtype=np.float32))
 
         return state_spaces, action_spaces
 

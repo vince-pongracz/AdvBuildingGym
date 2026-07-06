@@ -310,11 +310,12 @@ def _generate_plots(out_dir: str | None, args: argparse.Namespace) -> None:
                 output_dir=os.path.join(plot_dir, ep_label),
                 file_prefix=ep_label,
                 dashboard_dir=dashboard_dir,
+                episode_plots=False,
             )
             total_paths.extend(paths)
         logger.info(
-            "Generated %d plot files for %d episodes in %s",
-            len(total_paths), len(episode_ids), plot_dir,
+            "Generated %d dashboard files for %d episodes in %s",
+            len(total_paths), len(episode_ids), dashboard_dir,
         )
     else:
         paths = generate_all_plots(
