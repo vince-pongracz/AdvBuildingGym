@@ -46,7 +46,8 @@ def select_model(
             # NOTE VP 2026.01.12. : tune these and other hyperparameters later -- using tune
         )
         config.env_runners(
-            rollout_fragment_length=env_config.EPISODE_LENGTH
+            # Full episodes by default (codebase invariant); override via ppo.rollout_length.
+            rollout_fragment_length=training_config.ppo_rollout_length or env_episode_length
         ) # Collect complete episodes before returning to learner.
 
 
@@ -95,7 +96,8 @@ def select_model(
             # grad_clip=1.0,  # RLlib default: None
         )
         config.env_runners(
-            rollout_fragment_length=144
+            # Full episodes by default (codebase invariant); override via sac.rollout_length.
+            rollout_fragment_length=training_config.sac_rollout_length or env_episode_length
         ) # Collect complete episodes before returning to learner.
         
     elif algorithm == "dreamerv3":
@@ -118,6 +120,10 @@ def select_model(
                 "capacity": env_episode_length * training_config.dreamerv3_episodes_to_keep_in_replay_buffer,
             },
         )
+        # DreamerV3 leaves rollout_fragment_length at its RLlib default unless overridden
+        # via dreamerv3.rollout_length (its RLModule manages sequence lengths internally).
+        if training_config.dreamerv3_rollout_length is not None:
+            config.env_runners(rollout_fragment_length=training_config.dreamerv3_rollout_length)
     else:
         raise ValueError(f"Unknown algorithm: {algorithm}. Supported: ppo, sac, dreamerv3")
 

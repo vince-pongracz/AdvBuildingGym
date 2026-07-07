@@ -50,6 +50,7 @@ training_params:
     minibatch_size: 64
     num_epochs: 10
   sac:
+    rollout_length: 144  # override: keep SAC at legacy half-episode fragment
     episodes_to_keep_in_replay_buffer: 500
     n_step_return: 3
     training_intensity: 32

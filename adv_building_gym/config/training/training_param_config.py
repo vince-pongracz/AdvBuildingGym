@@ -71,10 +71,18 @@ class TrainingParamConfig(LoggableConfig):
     # Early stopping on the held-out eval metric (disabled unless patience_episodes > 0).
     early_stopping: EarlyStoppingConfig = field(default_factory=EarlyStoppingConfig)
 
+    # Per-algorithm rollout_fragment_length override 
+    # (steps each EnvRunner collects per sample call). 
+    # None → fall back to EPISODE_LENGTH (the codebase invariant, see
+    # ray/callbacks/_swap_trigger.py). Set only to deviate from full-episode fragments.
+    ppo_rollout_length: int | None = None
+    sac_rollout_length: int | None = None
+    dreamerv3_rollout_length: int | None = None
+
     ppo_episodes_per_iteration: int = 25
     ppo_minibatch_size: int = 128 # Rllib default
     ppo_num_epochs: int = 20
-    
+
     sac_replay_batch_size: int = 256 # NOTE VP 2026.05.08.: Rllib default
     sac_episodes_to_keep_in_replay_buffer: int = 100
     sac_training_intensity: float | None = None

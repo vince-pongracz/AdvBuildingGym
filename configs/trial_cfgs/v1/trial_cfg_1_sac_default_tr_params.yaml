@@ -130,6 +130,7 @@ training_params:
 
   # SAC-specific (off-policy)
   sac:
+    rollout_length: 144  # override: keep SAC at legacy half-episode fragment
     episodes_to_keep_in_replay_buffer: 500 # ≈ 500 * EPISODE_LENGTH transitions
     # UTD = training_intensity / replay_batch_size. 256/256 = 1.0 (vanilla SAC).
     # Without this RLlib falls back to round-robin (UTD ≈ 0.001) → no real learning.
