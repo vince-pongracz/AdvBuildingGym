@@ -188,9 +188,7 @@ class TrialConfig:
             if not data_schedule_path:
                 raise ValueError(f"Trial config {label}: data_schedule.{split} not set")
             data_combinator = load_data_combinator_config(
-                cfg_yaml_path=data_schedule_path,
-                episode_length=env_config.EPISODE_LENGTH,
-                default_seed=trial_seed,
+                cfg_yaml_path=data_schedule_path, default_seed=trial_seed,
             )
             # During training, also build the eval-split combinator so the in-training
             # evaluation rounds sample from the held-out eval dataset (wired to the eval
@@ -200,9 +198,7 @@ class TrialConfig:
                 eval_schedule_path = data_schedule.get("eval")
                 if eval_schedule_path:
                     eval_data_combinator = load_data_combinator_config(
-                        cfg_yaml_path=eval_schedule_path,
-                        episode_length=env_config.EPISODE_LENGTH,
-                        default_seed=trial_seed,
+                        cfg_yaml_path=eval_schedule_path, default_seed=trial_seed,
                     )
                 else:
                     logger.warning(

@@ -65,6 +65,8 @@ class DataCombinator:
 
     def _build_variants(self) -> list[dict[str, str]]:
         """Build the full variant pool from scenarios x variable combinations."""
+        scenarios = self._season_compatible_scenarios()
+
         # Build variable combinations (Cartesian product of independent axes)
         if self.variable:
             keys = list(self.variable.keys())
@@ -78,10 +80,10 @@ class DataCombinator:
             variable_combos = [{}]  # neutral element -- no independent sources
 
         # Cross-product: each scenario x each variable combination
-        if self.scenarios:
+        if scenarios:
             pool = [
                 {**scenario, **var_combo}
-                for scenario in self.scenarios
+                for scenario in scenarios
                 for var_combo in variable_combos
             ]
         else:
@@ -94,10 +96,41 @@ class DataCombinator:
 
         logger.info(
             "Generated %d variant(s) (%d scenario(s) x %d variable combo(s), swap every %d episode(s), mode=%s, day=%s, season=%s)",
-            len(pool), len(self.scenarios), len(variable_combos),
+            len(pool), len(scenarios), len(variable_combos),
             self.swap_every_n_episodes, self.mode, self.day, self.season,
         )
         return pool
+
+    def _season_compatible_scenarios(self) -> list[dict[str, str]]:
+        """Drop scenarios whose data never reaches the configured season.
+
+        Checked once here (construction time), not per-episode: the only question
+        is "does this scenario's CSV cover the season" (``SeasonFilter.covers_csv``),
+        resolved from the "date" source (falling back to "weather"). A scenario that
+        fails this -- e.g. a partial, in-progress calendar year -- is excluded from
+        the pool entirely and logged, rather than being offered as a candidate that
+        could only ever yield an out-of-season day.
+        """
+        if not self._season_filter.enabled or not self.scenarios:
+            return self.scenarios
+
+        coverage_cache: dict[str, bool] = {}
+        kept: list[dict[str, str]] = []
+        for scenario in self.scenarios:
+            csv_path = scenario.get("date", scenario.get("weather"))
+            if csv_path is None:
+                kept.append(scenario)  # nothing to check against -- keep it
+                continue
+            if csv_path not in coverage_cache:
+                coverage_cache[csv_path] = self._season_filter.covers_csv(csv_path)
+            if coverage_cache[csv_path]:
+                kept.append(scenario)
+            else:
+                logger.warning(
+                    "Excluding scenario from data schedule: season %r has no day in %s",
+                    self.season, csv_path,
+                )
+        return kept
 
     def get_variant(
         self,
@@ -170,6 +203,8 @@ class DataCombinator:
 
         if self.day == "random":
             # Restrict the draw to in-season days only (full range when season="all").
+            # _season_compatible_scenarios() already keeps only scenarios that cover
+            # the season, so valid_days is never empty for a real, selected variant.
             valid_days = self._season_filter.valid_day_indices(year, max_days)
             if rng is not None:
                 day_index = int(rng.choice(valid_days))

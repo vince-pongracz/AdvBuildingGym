@@ -22,7 +22,7 @@ env_meta:
     - -1
     - -2
     - -3
-    - -4    
+    - -4
 
   forecast_env_wrapper:
     enabled: true
