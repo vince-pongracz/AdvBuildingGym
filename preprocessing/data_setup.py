@@ -5,8 +5,16 @@ By default, this script runs all three pipelines:
 2) weather/Zenodo fetch + preprocessing
 3) DWD CDC weather download + preprocessing
 
+--years bounds the pipelines: only price/weather/consumption data for the
+selected years is fetched and processed (e.g. the WPuQ/Zenodo archives only
+exist for 2018-2020, so those years must be selected to process them).
+Two outputs stay all-years regardless: the full DWD merged CSV
+(merged_<station>.csv, updated by merging new rows into the rows already on
+disk) and the data quality report (always scans the full data inventory).
+
 Examples:
     python preprocessing/data_setup.py
+    python preprocessing/data_setup.py --years 2018 2019 2020
     python preprocessing/data_setup.py --skip-weather
     python preprocessing/data_setup.py --skip-prices --steps zenodo-extract weather-csv
     python preprocessing/data_setup.py --skip-weather --years 2025 --skip-price-fetch --raw-price-files data/e_price/2025_prices.csv
@@ -54,7 +62,9 @@ def _parse_args() -> argparse.Namespace:
         nargs="+",
         type=int,
         default=DEFAULT_YEARS,
-        help=f"Target years for price data fetch/preprocessing (default: {DEFAULT_YEARS})",
+        help="Target years for the pipelines: prices, Zenodo/WPuQ + DWD weather, household "
+             "consumption, and synthesis inputs. The full DWD merged CSV and the quality "
+             f"report always cover all years on disk (default: {DEFAULT_YEARS})",
     )
     parser.add_argument(
         "--price-source",

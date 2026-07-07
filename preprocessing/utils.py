@@ -3,6 +3,7 @@
 import logging
 import re
 import time
+from collections.abc import Collection, Iterable
 from pathlib import Path
 
 import pandas as pd
@@ -44,6 +45,22 @@ def parse_year_from_filename(file_path: Path) -> int:
     if match is None:
         raise ValueError(f"Could not infer year from filename: {file_path}")
     return int(match.group(1))
+
+
+def name_matches_years(name: str, years: Collection[int] | None) -> bool:
+    """True if name carries a selected 4-digit year, carries no year, or no filter is set.
+
+    Year-less names (e.g. datapackage.json) pass so metadata files survive filtering.
+    """
+    if not years:
+        return True
+    match = re.search(r"(20\d{2})", name)
+    return match is None or int(match.group(1)) in set(years)
+
+
+def filter_paths_by_years(paths: Iterable[Path], years: Collection[int] | None) -> list[Path]:
+    """Keep paths whose filename matches a selected year (see name_matches_years)."""
+    return [path for path in paths if name_matches_years(Path(path).name, years)]
 
 
 def select_columns(

@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import logging
 import zipfile
+from collections.abc import Collection
 from pathlib import Path
 from urllib.parse import urlparse
 
 import requests
 
-from preprocessing.utils import fetch_with_retry
+from preprocessing.utils import fetch_with_retry, filter_paths_by_years, name_matches_years
 
 logger = logging.getLogger(__name__)
 
@@ -64,27 +65,50 @@ def download_file(url: str, destination: Path, overwrite: bool) -> bool:
     return True
 
 
-def download_links(links_file: Path, output_dir: Path, overwrite: bool) -> list[Path]:
-    """Download all links listed in links_file into output_dir."""
+def download_links(
+    links_file: Path,
+    output_dir: Path,
+    overwrite: bool,
+    years: Collection[int] | None = None,
+) -> list[Path]:
+    """Download links listed in links_file into output_dir.
+
+    With years set, links whose filename carries a different 4-digit year are
+    skipped; year-less links (e.g. datapackage.json) are always downloaded.
+    """
     output_dir.mkdir(parents=True, exist_ok=True)
     links = read_links_file(links_file)
 
     downloaded_files: list[Path] = []
+    skipped_by_year = 0
     for url in links:
         filename = filename_from_url(url)
+        if not name_matches_years(filename, years):
+            skipped_by_year += 1
+            continue
         destination = output_dir / filename
         wrote_file = download_file(url, destination, overwrite=overwrite)
         if wrote_file:
             downloaded_files.append(destination)
 
+    if skipped_by_year:
+        logger.info("Skipped %d link(s) outside selected years %s", skipped_by_year, sorted(set(years)),)
+
     return downloaded_files
 
 
-def extract_zip_files(directory: Path, overwrite: bool) -> list[Path]:
-    """Extract zip files in directory; returns list of extracted members."""
+def extract_zip_files(
+    directory: Path,
+    overwrite: bool,
+    years: Collection[int] | None = None,
+) -> list[Path]:
+    """Extract zip files in directory; returns list of extracted members.
+
+    With years set, archives whose filename carries a different 4-digit year are skipped.
+    """
     extracted_files: list[Path] = []
 
-    for zip_path in sorted(directory.glob("*.zip")):
+    for zip_path in filter_paths_by_years(sorted(directory.glob("*.zip")), years):
         try:
             with zipfile.ZipFile(zip_path, "r") as zip_file:
                 members = [Path(member) for member in zip_file.namelist() if not member.endswith("/")]

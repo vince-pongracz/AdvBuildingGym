@@ -180,21 +180,57 @@ def split_by_year(
         logger.info("Written %s (%d rows)", year_csv.name, len(year_df))
 
 
+def upsert_full_merged_csv(merged: pd.DataFrame, full_path: Path) -> pd.DataFrame:
+    """Update the all-years full merged CSV with newly fetched rows.
+
+    Rows already on disk for other years are kept; overlapping timestamps are
+    refreshed with the newly fetched values. This keeps the file all-years even
+    when the fetch was restricted to a subset of years.
+    """
+    full = merged
+    if full_path.exists():
+        try:
+            existing = pd.read_csv(full_path)
+            existing["timestamp"] = pd.to_datetime(existing["timestamp"], utc=True)
+            full = (
+                pd.concat([existing, merged], ignore_index=True)
+                .drop_duplicates(subset="timestamp", keep="last")
+                .sort_values("timestamp")
+                .reset_index(drop=True)
+            )
+        except Exception as exc:
+            logger.warning(
+                "Could not merge existing %s (%s) — rewriting it from fetched data only",
+                full_path.name, exc,
+            )
+    full.to_csv(full_path, index=False)
+    logger.info(
+        "Merged CSV written to %s (%d rows, %d columns)",
+        full_path, len(full), len(full.columns),
+    )
+    return full
+
+
 def preprocess(
     dataframes: dict[str, pd.DataFrame],
     output_dir: Path,
     station_id: str,
     upsample_method: str = "average",
+    years: list[int] | None = None,
 ) -> pd.DataFrame | None:
     """Run the full preprocessing pipeline.
 
     Steps:
       1. Merge data types on MESS_DATUM, rename columns, drop all-missing rows
-      2. Write full merged CSV (10-min resolution)
-      3. Per year: missing report -> upsample to 5-min -> write CSV
+      2. Update the full merged CSV (10-min resolution) — kept all-years by
+         merging with rows already on disk
+      3. Keep only rows within the selected years (if given)
+      4. Per year: missing report -> upsample to 5-min -> write CSV
 
     Args:
         upsample_method: 'average' (linear interpolation) or 'duplicate' (forward-fill).
+        years: Restrict per-year outputs to these years. Needed even when the fetch
+            already filtered archives, because historical zips span multiple years.
     """
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -203,13 +239,17 @@ def preprocess(
         logger.error("Merge produced no data.")
         return None
 
-    # Write the full merged CSV (10-min resolution)
-    full_path = output_dir / f"merged_{station_id}.csv"
-    merged.to_csv(full_path, index=False)
-    logger.info(
-        "Merged CSV written to %s (%d rows, %d columns)",
-        full_path, len(merged), len(merged.columns),
-    )
+    upsert_full_merged_csv(merged, output_dir / f"merged_{station_id}.csv")
+
+    if years:
+        keep_mask = merged["timestamp"].dt.year.isin(list(years))
+        n_dropped = int((~keep_mask).sum())
+        if n_dropped > 0:
+            merged = merged.loc[keep_mask].reset_index(drop=True)
+            logger.info("Dropped %d rows outside selected years %s", n_dropped, sorted(set(years)))
+        if merged.empty:
+            logger.error("No DWD rows left for selected years %s.", sorted(set(years)))
+            return None
 
     split_by_year(merged, output_dir, station_id, upsample_method)
 
