@@ -135,7 +135,7 @@ training_params:
     # UTD = training_intensity / replay_batch_size. 256/256 = 1.0 (vanilla SAC).
     # Without this RLlib falls back to round-robin (UTD ≈ 0.001) → no real learning.
     n_step_return: 3 # 6-step is biased under non-stationary rewards / curricula
-    training_intensity: 32
+    training_intensity: 10
     learning_starts_after_n_episodes: 50
 
 data_schedule:
