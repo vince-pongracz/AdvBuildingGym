@@ -21,9 +21,9 @@ infras:
   v2g_playroom: 0.1
 - class: SolarPanel
   name: solar
-  max_power_kW: 15.0
+  max_power_kW: 5.0
   pv_efficiency: 0.22
-  panel_area_m2: 170
+  panel_area_m2: 50
 - class: HouseholdEnergyConsumers
   name: hh_consumers
   peak_consumption_kW: 8.0

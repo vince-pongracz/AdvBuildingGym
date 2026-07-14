@@ -1,9 +1,14 @@
+# Per-episode battery-size sampling (BatteryLinearWrapper): capacity drawn
+# uniformly from max_cap_range_kWh at every reset, rounded to 1 decimal;
+# exc_max_cap_kWh holds out the in-range eval capacities (eval set: 12/16/22,
+# see battery_lin_capacity_so_v2/battery_lin_cap_eval_*.yaml).
 infras:
-- class: BatteryLinear
+- class: BatteryLinearWrapper
   name: battery
   ctxt_keys: [ctxt_battery_capacity_kWh]
-  max_power_kW: 10.0
-  max_cap_kWh: 22.0
+  max_power_range_kW: [10.0, 10.0]
+  max_cap_range_kWh: [10.0, 25.0]
+  exc_max_cap_kWh: [12.0, 16.0, 22.0]
   start_soc_percentage: 0.3
   start_soc_jitter: 0.1
   soc_min: 0.1

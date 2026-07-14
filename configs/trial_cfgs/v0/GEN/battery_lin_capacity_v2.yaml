@@ -139,6 +139,6 @@ data_schedule:
   eval: configs/schedules/data/eval.yaml
 
 exploration_reset:
-  enabled: true
+  enabled: false
   trigger: on_infra_swap
   sac_alpha: 0.5

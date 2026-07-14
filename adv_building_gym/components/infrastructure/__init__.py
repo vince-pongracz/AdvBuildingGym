@@ -9,7 +9,7 @@ logging.basicConfig(
 )
 
 from .base import Infrastructure
-from .battery_models import BatteryLinear, BatteryTremblay
+from .battery_models import BatteryLinear, BatteryLinearWrapper, BatteryTremblay
 from .ev_charger import LinearEVCharger, EvSpec
 from .hh_consumers import HouseholdEnergyConsumers
 from .hp import HP
@@ -21,6 +21,7 @@ __all__ = [
     "HP",
     "HouseholdEnergyConsumers",
     "BatteryLinear",
+    "BatteryLinearWrapper",
     "BatteryTremblay",
     "LinearEVCharger",
     "EvSpec",
