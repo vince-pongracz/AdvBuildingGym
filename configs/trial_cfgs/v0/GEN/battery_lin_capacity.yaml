@@ -71,16 +71,17 @@ statesources:
 #   #                     here -> built-in default: peak 40 (17:00-21:00), off-peak 18 (00:00-06:00),
 #   #                     default 28 ct/kWh.
 #   #   default_season  - fallback season when the episode's season has no schedule.
-#   #   emit_ctxt       - also publish ctxt_E_price_max (the divisor) for policy conditioning.
+#   #   ctxt_keys       - list ctxt_E_price_max to publish the divisor (price scale) for policy conditioning.
 #   # s_E_price = baseprice / divisor, divisor = largest level magnitude across all schedules.
 #   default_season: summer
-#   emit_ctxt: false
+#   ctxt_keys: [ctxt_E_price_max]
 - class: WeatherDataSource
   name: weather
 - class: InsideTemperature
   name: desired_temp_in
 - class: DesiredUserEnergyNeed
   name: user_energy_need
+  ctxt_keys: [ctxt_hh_consumption_max]
 - class: BuildingHeatLoss
   name: building_heat_loss
   K: 20

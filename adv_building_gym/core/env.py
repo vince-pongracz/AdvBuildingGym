@@ -121,6 +121,10 @@ class AdvBuildingGym(gym.Env, DataVariantConsumer):
         for ds in self.statesources:
             ds.setup_spaces(observation_space, action_space)
 
+        # Fail fast on ctxt_keys typos now that every component has offered its ctxt keys.
+        for component in self.infras + self.statesources:
+            component.validate_ctxt_keys()
+
         # env-owned hour-of-day [0, 1]; depends only on iteration and EPISODE_LENGTH
         observation_space["s_sim_time"] = spaces.Box(low=0.0, high=np.inf, shape=(1,), dtype=np.float32)
 

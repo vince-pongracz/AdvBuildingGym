@@ -9,9 +9,10 @@ statesources:
   name: desired_temp_in
 - class: DesiredUserEnergyNeed
   name: user_energy_need
+  ctxt_keys: [ctxt_hh_consumption_max]
 - class: BuildingHeatLoss
   name: building_heat_loss
-  emit_ctxt: true
+  ctxt_keys: [ctxt_building_K]
   K: 30
   mC: 150
 - class: EVState

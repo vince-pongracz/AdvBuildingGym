@@ -26,7 +26,7 @@ class EnergyPriceYearDynDataSource(StateSource, Forecastable, CsvLookahead, CsvR
 
     For the 1-day windowed (next-24h max) normalisation use ``EnergyPriceDayDynDataSource`` instead.
 
-    The divisor (raw ct/kWh) is published as ``ctxt_E_price_max`` only when ``emit_ctxt`` is set,
+    The divisor (raw ct/kWh) is published as ``ctxt_E_price_max`` only when listed in ``ctxt_keys``,
     so the policy can condition on the price scale (``raw = s_E_price * ctxt_E_price_max``).
     """
 
@@ -47,7 +47,7 @@ class EnergyPriceYearDynDataSource(StateSource, Forecastable, CsvLookahead, CsvR
     def __init__(self, name: str, ds_path: str | None = None,
                 max_calc_mode: str = "mean",
                 percentile: float = 0.75,
-                emit_ctxt: bool = False,
+                ctxt_keys: list[str] | None = None,
                 episode_length: int = 288) -> None:
         """Args:
             name: Source identifier.
@@ -58,7 +58,8 @@ class EnergyPriceYearDynDataSource(StateSource, Forecastable, CsvLookahead, CsvR
                   percentile        — `percentile` quantile
                   mean_above_median — mean of values above the median
             percentile: Quantile in (0, 1); used only when max_calc_mode == "percentile".
-            emit_ctxt: Also publish ctxt_E_price_max (the active divisor) for policy conditioning.
+            ctxt_keys: ctxt_* keys to expose to the policy; list ctxt_E_price_max (the active
+                divisor) for price-level conditioning.
             episode_length: Episode length in steps (context-injected); sizes the blend window.
         """
         super().__init__(name=name)
@@ -69,7 +70,7 @@ class EnergyPriceYearDynDataSource(StateSource, Forecastable, CsvLookahead, CsvR
             raise ValueError(f"percentile must be in (0, 1) when max_calc_mode='percentile'; got {percentile}.")
 
         self.max_calc_mode = max_calc_mode
-        self.emit_ctxt = bool(emit_ctxt)
+        self.ctxt_keys = list(ctxt_keys) if ctxt_keys is not None else None
         self.percentile = float(percentile)
         self.episode_length: int = episode_length
 
@@ -133,7 +134,7 @@ class EnergyPriceYearDynDataSource(StateSource, Forecastable, CsvLookahead, CsvR
         if "s_E_price" not in state_spaces:
             state_spaces["s_E_price"] = Box(low=-np.inf, high=np.inf, shape=(1,), dtype=np.float32)
 
-        # Price divisor (raw ct/kWh) — policy-only conditioning, gated by emit_ctxt. raw = s_E_price * this.
+        # Price divisor (raw ct/kWh) — policy-only conditioning, published only when listed in ctxt_keys. raw = s_E_price * this.
         self._publish_ctxt(state_spaces, "ctxt_E_price_max", Box(low=-np.inf, high=np.inf, shape=(1,), dtype=np.float32))
 
         return state_spaces, action_spaces
@@ -148,7 +149,7 @@ class EnergyPriceYearDynDataSource(StateSource, Forecastable, CsvLookahead, CsvR
         self.baseprice_raw = float(self.ts["baseprice"].iloc[idx])
 
         states["s_E_price"][0] = np.float32(self._normalise(self.baseprice_raw))
-        # No-op unless ctxt_E_price_max was published (emit_ctxt).
+        # No-op unless ctxt_E_price_max was published (listed in ctxt_keys).
         self._write_ctxt(states, "ctxt_E_price_max", np.float32(self.price_divisor))
 
     def reset(self, states, info: dict) -> None:

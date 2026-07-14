@@ -6,7 +6,7 @@ infras:
   cop_cool: 2.5
 - class: BatteryLinear
   name: battery
-  emit_ctxt: true
+  ctxt_keys: [ctxt_battery_power_kW]
   max_power_kW: 22.0
   max_cap_kWh: 10.0
   start_soc_percentage: 0.3

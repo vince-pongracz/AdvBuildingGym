@@ -58,6 +58,7 @@ statesources:
   name: weather
 - class: DesiredUserEnergyNeed
   name: user_energy_need
+  ctxt_keys: [ctxt_hh_consumption_max]
 - class: OperatorEnergyControl
   name: operator_energy_control
   max_power_kW: 20.0

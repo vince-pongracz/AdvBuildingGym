@@ -36,6 +36,12 @@ class DataCombinator:
                 season (``winter``/``spring``/``summer``/``autumn``/
                 ``spring_autumn``); ``"all"`` (default) disables filtering. A
                 pinned date string ignores this. See ``season_filter.py``.
+        active_source_names: Names of the trial's reloadable statesources. When set,
+                variant keys with no consuming statesource are excluded: variable axes
+                not in the set are disabled, scenario dicts are projected onto the set,
+                and the resulting duplicates are collapsed — a CSV only constitutes a
+                variant if a configured statesource processes it. ``None`` disables
+                filtering (full pool, legacy behaviour).
 
     Final pool = scenarios x variable_combinations.
     If scenarios is empty, only variable combinations are used (and vice versa).
@@ -43,6 +49,7 @@ class DataCombinator:
 
     scenarios: list[dict[str, str]] = field(default_factory=list)
     variable: dict[str, list[str]] = field(default_factory=dict)
+    active_source_names: frozenset[str] | None = None
 
     swap_every_n_episodes: int = 5
     mode: Literal["cycle", "random"] = "cycle"
@@ -66,15 +73,21 @@ class DataCombinator:
     def _build_variants(self) -> list[dict[str, str]]:
         """Build the full variant pool from scenarios x variable combinations."""
         scenarios = self._season_compatible_scenarios()
+        variable = self.variable
+        if self.active_source_names is not None:
+            # Season filtering above must see the unprojected dicts (it reads the
+            # "date"/"weather" paths); conformance filtering comes after.
+            scenarios = self._project_scenarios_onto_active_sources(scenarios)
+            variable = self._active_variable_axes()
 
         # Build variable combinations (Cartesian product of independent axes)
-        if self.variable:
-            keys = list(self.variable.keys())
+        if variable:
+            keys = list(variable.keys())
             variable_combos: list[dict[str, str]] = [
                 dict(zip(keys, combo))
-                # NOTE: itertools.product(*[self.variable[k] for k in keys]) gives Cartesian product of the variable lists.
+                # NOTE: itertools.product(*[variable[k] for k in keys]) gives Cartesian product of the variable lists.
                 # We want to keep track of which path belongs to which source_name, so we zip back with keys to get dicts.
-                for combo in itertools.product(*(self.variable[k] for k in keys))
+                for combo in itertools.product(*(variable[k] for k in keys))
             ]
         else:
             variable_combos = [{}]  # neutral element -- no independent sources
@@ -88,7 +101,13 @@ class DataCombinator:
             ]
         else:
             # No scenarios -- return variable combinations only (omit the empty-dict case)
-            pool = variable_combos if self.variable else []
+            pool = variable_combos if variable else []
+
+        if not pool and (self.scenarios or self.variable):
+            logger.warning(
+                "Data variant pool is empty after filtering: no configured statesource "
+                "consumes any of the scheduled data sources.",
+            )
 
         if self.shuffle:
             rng = np.random.default_rng(seed=self.seed)
@@ -131,6 +150,53 @@ class DataCombinator:
                     self.season, csv_path,
                 )
         return kept
+
+    def _active_variable_axes(self) -> dict[str, list[str]]:
+        """Drop variable axes with no consuming statesource in the trial config.
+
+        A CSV only constitutes a variant if a configured reloadable statesource
+        processes it — a dead axis would multiply the pool with duplicates.
+        """
+        disabled = [axis for axis in self.variable if axis not in self.active_source_names]
+        for axis in disabled:
+            logger.warning(
+                "Variable axis %r disabled: no reloadable statesource with that name "
+                "in the trial config.", axis,
+            )
+        return {axis: paths for axis, paths in self.variable.items() if axis not in disabled}
+
+    def _project_scenarios_onto_active_sources(self, 
+        scenarios: list[dict[str, str]],
+    ) -> list[dict[str, str]]:
+        """Project scenario dicts onto the active sources and collapse duplicates.
+
+        Keys with no consuming statesource (e.g. an ``E_price`` CSV while the trial
+        uses the synthetic fix-price source) are removed; scenarios that become
+        identical after projection are deduplicated order-preservingly. Scenarios
+        projected to the empty dict are dropped entirely.
+        """
+        dead_keys = {key for scenario in scenarios for key in scenario if key not in self.active_source_names}
+        if dead_keys:
+            logger.warning(
+                "Scenario source(s) %s disabled: no reloadable statesource with that "
+                "name in the trial config.", sorted(dead_keys),
+            )
+        projected: list[dict[str, str]] = []
+        seen: set[tuple[tuple[str, str], ...]] = set()
+        for scenario in scenarios:
+            kept = {name: path for name, path in scenario.items() if name in self.active_source_names}
+            if not kept:
+                continue
+            dedupe_key = tuple(sorted(kept.items()))
+            if dedupe_key not in seen:
+                seen.add(dedupe_key)
+                projected.append(kept)
+        if len(projected) < len(scenarios):
+            logger.info(
+                "Scenario pool reduced %d -> %d after projecting onto the trial's "
+                "statesources and deduplicating.", len(scenarios), len(projected),
+            )
+        return projected
 
     def get_variant(
         self,

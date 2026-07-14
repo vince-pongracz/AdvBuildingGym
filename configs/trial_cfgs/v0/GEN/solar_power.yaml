@@ -58,6 +58,7 @@ statesources:
   name: desired_temp_in
 - class: DesiredUserEnergyNeed
   name: user_energy_need
+  ctxt_keys: [ctxt_hh_consumption_max]
 - class: BuildingHeatLoss
   name: building_heat_loss
   K: 20

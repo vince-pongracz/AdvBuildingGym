@@ -40,7 +40,7 @@ class WindTurbine(Infrastructure, Forecastable):
                 cut_in_speed_ms: float = 3.0,
                 rated_speed_ms: float = 10.0,
                 cut_out_speed_ms: float = 25.0,
-                emit_ctxt: bool = False,
+                ctxt_keys: list[str] | None = None,
                 ) -> None:
         """Initialize wind turbine infrastructure.
 
@@ -57,7 +57,7 @@ class WindTurbine(Infrastructure, Forecastable):
                 Link: https://webstore.iec.ch/en/publication/5433
         """
         super().__init__(name, max_power_kW)
-        self.emit_ctxt = emit_ctxt
+        self.ctxt_keys = list(ctxt_keys) if ctxt_keys is not None else None
 
         if cut_in_speed_ms >= rated_speed_ms:
             raise ValueError("cut_in_speed must be less than rated_speed.")
@@ -91,8 +91,8 @@ class WindTurbine(Infrastructure, Forecastable):
         # weather-derived observation the policy sees for wind.
         if "s_wind_power_norm" not in state_spaces.keys():
             state_spaces["s_wind_power_norm"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
-        # Raw rated power (kW) — policy-only conditioning, gated by emit_ctxt;
-        # lets the policy recover absolute power from the normalised obs.
+        # Raw rated power (kW) — policy-only conditioning, published only when listed in
+        # ctxt_keys; lets the policy recover absolute power from the normalised obs.
         self._publish_ctxt(state_spaces, "ctxt_wind_rated_power_kW",
                         Box(low=0, high=np.inf, shape=(1,), dtype=np.float32))
 

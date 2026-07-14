@@ -47,6 +47,8 @@ from typing import Any, Optional
 
 import yaml
 
+from adv_building_gym._common.lifecycle import Reloadable
+from adv_building_gym.components.registry import ComponentRegistry
 from adv_building_gym.config.data.data_config import load_data_combinator_config
 from adv_building_gym.config.env.env_config import EnvConfig
 from adv_building_gym.config.env.env_config_manager import EnvConfigManager
@@ -178,36 +180,6 @@ class TrialConfig:
             env_meta_doc=env_meta_doc,
         )
 
-        # ---- data combinator (path-based train/eval) ----
-        data_combinator: Optional[DataCombinator] = None
-        eval_data_combinator: Optional[DataCombinator] = None
-        data_schedule = trial_dict.get("data_schedule")
-        if data_schedule:
-            split = "train" if is_training else "eval"
-            data_schedule_path = data_schedule.get(split)
-            if not data_schedule_path:
-                raise ValueError(f"Trial config {label}: data_schedule.{split} not set")
-            data_combinator = load_data_combinator_config(
-                cfg_yaml_path=data_schedule_path, default_seed=trial_seed,
-            )
-            # During training, also build the eval-split combinator so the in-training
-            # evaluation rounds sample from the held-out eval dataset (wired to the eval
-            # EnvRunners by the env creator, gated on eval_mode). When is_training=False
-            # the standalone eval driver already loads the eval split as data_combinator.
-            if is_training:
-                eval_schedule_path = data_schedule.get("eval")
-                if eval_schedule_path:
-                    eval_data_combinator = load_data_combinator_config(
-                        cfg_yaml_path=eval_schedule_path, default_seed=trial_seed,
-                    )
-                else:
-                    logger.warning(
-                        "Trial config %s: data_schedule.eval not set — in-training "
-                        "evaluation falls back to the training dataset.", label,
-                    )
-        elif require_data_schedule:
-            raise ValueError(f"Trial config {label} missing 'data_schedule' (required for training)")
-
         # ---- rewards (required) + optional reward schedule (inlined) ----
         rewards_pool = trial_dict["rewards"]
         if not isinstance(rewards_pool, list) or not rewards_pool:
@@ -280,6 +252,54 @@ class TrialConfig:
                 statesource_combinator.swap_every_n_episodes,
             )
 
+        # ---- data combinator (path-based train/eval) ----
+        # Built after the statesource axis is known: variant keys with no consuming
+        # reloadable statesource are excluded from the pool, so a shared data-schedule
+        # YAML cannot inflate the pool with combinations the trial never loads.
+        # With a statesource schedule, the per-split union keeps an axis alive if ANY
+        # scheduled config consumes it (matching the swap-through-configs semantics).
+        if statesource_combinator is not None:
+            active_sources: dict[str, frozenset[str]] = {
+                split: _reloadable_statesource_names(
+                    [spec for cfg_specs in statesource_combinator.spec_dicts(split) for spec in cfg_specs]
+                )
+                for split in ("train", "eval")
+            }
+        else:
+            inline_names = _reloadable_statesource_names(env_config.statesource_specs)
+            active_sources = {"train": inline_names, "eval": inline_names}
+
+        data_combinator: Optional[DataCombinator] = None
+        eval_data_combinator: Optional[DataCombinator] = None
+        data_schedule = trial_dict.get("data_schedule")
+        if data_schedule:
+            split = "train" if is_training else "eval"
+            data_schedule_path = data_schedule.get(split)
+            if not data_schedule_path:
+                raise ValueError(f"Trial config {label}: data_schedule.{split} not set")
+            data_combinator = load_data_combinator_config(
+                cfg_yaml_path=data_schedule_path, default_seed=trial_seed,
+                active_source_names=active_sources[split],
+            )
+            # During training, also build the eval-split combinator so the in-training
+            # evaluation rounds sample from the held-out eval dataset (wired to the eval
+            # EnvRunners by the env creator, gated on eval_mode). When is_training=False
+            # the standalone eval driver already loads the eval split as data_combinator.
+            if is_training:
+                eval_schedule_path = data_schedule.get("eval")
+                if eval_schedule_path:
+                    eval_data_combinator = load_data_combinator_config(
+                        cfg_yaml_path=eval_schedule_path, default_seed=trial_seed,
+                        active_source_names=active_sources["eval"],
+                    )
+                else:
+                    logger.warning(
+                        "Trial config %s: data_schedule.eval not set — in-training "
+                        "evaluation falls back to the training dataset.", label,
+                    )
+        elif require_data_schedule:
+            raise ValueError(f"Trial config {label} missing 'data_schedule' (required for training)")
+
         # ---- multi-axis eval guard ----
         if not is_training and infra_combinator is not None and statesource_combinator is not None:
             if infra_combinator.eval_count() > 1 and statesource_combinator.eval_count() > 1:
@@ -317,6 +337,36 @@ class TrialConfig:
             trial.seed, training_param_config.max_episodes_to_run, trial.metric,
         )
         return trial
+
+
+def _reloadable_statesource_names(specs: list[dict]) -> frozenset[str]:
+    """Names of the configured statesources whose class is ``Reloadable``.
+
+    Statically mirrors what ``ReloadDispatcher.register_all`` does at runtime with
+    the instantiated sources (``isinstance(source, Reloadable)``), so the data
+    combinator can exclude variant keys no configured statesource would consume.
+    Only the trial's spec dicts count — a class merely registered in the
+    ``ComponentRegistry`` contributes nothing. Unresolvable class names are kept
+    (never silently drop data on a lookup error).
+    """
+    names: set[str] = set()
+    for spec in specs:
+        name = spec.get("name")
+        if not name:
+            continue
+        class_name = spec.get("class")
+        try:
+            statesource_class = ComponentRegistry.get("statesource", class_name)
+        except ValueError:
+            logger.warning(
+                "Statesource class %r not in ComponentRegistry — keeping %r in the "
+                "active data-source set.", class_name, name,
+            )
+            names.add(name)
+            continue
+        if issubclass(statesource_class, Reloadable):
+            names.add(name)
+    return frozenset(names)
 
 
 def _validate_mutex(

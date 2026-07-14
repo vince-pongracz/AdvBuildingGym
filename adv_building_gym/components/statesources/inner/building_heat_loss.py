@@ -12,7 +12,9 @@ from adv_building_gym._common.constants import SLOWDOWN_TERM, TEMP_ABS_MAX_CELSI
 logger = logging.getLogger(__name__)
 
 # Inner statesource: deterministic physics update of s_temp_in_norm (no action).
-# Sole owner of envelope params (K, mC), published as ctxt_building_K / ctxt_building_mC.
+# Sole owner of envelope params (K, mC): both exposable to the policy as 
+# ctxt_building_K / ctxt_building_mC via ctxt_keys; 
+# mC is also shared on the info channel for HP.
 
 class BuildingHeatLoss(StateSource):
     """Building heat loss/gain from indoor-outdoor temperature difference.
@@ -33,10 +35,10 @@ class BuildingHeatLoss(StateSource):
                 K: float,
                 mC: float,
                 timestep: float = 300,
-                emit_ctxt: bool = False) -> None:
+                ctxt_keys: list[str] | None = None) -> None:
         """K: heat transfer coefficient [W/K]; mC: thermal mass [J/K]; timestep: seconds."""
         super().__init__(name=name)
-        self.emit_ctxt = emit_ctxt
+        self.ctxt_keys = list(ctxt_keys) if ctxt_keys is not None else None
         self.K = K
         self.mC = mC
         self.timestep = timestep
@@ -52,11 +54,11 @@ class BuildingHeatLoss(StateSource):
         sees the comfort error (s_temp_error_norm, published by InsideTemperature) instead.
         """
         # Static building physics — context, changes only on a building swap.
-        # K is policy-only conditioning (gated by emit_ctxt); mC is functional —
-        # HP reads ctxt_building_mC for its 1R1C update, so it is always published.
+        # Both K and mC are policy-facing ctxt keys (added to the obs space only when listed
+        # in ctxt_keys). mC is additionally shared on the info channel in update_state — HP
+        # reads it there for its 1R1C update regardless of ctxt_keys.
         self._publish_ctxt(state_spaces, "ctxt_building_K", Box(low=0, high=np.inf, shape=(1,), dtype=np.float32))
-        if "ctxt_building_mC" not in state_spaces:
-            state_spaces["ctxt_building_mC"] = Box(low=0, high=np.inf, shape=(1,), dtype=np.float32)
+        self._publish_ctxt(state_spaces, "ctxt_building_mC", Box(low=0, high=np.inf, shape=(1,), dtype=np.float32))
 
         return state_spaces, action_spaces
 
@@ -92,9 +94,11 @@ class BuildingHeatLoss(StateSource):
         # wins in RawStateTracker (infras collected before statesources).
         self.temp_in_raw = new_temp * temp_abs_max
 
-        # publish static building physics (K policy-only/gated; mC functional, always on)
+        # K and mC are policy-facing ctxt keys (obs iff listed in ctxt_keys); mC is also
+        # shared on the info channel so HP can read the thermal mass regardless of ctxt_keys.
         self._write_ctxt(states, "ctxt_building_K", np.float32(self.K))
-        states["ctxt_building_mC"][0] = np.float32(self.mC)
+        self._write_ctxt(states, "ctxt_building_mC", np.float32(self.mC))
+        info["ctxt_building_mC"] = float(self.mC)
 
     def get_raw_values(self) -> dict[str, float]:
         return {"raw_temp_in": self.temp_in_raw}

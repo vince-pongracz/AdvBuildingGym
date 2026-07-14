@@ -6,7 +6,7 @@ infras:
   cop_cool: 2.5
 - class: BatteryLinear
   name: battery
-  emit_ctxt: true
+  ctxt_keys: [ctxt_battery_capacity_kWh]
   max_power_kW: 10.0
   max_cap_kWh: 20.0
   start_soc_percentage: 0.3
@@ -21,7 +21,7 @@ infras:
   v2g_playroom: 0.1
 - class: SolarPanel
   name: solar
-  emit_ctxt: true
+  ctxt_keys: [ctxt_solar_max_power_kW]
   max_power_kW: 20.0
   pv_efficiency: 0.22
   panel_area_m2: 200

@@ -40,7 +40,7 @@ class BatteryLinear(Infrastructure):
                 soc_min: float,
                 soc_max: float,
                 start_soc_jitter: float = 0.0,
-                emit_ctxt: bool = False,
+                ctxt_keys: list[str] | None = None,
                 ) -> None:
         """Initialize linear battery model.
 
@@ -57,7 +57,7 @@ class BatteryLinear(Infrastructure):
                 keeps the deterministic ``start_soc_percentage``.
         """
         super().__init__(name, max_power_kW)
-        self.emit_ctxt = emit_ctxt
+        self.ctxt_keys = list(ctxt_keys) if ctxt_keys is not None else None
 
         if start_soc_jitter < 0.0:
             raise ValueError("start_soc_jitter must be non-negative.")
@@ -79,7 +79,7 @@ class BatteryLinear(Infrastructure):
         if "s_battery_soc" not in state_spaces.keys():
             state_spaces["s_battery_soc"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
 
-        # Capacity (kWh) and power (kW) — policy-only conditioning, gated by emit_ctxt.
+        # Capacity (kWh) and power (kW) — policy-only conditioning, published only when listed in ctxt_keys.
         self._publish_ctxt(state_spaces, "ctxt_battery_capacity_kWh",
                         Box(low=0, high=np.inf, shape=(1,), dtype=np.float32))
         self._publish_ctxt(state_spaces, "ctxt_battery_power_kW",

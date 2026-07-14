@@ -39,18 +39,20 @@ class EnergyPriceDayDynDataSource(StateSource, Forecastable, CsvLookahead, CsvRe
     _lookahead_columns: ClassVar[dict[str, str]] = {"baseprice": "baseprice"}
 
     def __init__(self, name: str, ds_path: str | None = None,
+                ctxt_keys: list[str] | None = None,
                 episode_length: int = 288,
                 timestep: float = 300.0) -> None:
         """Args:
             name: Source identifier.
             ds_path: Optional CSV path; pushed later via DataCombinator.reload.
+            ctxt_keys: ctxt_* keys to expose to the policy; the per-episode price scale changes
+                every reset(), so list ctxt_E_price_max to let the policy condition on it.
             episode_length: Episode length in steps (context-injected); caps the 24h window.
             timestep: Control step in seconds (context-injected); window = SECONDS_PER_DAY / timestep steps.
         """
         super().__init__(name=name)
 
-        # The per-episode price scale changes every reset(), so the policy must always see it.
-        self.emit_ctxt = True
+        self.ctxt_keys = list(ctxt_keys) if ctxt_keys is not None else None
         self.episode_length = int(episode_length)
         # One day in control steps; bounds the per-episode lookahead window.
         self.steps_per_day = max(1, round(SECONDS_PER_DAY / timestep))

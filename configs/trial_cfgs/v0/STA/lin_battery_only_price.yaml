@@ -53,7 +53,7 @@ training_params:
     rollout_length: 144  # override: keep SAC at legacy half-episode fragment
     episodes_to_keep_in_replay_buffer: 500
     n_step_return: 3
-    training_intensity: 32
+    training_intensity: 10
     learning_starts_after_n_episodes: 50
   dreamerv3:
     model_size: "XS"
@@ -77,10 +77,10 @@ statesources:
 #   #                     entries (start/end are "HH:MM" times in 00:00-24:00, may wrap midnight);
 #   #                     the first band covering the time-of-day wins, else default_price.
 #   #   default_season  - fallback season when the episode's season has no schedule.
-#   #   emit_ctxt       - also publish ctxt_E_price_max (the divisor) for policy conditioning.
+#   #   ctxt_keys       - list ctxt_E_price_max to publish the divisor (price scale) for policy conditioning.
 #   # s_E_price = baseprice / divisor, divisor = largest level magnitude across all schedules.
 #   default_season: summer
-#   emit_ctxt: false
+#   ctxt_keys: [ctxt_E_price_max]
 #   # Explicit form of the built-in default tariff (under "all" -> used every season).
 #   schedules:
 #     all:
@@ -100,6 +100,7 @@ statesources:
   name: desired_temp_in
 - class: DesiredUserEnergyNeed
   name: user_energy_need
+  ctxt_keys: [ctxt_hh_consumption_max]
 - class: OperatorEnergyControl
   name: operator_energy_control
   max_power_kW: 20.0

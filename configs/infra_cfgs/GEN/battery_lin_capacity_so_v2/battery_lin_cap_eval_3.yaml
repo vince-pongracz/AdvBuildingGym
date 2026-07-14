@@ -1,7 +1,7 @@
 infras:
 - class: BatteryLinear
   name: battery
-  emit_ctxt: true
+  ctxt_keys: [ctxt_battery_capacity_kWh]
   max_power_kW: 10.0
   max_cap_kWh: 22.0
   start_soc_percentage: 0.3

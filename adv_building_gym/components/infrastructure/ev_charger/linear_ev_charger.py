@@ -42,7 +42,7 @@ class LinearEVCharger(Infrastructure):
                 max_charge_time_hrs: float = 24.0,
                 v2g_enabled: bool = True,
                 v2g_playroom: float = 0.1,
-                emit_ctxt: bool = False,
+                ctxt_keys: list[str] | None = None,
                 ) -> None:
         """Initialize EV Charger infrastructure.
 
@@ -59,7 +59,7 @@ class LinearEVCharger(Infrastructure):
                 disallowed even when both V2G flags are set.
         """
         super().__init__(name, max_power_kW)
-        self.emit_ctxt = emit_ctxt
+        self.ctxt_keys = list(ctxt_keys) if ctxt_keys is not None else None
 
         self.control_step = control_step
         self.max_charge_time_hrs = max_charge_time_hrs
@@ -150,7 +150,7 @@ class LinearEVCharger(Infrastructure):
         # Effective V2G = charger.v2g_enabled AND ev_spec.v2g_enabled. Unlike
         # ctxt_ev_schedule_v2g (EV-side only), this is the actionable composite
         # (0 if unplugged or either side forbids V2G). Policy-only — no code reads it,
-        # so it is gated by emit_ctxt (unlike the other evc_* keys the rewards read).
+        # so it is published only when listed in ctxt_keys (unlike the always-on evc_* keys the rewards read).
         self._publish_ctxt(state_spaces, "ctxt_evc_v2g_effective",
                             Box(low=0, high=1, shape=(1,), dtype=np.float32))
 

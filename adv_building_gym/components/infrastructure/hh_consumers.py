@@ -82,7 +82,7 @@ class HouseholdEnergyConsumers(Infrastructure):
         # Scale normalised signal to physical kW by the dataset's own max (recovers
         # raw kW since DesiredUserEnergyNeed uses abs-min-max scaling); fall back to
         # the configured peak when no such source is present.
-        self._effective_peak_kW = self._resolve_peak_kW(states)
+        self._effective_peak_kW = self._resolve_peak_kW(info)
         self.current_consumption_kW = self.consumption_norm * self._effective_peak_kW
 
     def update_state(self, states: Dict, info: dict) -> None:
@@ -93,11 +93,11 @@ class HouseholdEnergyConsumers(Infrastructure):
         """Clear per-episode consumption readouts and refresh the effective peak.
 
         Statesources reset before infras, so ``ctxt_hh_consumption_max`` is already
-        published here when a DesiredUserEnergyNeed source exists.
+        shared on the info channel here when a DesiredUserEnergyNeed source exists.
         """
         self.consumption_norm = 0.0
         self.current_consumption_kW = 0.0
-        self._effective_peak_kW = self._resolve_peak_kW(states)
+        self._effective_peak_kW = self._resolve_peak_kW(info)
         # Bind to env rng (info["_rng"]) so fallback noise shares the
         # deterministic per-worker stream; standalone fallback otherwise.
         self._rng = info.get("_rng") or np.random.default_rng()
@@ -108,13 +108,13 @@ class HouseholdEnergyConsumers(Infrastructure):
         """Max grid draw (kW) = effective peak (data max when published, else fallback)."""
         return self._effective_peak_kW
 
-    def _resolve_peak_kW(self, states: Dict) -> float:
-        """Physical peak load (kW): the dataset max published by DesiredUserEnergyNeed
-        (``ctxt_hh_consumption_max``) when present and positive, else the configured fallback."""
-        if "ctxt_hh_consumption_max" in states:
-            published = float(states["ctxt_hh_consumption_max"][0])
-            if published > 0.0:
-                return published
+    def _resolve_peak_kW(self, info: dict) -> float:
+        """Physical peak load (kW): the dataset max shared by DesiredUserEnergyNeed on the
+        info channel (``ctxt_hh_consumption_max``) when present and positive, else the
+        configured fallback."""
+        published = info.get("ctxt_hh_consumption_max")
+        if published is not None and float(published) > 0.0:
+            return float(published)
         return self.peak_consumption_kW
 
     def _synthetic_consumption(self, states: Dict) -> float:

@@ -6,7 +6,7 @@ infras:
   cop_cool: 2.5
 - class: BatteryTremblay
   name: battery
-  emit_ctxt: true
+  ctxt_keys: [ctxt_battery_capacity_kWh]
   cell_capacity_Ah: 5.7
   max_charge_A: 48.0
   start_soc: 0.3

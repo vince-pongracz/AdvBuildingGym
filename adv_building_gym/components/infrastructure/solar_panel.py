@@ -38,13 +38,13 @@ class SolarPanel(Infrastructure, Forecastable):
                 # Link: https://www.ise.fraunhofer.de/content/dam/ise/de/documents/publications/studies/Photovoltaics-Report.pdf
                 pv_efficiency: float,
                 panel_area_m2: float,
-                emit_ctxt: bool = False
+                ctxt_keys: list[str] | None = None,
                 ) -> None:
         """max_power_kW: peak output under standard test conditions (STC)."""
         # NOTE VP 2026.01.24. : Inverter efficiency is not considered,
         # max power means peak output power, produced by the solar panel.
         super().__init__(name, max_power_kW)
-        self.emit_ctxt = emit_ctxt
+        self.ctxt_keys = list(ctxt_keys) if ctxt_keys is not None else None
 
         # State variables
         self.irradiance_W_m2 = 0.0  # Global irradiance in W/m² (raw, denormalised)
@@ -72,8 +72,8 @@ class SolarPanel(Infrastructure, Forecastable):
         if "s_pv_power_norm" not in state_spaces.keys():
             state_spaces["s_pv_power_norm"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
 
-        # Raw peak power capacity (kW) — policy-only conditioning, gated by emit_ctxt;
-        # lets the policy recover absolute production from the normalised obs.
+        # Raw peak power capacity (kW) — policy-only conditioning, published only when
+        # listed in ctxt_keys; lets the policy recover absolute production from the normalised obs.
         self._publish_ctxt(state_spaces, "ctxt_solar_max_power_kW", Box(low=0, high=np.inf, shape=(1,), dtype=np.float32))
 
         return state_spaces, action_spaces

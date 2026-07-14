@@ -108,7 +108,7 @@ class BatteryTremblay(Infrastructure):
                  # Operating limits -- prevent battery damage
                  soc_min: float,  # Hardware minimum SoC (clipping floor)
                  soc_max: float,  # Hardware maximum SoC (clipping ceiling)
-                 emit_ctxt: bool = False,  # publish policy-only ctxt_* (generalisation runs)
+                 ctxt_keys: list[str] | None = None,  # ctxt_* keys to expose to the policy (generalisation runs)
                  ) -> None:
         # Rated pack power is DERIVED from the pack's own limits, not passed in.
         # P_rated = V_nominal * I_max, where V_nominal = E0 * n_series and I_max is
@@ -121,7 +121,7 @@ class BatteryTremblay(Infrastructure):
         # NOTE VP 2026.06.14.: C-rate [1/h], cell_capacity_Ah [Ah]
         # → max current (A) limit from chemistry and wiring.
         super().__init__(name, self.nominal_V * self.max_current_A / 1000.0)
-        self.emit_ctxt = emit_ctxt
+        self.ctxt_keys = list(ctxt_keys) if ctxt_keys is not None else None
 
         self.cell_capacity_Ah = cell_capacity_Ah
         self.max_charge_A = max_charge_A
@@ -225,7 +225,7 @@ class BatteryTremblay(Infrastructure):
             state_spaces["s_battery_soc"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
 
         # Capacity (kWh) — constant hardware parameter.
-        # Capacity (kWh) and power (kW) — policy-only conditioning, gated by emit_ctxt.
+        # Capacity (kWh) and power (kW) — policy-only conditioning, published only when listed in ctxt_keys.
         self._publish_ctxt(state_spaces, "ctxt_battery_capacity_kWh",
                             Box(low=0, high=np.inf, shape=(1,), dtype=np.float32))
         self._publish_ctxt(state_spaces, "ctxt_battery_max_power_kW",

@@ -77,7 +77,7 @@ class EnergyPriceFixDataSource(StateSource, Forecastable, Lookahead):
 
     ``s_E_price = baseprice / divisor`` (not clipped); the divisor is the largest band/default price
     magnitude across all schedules — a stable per-run scale, published as ``ctxt_E_price_max`` only
-    when ``emit_ctxt`` is set. Hour of day = ``(effective_index * timestep / 3600) mod 24``.
+    when listed in ``ctxt_keys``. Hour of day = ``(effective_index * timestep / 3600) mod 24``.
     """
 
     _context_params: ClassVar[Set[str]] = {"timestep"}
@@ -96,7 +96,7 @@ class EnergyPriceFixDataSource(StateSource, Forecastable, Lookahead):
     def __init__(self, name: str,
                 schedules: dict | None = None,
                 default_season: str = "summer",
-                emit_ctxt: bool = False,
+                ctxt_keys: list[str] | None = None,
                 timestep: float = 300.0) -> None:
         super().__init__(name=name)
 
@@ -104,7 +104,7 @@ class EnergyPriceFixDataSource(StateSource, Forecastable, Lookahead):
         # Canonical, round-trip-safe form (band dicts -> PriceBand); read directly by Serializable.to_dict.
         self.schedules = {season: self._normalise_schedule(block) for season, block in raw.items()}
         self.default_season = str(default_season)
-        self.emit_ctxt = bool(emit_ctxt)
+        self.ctxt_keys = list(ctxt_keys) if ctxt_keys is not None else None
         self.timestep = float(timestep)
 
         # Fixed divisor: largest price magnitude across all schedules (stable per-run scale).

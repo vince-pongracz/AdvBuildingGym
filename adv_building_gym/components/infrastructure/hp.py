@@ -22,7 +22,7 @@ class HP(Infrastructure):
 
     POWER_FLOW = "consumer"
 
-    # control_step from env context; mC read from ctxt_building_mC obs at runtime.
+    # control_step from env context; mC read from info["ctxt_building_mC"] at runtime.
     _context_params: ClassVar[Set[str]] = {'control_step'}
 
     # Internal state - not serialised
@@ -34,10 +34,10 @@ class HP(Infrastructure):
                 control_step: int,
                 cop_heat: float = 1.0,
                 cop_cool: float = 1.0,
-                emit_ctxt: bool = False,
+                ctxt_keys: list[str] | None = None,
                 ) -> None:
         super().__init__(name, max_power_kW)
-        self.emit_ctxt = emit_ctxt
+        self.ctxt_keys = list(ctxt_keys) if ctxt_keys is not None else None
 
         # NOTE VP 2026.01.20. : COP, link: https://en.wikipedia.org/wiki/Coefficient_of_performance
         # COP = Q_thermal / P_electric => Q_thermal = P_electric * COP
@@ -67,7 +67,7 @@ class HP(Infrastructure):
         # integration variable on info["temp_in_norm"], outdoor temp lives on
         # info["temp_out_norm"]; the policy sees the comfort error (s_temp_error_norm).
 
-        # Raw electric capacity (kW) — policy-only conditioning, gated by emit_ctxt.
+        # Raw electric capacity (kW) — policy-only conditioning, published only when listed in ctxt_keys.
         self._publish_ctxt(state_spaces, "ctxt_hp_max_power_kW", Box(low=0, high=np.inf, shape=(1,), dtype=np.float32))
 
         return state_spaces, action_spaces
@@ -107,9 +107,9 @@ class HP(Infrastructure):
         # Link: https://www.sciencedirect.com/science/article/pii/S0378778812003039?via%3Dihub
         # NOTE VP 2026.01.20. : According to paper2, 1R1C mean RMS error to the reality is ~0.47 C --> influences precision
 
-        # Thermal mass owned/published by BuildingHeatLoss; read as obs to keep
-        # envelope params on a single owner.
-        mC = float(states["ctxt_building_mC"][0])
+        # Thermal mass owned by BuildingHeatLoss; shared on the info channel
+        # (inter-component), so it is available regardless of the obs-space ctxt_keys.
+        mC = float(info["ctxt_building_mC"])
         # Fixed temperature normalisation scale from the info channel (WeatherDataSource).
         temp_abs_max = float(info["temp_abs_max"]) if "temp_abs_max" in info else TEMP_ABS_MAX_CELSIUS
 

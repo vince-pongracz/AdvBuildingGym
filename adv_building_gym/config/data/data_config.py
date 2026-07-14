@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 def load_data_combinator_config(
     cfg_yaml_path: str | Path,
     default_seed: int | None = None,
+    active_source_names: frozenset[str] | None = None,
 ) -> DataCombinator:
     """Build a DataCombinator from a data-schedule YAML.
 
@@ -29,6 +30,9 @@ def load_data_combinator_config(
         cfg_yaml_path: Path to the data schedule YAML
             (e.g. ``configs/schedules/data/train.yaml``).
         default_seed: Fallback seed when the YAML omits ``seed``.
+        active_source_names: Names of the trial's reloadable statesources; variant
+            keys outside this set are excluded from the pool (see ``DataCombinator``).
+            ``None`` disables filtering.
 
     Returns:
         A fully constructed DataCombinator with scenarios expanded from
@@ -94,6 +98,7 @@ def load_data_combinator_config(
     return DataCombinator(
         scenarios=scenarios,
         variable=variable,
+        active_source_names=active_source_names,
         swap_every_n_episodes=cfg["swap_every_n_episodes"],
         mode=cfg["mode"],
         day=cfg["day"],

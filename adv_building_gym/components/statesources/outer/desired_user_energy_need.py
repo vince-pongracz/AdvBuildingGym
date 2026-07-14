@@ -36,9 +36,11 @@ class DesiredUserEnergyNeed(StateSource, Forecastable, CsvLookahead, CsvReloadab
     _exclude_params: ClassVar[Set[str]] = {'consumption_max'}
 
     def __init__(self, name: str, ds_path: str | None = None,
-                normalise: Normalisation | str | None = Normalisation.MAX_ABS_SCALING) -> None:
+                normalise: Normalisation | str | None = Normalisation.MAX_ABS_SCALING,
+                ctxt_keys: list[str] | None = None) -> None:
         super().__init__(name=name)
 
+        self.ctxt_keys = list(ctxt_keys) if ctxt_keys is not None else None
         self.normalise = Normalisation.init(normalise)
 
         self.consumption_max: float = 1.0
@@ -67,9 +69,11 @@ class DesiredUserEnergyNeed(StateSource, Forecastable, CsvLookahead, CsvReloadab
         if "s_desired_energy_need" not in state_spaces.keys():
             state_spaces["s_desired_energy_need"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
 
-        # Max household consumption (kW) — changes per data variant.
-        if "ctxt_hh_consumption_max" not in state_spaces.keys():
-            state_spaces["ctxt_hh_consumption_max"] = Box(low=0, high=np.inf, shape=(1,), dtype=np.float32)
+        # Max household consumption (kW) — changes per data variant. 
+        # Policy-facing ctxt key (obs iff listed in ctxt_keys); 
+        # also shared on the info channel in update_state so
+        # HouseholdEnergyConsumers can recover physical kW regardless of ctxt_keys.
+        self._publish_ctxt(state_spaces, "ctxt_hh_consumption_max", Box(low=0, high=np.inf, shape=(1,), dtype=np.float32))
 
         return state_spaces, action_spaces
 
@@ -84,8 +88,10 @@ class DesiredUserEnergyNeed(StateSource, Forecastable, CsvLookahead, CsvReloadab
         desired_energy = float(row[NORM_COLUMN])
 
         states["s_desired_energy_need"][0] = np.float32(desired_energy)
-        # max consumption (kW) — constant per episode
-        states["ctxt_hh_consumption_max"][0] = np.float32(self.consumption_max)
+        # max consumption (kW) — constant per episode. Obs iff listed in ctxt_keys, and
+        # always shared on the info channel for HouseholdEnergyConsumers.
+        self._write_ctxt(states, "ctxt_hh_consumption_max", np.float32(self.consumption_max))
+        info["ctxt_hh_consumption_max"] = float(self.consumption_max)
 
     def forecast_keys(self) -> tuple[str, ...]:
         return ("s_fc_desired_energy_need",)

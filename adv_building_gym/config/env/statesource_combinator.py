@@ -120,6 +120,10 @@ class StatesourceCombinator:
     def get_eval_config_name(self, idx: int) -> str:
         return self._configs["eval"][idx].name
 
+    def spec_dicts(self, split: Split = "train") -> list[list[dict]]:
+        """Raw statesource spec dicts of every scheduled config for ``split``."""
+        return [list(cfg.statesource_dicts) for cfg in self._configs[split]]
+
     @property
     def config_paths(self) -> list[str]:
         """Backwards-compatible alias for the training paths."""
