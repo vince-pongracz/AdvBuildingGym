@@ -4,6 +4,8 @@ import datetime
 import logging
 
 from ray.rllib.algorithms.algorithm_config import AlgorithmConfig
+from ray.rllib.utils.metrics import NUM_ENV_STEPS_SAMPLED_LIFETIME
+from ray.tune.result import TIMESTEPS_TOTAL
 
 from adv_building_gym.config.env.env_config import EnvConfig
 # Single-agent obs flattening is env-side (FlattenObservation in the env creator);
@@ -40,6 +42,21 @@ def _compose_on_train_result(*fns):
         for fn in fns:
             fn(algorithm=algorithm, result=result, **kwargs)
     return composed_on_train_result
+
+
+def _env_step_axis_on_train_result(*, algorithm, result: dict, **kwargs) -> None:
+    """Mirror lifetime env steps into ``timesteps_total`` so TensorBoard's STEP axis counts env steps.
+
+    Tune's TBX writers use ``timesteps_total`` as global_step and fall back to
+    ``training_iteration`` when it is absent; the new API stack no longer fills it,
+    so the STEP axis would count algorithm-dependent iterations and SAC / PPO runs
+    could not be compared. Algorithm.log_result runs on_train_result hooks BEFORE
+    handing the result to the loggers, so this mutation reaches all writers.
+    Link: ray/tune/logger/tensorboardx.py (TBXLoggerCallback.log_trial_result)
+    """
+    env_steps = result.get(NUM_ENV_STEPS_SAMPLED_LIFETIME)
+    if env_steps is not None:
+        result[TIMESTEPS_TOTAL] = int(env_steps)
 
 
 def register_callbacks(
@@ -97,7 +114,9 @@ def register_callbacks(
     # callback's log output lands between the "end N" and "start N+1" markers
     iter_start_logging_cb = create_iter_start_logging_cb()
     on_train_result_fns = [
-        # end marker first: logs "Iteration N: end" right after step() returned
+        # env-step STEP axis first: promote num_env_steps_sampled_lifetime → timesteps_total
+        _env_step_axis_on_train_result,
+        # end marker: logs "Iteration N: end" right after step() returned
         create_iter_end_logging_on_train_result_cb(),
         # mirror eval return to a flat result key so Tune's checkpoint_score_attribute
         # can rank checkpoints (slashed keys are ignored); logs save/keep/evict each iter
