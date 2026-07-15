@@ -16,10 +16,13 @@
 # A snapshot may get several, one, or none of these (none => skipped).
 #
 # Usage:
-#   ./submit_snapshot_evals.sh [CUTOFF_DATE] [-- <extra sbatch flags>]
+#   ./submit_snapshot_evals.sh [CUTOFF] [-- <extra sbatch flags>]
 #
-#   CUTOFF_DATE   YYYYMMDD inclusive lower bound on the snapshot date prefix
-#                 (default: 20260601).
+#   CUTOFF        Inclusive lower bound on the snapshot timestamp prefix
+#                 ("<YYYYMMDD>_<HHMMSS>"). Either a date (YYYYMMDD) or a
+#                 concrete date and time (YYYYMMDD_HHMMSS); a truncated time
+#                 is zero-padded, e.g. 20260601_23 -> 20260601_230000.
+#                 Default: 20260601.
 #
 # Env overrides:
 #   EPISODES=10           number of eval episodes (default 10)
@@ -31,6 +34,7 @@
 # Examples:
 #   ./submit_snapshot_evals.sh                       # all snapshots >= 20260601
 #   ./submit_snapshot_evals.sh 20260610              # only the newest ones
+#   ./submit_snapshot_evals.sh 20260525_1430         # from 2026-05-25 14:30:00 on
 #   DRY_RUN=1 ./submit_snapshot_evals.sh             # preview, submit nothing
 #   SBATCH_ARGS="--time=01:00:00" ./submit_snapshot_evals.sh
 
@@ -39,16 +43,21 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$REPO_ROOT"
 
-CUTOFF_DATE="${1:-20260601}"
+CUTOFF="${1:-20260601}"
 EPISODES="${EPISODES:-10}"
 SNAPSHOTS_DIR="${SNAPSHOTS_DIR:-$REPO_ROOT/snapshots}"
 VENV="${VENV:-/home/iai/dj0397/adv_env}"
 SBATCH_ARGS="${SBATCH_ARGS:-}"
 
-if ! [[ "$CUTOFF_DATE" =~ ^[0-9]{8}$ ]]; then
-    echo "ERROR: CUTOFF_DATE must be YYYYMMDD, got '$CUTOFF_DATE'" >&2
+# Accept YYYYMMDD or YYYYMMDD_HHMMSS (time may be truncated, e.g. _23 or _1430).
+# Missing time digits are zero-padded so the cutoff is inclusive from that instant,
+# matching the fixed-width "<YYYYMMDD>_<HHMMSS>" snapshot-name prefix.
+if ! [[ "$CUTOFF" =~ ^[0-9]{8}(_[0-9]{1,6})?$ ]]; then
+    echo "ERROR: CUTOFF must be YYYYMMDD or YYYYMMDD_HHMMSS, got '$CUTOFF'" >&2
     exit 1
 fi
+cutoff_time="${CUTOFF:9}000000"
+CUTOFF_TS="${CUTOFF:0:8}_${cutoff_time:0:6}"
 
 # Activate the project virtualenv so `python -m tools.snapshot.submit_snapshot`
 # resolves. Skip gracefully if already inside it.
@@ -59,7 +68,7 @@ else
     echo "WARNING: venv not found at $VENV; using current python" >&2
 fi
 
-echo "Cutoff date : >= $CUTOFF_DATE"
+echo "Cutoff      : >= $CUTOFF_TS"
 echo "Episodes    : $EPISODES"
 echo "Snapshots   : $SNAPSHOTS_DIR"
 [[ -n "$SBATCH_ARGS" ]] && echo "sbatch args : $SBATCH_ARGS"
@@ -119,10 +128,11 @@ for snap in "$SNAPSHOTS_DIR"/*/; do
     snap="${snap%/}"
     name="$(basename "$snap")"
 
-    # Snapshot dirs are named "<YYYYMMDD>_<HHMMSS>_<trial>"; date is the prefix.
-    date_prefix="${name:0:8}"
-    [[ "$date_prefix" =~ ^[0-9]{8}$ ]] || { echo "SKIP $name (no date prefix)"; n_skipped=$((n_skipped + 1)); continue; }
-    [[ "$date_prefix" -lt "$CUTOFF_DATE" ]] && continue
+    # Snapshot dirs are named "<YYYYMMDD>_<HHMMSS>_<trial>"; compare the full
+    # timestamp prefix lexicographically (fixed-width, so string order = time order).
+    ts_prefix="${name:0:15}"
+    [[ "$ts_prefix" =~ ^[0-9]{8}_[0-9]{6}$ ]] || { echo "SKIP $name (no timestamp prefix)"; n_skipped=$((n_skipped + 1)); continue; }
+    [[ "$ts_prefix" < "$CUTOFF_TS" ]] && continue
 
     did_submit=0
     echo "$name"

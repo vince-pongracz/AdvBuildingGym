@@ -49,6 +49,8 @@ import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 
+import yaml
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
@@ -59,6 +61,8 @@ logger = logging.getLogger("submit_snapshot")
 
 
 # Mapping from --kind to (slurm wrapper basename, entry-point .py inside snapshot).
+# --kind train additionally dispatches on the trial YAML's top-level
+# `algorithm:` key — see _resolve_train_wrapper_basename below.
 KIND_SPECS: dict[str, tuple[str, str]] = {
     "train":        ("slurm_train_ray.sh",     "run_train_ray.py"),
     "train-cpu":    ("slurm_train_ray_cpu.sh", "run_train_ray.py"),
@@ -69,6 +73,54 @@ KIND_SPECS: dict[str, tuple[str, str]] = {
     "eval-rbc":     ("slurm_eval_rbc.sh",      "run_eval_rule_based.py"),
     "eval-sb":      ("slurm_eval_sb.sh",       "run_eval_sb.py"),
 }
+
+# DreamerV3 samples in-process on the driver (num_env_runners is forced to 0
+# in adv_building_gym/ray/training/resource_setup.py), so remote-env-runner
+# CPUs would sit idle — this wrapper books fewer than KIND_SPECS["train"]'s.
+TRAIN_WRAPPER_DREAMERV3 = "slurm_train_ray_dreamerv3.sh"
+
+
+def _read_trial_algorithm(trial_yaml_text: str) -> str:
+    """Return the trial YAML's top-level ``algorithm:`` value.
+
+    A missing key defaults to ``ppo``, mirroring ``_RUN_DEFAULTS`` in
+    ``adv_building_gym/config/trial_config.py``.
+    """
+    trial_doc = yaml.safe_load(trial_yaml_text) or {}
+    return str(trial_doc.get("algorithm", "ppo")).lower()
+
+
+def _resolve_train_wrapper_basename(algorithm: str) -> str:
+    """Pick the training wrapper for an algorithm: DreamerV3 gets the
+    low-resource wrapper, SAC / PPO keep the KIND_SPECS default."""
+    return TRAIN_WRAPPER_DREAMERV3 if algorithm == "dreamerv3" else KIND_SPECS["train"][0]
+
+
+def _load_snapshot_trial_text(snapshot_dir: Path, trial_path_in_snap: str) -> str:
+    """Read the frozen trial YAML's text from a snapshot.
+
+    Prefers the extracted ``code/`` copy; otherwise reads the member straight
+    out of ``snapshot.zip`` so submission never forces an extraction. Zip
+    arcnames are repo-relative with forward slashes (see make_snapshot), which
+    is exactly the manifest's ``source_trial_path`` format.
+    """
+    extracted = snapshot_dir / "code" / trial_path_in_snap
+    if extracted.exists():
+        return extracted.read_text(encoding="utf-8")
+    with zipfile.ZipFile(snapshot_dir / "snapshot.zip") as zf:
+        return zf.read(trial_path_in_snap).decode("utf-8")
+
+
+def _passthrough_trial_path(extra_args: list[str]) -> str | None:
+    """Return the value of a user-supplied pass-through ``--trial``, if any.
+
+    Uses the same exact-token convention as the injection logic in
+    ``_build_plan`` (``--trial`` followed by a value).
+    """
+    for i, arg in enumerate(extra_args):
+        if arg == "--trial" and i + 1 < len(extra_args):
+            return extra_args[i + 1]
+    return None
 
 
 @dataclass
@@ -226,15 +278,28 @@ def _build_plan(
 ) -> SubmissionPlan:
     if kind not in KIND_SPECS:
         raise ValueError(f"Unknown --kind {kind!r}; valid: {sorted(KIND_SPECS)}")
-    wrapper_basename, entry_script = KIND_SPECS[kind]
-    wrapper_path = REPO_ROOT / "slurm_scripts" / wrapper_basename
-    if not wrapper_path.exists():
-        raise FileNotFoundError(f"SLURM wrapper not found: {wrapper_path}")
 
     manifest = _read_manifest(snapshot_dir)
     trial_path_in_snap = manifest["source_trial_path"]
     if not (snapshot_dir / "snapshot.zip").exists():
         raise FileNotFoundError(f"snapshot.zip missing from {snapshot_dir}")
+
+    wrapper_basename, entry_script = KIND_SPECS[kind]
+    if kind == "train":
+        # A pass-through --trial overrides the snapshot's frozen YAML below,
+        # so it must also drive the wrapper choice.
+        user_trial = _passthrough_trial_path(extra_args)
+        trial_text = (
+            Path(user_trial).read_text(encoding="utf-8")
+            if user_trial is not None
+            else _load_snapshot_trial_text(snapshot_dir, trial_path_in_snap)
+        )
+        algorithm = _read_trial_algorithm(trial_text)
+        wrapper_basename = _resolve_train_wrapper_basename(algorithm)
+        logger.info("Trial algorithm '%s' → training wrapper %s", algorithm, wrapper_basename)
+    wrapper_path = REPO_ROOT / "slurm_scripts" / wrapper_basename
+    if not wrapper_path.exists():
+        raise FileNotFoundError(f"SLURM wrapper not found: {wrapper_path}")
 
     # Absolute path to the trial YAML inside the snapshot's code/ dir. The
     # SLURM wrapper changes CWD to <snapshot>/runs/<run_id>/, so a relative
@@ -468,7 +533,10 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--kind", required=True, choices=sorted(KIND_SPECS),
-        help="Which SLURM wrapper to submit against.",
+        help="Which SLURM wrapper to submit against. For 'train' the wrapper "
+            "is picked from the trial YAML's algorithm: dreamerv3 → the "
+            f"low-resource {TRAIN_WRAPPER_DREAMERV3}, sac/ppo → the default "
+            f"{KIND_SPECS['train'][0]}.",
     )
     parser.add_argument(
         "--sbatch", default="",
@@ -565,6 +633,11 @@ def main(argv: list[str] | None = None) -> int:
             run_id = f"{run_id}_seed{args.seed}"
         wrapper_basename, entry_script = KIND_SPECS[args.kind]
         trial_abs = Path(args.trial).resolve()
+        if args.kind == "train":
+            # No snapshot exists on dry-run; the live YAML is what would be frozen.
+            algorithm = _read_trial_algorithm(trial_abs.read_text(encoding="utf-8"))
+            wrapper_basename = _resolve_train_wrapper_basename(algorithm)
+            logger.info("Trial algorithm '%s' → training wrapper %s", algorithm, wrapper_basename)
         trial_rel = (
             str(trial_abs.relative_to(REPO_ROOT))
             if trial_abs.is_relative_to(REPO_ROOT) else str(trial_abs)

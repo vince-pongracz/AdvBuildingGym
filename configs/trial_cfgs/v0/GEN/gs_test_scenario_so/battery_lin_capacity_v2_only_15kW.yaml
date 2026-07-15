@@ -1,4 +1,4 @@
-trial_name: gen_battery_lin_so_wo_17kW
+trial_name: gen_battery_lin_so_only_15kW
 algorithm: sac
 seed: 42
 metric: episode_return_mean
@@ -46,7 +46,7 @@ training_params:
     replay_batch_size: 256
     training_intensity: 10
     episodes_to_keep_in_replay_buffer: 500
-    n_step_return: 3
+    n_step_return: 1
     learning_starts_after_n_episodes: 50
 
 statesources:
@@ -74,19 +74,11 @@ infra_schedule:
   swap_every_n_episodes: 12
   configs:
     train:
-    - configs/infra_cfgs/GEN/battery_lin_capacity_so_v2/battery_lin_cap_1.yaml
-    - configs/infra_cfgs/GEN/battery_lin_capacity_so_v2/battery_lin_cap_2.yaml
     - configs/infra_cfgs/GEN/battery_lin_capacity_so_v2/battery_lin_cap_3.yaml
-    - configs/infra_cfgs/GEN/battery_lin_capacity_so_v2/battery_lin_cap_5.yaml
     eval:
     - configs/infra_cfgs/GEN/battery_lin_capacity_so_v2/battery_lin_cap_eval_1.yaml
     - configs/infra_cfgs/GEN/battery_lin_capacity_so_v2/battery_lin_cap_eval_2.yaml
     - configs/infra_cfgs/GEN/battery_lin_capacity_so_v2/battery_lin_cap_eval_3.yaml
-    - configs/infra_cfgs/GEN/battery_lin_capacity_so_v2/battery_lin_cap_1.yaml
-    - configs/infra_cfgs/GEN/battery_lin_capacity_so_v2/battery_lin_cap_2.yaml
-    - configs/infra_cfgs/GEN/battery_lin_capacity_so_v2/battery_lin_cap_3.yaml
-    - configs/infra_cfgs/GEN/battery_lin_capacity_so_v2/battery_lin_cap_4.yaml
-    - configs/infra_cfgs/GEN/battery_lin_capacity_so_v2/battery_lin_cap_5.yaml
 
 statesource_schedule: null
 

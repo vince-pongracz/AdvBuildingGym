@@ -9,7 +9,8 @@ All scripts activate the Python virtualenv at `../adv_env` relative to the proje
 
 | Script | Purpose | GPU | CPUs | Default time |
 |--------|---------|-----|------|--------------|
-| `slurm_train_ray.sh` | Ray/RLlib training | 1x full | 4 | 10 min |
+| `slurm_train_ray.sh` | Ray/RLlib training (SAC / PPO) | 1x 4g.20gb | 5 | 30 min |
+| `slurm_train_ray_dreamerv3.sh` | Ray/RLlib training (DreamerV3; samples in-process, no remote env runners) | 1x 4g.20gb | 3 | 30 min |
 | `slurm_eval_ray.sh` | Ray/RLlib evaluation | No | 2 | 10 min |
 | `slurm_train_ma.sh` | Multi-agent Ray/RLlib training | 1x full | 5 | 30 min |
 | `slurm_train_sb.sh` | Stable Baselines3 training | 1x full | 4 | 15 min |
@@ -29,6 +30,7 @@ Each script writes logs to a dedicated subdirectory under `slurm_logs/`:
 | Script | Log directory |
 |--------|--------------|
 | `slurm_train_ray.sh` | `slurm_logs/train/` |
+| `slurm_train_ray_dreamerv3.sh` | `slurm_logs/train/` |
 | `slurm_eval_ray.sh` | `slurm_logs/eval/` |
 | `slurm_train_sb.sh` | `slurm_logs/train/` |
 | `slurm_data_setup.sh` | `slurm_logs/data_setup/` |
@@ -230,7 +232,11 @@ python -m tools.snapshot.submit_snapshot \
 ```
 
 `--kind` ∈ `{train, eval, train-ma, train-sb}` selects which SLURM wrapper to
-invoke. Any argument after `--` is forwarded verbatim to the wrapper (and onward
+invoke. For `--kind train` the wrapper is additionally picked from the trial
+YAML's top-level `algorithm:` key: `dreamerv3` submits the low-resource
+`slurm_train_ray_dreamerv3.sh` (DreamerV3 samples in-process — no remote env
+runners), while `sac` / `ppo` submit the default `slurm_train_ray.sh`.
+Any argument after `--` is forwarded verbatim to the wrapper (and onward
 to the entry script).
 
 Snapshot layout: `snapshots/<YYYYMMDD_HHMMSS>_<trial_name>/` contains

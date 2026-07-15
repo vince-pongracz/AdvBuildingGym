@@ -37,7 +37,6 @@
 set -euo pipefail
 
 MMLSQUOTA=/usr/lpp/mmfs/bin/mmlsquota
-TOP_N=40
 
 echo "=== SLURM Resource Info ==="
 echo "Node : $(hostname)"
@@ -67,12 +66,12 @@ for target in "${TARGETS[@]}"; do
   du -xsh "${target}" 2>/dev/null || true
 
   echo ""
-  echo "=== Top ${TOP_N} subdirectories of ${target} by size ==="
-  { du -xh --max-depth=5 "${target}" 2>/dev/null || true; } | sort -rh | head -n "${TOP_N}"
+  echo "=== Subdirectories of ${target} by size ==="
+  { du -xh --max-depth=5 "${target}" 2>/dev/null || true; } | sort -rh
 
   echo ""
-  echo "=== Top ${TOP_N} subdirectories of ${target} by file count ==="
-  { du -x --inodes --max-depth=5 "${target}" 2>/dev/null || true; } | sort -rn | head -n "${TOP_N}"
+  echo "=== Subdirectories of ${target} by file count ==="
+  { du -x --inodes --max-depth=5 "${target}" 2>/dev/null || true; } | sort -rn
 done
 
 echo ""
