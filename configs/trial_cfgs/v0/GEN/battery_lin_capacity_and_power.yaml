@@ -56,17 +56,9 @@ statesources:
   name: E_price
 - class: WeatherDataSource
   name: weather
-- class: InsideTemperature
-  name: desired_temp_in
 - class: DesiredUserEnergyNeed
   name: user_energy_need
   ctxt_keys: [ctxt_hh_consumption_max]
-- class: BuildingHeatLoss
-  name: building_heat_loss
-  K: 20
-  mC: 300
-- class: EVState
-  name: ev_schedule
 - class: OperatorEnergyControl
   name: operator_energy_control
   max_power_kW: 20.0
@@ -74,49 +66,12 @@ statesources:
 infras: null
 
 rewards:
-- class_name: TempRewardV0
+- class_name: EconomicRewardV0
   weight: 1.0
-  params: {}
-- class_name: LongTermEconomicRewardV0
-  weight: 1.0
-  params:
-    reference_power_kW: 22.0
-- class_name: MinimiseEnergyConsumptionRewardV0
-  weight: 1.0
-  params: {}
-- class_name: OperatorEnergyControlRewardV0
-  weight: 1.0
-  params:
-    harsh_penalty: -4.0
-    soft_threshold_pct: 0.9
-    recovery_steps: 3
-- class_name: BatteryTargetRewardV0
-  weight: 1.0
-  params:
-    min_pct: 0.15
-    max_pct: 0.95
-- class_name: BatteryMgmtRewardV0
-  weight: 1.0
-  params:
-    scale: 0.5
-- class_name: EVChargingRewardV0
-  weight: 1.0
-  params:
-    diff_threshold: 0.02
-    soc_diff_multiplier: 5.0
-    disconnect_soc_tolerance: 0.05
-- class_name: EVChargingOnTimeRewardV0
-  weight: 1.0
-  params: {}
-- class_name: ActionSmoothnessRewardV0
-  weight: 1.0
-  params:
-    n_steps: 16
-    mode: weighted
-    freq_exponent: 1.0
+
 infra_schedule:
   mode: cycle
-  swap_every_n_episodes: 100
+  swap_every_n_episodes: 12
   configs:
     train:
     - configs/infra_cfgs/GEN/battery_lin_capacity_and_power/battery_lin_cap_1.yaml

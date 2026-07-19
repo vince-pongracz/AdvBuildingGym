@@ -13,12 +13,6 @@ infras:
   start_soc_jitter: 0.1
   soc_min: 0.1
   soc_max: 0.95
-- class: LinearEVCharger
-  name: ev_charger
-  max_power_kW: 22.0
-  v2g_enabled: true
-  max_charge_time_hrs: 24.0
-  v2g_playroom: 0.1
 - class: SolarPanel
   name: solar
   max_power_kW: 5.0

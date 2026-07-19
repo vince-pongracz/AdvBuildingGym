@@ -1,4 +1,5 @@
 import logging
+import math
 from typing import ClassVar, Dict, Set
 
 import numpy as np
@@ -37,30 +38,52 @@ class SolarPanel(Infrastructure, Forecastable):
                 control_step: int,
                 # Link: https://www.ise.fraunhofer.de/content/dam/ise/de/documents/publications/studies/Photovoltaics-Report.pdf
                 pv_efficiency: float,
-                panel_area_m2: float,
+                panel_area_m2: float | None = None,
+                area_headroom_factor: float = 0.975,
                 ctxt_keys: list[str] | None = None,
                 ) -> None:
-        """max_power_kW: peak output under standard test conditions (STC)."""
+        """max_power_kW: peak output under standard test conditions (STC).
+
+        panel_area_m2: when given, it is the single source of truth — used as-is,
+        whatever headroom vs. max_power_kW it implies (legacy configs rely on
+        deliberately under-/oversized areas). When omitted, the area is derived
+        via ``_derive_area_m2`` so the formula peak ``A * η`` sits
+        ``area_headroom_factor`` × rating, just below the ``max_power_kW`` clip.
+        """
         # NOTE VP 2026.01.24. : Inverter efficiency is not considered,
         # max power means peak output power, produced by the solar panel.
         super().__init__(name, max_power_kW)
+        if pv_efficiency <= 0.0:
+            raise ValueError(f"pv_efficiency must be positive, got {pv_efficiency!r}.")
+        if not 0.0 < area_headroom_factor <= 1.0:
+            raise ValueError(f"area_headroom_factor must be in (0, 1], got {area_headroom_factor!r}.")
         self.ctxt_keys = list(ctxt_keys) if ctxt_keys is not None else None
 
         # State variables
         self.irradiance_W_m2 = 0.0  # Global irradiance in W/m² (raw, denormalised)
         self.current_production_kW = 0.0  # Actual power production in kW
         self.pv_efficiency = pv_efficiency
-        self.panel_area_m2 = panel_area_m2
+        self.area_headroom_factor = float(area_headroom_factor)
+        self.panel_area_m2 = float(panel_area_m2) if panel_area_m2 is not None else self._derive_area_m2(max_power_kW)
         self.control_step = control_step
         # Reference to WeatherDataSource's stable forecast channel (info["raw_weather_forecast"]),
         # captured each update_state — NOT the whole info dict. forecast() reads the future raw
         # irradiance from it.
         self._weather_forecast: dict[str, list[float]] | None = None
 
+    def _derive_area_m2(self, rating_kW: float) -> float:
+        """Panel area (m²) whose formula peak ``A * η`` is area_headroom_factor × rating.
+
+        Rounded UP at the 2nd decimal so the resulting headroom never dips
+        below the target (``A * η >= factor * rating`` despite the rounding).
+        """
+        return math.ceil(rating_kW * self.area_headroom_factor / self.pv_efficiency * 100.0) / 100.0
+
     def _power_from_irradiance(self, irradiance_W_m2: float) -> float:
         """P[kW] = G[W/m²] * A[m²] * η / 1000, clipped to max_power_kW."""
-        p = irradiance_W_m2 * self.panel_area_m2 * self.pv_efficiency / 1000.0
-        return float(np.clip(p, 0.0, self.max_power_kW))
+        # NOTE: standard test conditions https://de.wikipedia.org/wiki/Standard-Testbedingungen_(Photovoltaik)
+        power_out = irradiance_W_m2 * self.panel_area_m2 * self.pv_efficiency / 1000.0
+        return float(np.clip(power_out, 0.0, self.max_power_kW))
 
     def setup_spaces(self,
                     state_spaces,
@@ -75,6 +98,7 @@ class SolarPanel(Infrastructure, Forecastable):
         # Raw peak power capacity (kW) — policy-only conditioning, published only when
         # listed in ctxt_keys; lets the policy recover absolute production from the normalised obs.
         self._publish_ctxt(state_spaces, "ctxt_solar_max_power_kW", Box(low=0, high=np.inf, shape=(1,), dtype=np.float32))
+        self._publish_ctxt(state_spaces, "ctxt_pv_area_m2", Box(low=0, high=np.inf, shape=(1,), dtype=np.float32))
 
         return state_spaces, action_spaces
 
@@ -98,6 +122,7 @@ class SolarPanel(Infrastructure, Forecastable):
         pv_power_norm = self.current_production_kW / self.max_power_kW if self.max_power_kW > 0 else 0.0
         states["s_pv_power_norm"][0] = np.float32(np.clip(pv_power_norm, 0.0, 1.0))
         self._write_ctxt(states, "ctxt_solar_max_power_kW", np.float32(self.max_power_kW))
+        self._write_ctxt(states, "ctxt_pv_area_m2", np.float32(self.panel_area_m2))
 
     def reset(self, states: Dict, info: dict) -> None:
         """Clear per-episode irradiance/production readouts."""

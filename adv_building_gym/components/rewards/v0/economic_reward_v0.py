@@ -31,14 +31,6 @@ class EconomicRewardV0(RewardFunction):
         self.reference_power_kW = float(reference_power_kW)
         self._step = 0
 
-    def _resolve_reference_power_kW(self, states) -> float:
-        ctxt = states.get("ctxt_operator_max_power_kW")
-        if ctxt is not None:
-            value = float(ctxt[0])
-            if value > 0:
-                return value
-        return self.reference_power_kW
-
     def on_reset(self, states, info: dict) -> None:
         self._step = 0
 
@@ -65,7 +57,7 @@ class EconomicRewardV0(RewardFunction):
         else:
             price_signal = current_energy_price_norm
 
-        op_max_kW = self._resolve_reference_power_kW(state)
+        op_max_kW = self.reference_power_kW
 
         # Canonical: net > 0 means export, net < 0 means consumption.
         per_step = float(np.clip(net_power_kW * price_signal / op_max_kW, -1.0, 1.0))

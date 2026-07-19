@@ -1,4 +1,4 @@
-trial_name: gen_battery_lin_so_all
+trial_name: gen_battery_lin_so_all_sac
 algorithm: sac
 seed: 42
 metric: episode_return_mean
@@ -40,7 +40,7 @@ training_params:
   ppo:
     episodes_per_iteration: 10
     minibatch_size: 64
-    num_epochs: 20
+    num_epochs: 10
   sac:
     rollout_length: 144  # override: keep SAC at legacy half-episode fragment
     replay_batch_size: 256
@@ -48,6 +48,13 @@ training_params:
     episodes_to_keep_in_replay_buffer: 500
     n_step_return: 3
     learning_starts_after_n_episodes: 50
+  dreamerv3:
+    rollout_length: 288
+    training_ratio: 10.0
+    episodes_to_keep_in_replay_buffer: 500
+    batch_size_B: 16
+    batch_length_T: 16
+    horizon_H: 15
 
 statesources:
 - class: DateSource

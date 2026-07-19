@@ -1,4 +1,4 @@
-trial_name: gen_battery_lin_so_only_15kW_sac
+trial_name: gen_lin_bat_pv_sampled_sac
 algorithm: sac
 seed: 42
 metric: episode_return_mean
@@ -46,7 +46,7 @@ training_params:
     replay_batch_size: 256
     training_intensity: 10
     episodes_to_keep_in_replay_buffer: 500
-    n_step_return: 1
+    n_step_return: 3
     learning_starts_after_n_episodes: 50
   dreamerv3:
     rollout_length: 288
@@ -76,16 +76,21 @@ rewards:
 - class_name: EconomicRewardV0
   weight: 1.0
 
+# Battery-capacity and PV-rating diversity comes from the wrappers' per-episode
+# sampling (see the train infra YAML) instead of a config-swap curriculum, so the
+# schedule stays off (no hot-swaps). Standalone eval iterates configs.eval —
+# plain fixed-size BatteryLinear/SolarPanel on the held-out size combinations.
 infra_schedule:
-  mode: cycle
-  swap_every_n_episodes: 12
+  mode: "off"   # quoted: bare `off` is YAML-1.1 boolean False, not the string "off"
+  swap_every_n_episodes: 100
   configs:
     train:
-    - configs/infra_cfgs/GEN/battery_lin_capacity_so_v2/battery_lin_cap_3.yaml
+    - configs/infra_cfgs/GEN/battery_lin_cap_lin_pv_sampled/lin_bat_pv_sampled.yaml
     eval:
-    - configs/infra_cfgs/GEN/battery_lin_capacity_so_v2/battery_lin_cap_eval_1.yaml
-    - configs/infra_cfgs/GEN/battery_lin_capacity_so_v2/battery_lin_cap_eval_2.yaml
-    - configs/infra_cfgs/GEN/battery_lin_capacity_so_v2/battery_lin_cap_eval_3.yaml
+    - configs/infra_cfgs/GEN/battery_lin_cap_lin_pv_so/cfg_eval_0.yaml
+    - configs/infra_cfgs/GEN/battery_lin_cap_lin_pv_so/cfg_eval_1.yaml
+    - configs/infra_cfgs/GEN/battery_lin_cap_lin_pv_so/cfg_eval_2.yaml
+    - configs/infra_cfgs/GEN/battery_lin_cap_lin_pv_so/cfg_eval_3.yaml
 
 statesource_schedule: null
 
@@ -95,6 +100,7 @@ data_schedule:
   train: configs/schedules/data/train.yaml
   eval: configs/schedules/data/eval.yaml
 
+# No infra swaps with mode: off — the on_infra_swap trigger would never fire.
 exploration_reset:
   enabled: false
   trigger: on_infra_swap

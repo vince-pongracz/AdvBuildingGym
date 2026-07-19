@@ -39,7 +39,7 @@ class EnergyPriceDayDynDataSource(StateSource, Forecastable, CsvLookahead, CsvRe
     _lookahead_columns: ClassVar[dict[str, str]] = {"baseprice": "baseprice"}
 
     def __init__(self, name: str, ds_path: str | None = None,
-                ctxt_keys: list[str] | None = None,
+                ctxt_keys: list[str] | None = ["ctxt_E_price_max"],
                 episode_length: int = 288,
                 timestep: float = 300.0) -> None:
         """Args:

@@ -95,7 +95,7 @@ class TrainingParamConfig(LoggableConfig):
     dreamerv3_model_size: str = "XS"  # one of "XS", "S", "M", "L", "XL"
     dreamerv3_batch_size_B: int = 16  # RLlib default
     dreamerv3_batch_length_T: int = 64  # RLlib default
-    dreamerv3_training_ratio: float = 1024.0  # RLlib default
+    dreamerv3_training_ratio: float = 10.0
     dreamerv3_horizon_H: int = 15  # imagination horizon. RLlib default
     dreamerv3_episodes_to_keep_in_replay_buffer: int = 500
     dreamerv3_world_model_lr: float = 1e-4  # RLlib default
