@@ -40,32 +40,28 @@ training_params:
   ppo:
     episodes_per_iteration: 10
     minibatch_size: 64
-    num_epochs: 20
+    num_epochs: 10
   sac:
     rollout_length: 144  # override: keep SAC at legacy half-episode fragment
     episodes_to_keep_in_replay_buffer: 500
     n_step_return: 3
     training_intensity: 10
     learning_starts_after_n_episodes: 50
+  dreamerv3:
+    model_size: "XS"
+    batch_size_B: 16
+    batch_length_T: 64
+    training_ratio: 128.0
+    horizon_H: 15
+    episodes_to_keep_in_replay_buffer: 500
 
 statesources:
 - class: DateSource
   name: date
-- class: EnergyPriceYearDynDataSource
+- class: EnergyPriceDayDynDataSource
   name: E_price
-  # Price normalisation: s_E_price = clip(raw_price / divisor, -1, 1). The divisor blends the
-  # max_calc_mode statistic over the whole series (0.3) and the per-episode window (0.7):
-  #   mean              - mean of raw baseprice
-  #   median            - median of raw baseprice
-  #   percentile        - quantile at `percentile` (e.g. 0.75)
-  #   mean_above_median - mean of raw baseprice strictly above the series median
-  # For the 1-day windowed (next-24h max) normalisation use class EnergyPriceDayDynDataSource.
-  max_calc_mode: mean_above_median
-  percentile: 0.75  # consulted only when max_calc_mode == "percentile"
 - class: WeatherDataSource
   name: weather
-- class: InsideTemperature
-  name: desired_temp_in
 - class: DesiredUserEnergyNeed
   name: user_energy_need
   ctxt_keys: [ctxt_hh_consumption_max]
@@ -78,23 +74,21 @@ statesources:
 infras:
 - class: LinearEVCharger
   name: ev_charger
-  max_power_kW: 22.0
+  max_power_kW: 11.0
   v2g_enabled: true
-  max_charge_time_hrs: 24.0
   v2g_playroom: 0.1
 - class: BatteryLinear
   name: battery
   max_power_kW: 10.0
-  max_cap_kWh: 15.0
+  max_cap_kWh: 16.0
   start_soc_percentage: 0.3
   start_soc_jitter: 0.1
   soc_min: 0.1
   soc_max: 0.95
 - class: SolarPanel
   name: solar
-  max_power_kW: 5.0
+  max_power_kW: 10.0
   pv_efficiency: 0.22
-  panel_area_m2: 50
 - class: WindTurbine
   name: wind_turbine
   max_power_kW: 5.0
@@ -106,39 +100,27 @@ infras:
   peak_consumption_kW: 8.0
 
 rewards:
-- class_name: BatteryTargetRewardV0
+- class_name: EconomicRewardV0
   weight: 1.0
-  params:
-    min_pct: 0.15
-    max_pct: 0.85
-- class_name: BatteryMgmtRewardV0
-  weight: 1.0
-  params:
-    scale: 0.5
 - class_name: OperatorEnergyControlRewardV0
   weight: 1.0
   params:
     harsh_penalty: -4.0
     soft_threshold_pct: 0.9
     recovery_steps: 3
-- class_name: LongTermEconomicRewardV0
-  weight: 1.0
-  params: {}
-- class_name: EVChargingRewardV0
+- class_name: EVChargingSessionReward
   weight: 1.0
   params:
-    diff_threshold: 0.02
-    soc_diff_multiplier: 5.0
+    success_reward: 30.0
+    failure_penalty: -60.0
     disconnect_soc_tolerance: 0.05
-- class_name: EVChargingOnTimeRewardV0
-  weight: 1.0
-  params: {}
-- class_name: ActionSmoothnessRewardV0
-  weight: 1.0
-  params:
-    n_steps: 16
-    mode: weighted
-    freq_exponent: 1.0
+    charge_progress_scale: 10.0
+# Low weight on purpose: at 1.0 its +1/step-after-target payout (~+100/session)
+# rewards charge-ASAP and buries the economic timing signal (~±0.3/step); at 0.1 the
+# pacing/infeasibility signal survives while EconomicRewardV0 decides WHEN to charge.
+# - class_name: EVChargingOnTimeRewardV0
+#   weight: 0.1
+#   params: {}
 
 infra_schedule: null
 

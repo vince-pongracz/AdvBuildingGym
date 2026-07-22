@@ -106,8 +106,6 @@ class BatteryLinear(Infrastructure):
         old_soc = self.soc
         new_soc = self.soc + delta_soc
         self.soc = float(np.clip(new_soc, self.soc_min, self.soc_max))
-        if not np.isclose(self.soc,new_soc):
-            info["action_overstep"] = info.get("action_overstep", 0) + 1
 
         # actual energy transferred (may be SoC-limited)
         actual_delta_soc = self.soc - old_soc
