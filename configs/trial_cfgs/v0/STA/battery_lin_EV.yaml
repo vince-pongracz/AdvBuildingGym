@@ -115,6 +115,12 @@ rewards:
     failure_penalty: -60.0
     disconnect_soc_tolerance: 0.05
     charge_progress_scale: 10.0
+- class_name: BESRegulatorReward
+  weight: 1.0
+  params: {penalty: -1.0}
+- class_name: EVRegulatorReward
+  weight: 1.0
+  params: {penalty: -1.0}
 # Low weight on purpose: at 1.0 its +1/step-after-target payout (~+100/session)
 # rewards charge-ASAP and buries the economic timing signal (~±0.3/step); at 0.1 the
 # pacing/infeasibility signal survives while EconomicRewardV0 decides WHEN to charge.

@@ -1,4 +1,5 @@
 start,max_cap_kWh,max_charging_kW,charger_efficiency,discharge_efficiency,v2g_enabled,start_soc,target_soc,target_soc_reach_duration_h
 2025-01-08 13:00:00,95.0,11.0,0.94,0.92,True,0.45,0.9,6.0
 2025-01-08 19:00:00,,,,,,,,
-2025-01-08 19:05:00,78.0,11.0,0.93,0.91,True,0.25,0.80,9.0
+2025-01-08 19:05:00,78.0,11.0,0.93,0.91,True,0.25,0.80,4.9166
+2025-01-08 23:55:00,,,,,,,,

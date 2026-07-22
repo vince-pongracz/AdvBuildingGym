@@ -50,7 +50,8 @@ class AdvBuildingGym(gym.Env, DataVariantConsumer):
         1. ``self.state`` / ``observation_space`` — policy-visible normalised
            values (``s_*`` / ``ctxt_*``).
         2. ``self._component_info`` — shared inter-component dict for raw
-           physical values (``net_power_kW``, EV schedule, action history).
+           physical values (``net_power_kW``, EV schedule, action history,
+           ``requested_action`` = the pre-clip action snapshot).
         3. step/reset ``info`` — diagnostics for callbacks and logging
            (``reward_breakdown``, ``cum_E_kWh``, ``raw``).
 
@@ -395,6 +396,15 @@ class AdvBuildingGym(gym.Env, DataVariantConsumer):
         )
 
     def _execute_actions(self, action) -> None:
+        # Snapshot what the policy asked for before any infra rewrites it in place:
+        # BatteryLinear back-calculates a_battery from the SoC-clipped energy and
+        # LinearEVCharger zeroes a_lin_ev_charger when no EV is plugged in, so after
+        # this loop the requested value is unrecoverable. Regulator rewards
+        # (BESRegulatorReward / EVRegulatorReward) compare it against the realised one.
+        self._info["requested_action"] = {
+            key: np.asarray(val, dtype=np.float32).copy()
+            for key, val in action.items()
+        }
         for infr in self.infras:
             infr.exec_action(action, self.state, info=self._info)
 
