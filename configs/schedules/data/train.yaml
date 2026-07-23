@@ -76,15 +76,15 @@ variable:
   user_energy_need:
     - data/hh_consumption/wpuq/2020_SFH10.csv
     - data/hh_consumption/wpuq/2020_SFH30.csv
-    - data/hh_consumption/wpuq/2020_SFH10_syn_cfg_1_neg.csv
+    # - data/hh_consumption/wpuq/2020_SFH10_syn_cfg_1_neg.csv
     - data/hh_consumption/wpuq/2020_SFH10_syn_cfg_1_pos.csv
-    - data/hh_consumption/wpuq/2020_SFH10_syn_cfg_2_neg.csv
+    # - data/hh_consumption/wpuq/2020_SFH10_syn_cfg_2_neg.csv
     - data/hh_consumption/wpuq/2020_SFH10_syn_cfg_2_pos.csv
-    - data/hh_consumption/wpuq/2020_SFH10_syn_cfg_3_neg.csv
+    # - data/hh_consumption/wpuq/2020_SFH10_syn_cfg_3_neg.csv
     - data/hh_consumption/wpuq/2020_SFH10_syn_cfg_3_pos.csv
-    - data/hh_consumption/wpuq/2020_SFH30_syn_cfg_1_neg.csv
+    # - data/hh_consumption/wpuq/2020_SFH30_syn_cfg_1_neg.csv
     - data/hh_consumption/wpuq/2020_SFH30_syn_cfg_1_pos.csv
-    - data/hh_consumption/wpuq/2020_SFH30_syn_cfg_2_neg.csv
+    # - data/hh_consumption/wpuq/2020_SFH30_syn_cfg_2_neg.csv
     - data/hh_consumption/wpuq/2020_SFH30_syn_cfg_2_pos.csv
-    - data/hh_consumption/wpuq/2020_SFH30_syn_cfg_3_neg.csv
+    # - data/hh_consumption/wpuq/2020_SFH30_syn_cfg_3_neg.csv
     - data/hh_consumption/wpuq/2020_SFH30_syn_cfg_3_pos.csv

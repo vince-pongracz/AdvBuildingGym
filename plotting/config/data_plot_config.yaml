@@ -72,6 +72,12 @@ user_energy_need:
   profiles:
     - SFH10
     - SFH30
+  # Overlay the synthesised siblings "<year>_<profile>_syn_cfg_*.csv"
+  # (produced by preprocessing/synthesize.py), same as weather/price do.
+  # Off by default: every cfg adds a trace group per profile and date.
+  include_syn: true
+  # Restrict which discovered cfg names are drawn. Empty list = all of them.
+  syn_cfgs: []
   timestamp_col: timestamp
   value_col: hh_consumption_kW
 

@@ -361,7 +361,11 @@ def build_user_energy_need_figure(
     value_col: str,
     stat_only: bool = False,
 ) -> go.Figure:
-    """Create a figure overlaying all household consumption profiles."""
+    """Create a figure overlaying all household consumption profiles.
+
+    Synthesised ``*_syn_cfg_*`` variants (when enabled in the config) arrive
+    in *profile_frames* as ordinary per-day traces, not as a syn overlay.
+    """
     n = len(profile_frames)
     return build_overlay_figure(
         profile_frames,

@@ -1,29 +1,23 @@
 infras:
-- class: HP
-  name: HP
-  max_power_kW: 1.0
-  cop_heat: 3.0
-  cop_cool: 2.5
 - class: BatteryLinear
   name: battery
   ctxt_keys: [ctxt_battery_power_kW]
-  max_power_kW: 16.0
+  max_power_kW: 3.0
   max_cap_kWh: 10.0
   start_soc_percentage: 0.3
   start_soc_jitter: 0.1
   soc_min: 0.1
   soc_max: 0.95
-- class: LinearEVCharger
-  name: ev_charger
-  max_power_kW: 22.0
-  v2g_enabled: true
-  max_charge_time_hrs: 24.0
-  v2g_playroom: 0.1
 - class: SolarPanel
   name: solar
   max_power_kW: 5.0
   pv_efficiency: 0.22
-  panel_area_m2: 50
+- class: WindTurbine
+  name: wind_turbine
+  max_power_kW: 5.0
+  cut_in_speed_ms: 3.0
+  rated_speed_ms: 12.0
+  cut_out_speed_ms: 25.0
 - class: HouseholdEnergyConsumers
   name: hh_consumers
   peak_consumption_kW: 8.0
