@@ -88,7 +88,15 @@ note.txt
 # Snapshot bundles produced by tools/snapshot/. Each snapshot dir contains
 # the immutable snapshot.zip + manifest.json plus its per-run outputs.
 # The README at the root of snapshots/ is the only tracked file in there.
-snapshots/*
+snapshots/**
 !snapshots/snapshots.md
 
 tests/**
+
+thesis_eval/**/*.pdf
+thesis_eval/**/*.csv
+thesis_eval/**/*.tex
+thesis_eval/**/*.png
+thesis_eval/**/*.html
+thesis_eval/**/*.svg
+thesis_eval/**/*.tb_return_cache

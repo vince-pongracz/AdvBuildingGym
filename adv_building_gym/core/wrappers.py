@@ -17,8 +17,8 @@ from gymnasium.wrappers import RescaleAction
 
 
 class FlattenAction(gymnasium.ActionWrapper):
-    """Flatten a Dict action space into a single Box (via flatten_space); incoming
-    flat actions are unflattened back to a Dict for the wrapped env.
+    """Flatten a Dict action space into a single Box (via flatten_space); 
+    incoming flat actions are unflattened back to a Dict for the wrapped env.
     """
 
     def __init__(self, env: gymnasium.Env) -> None:

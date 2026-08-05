@@ -37,7 +37,7 @@
 # Driver (1 CPU, reserved in _common/resource_check_util.py) + headroom for the
 # in-process learner + Ray internals. No remote env runners (see header note).
 #SBATCH --cpus-per-task=3
-#SBATCH --gres=gpu:4g.20gb:1
+#SBATCH --gres=gpu:1g.5gb:1
 #SBATCH --time=00:30:00
 # Exclude nodes with known GPU issues (add problematic nodes here)
 # // # --exclude=haicn1704,haicn1711

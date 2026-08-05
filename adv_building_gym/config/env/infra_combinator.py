@@ -8,8 +8,8 @@ The swap is synchronised across all Ray workers via the companion
 
 Schedule YAML carries separate train and eval lists::
 
-    mode: cycle
-    swap_every_n_episodes: 300
+    mode: "cycle"
+    swap_every_n_episodes: 12
     configs:
       train:
         - configs/infra_cfgs/.../foo_1.yaml
@@ -40,15 +40,13 @@ Split = Literal["train", "eval"]
 class _ParsedConfig:
     """One parsed infra YAML (infras only)."""
 
-    __slots__ = ("name", "infra_dicts", "context")
-
     def __init__(self, name: str, infra_dicts: list[dict], control_step: int) -> None:
         self.name = name
         self.infra_dicts = infra_dicts
         # Deserialization context (same key as EnvConfigManager).
         self.context = {"control_step": control_step}
 
-
+# TODO noprio VP 2026.08.02.: Issue with the eval part of the scheduling
 class InfraCombinator:
     """Schedule infra YAMLs for infrastructure curriculum training.
 
@@ -183,7 +181,7 @@ class InfraCombinator:
 
         Expected layout::
 
-            mode: cycle
+            mode: "cycle"
             swap_every_n_episodes: 300
             configs:
               train: [<path>, ...]

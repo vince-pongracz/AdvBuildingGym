@@ -11,7 +11,7 @@ from adv_building_gym.core.env import AdvBuildingGym
 from adv_building_gym.core.forecast_wrapper import ForecastWrapper
 from adv_building_gym.core.history_wrapper import HistoryWrapper
 from adv_building_gym.ray.ma_env import MultiAgentAdvBuildingGym
-from adv_building_gym.core.wrappers import FlattenAction, wrap_action_space
+from adv_building_gym.core.wrappers import wrap_action_space
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +61,10 @@ def adv_building_env_creator(config: dict) -> gymnasium.Env:
             - ``eval_mode``: Set by Ray's evaluation env_config override; routes
               the env to ``eval_data_combinator`` and fresh-random per-episode
               sampling.
+            - ``seed``: Base construction seed for training envs (trial ``seed:``).
+            - ``eval_seed``: Base construction seed used instead of ``seed`` when
+              ``eval_mode`` is set (trial ``eval_seed:``, which defaults to
+              ``seed:``). Absent → falls back to ``seed``.
 
     Returns:
         Wrapped AdvBuildingGym with flat Box(-1, 1) action space and flat Box obs.
@@ -125,9 +129,18 @@ def adv_building_env_creator(config: dict) -> gymnasium.Env:
         instance_id=instance_id,
         eval_mode=is_eval,
     )
-    seed = config.get("seed", 21) + worker_index + 1000 * vector_index  # Derive a unique seed per env instance.
+    # Derive a unique seed per env instance. Eval EnvRunners take ``eval_seed`` (the trial's
+    # `eval_seed:`, defaulting to `seed:`) so a training seed sweep leaves the eval episode
+    # sequence fixed. This reset is the ONLY one that reaches an eval env's RNG: it sets
+    # _has_seeded, after which AdvBuildingGym._maybe_reseed ignores every later reset seed in
+    # eval_mode — including RLlib's own `seed + 1e6` — so RLlib cannot override the value here.
+    base_seed = config.get("seed", 21)
+    if is_eval:
+        base_seed = config.get("eval_seed", base_seed)
+    seed = base_seed + worker_index + 1000 * vector_index
     env.reset(seed=seed)
-    logger.info("Env: instance_id=%s seed=%s", instance_id, seed)
+    logger.info("Env: instance_id=%s seed=%s (base=%s, %s)",
+                instance_id, seed, base_seed, "eval_seed" if is_eval else "seed")
     
     # Seed action space if the method exists
     if hasattr(env.action_space, "seed"):

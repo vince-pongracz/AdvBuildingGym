@@ -45,6 +45,8 @@ def create_infra_schedule_on_train_result_cb(
     return on_train_result
 
 
+# TODO noprio VP 2026.08.02.: Solve it with callback on the environment itself.. 
+# This is a bit ugly und unstructured.
 def _push_infras_to_runners(
     algorithm,
     infra_combinator: InfraCombinator,

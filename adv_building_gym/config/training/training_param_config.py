@@ -81,7 +81,7 @@ class TrainingParamConfig(LoggableConfig):
 
     ppo_episodes_per_iteration: int = 25
     ppo_minibatch_size: int = 128 # Rllib default
-    ppo_num_epochs: int = 20
+    ppo_num_epochs: int = 10
 
     sac_replay_batch_size: int = 256 # NOTE VP 2026.05.08.: Rllib default
     sac_episodes_to_keep_in_replay_buffer: int = 100
@@ -95,7 +95,7 @@ class TrainingParamConfig(LoggableConfig):
     dreamerv3_model_size: str = "XS"  # one of "XS", "S", "M", "L", "XL"
     dreamerv3_batch_size_B: int = 16  # RLlib default
     dreamerv3_batch_length_T: int = 64  # RLlib default
-    dreamerv3_training_ratio: float = 10.0
+    dreamerv3_training_ratio: float = 10.0 # Not RLlib default, default is 1024
     dreamerv3_horizon_H: int = 15  # imagination horizon. RLlib default
     dreamerv3_episodes_to_keep_in_replay_buffer: int = 500
     dreamerv3_world_model_lr: float = 1e-4  # RLlib default

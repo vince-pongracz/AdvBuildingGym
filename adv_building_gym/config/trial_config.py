@@ -10,7 +10,10 @@ Schema (top-level keys, ordered):
 
     # run control
     algorithm: ppo|sac|dreamerv3
-    seed: 42
+    seed: 42        # learner + global RNGs + the TRAINING env runners' env seeds
+    eval_seed: 42   # optional; the IN-TRAINING EVAL env runner's env seed. Defaults to `seed`.
+                    # Pin it while varying `seed` to run a seed sweep against an identical
+                    # eval episode sequence (see adv_building_gym/ray/env_creator.py).
     metric: episode_return_mean | achieved_reward
     # Eval + checkpoint cadence is a single knob: training_params.common.evaluation.interval
     # (checkpoints are taken on eval iterations; see run_train_ray._build_tuner).
@@ -67,6 +70,7 @@ logger = logging.getLogger(__name__)
 
 _RUN_DEFAULTS: dict[str, Any] = {
     "algorithm": "ppo",
+    "eval_seed": None, # None → fall back to the seed
     "metric": "episode_return_mean",
     "log_trajectories": False,
     "num_envs": 1,
@@ -88,6 +92,8 @@ class TrialConfig:
     trial_name: str
     algorithm: str
     seed: Optional[int]
+    # Seed for the in-training eval env only; equals `seed` unless the YAML sets it.
+    eval_seed: int
     metric: str
     log_trajectories: bool
     num_envs: int
@@ -146,6 +152,11 @@ class TrialConfig:
             raise ValueError(f"Trial config {label}: algorithm must be 'ppo', 'sac', or 'dreamerv3', got '{run['algorithm']}'")
 
         trial_seed: int = int(trial_dict["seed"])
+        # `eval_seed` isolates the in-training eval env from a training seed sweep: the
+        # eval env is seeded once at construction (ray/env_creator.py) and ignores RLlib's
+        # later reset seeds, so without a separate key it would follow `seed` and every
+        # sweep member would evaluate on a different episode sequence.
+        eval_seed: int = trial_seed if run["eval_seed"] is None else int(run["eval_seed"])
         overrides = run["overrides"] or {}
 
         # ---- training params (inlined) ----
@@ -316,6 +327,7 @@ class TrialConfig:
             trial_name=trial_dict["trial_name"],
             algorithm=run["algorithm"],
             seed=trial_seed,
+            eval_seed=eval_seed,
             metric=run["metric"],
             log_trajectories=bool(run["log_trajectories"]),
             num_envs=int(run["num_envs"]),
@@ -332,9 +344,11 @@ class TrialConfig:
             source_path=source_path,
         )
         logger.info(
-            "Loaded trial '%s' from %s [algorithm=%s, seed=%s, episodes=%s, metric=%s]",
+            "Loaded trial '%s' from %s [algorithm=%s, seed=%s, eval_seed=%s%s, episodes=%s, metric=%s]",
             trial.trial_name, source_path or "<inline>", trial.algorithm,
-            trial.seed, training_param_config.max_episodes_to_run, trial.metric,
+            trial.seed, trial.eval_seed,
+            "" if run["eval_seed"] is not None else " (inherited from seed)",
+            training_param_config.max_episodes_to_run, trial.metric,
         )
         return trial
 

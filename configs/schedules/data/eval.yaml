@@ -1,7 +1,7 @@
 # Data combinator configuration for evaluation
 # Uses deterministic round-robin traversal for reproducible multi-scenario eval.
 # Same scenario pool as training; key differences:
-#   - mode: cycle (deterministic, not random)
+#   - mode: "cycle" (deterministic, not random)
 #   - day: each (sequential days for reproducible coverage)
 #   - swap_every_n_episodes: 1 (new variant each episode)
 

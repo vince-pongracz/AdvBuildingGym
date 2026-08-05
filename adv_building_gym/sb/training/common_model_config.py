@@ -236,8 +236,12 @@ def sb_common_model_setup(
     train_vec = build_vec_env(
         trial, num_envs=trial.num_envs, seed=trial.seed, role="train",
     )
+    # Eval seeds from `eval_seed` (trial `eval_seed:`, default = `seed:`) so a training
+    # seed sweep evaluates every member on the identical episode sequence, mirroring the
+    # Ray driver (see adv_building_gym/ray/env_creator.py). The +10_000 offset keeps the
+    # eval stream clear of the training envs' `eval_seed + rank` range when both coincide.
     eval_vec = build_vec_env(
-        trial, num_envs=1, seed=trial.seed + 10_000, role="eval", force_dummy=True,
+        trial, num_envs=1, seed=trial.eval_seed + 10_000, role="eval", force_dummy=True,
     )
 
     # Eval cadence: every ``evaluation_interval`` episodes (the single shared

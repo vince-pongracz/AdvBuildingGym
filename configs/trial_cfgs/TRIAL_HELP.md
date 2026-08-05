@@ -107,7 +107,7 @@ single training run.
 
 ```yaml
 infra_schedule:
-  mode: cycle
+  mode: "cycle"
   swap_every_n_episodes: 100
   configs:
     train:

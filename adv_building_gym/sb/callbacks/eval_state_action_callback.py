@@ -67,11 +67,6 @@ def _sanitise_trial_name(name: Optional[str]) -> str:
 class _EvalRunStats:
     """Iteration-level accumulators populated during one eval round."""
 
-    __slots__ = (
-        "returns", "cum_E_kWh", "cum_price_EUR",
-        "lengths", "per_component_totals", "trajectory_buffer",
-    )
-
     def __init__(self):
         self.returns: list[float] = []
         self.cum_E_kWh: list[float] = []

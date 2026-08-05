@@ -222,7 +222,12 @@ def _build_progress_reporter(algorithm: str) -> CLIReporter:
     )
 
 
-def _build_tuner(trial: TrialConfig, metric: str, param_space, run_name, storage_path, 
+# Ray's algorithm registry is case-sensitive: "PPO"/"SAC" are all-caps,
+# but DreamerV3 is mixed-case — see ray.rllib.algorithms.registry.
+TRAINABLE_NAMES = {"ppo": "PPO", "sac": "SAC", "dreamerv3": "DreamerV3"}
+
+
+def _build_tuner(trial: TrialConfig, metric: str, param_space, run_name, storage_path,
                 checkpoint_freq_iterations, trial_name: str | None = None):
     """Build the ``tune.Tuner`` for the chosen algorithm."""
     # Hard episode cap (1 episode = 1 day at 5-min control step) plus optional
@@ -231,9 +236,7 @@ def _build_tuner(trial: TrialConfig, metric: str, param_space, run_name, storage
     stop_criteria = build_stop_criteria(trial.training_param_config, metric, mode="max")
     progress_reporter = _build_progress_reporter(trial.algorithm)
 
-    # Ray's algorithm registry is case-sensitive: "PPO"/"SAC" are all-caps,
-    # but DreamerV3 is mixed-case — see ray.rllib.algorithms.registry.
-    trainable_name = {"ppo": "PPO", "sac": "SAC", "dreamerv3": "DreamerV3"}[trial.algorithm]
+    trainable_name = TRAINABLE_NAMES[trial.algorithm]
 
     return tune.Tuner(
         trainable_name,
@@ -367,6 +370,9 @@ def main():
 
     env_creator_config = {
         "seed": trial.seed,
+        # Eval EnvRunners seed from this instead (trial `eval_seed:`, default = `seed:`),
+        # so sweeping `seed` keeps the in-training eval episode sequence identical.
+        "eval_seed": trial.eval_seed,
         "env_config": trial.env_config,
         "data_combinator": trial.data_combinator,
         # Eval EnvRunners (eval_mode=True via the evaluation_config override) pick this

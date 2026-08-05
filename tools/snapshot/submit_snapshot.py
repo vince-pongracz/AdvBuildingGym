@@ -18,6 +18,24 @@ Two modes:
            [--checkpoint <abs path>] \
            [-- --episodes 20 --plot-all]
 
+2b. Fan out training seeds from one snapshot while holding the in-training
+    evaluation dataset fixed::
+
+       for s in 100 200 300; do
+         python -m tools.snapshot.submit_snapshot \
+             --snapshot snapshots/<existing> --kind train --common-seed $s
+       done
+
+    ``--common-seed`` writes ``training_params.common.seed``, which RLlib
+    receives via ``config.debugging()`` and turns into ``seed + worker_index``
+    per training EnvRunner. The trial's top-level ``seed:`` is left alone, and
+    that is what the env creator uses to seed each env at construction — the
+    seed the eval env keeps, because an ``eval_mode`` env ignores every later
+    reset seed. So varying ``--common-seed`` changes training data + learner
+    init while every run evaluates on the identical episode sequence.
+    ``--seed`` rewrites the top-level scalar instead and therefore moves the
+    eval stream too.
+
 3. Run a snapshot locally without sbatch (foreground bash exec)::
 
        python -m tools.snapshot.submit_snapshot \
@@ -136,6 +154,12 @@ class SubmissionPlan:
     trial_path_in_snap: str     # relative to <snapshot>/code/
     extra_args: list[str]
     seed_override: int | None = None
+    common_seed_override: int | None = None
+
+    @property
+    def needs_run_config_copy(self) -> bool:
+        """Whether this run gets its own writable configs/ tree (any seed override does)."""
+        return self.seed_override is not None or self.common_seed_override is not None
 
 
 # ---------------------------------------------------------------------------
@@ -263,6 +287,107 @@ def _rewrite_top_level_seed(trial_yaml_path: Path, new_seed: int) -> None:
     trial_yaml_path.write_text(new_text, encoding="utf-8")
 
 
+_COMMON_SEED_LINE_REGEX = re.compile(r"^\s*seed:\s*\S+(?P<trail>\s*#.*)?$")
+
+
+def _yaml_indent(line: str) -> int:
+    return len(line) - len(line.lstrip())
+
+
+def _is_structural(line: str) -> bool:
+    """True for lines that carry block structure (blank lines and full-line comments do not)."""
+    stripped = line.strip()
+    return bool(stripped) and not stripped.startswith("#")
+
+
+def _block_end(lines: list[str], open_idx: int, open_indent: int) -> int:
+    """Exclusive end index of the block opened at ``open_idx``.
+
+    The block runs until the next structural line indented at or below the
+    opening key, mirroring YAML's indentation-defined scoping.
+    """
+    for i in range(open_idx + 1, len(lines)):
+        if _is_structural(lines[i]) and _yaml_indent(lines[i]) <= open_indent:
+            return i
+    return len(lines)
+
+
+def _find_key(lines: list[str], key: str, indent: int, lo: int, hi: int) -> int | None:
+    """Index of the ``<key>:`` line at exactly ``indent`` within ``[lo, hi)``, else None.
+
+    The exact-indent match is what keeps a search for ``seed`` from hitting a
+    deeper nested key (e.g. ``common.early_stop.seed``).
+    """
+    for i in range(lo, hi):
+        if not _is_structural(lines[i]) or _yaml_indent(lines[i]) != indent:
+            continue
+        if lines[i].strip().split(":", 1)[0].strip() == key:
+            return i
+    return None
+
+
+def _set_common_seed(trial_yaml_path: Path, new_seed: int) -> str:
+    """Set ``training_params.common.seed`` in a trial YAML in place.
+
+    Rewrites the value when the key exists, and inserts it — creating the
+    ``common:`` block too, if that is also absent — when it does not. Trial
+    YAMLs carry explanatory comments, so this edits lines rather than doing a
+    ``yaml.safe_load`` + ``dump`` round-trip, which would discard them.
+
+    ``common.seed`` wins over the trial's top-level ``seed:`` in
+    ``TrainingParamConfig.from_dict`` (only absent keys fall back to
+    ``default_seed``), so writing it here decouples the RLlib/learner seed from
+    the top-level one, which keeps driving the env-creator's construction seed.
+
+    Returns ``"rewritten"`` or ``"inserted"`` for logging.
+    """
+    lines = trial_yaml_path.read_text(encoding="utf-8").splitlines()
+
+    tparams_idx = _find_key(lines, "training_params", 0, 0, len(lines))
+    if tparams_idx is None:
+        raise ValueError(
+            f"No top-level 'training_params:' block in {trial_yaml_path}; cannot set common.seed."
+        )
+    tparams_end = _block_end(lines, tparams_idx, 0)
+
+    # The first structural child fixes the file's indent step (2 in our trial YAMLs).
+    child_indent = next(
+        (_yaml_indent(l) for l in lines[tparams_idx + 1:tparams_end] if _is_structural(l)), None
+    )
+    if child_indent is None:
+        raise ValueError(
+            f"'training_params:' has no child keys in {trial_yaml_path}; cannot set common.seed."
+        )
+    step = child_indent or 2
+
+    common_idx = _find_key(lines, "common", child_indent, tparams_idx + 1, tparams_end)
+    if common_idx is None:
+        # No `common:` section at all — create it as training_params' first child.
+        lines.insert(tparams_idx + 1, f"{' ' * child_indent}common:")
+        lines.insert(tparams_idx + 2, f"{' ' * (child_indent + step)}seed: {new_seed}")
+        trial_yaml_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        return "inserted"
+
+    common_end = _block_end(lines, common_idx, child_indent)
+    seed_indent = next(
+        (_yaml_indent(l) for l in lines[common_idx + 1:common_end] if _is_structural(l)),
+        child_indent + step,
+    )
+    seed_idx = _find_key(lines, "seed", seed_indent, common_idx + 1, common_end)
+
+    if seed_idx is None:
+        lines.insert(common_idx + 1, f"{' ' * seed_indent}seed: {new_seed}")
+        status = "inserted"
+    else:
+        match = _COMMON_SEED_LINE_REGEX.match(lines[seed_idx])
+        trail = (match.group("trail") or "") if match else ""
+        lines[seed_idx] = f"{' ' * seed_indent}seed: {new_seed}{trail}"
+        status = "rewritten"
+
+    trial_yaml_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return status
+
+
 # ---------------------------------------------------------------------------
 # Plan construction
 # ---------------------------------------------------------------------------
@@ -274,6 +399,7 @@ def _build_plan(
     extra_args: list[str],
     checkpoint_override: str | None,
     seed_override: int | None = None,
+    common_seed_override: int | None = None,
     dry_run: bool = False,
 ) -> SubmissionPlan:
     if kind not in KIND_SPECS:
@@ -281,8 +407,21 @@ def _build_plan(
 
     manifest = _read_manifest(snapshot_dir)
     trial_path_in_snap = manifest["source_trial_path"]
+    # Either artifact is enough to run: the wrapper only unzips when code/ is
+    # absent (slurm_scripts/util/snapshot_mode.sh), and every read here prefers
+    # the extracted tree. A snapshot with code/ but no zip is no longer
+    # reproducible from the zip alone, so warn instead of failing.
     if not (snapshot_dir / "snapshot.zip").exists():
-        raise FileNotFoundError(f"snapshot.zip missing from {snapshot_dir}")
+        if not (snapshot_dir / "code").exists():
+            raise FileNotFoundError(
+                f"Neither snapshot.zip nor code/ found in {snapshot_dir}"
+            )
+        logger.warning(
+            "No snapshot.zip in %s — running from the extracted code/ tree. "
+            "Rebuild it with `python -m tools.snapshot.repack_snapshot %s` to "
+            "keep the snapshot self-contained.",
+            snapshot_dir, snapshot_dir,
+        )
 
     wrapper_basename, entry_script = KIND_SPECS[kind]
     if kind == "train":
@@ -311,34 +450,44 @@ def _build_plan(
     run_id = f"{kind.replace('-', '_')}_{timestamp}"
     if seed_override is not None:
         run_id = f"{run_id}_seed{seed_override}"
+    if common_seed_override is not None:
+        run_id = f"{run_id}_cseed{common_seed_override}"
     run_dir = snapshot_dir / "runs" / run_id
 
     args = list(extra_args)
     effective_trial_path = trial_abs_in_snap
 
-    # --seed: pre-create the run dir with a copied configs/ tree and rewrite
-    # the seed in the per-run copy. The original snapshot stays untouched so
-    # multiple seeds can fan out from one snapshot in isolated run dirs.
-    # source_trial_path is repo-relative (e.g. "configs/trial_cfgs/.../x.yaml");
-    # the copytree puts it under <run_dir>/configs/trial_cfgs/.../x.yaml.
-    if seed_override is not None:
+    # --seed / --common-seed: pre-create the run dir with a copied configs/ tree
+    # and rewrite the seed(s) in the per-run copy. The original snapshot stays
+    # untouched so multiple seeds can fan out from one snapshot in isolated run
+    # dirs. source_trial_path is repo-relative (e.g.
+    # "configs/trial_cfgs/.../x.yaml"); the copytree puts it under
+    # <run_dir>/configs/trial_cfgs/.../x.yaml.
+    if seed_override is not None or common_seed_override is not None:
         trial_rel_to_configs = Path(trial_path_in_snap).relative_to("configs")
         effective_trial_path = run_dir / "configs" / trial_rel_to_configs
         if dry_run:
             logger.info(
-                "[dry-run] would extract snapshot, copy configs/ into %s, "
-                "and rewrite seed → %d in %s",
-                run_dir, seed_override, effective_trial_path,
+                "[dry-run] would extract snapshot, copy configs/ into %s, and set "
+                "seed=%s / common.seed=%s in %s",
+                run_dir, seed_override, common_seed_override, effective_trial_path,
             )
         else:
             _extract_snapshot_if_needed(snapshot_dir)
             run_dir.mkdir(parents=True, exist_ok=False)
             shutil.copytree(snapshot_dir / "code" / "configs", run_dir / "configs")
-            _rewrite_top_level_seed(effective_trial_path, seed_override)
-            logger.info(
-                "Seed override applied: %s (rewrote %s)",
-                seed_override, effective_trial_path,
-            )
+            if seed_override is not None:
+                _rewrite_top_level_seed(effective_trial_path, seed_override)
+                logger.info(
+                    "Top-level seed override applied: %s (rewrote %s)",
+                    seed_override, effective_trial_path,
+                )
+            if common_seed_override is not None:
+                status = _set_common_seed(effective_trial_path, common_seed_override)
+                logger.info(
+                    "training_params.common.seed %s: %s (in %s)",
+                    status, common_seed_override, effective_trial_path,
+                )
 
     # If the user didn't supply --trial in pass-through args, inject the
     # snapshot-internal trial path (or the per-run copy when --seed is set)
@@ -377,6 +526,7 @@ def _build_plan(
         trial_path_in_snap=trial_path_in_snap,
         extra_args=args,
         seed_override=seed_override,
+        common_seed_override=common_seed_override,
     )
 
 
@@ -552,7 +702,21 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "configs/ into the run dir, rewrites the seed in the copy, and "
             "appends _seed{N} to the run id. Original snapshot is untouched, "
             "so multiple seeds can fan out from a single snapshot in isolated "
-            "run dirs.",
+            "run dirs. NOTE: the top-level seed also drives the env-creator's "
+            "construction seed, which is what the in-training EVAL env keeps "
+            "(RLlib's own eval seed is ignored once the env has been seeded). "
+            "Vary --common-seed instead to hold the eval data fixed.",
+    )
+    parser.add_argument(
+        "--common-seed", type=int, default=None,
+        help="Set training_params.common.seed in the per-run trial YAML copy "
+            "(rewritten if present, inserted if not) and append _cseed{N} to "
+            "the run id. This is the seed RLlib gets via config.debugging(), so "
+            "it drives the training EnvRunners' data streams and the learner's "
+            "weight init, while the top-level seed keeps driving the eval env. "
+            "Use it (not --seed) to fan out training seeds with a FIXED eval "
+            "dataset. Space values by at least num_env_runners — RLlib adds "
+            "worker_index, so 42/43/44 would share most worker streams.",
     )
     parser.add_argument(
         "--note", default=None,
@@ -596,13 +760,13 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = _parse_args(argv)
 
-    # --seed rewrites the per-run trial YAML copy and points --trial at it.
-    # A pass-through --trial would bypass the rewrite, so the seed override
-    # would silently do nothing — reject up front instead.
-    if args.seed is not None and "--trial" in args.pass_through:
+    # --seed / --common-seed rewrite the per-run trial YAML copy and point
+    # --trial at it. A pass-through --trial would bypass the rewrite, so the
+    # override would silently do nothing — reject up front instead.
+    if (args.seed is not None or args.common_seed is not None) and "--trial" in args.pass_through:
         logger.error(
-            "--seed cannot be combined with a pass-through --trial; "
-            "--seed rewrites the snapshot's trial YAML and must own the --trial flag."
+            "--seed / --common-seed cannot be combined with a pass-through --trial; "
+            "they rewrite the snapshot's trial YAML and must own the --trial flag."
         )
         return 1
 
@@ -631,6 +795,8 @@ def main(argv: list[str] | None = None) -> int:
         run_id = f"{args.kind.replace('-', '_')}_{timestamp}"
         if args.seed is not None:
             run_id = f"{run_id}_seed{args.seed}"
+        if args.common_seed is not None:
+            run_id = f"{run_id}_cseed{args.common_seed}"
         wrapper_basename, entry_script = KIND_SPECS[args.kind]
         trial_abs = Path(args.trial).resolve()
         if args.kind == "train":
@@ -644,11 +810,11 @@ def main(argv: list[str] | None = None) -> int:
         )
         # Mirror the real flow: --trial points at the absolute path inside the
         # would-be snapshot's code/ dir, because the wrapper cd's into runs/.
-        # When --seed is set, it would instead point at the per-run copy
-        # under <run_dir>/configs/. Dry-run only previews the path — no
-        # extraction, no copy, no rewrite.
+        # When --seed / --common-seed is set, it would instead point at the
+        # per-run copy under <run_dir>/configs/. Dry-run only previews the path
+        # — no extraction, no copy, no rewrite.
         run_dir = snapshot_dir / "runs" / run_id
-        if args.seed is not None:
+        if args.seed is not None or args.common_seed is not None:
             trial_rel_to_configs = Path(trial_rel).relative_to("configs")
             effective_trial_path = run_dir / "configs" / trial_rel_to_configs
         else:
@@ -663,6 +829,7 @@ def main(argv: list[str] | None = None) -> int:
             trial_path_in_snap=trial_rel,
             extra_args=["--trial", str(effective_trial_path), *args.pass_through],
             seed_override=args.seed,
+            common_seed_override=args.common_seed,
         )
     else:
         try:
@@ -672,15 +839,16 @@ def main(argv: list[str] | None = None) -> int:
                 extra_args=args.pass_through,
                 checkpoint_override=args.checkpoint,
                 seed_override=args.seed,
+                common_seed_override=args.common_seed,
                 dry_run=args.dry_run,
             )
         except Exception as exc:
             logger.error("Could not build submission plan: %s", exc)
             return 1
-        # _build_plan already created the run dir when --seed is set (to
-        # land the configs copytree). Otherwise create it here. Dry-run
+        # _build_plan already created the run dir when a seed override is set
+        # (to land the configs copytree). Otherwise create it here. Dry-run
         # never touches disk.
-        if not args.dry_run and plan.seed_override is None:
+        if not args.dry_run and not plan.needs_run_config_copy:
             plan.run_dir.mkdir(parents=True, exist_ok=False)
 
     # Phase 3: sbatch — or local bash exec when --local is set.
@@ -701,7 +869,9 @@ def main(argv: list[str] | None = None) -> int:
     logger.info("  entry script : %s", plan.entry_script)
     logger.info("  trial path   : %s (inside snapshot)", plan.trial_path_in_snap)
     if plan.seed_override is not None:
-        logger.info("  seed override: %d", plan.seed_override)
+        logger.info("  seed override: %d (top-level `seed:` — also the eval env's seed)", plan.seed_override)
+    if plan.common_seed_override is not None:
+        logger.info("  common.seed  : %d (training EnvRunners + learner)", plan.common_seed_override)
     logger.info("  pass-through : %s", " ".join(plan.extra_args) or "(none)")
     logger.info("  mode         : %s", "local (bash)" if args.local else "sbatch")
 

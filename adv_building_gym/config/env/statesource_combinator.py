@@ -23,8 +23,6 @@ Split = Literal["train", "eval"]
 
 
 class _ParsedConfig:
-    __slots__ = ("name", "statesource_dicts", "context")
-
     def __init__(self, name: str, statesource_dicts: list[dict], control_step: int) -> None:
         self.name = name
         self.statesource_dicts = statesource_dicts
