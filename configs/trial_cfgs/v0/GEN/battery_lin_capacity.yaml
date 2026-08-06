@@ -58,7 +58,7 @@ statesources:
   # |raw baseprice| max over the NEXT 24h window (one day = SECONDS_PER_DAY / control_step steps,
   # capped at the episode length), recomputed each reset() (per episode / per day). Always publishes
   # ctxt_E_price_max (the per-episode divisor) so the policy can condition on the scale
-  # (raw = s_E_price * ctxt_E_price_max). episode_length / timestep are context-injected; there are
+  # (raw = s_E_price * ctxt_E_price_max). episode_length / control_step are context-injected; there are
   # no max_calc_mode / percentile params.
   # For the whole-series blended normalisation use class EnergyPriceYearDynDataSource.
 # - class: EnergyPriceFixDataSource

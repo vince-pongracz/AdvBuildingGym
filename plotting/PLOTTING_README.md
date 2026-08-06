@@ -57,7 +57,7 @@ Per episode, six figure groups are emitted (each a list of plotly figures):
 | `--select-by`    | `achieved_reward`                | Auto-pick metric. One of `achieved_reward`, `cum_E_kWh` (lowest is best for this one). |
 | `--output-dir`   | `plotting/out/traj_plots/ep_<id>/` | Output root. With `--all-episodes` this is the parent dir. |
 | `--format`       | `html svg`                       | One or more of `html`, `png`, `svg`, `pdf`. |
-| `--control-step` | `300`                            | Control timestep in seconds (used for time-axis). |
+| `--control-step` | `300`                            | Control step duration in seconds (used for time-axis). |
 
 ### Examples (one per mode / option)
 

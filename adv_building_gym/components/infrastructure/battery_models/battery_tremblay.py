@@ -86,7 +86,7 @@ class BatteryTremblay(Infrastructure):
     }
 
     def __init__(self, name: str,
-                 control_step: int,  # Timesteps in seconds
+                 control_step: int,  # Control step duration in seconds
                  cell_capacity_Ah: float,  # Single cell capacity in Ah (typical 21700: 3.5)
                  max_charge_A: float,  # Max pack current in A (e.g. 48)
                  start_soc: float,  # Initial SoC [0, 1]

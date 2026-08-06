@@ -23,8 +23,8 @@ class BuildingHeatLoss(StateSource):
     No time-series data needed — it only updates the indoor temperature state.
     """
 
-    # timestep comes from env_meta control_step; K and mC are explicit YAML params.
-    _context_params: ClassVar[Set[str]] = {'timestep'}
+    # control_step comes from env_meta control_step; K and mC are explicit YAML params.
+    _context_params: ClassVar[Set[str]] = {'control_step'}
 
     # Endogenous physics: runs before the reward under the observed exogenous row
     # (see StateSource.UPDATE_PHASE / env._update_endogenous).
@@ -34,14 +34,13 @@ class BuildingHeatLoss(StateSource):
                 name: str,
                 K: float,
                 mC: float,
-                timestep: float = 300,
+                control_step: float = 300,
                 ctxt_keys: list[str] | None = None) -> None:
-        """K: heat transfer coefficient [W/K]; mC: thermal mass [J/K]; timestep: seconds."""
-        super().__init__(name=name)
+        """K: heat transfer coefficient [W/K]; mC: thermal mass [J/K]; control_step: seconds."""
+        super().__init__(name=name, control_step=control_step)
         self.ctxt_keys = list(ctxt_keys) if ctxt_keys is not None else None
         self.K = K
         self.mC = mC
-        self.timestep = timestep
         self.temp_in_raw = 0.0  # Denormalised indoor temp after this component's update (°C)
 
     def setup_spaces(self,
@@ -83,7 +82,7 @@ class BuildingHeatLoss(StateSource):
         Q_transfer = self.K * (Tout_raw - Tin_raw)
 
         # Temperature change due to heat loss (raw °C), then renormalise.
-        dT_raw = SLOWDOWN_TERM * self.timestep * Q_transfer / self.mC
+        dT_raw = SLOWDOWN_TERM * self.control_step * Q_transfer / self.mC
         dTemp_norm = dT_raw / temp_abs_max if temp_abs_max > 0 else 0.0
 
         # Apply heat loss to indoor temperature, clip to the ±1 normalised bounds.

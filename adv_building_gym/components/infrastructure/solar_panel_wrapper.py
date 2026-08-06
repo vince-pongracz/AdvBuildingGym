@@ -45,7 +45,7 @@ class SolarPanelWrapper(SolarPanel):
             name: Component identifier
             max_power_range_kW: [low, high] uniform sampling range for the
                 per-episode peak power (STC rating) in kW (low == high pins it)
-            control_step: Timestep duration in seconds
+            control_step: Control step duration in seconds
             pv_efficiency: Module efficiency η used by the irradiance→power formula
             exc_max_power_kW: 1-decimal rating values never sampled (redrawn)
             area_headroom_factor: Formula-peak fraction of the rating the derived

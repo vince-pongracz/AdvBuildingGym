@@ -31,9 +31,8 @@ class EnergyPriceDayDynDataSource(StateSource, Forecastable, CsvLookahead, CsvRe
     changes every episode, so the policy must condition on it (``raw = s_E_price * ctxt_E_price_max``).
     """
 
-    # episode_length and timestep come from env context (EnvConfig.EPISODE_LENGTH / CONTROL_STEP).
-    # The control step is injected as `timestep` (EnvConfig._statesource_context), so use that name.
-    _context_params: ClassVar[Set[str]] = {"episode_length", "timestep"}
+    # episode_length and control_step come from env context (EnvConfig.EPISODE_LENGTH / CONTROL_STEP).
+    _context_params: ClassVar[Set[str]] = {"episode_length", "control_step"}
 
     # Lookahead channel -> CSV column (drives Lookahead.lookahead and forecast()).
     _lookahead_columns: ClassVar[dict[str, str]] = {"baseprice": "baseprice"}
@@ -41,21 +40,21 @@ class EnergyPriceDayDynDataSource(StateSource, Forecastable, CsvLookahead, CsvRe
     def __init__(self, name: str, ds_path: str | None = None,
                 ctxt_keys: list[str] | None = ["ctxt_E_price_max"],
                 episode_length: int = 288,
-                timestep: float = 300.0) -> None:
+                control_step: float = 300.0) -> None:
         """Args:
             name: Source identifier.
             ds_path: Optional CSV path; pushed later via DataCombinator.reload.
             ctxt_keys: ctxt_* keys to expose to the policy; the per-episode price scale changes
                 every reset(), so list ctxt_E_price_max to let the policy condition on it.
             episode_length: Episode length in steps (context-injected); caps the 24h window.
-            timestep: Control step in seconds (context-injected); window = SECONDS_PER_DAY / timestep steps.
+            control_step: Control step in seconds (context-injected); window = SECONDS_PER_DAY / control_step steps.
         """
-        super().__init__(name=name)
+        super().__init__(name=name, control_step=control_step)
 
         self.ctxt_keys = list(ctxt_keys) if ctxt_keys is not None else None
         self.episode_length = int(episode_length)
         # One day in control steps; bounds the per-episode lookahead window.
-        self.steps_per_day = max(1, round(SECONDS_PER_DAY / timestep))
+        self.steps_per_day = max(1, round(SECONDS_PER_DAY / control_step))
 
         # Raw-unit divisors for s_E_price. `series_divisor` is the full-series abs max (set at
         # load, pre-reset baseline); `price_divisor` is the active next-24h value (set at reset).

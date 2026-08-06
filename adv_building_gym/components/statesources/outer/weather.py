@@ -3,6 +3,7 @@ from collections import OrderedDict
 from typing import ClassVar, Set
 
 import numpy as np
+import pandas as pd
 
 from ..base import StateSource
 from ..csv_loader import CsvLoader
@@ -26,6 +27,10 @@ class WeatherDataSource(StateSource, CsvLookahead, CsvReloadable):
     Both DWD and Zenodo/WPuQ pipelines emit ``sun_shine`` in W/m² (DWD converted from
     J/cm² per 10 min in ``dwd_preprocess.py``; Zenodo native). ``ctxt_solar_irradiance_max``
     is the scale factor recovering raw W/m² from ``s_solar_irradiance_norm ∈ [0, 1]``.
+
+    Rows are indexed by elapsed simulation TIME, not by raw step count: the CSV carries its own
+    fixed sampling period (5 min from both pipelines) which need not equal ``control_step``, so
+    ``update_state`` / ``lookahead`` convert steps to rows via ``_rows_per_control_step``.
     """
 
     # normalise is an enum, need special handling for serialization
@@ -43,10 +48,16 @@ class WeatherDataSource(StateSource, CsvLookahead, CsvReloadable):
     }
 
     def __init__(self, name: str, ds_path: str | None = None,
-                normalise: Normalisation | str | None = Normalisation.MAX_ABS_SCALING) -> None:
-        super().__init__(name=name)
+                normalise: Normalisation | str | None = Normalisation.MAX_ABS_SCALING,
+                control_step: float = 300.0) -> None:
+        super().__init__(name=name, control_step=control_step)
 
         self.normalise = Normalisation.init(normalise)  # Store for serialization
+
+        # CSV sampling period (s) and how many rows one control step advances. Derived from the
+        # timestamp column on every load (_update_row_cadence); 1:1 until a CSV is read.
+        self._csv_row_seconds: float = float(control_step)
+        self._rows_per_control_step: float = 1.0
         # Raw values for get_raw_values() — updated each step
         self.temp_out_raw: float = 0.0
         self.wind_speed_raw: float = 0.0
@@ -68,6 +79,9 @@ class WeatherDataSource(StateSource, CsvLookahead, CsvReloadable):
 
     def _post_load_data_processing(self) -> None:
         """Normalise weather columns after load/reload (cleaning is done in preprocessing)."""
+        # Row cadence first — it reads `timestamp`, which _keep_ts_columns drops below.
+        self._update_row_cadence()
+
         # warn only on a new file (not every same-file reload at episode reset)
         weather_cols = ["temp_amb", "sun_shine", "avg_wind_speed"]
         for col in weather_cols:
@@ -108,6 +122,56 @@ class WeatherDataSource(StateSource, CsvLookahead, CsvReloadable):
         # columns are unused, so drop them with the rest of the CSV.
         self._keep_ts_columns({"temp_amb", "sun_shine", "avg_wind_speed", "s_temp_out_norm"})
 
+    def _update_row_cadence(self) -> None:
+        """Cache the CSV sampling period (median positive timestamp delta) and rows/control step.
+
+        The weather CSVs are written at a fixed period by the preprocessing pipelines (5 min)
+        that is independent of the env control step, so the row index must follow elapsed time.
+        Falls back to a 1:1 step↔row mapping when the period cannot be determined.
+        """
+        row_seconds = 0.0
+        if "timestamp" in self.ts.columns and len(self.ts) > 1:
+            stamps = pd.to_datetime(self.ts["timestamp"], utc=True, errors="coerce")
+            deltas = stamps.diff().dt.total_seconds().dropna()
+            deltas = deltas[deltas > 0.0]
+            if not deltas.empty:
+                row_seconds = float(deltas.median())
+
+        if row_seconds <= 0.0:
+            if self.is_new_data_source:
+                logger.warning(
+                    "WeatherDataSource '%s': cannot derive the CSV sampling period from "
+                    "'timestamp' — assuming one row per control step (%.0fs).",
+                    self.name, float(self.control_step),
+                )
+            row_seconds = float(self.control_step)
+
+        self._csv_row_seconds = row_seconds
+        self._rows_per_control_step = float(self.control_step) / row_seconds
+        if self.is_new_data_source and self._rows_per_control_step != 1.0:
+            logger.info(
+                "WeatherDataSource '%s': CSV sampled every %.0fs, control_step=%.0fs "
+                "-> %.3f rows per step.",
+                self.name, row_seconds, float(self.control_step), self._rows_per_control_step,
+            )
+
+    def _row_index(self, step_offset: int = 0) -> int:
+        """CSV row for the current step (+ ``step_offset`` control steps), by elapsed time."""
+        return int((self.effective_index + step_offset) * self._rows_per_control_step)
+
+    def lookahead(self, steps: list[int]) -> dict[str, list[float]]:
+        """Future raw values at ``steps`` control steps ahead, indexed by time like update_state.
+
+        Overrides ``CsvLookahead.lookahead``, which adds step counts straight to the row index —
+        that only holds when the CSV period equals ``control_step``.
+        """
+        base_row = self._row_index()
+        row_offsets = [self._row_index(step) - base_row for step in steps]
+        return {
+            key: self._csv_forecast(self.ts, base_row, column, row_offsets)
+            for key, column in self._lookahead_columns.items()
+        }
+
     # The temperature scale is a fixed constant (TEMP_ABS_MAX_CELSIUS), not a per-variant
     # factor, so it is not published as a ctxt_* observation but handed to consumers via
     # info["temp_abs_max"] (see update_state). The weather drivers (outdoor temp, irradiance,
@@ -120,7 +184,7 @@ class WeatherDataSource(StateSource, CsvLookahead, CsvReloadable):
                 f"WeatherDataSource '{self.name}': no CSV loaded. The DataCombinator "
                 "must push a weather variant before update_state is called."
             )
-        row = self.ts.iloc[min(self.effective_index, len(self.ts) - 1)]
+        row = self.ts.iloc[min(self._row_index(), len(self.ts) - 1)]
         temp_out_norm = float(row["s_temp_out_norm"])
         self.temp_out_raw = float(row["temp_amb"])
         self.wind_speed_raw = float(row.get("avg_wind_speed", 0.0))

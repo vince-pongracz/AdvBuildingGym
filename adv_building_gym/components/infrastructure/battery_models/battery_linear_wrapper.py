@@ -44,7 +44,7 @@ class BatteryLinearWrapper(BatteryLinear):
                 per-episode max charge/discharge power in kW (low == high pins it)
             max_cap_range_kWh: [low, high] uniform sampling range for the
                 per-episode battery capacity in kWh
-            control_step: Timestep duration in seconds
+            control_step: Control step duration in seconds
             start_soc_percentage: Initial state of charge [0, 1]
             soc_min: Hardware minimum SoC (clipping floor)
             soc_max: Hardware maximum SoC (clipping ceiling)

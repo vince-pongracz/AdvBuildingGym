@@ -177,7 +177,7 @@ def find_latest_hdf5(metrics_root: Path | None = None) -> str:
 def load_episode(
     hdf5_path: str,
     episode_id: str | None = None,
-    control_step_seconds: int = 300,
+    control_step_s: int = 300,
     select_by: str = "achieved_reward",
 ) -> EpisodeData:
     """Load one episode from an HDF5 trajectory file.
@@ -186,7 +186,7 @@ def load_episode(
         hdf5_path: Path to trajectories.hdf5.
         episode_id: Episode group name. If None, selects the best episode
             according to ``select_by``.
-        control_step_seconds: Control timestep in seconds (default 300 = 5 min).
+        control_step_s: Control step duration in seconds (default 300 = 5 min).
         select_by: Summary metric used to pick the best episode when
             ``episode_id`` is None. One of "achieved_reward",
             "cum_E_kWh". Default: "achieved_reward".
@@ -228,7 +228,7 @@ def load_episode(
 
         traj = ep["trajectory"]
         steps = traj["step"][:].astype(np.float32)
-        time_minutes = steps * (control_step_seconds / 60.0)
+        time_minutes = steps * (control_step_s / 60.0)
 
         # States
         states: dict[str, np.ndarray] = {}

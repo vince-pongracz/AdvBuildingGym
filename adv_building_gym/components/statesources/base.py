@@ -42,7 +42,7 @@ class StateSource(ContextEmitter):
 
         self.sync = EnvSync()
         self.name = name
-        self.control_step = control_step  # Control timestep in seconds
+        self.control_step = control_step  # Control step duration in seconds
         # CSV-backed subclasses set ``self.loader = CsvLoader(ds_path, on_reload=self._run_post_load)``.
         self.loader: Optional[CsvLoader] = None
 

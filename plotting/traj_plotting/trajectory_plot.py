@@ -48,7 +48,7 @@ def generate_all_plots(
     hdf5_path: str,
     episode_id: str | None = None,
     output_dir: str | None = None,
-    control_step_seconds: int = 300,
+    control_step_s: int = 300,
     formats: list[str] = ["html"],
     select_by: str = "achieved_reward",
     file_prefix: str | None = None,
@@ -63,7 +63,7 @@ def generate_all_plots(
         hdf5_path: Path to trajectories.hdf5.
         episode_id: Episode to plot. None = best by ``select_by`` metric.
         output_dir: Output directory. Default: plotting/out/{episode_id}/.
-        control_step_seconds: Timestep in seconds (default 300).
+        control_step_s: Control step duration in seconds (default 300).
         formats: Output formats to produce. Default: ["html"].
         select_by: Summary metric for auto-selecting the best episode.
         file_prefix: Prefix for output filenames. Default: episode_id.
@@ -83,7 +83,7 @@ def generate_all_plots(
         List of saved file paths.
     """
 
-    episode = load_episode(hdf5_path, episode_id, control_step_seconds, select_by)
+    episode = load_episode(hdf5_path, episode_id, control_step_s, select_by)
     ep_id = file_prefix if file_prefix is not None else f"ep_{episode.episode_id}"
 
     if output_dir is None:
@@ -201,8 +201,8 @@ def main() -> None:
         help="Output format(s). Default: html svg.",
     )
     parser.add_argument(
-        "--control-step", type=int, default=300,
-        help="Control timestep in seconds. Default: 300 (5 min).",
+        "--control-step", dest="control_step_s", type=int, default=300,
+        help="Control step duration in seconds. Default: 300 (5 min).",
     )
     parser.add_argument(
         "--select-by", type=str, default="achieved_reward",
@@ -229,7 +229,7 @@ def main() -> None:
                 hdf5_path=hdf5_path,
                 episode_id=ep_id,
                 output_dir=ep_output_dir,
-                control_step_seconds=args.control_step,
+                control_step_s=args.control_step_s,
                 formats=args.format,
                 select_by=args.select_by,
                 file_prefix=ep_label,
@@ -244,7 +244,7 @@ def main() -> None:
             hdf5_path=hdf5_path,
             episode_id=args.episode,
             output_dir=args.output_dir,
-            control_step_seconds=args.control_step,
+            control_step_s=args.control_step_s,
             formats=args.format,
             select_by=args.select_by,
         )

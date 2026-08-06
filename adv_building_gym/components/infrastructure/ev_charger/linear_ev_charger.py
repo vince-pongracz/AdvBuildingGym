@@ -49,7 +49,7 @@ class LinearEVCharger(Infrastructure):
         Args:
             name: Component identifier.
             max_power_kW: Charger hardware electrical rating in kW.
-            control_step: Control timestep in seconds.
+            control_step: Control step duration in seconds.
             max_charge_time_hrs: Upper bound on the per-session deadline; also
                 the normaliser for ``s_evc_charge_to_target_hrs_norm``.
             v2g_enabled: Charger-side V2G capability. Drives the action-space

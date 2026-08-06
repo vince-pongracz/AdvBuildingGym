@@ -79,7 +79,7 @@ class EnvConfig(LoggableConfig):
         return {"control_step": self.CONTROL_STEP}
 
     def _statesource_context(self) -> Dict[str, Any]:
-        return {"timestep": self.CONTROL_STEP, "episode_length": self.EPISODE_LENGTH}
+        return {"control_step": self.CONTROL_STEP, "episode_length": self.EPISODE_LENGTH}
 
     def create_statesources(self) -> List[StateSource]:
         """Fresh StateSource instances from ``statesource_specs`` (new each call, parallel-safe).

@@ -7,6 +7,9 @@ import gymnasium
 
 from adv_building_gym.components.rewards import SumRewardAggregator
 
+from adv_building_gym.config.data.data_combinator import DataCombinator
+from adv_building_gym.config.env.env_config import EnvConfig
+from adv_building_gym.config.rewards.reward_schedule_manager import RewardScheduleManager
 from adv_building_gym.core.env import AdvBuildingGym
 from adv_building_gym.core.forecast_wrapper import ForecastWrapper
 from adv_building_gym.core.history_wrapper import HistoryWrapper
@@ -77,7 +80,7 @@ def adv_building_env_creator(config: dict) -> gymnasium.Env:
     # ``spaces.items()``) — NOT the sorted order RLlib's FlattenObservations connector
     # produced; checkpoints are only compatible with the mechanism they trained on.
     
-    env_config = config.get("env_config")
+    env_config: EnvConfig | None = config.get("env_config")
     if env_config is None:
         raise ValueError(
             "adv_building_env_creator: 'env_config' missing from creator config. "
@@ -86,19 +89,21 @@ def adv_building_env_creator(config: dict) -> gymnasium.Env:
         )
 
     # fresh per-env instances (independent state) from the YAML specs
-    infras = env_config.create_infras()
-    statesources = env_config.create_statesources()
+    # TODO noprio VP 2026.08.06.: Refactor these, so they are not called here but inside AdvBuildingGym.__init__
+    # The env_config is already passed to the constructor...
+    infras: list = env_config.create_infras()
+    statesources: list = env_config.create_statesources()
 
     # Rewards always come from the RewardScheduleManager (mode=OFF returns all).
-    reward_manager = config["reward_schedule_manager"]
-    rewards = reward_manager.create_active_rewards()
+    reward_manager: RewardScheduleManager = config["reward_schedule_manager"]
+    rewards: list = reward_manager.create_active_rewards()
 
     # RLlib indices (via merge_env_context): worker_index 0=local, 1..N=remote;
     # vector_index = sub-env slot within the worker
-    worker_index = getattr(config, "worker_index", 0)
-    vector_index = getattr(config, "vector_index", 0)
-    instance_id = f"AdvBuildingGym_w{worker_index}_v{vector_index}"
-    is_eval = config.get("eval_mode", False)
+    worker_index: int = getattr(config, "worker_index", 0)
+    vector_index: int = getattr(config, "vector_index", 0)
+    instance_id: str = f"AdvBuildingGym_w{worker_index}_v{vector_index}"
+    is_eval: bool = config.get("eval_mode", False)
     if is_eval:
         instance_id = f"Eval_{instance_id}"
 
@@ -114,16 +119,16 @@ def adv_building_env_creator(config: dict) -> gymnasium.Env:
     # Eval EnvRunners carry eval_mode=True (set via the evaluation_config env_config
     # override); they sample from the held-out eval combinator when one is supplied,
     # so the in-training eval rounds run on the eval dataset rather than the train one.
-    data_combinator = config.get("data_combinator")
+    data_combinator: DataCombinator | None = config.get("data_combinator")
     if is_eval and config.get("eval_data_combinator") is not None:
         data_combinator = config.get("eval_data_combinator")
         logger.info("env_creator: eval_mode — using eval data_combinator for %s", instance_id)
 
     env = AdvBuildingGym(
-        infras=infras,
-        statesources=statesources,
-        rewards=rewards,
         env_config=env_config,
+        statesources=statesources,
+        infras=infras,
+        rewards=rewards,
         data_combinator=data_combinator,
         reward_aggregator=SumRewardAggregator(),
         instance_id=instance_id,

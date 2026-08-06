@@ -293,3 +293,15 @@ the wrappers behave exactly as before — fully backward compatible.
   `ep_metrics/`, `slurm_logs/`, `__pycache__/`, `*.egg-info/`.
 
 See `tools/snapshot/make_snapshot.py` for the exact whitelist.
+
+
+### Multisubmit examples
+
+```bash
+for v in v2 v2_long_H v3 v3_la_ti v4 v5 v6 v6_lti v7 v7_lti v8 v8_lti; do
+    python -m tools.snapshot.submit_snapshot \
+        --snapshot "snapshots/20260704_183007_sta_lin_battery_only_price_dreamerv3_$v" \
+        --kind eval \
+        -- --episodes 10 --plot-all
+done
+```

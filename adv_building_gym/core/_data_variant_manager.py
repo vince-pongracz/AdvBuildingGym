@@ -69,18 +69,17 @@ class DataVariantManager:
         """Compute starting row offset and update episode_date / day_mode.
 
         """
-        steps_per_episode = self.episode_length
         date_source = _date_source(statesources)
 
-        if date_source is not None and date_source.available_rows() >= steps_per_episode:
-            max_episodes = date_source.available_rows() // steps_per_episode
+        if date_source is not None and date_source.available_rows() >= self.episode_length:
+            max_episodes = date_source.available_rows() // self.episode_length
             data_start_year = date_source.start_year()
         else:
             max_episodes = 1
             data_start_year = datetime.now().year
 
         start_row_offset, self.episode_day_mode = self.data_combinator.get_episode_start_offset(
-            self.episode_count, max_episodes, steps_per_episode, data_start_year, rng,
+            self.episode_count, max_episodes, self.episode_length, data_start_year, rng,
         )
         self.episode_date = resolve_episode_date(date_source, start_row_offset, control_step)
 

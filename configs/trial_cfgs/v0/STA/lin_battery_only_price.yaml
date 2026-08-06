@@ -93,7 +93,7 @@ statesources:
   # Dynamic 1-day price normalisation: s_E_price = raw_baseprice / divisor, where the divisor is
   # |baseprice| max over the next-24h window (capped at the episode length), recomputed each reset.
   # ds_path is pushed per-episode by the DataCombinator (keyed by name "E_price"); episode_length
-  # and timestep are context-injected from env_meta. ctxt_E_price_max is always published.
+  # and control_step are context-injected from env_meta. ctxt_E_price_max is always published.
 - class: WeatherDataSource
   name: weather
 - class: InsideTemperature

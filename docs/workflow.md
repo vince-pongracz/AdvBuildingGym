@@ -400,7 +400,7 @@ python -m plotting.traj_plotting --output-dir my_plots/
 | `--select-by METRIC` | `achieved_reward` | Metric for best-episode selection |
 | `--format FMT [...]` | `html svg` | Output formats: `html`, `png`, `svg`, `pdf` |
 | `--output-dir PATH` | `plotting/out/<episode_id>/` | Output directory |
-| `--control-step N` | `300` | Timestep in seconds (for x-axis) |
+| `--control-step N` | `300` | Control step duration in seconds (for x-axis) |
 
 **Configuration:** `plotting/config/traj_plot_config.yaml` — domain-specific rendering
 settings. Edit this (not Python code) when adding new statesources or infrastructure.

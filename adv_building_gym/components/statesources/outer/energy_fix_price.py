@@ -77,10 +77,10 @@ class EnergyPriceFixDataSource(StateSource, Forecastable, Lookahead):
 
     ``s_E_price = baseprice / divisor`` (not clipped); the divisor is the largest band/default price
     magnitude across all schedules — a stable per-run scale, published as ``ctxt_E_price_max`` only
-    when listed in ``ctxt_keys``. Hour of day = ``(effective_index * timestep / 3600) mod 24``.
+    when listed in ``ctxt_keys``. Hour of day = ``(effective_index * control_step / 3600) mod 24``.
     """
 
-    _context_params: ClassVar[Set[str]] = {"timestep"}
+    _context_params: ClassVar[Set[str]] = {"control_step"}
 
     # Built-in default reproduces the legacy 3-level tariff: peak 40 ct/kWh (17:00-21:00), off-peak
     # 18 ct/kWh (00:00-06:00), and a 28 ct/kWh default for every other hour. Peak is listed first so
@@ -97,15 +97,14 @@ class EnergyPriceFixDataSource(StateSource, Forecastable, Lookahead):
                 schedules: dict | None = None,
                 default_season: str = "summer",
                 ctxt_keys: list[str] | None = None,
-                timestep: float = 300.0) -> None:
-        super().__init__(name=name)
+                control_step: float = 300.0) -> None:
+        super().__init__(name=name, control_step=control_step)
 
         raw = schedules or {"all": dict(self._DEFAULT_SCHEDULE)}
         # Canonical, round-trip-safe form (band dicts -> PriceBand); read directly by Serializable.to_dict.
         self.schedules = {season: self._normalise_schedule(block) for season, block in raw.items()}
         self.default_season = str(default_season)
         self.ctxt_keys = list(ctxt_keys) if ctxt_keys is not None else None
-        self.timestep = float(timestep)
 
         # Fixed divisor: largest price magnitude across all schedules (stable per-run scale).
         self.price_divisor: float = max(1e-6, max(
@@ -148,7 +147,7 @@ class EnergyPriceFixDataSource(StateSource, Forecastable, Lookahead):
         return self.default_season
 
     def _hour_of_day(self, index: int) -> float:
-        return (index * self.timestep / SECONDS_PER_HOUR) % 24.0
+        return (index * self.control_step / SECONDS_PER_HOUR) % 24.0
 
     def _normalise(self, raw: float) -> float:
         return float(raw / self.price_divisor)

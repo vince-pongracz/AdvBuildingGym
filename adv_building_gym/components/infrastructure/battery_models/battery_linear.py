@@ -48,7 +48,7 @@ class BatteryLinear(Infrastructure):
             name: Component identifier
             max_power_kW: Maximum charge/discharge power in kW
             max_cap_kWh: Battery capacity in kWh
-            control_step: Timestep duration in seconds
+            control_step: Control step duration in seconds
             start_soc_percentage: Initial state of charge [0, 1]
             soc_min: Hardware minimum SoC (clipping floor)
             soc_max: Hardware maximum SoC (clipping ceiling)
