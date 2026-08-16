@@ -10,10 +10,13 @@ Schema (top-level keys, ordered):
 
     # run control
     algorithm: ppo|sac|dreamerv3
-    seed: 42        # learner + global RNGs + the TRAINING env runners' env seeds
-    eval_seed: 42   # optional; the IN-TRAINING EVAL env runner's env seed. Defaults to `seed`.
-                    # Pin it while varying `seed` to run a seed sweep against an identical
-                    # eval episode sequence (see adv_building_gym/ray/env_creator.py).
+    seed: 42        # LEARNER axis: NN init, exploration noise, global torch/numpy RNGs.
+    env_seed: 42    # optional; ENV axis: data variant / episode day / per-episode component
+                    # draws of the TRAINING envs. Defaults to `seed`. Pin it while varying
+                    # `seed` to sweep network init over an identical data traversal.
+    eval_seed: 42   # optional; ENV axis of the IN-TRAINING EVAL env runner. Defaults to
+                    # `env_seed`. Pin it while varying `seed` to run a seed sweep against an
+                    # identical eval episode sequence (see adv_building_gym/ray/env_creator.py).
     metric: episode_return_mean | achieved_reward
     # Eval + checkpoint cadence is a single knob: training_params.common.evaluation.interval
     # (checkpoints are taken on eval iterations; see run_train_ray._build_tuner).
@@ -70,7 +73,8 @@ logger = logging.getLogger(__name__)
 
 _RUN_DEFAULTS: dict[str, Any] = {
     "algorithm": "ppo",
-    "eval_seed": None, # None → fall back to the seed
+    "env_seed": None,  # None → fall back to the seed
+    "eval_seed": None, # None → fall back to the env_seed
     "metric": "episode_return_mean",
     "log_trajectories": False,
     "num_envs": 1,
@@ -92,7 +96,10 @@ class TrialConfig:
     trial_name: str
     algorithm: str
     seed: Optional[int]
-    # Seed for the in-training eval env only; equals `seed` unless the YAML sets it.
+    # Env-stochasticity seed (data variant / day / per-episode component draws) of the
+    # training envs; equals `seed` unless the YAML sets it. Independent of the learner seed.
+    env_seed: int
+    # Same axis for the in-training eval env only; equals `env_seed` unless the YAML sets it.
     eval_seed: int
     metric: str
     log_trajectories: bool
@@ -152,11 +159,15 @@ class TrialConfig:
             raise ValueError(f"Trial config {label}: algorithm must be 'ppo', 'sac', or 'dreamerv3', got '{run['algorithm']}'")
 
         trial_seed: int = int(trial_dict["seed"])
-        # `eval_seed` isolates the in-training eval env from a training seed sweep: the
-        # eval env is seeded once at construction (ray/env_creator.py) and ignores RLlib's
-        # later reset seeds, so without a separate key it would follow `seed` and every
-        # sweep member would evaluate on a different episode sequence.
-        eval_seed: int = trial_seed if run["eval_seed"] is None else int(run["eval_seed"])
+        # Two independent axes. `seed` is the LEARNER axis (NN init, exploration, global
+        # torch/numpy RNGs). `env_seed` is the ENV axis: every env is seeded exactly once, at
+        # construction by the env creators, and AdvBuildingGym._maybe_reseed then ignores the
+        # framework's own (learner-derived) reset seeds — so sweeping `seed` with `env_seed`
+        # pinned varies network init over an identical data traversal.
+        env_seed: int = trial_seed if run["env_seed"] is None else int(run["env_seed"])
+        # `eval_seed` isolates the in-training eval env from a seed sweep the same way; it
+        # follows the env axis, not the learner axis.
+        eval_seed: int = env_seed if run["eval_seed"] is None else int(run["eval_seed"])
         overrides = run["overrides"] or {}
 
         # ---- training params (inlined) ----
@@ -288,8 +299,10 @@ class TrialConfig:
             data_schedule_path = data_schedule.get(split)
             if not data_schedule_path:
                 raise ValueError(f"Trial config {label}: data_schedule.{split} not set")
+            # env axis: the combinator's seed only shuffles the variant pool, which is part of
+            # the data traversal — it must follow `env_seed`, not the learner seed.
             data_combinator = load_data_combinator_config(
-                cfg_yaml_path=data_schedule_path, default_seed=trial_seed,
+                cfg_yaml_path=data_schedule_path, default_seed=env_seed,
                 active_source_names=active_sources[split],
             )
             # During training, also build the eval-split combinator so the in-training
@@ -300,7 +313,7 @@ class TrialConfig:
                 eval_schedule_path = data_schedule.get("eval")
                 if eval_schedule_path:
                     eval_data_combinator = load_data_combinator_config(
-                        cfg_yaml_path=eval_schedule_path, default_seed=trial_seed,
+                        cfg_yaml_path=eval_schedule_path, default_seed=eval_seed,
                         active_source_names=active_sources["eval"],
                     )
                 else:
@@ -327,6 +340,7 @@ class TrialConfig:
             trial_name=trial_dict["trial_name"],
             algorithm=run["algorithm"],
             seed=trial_seed,
+            env_seed=env_seed,
             eval_seed=eval_seed,
             metric=run["metric"],
             log_trajectories=bool(run["log_trajectories"]),
@@ -344,10 +358,12 @@ class TrialConfig:
             source_path=source_path,
         )
         logger.info(
-            "Loaded trial '%s' from %s [algorithm=%s, seed=%s, eval_seed=%s%s, episodes=%s, metric=%s]",
+            "Loaded trial '%s' from %s [algorithm=%s, seed(learner)=%s, env_seed=%s%s, "
+            "eval_seed=%s%s, episodes=%s, metric=%s]",
             trial.trial_name, source_path or "<inline>", trial.algorithm,
-            trial.seed, trial.eval_seed,
-            "" if run["eval_seed"] is not None else " (inherited from seed)",
+            trial.seed,
+            trial.env_seed, "" if run["env_seed"] is not None else " (inherited from seed)",
+            trial.eval_seed, "" if run["eval_seed"] is not None else " (inherited from env_seed)",
             training_param_config.max_episodes_to_run, trial.metric,
         )
         return trial

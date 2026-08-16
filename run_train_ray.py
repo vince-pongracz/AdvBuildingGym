@@ -75,9 +75,9 @@ logger.info("Runtime environment variables for Ray workers: %s", RUNTIME_ENV_VAR
 def _init_ray(cpu_only: bool = False) -> SlurmResources:
     """Resolve SLURM resources and init Ray.
 
-    Per-env seeding is handled by RLlib (``config.debugging(seed=...)`` →
-    ``trial.seed + worker_index`` applied on each env's first reset), so no
-    central RNG service is needed.
+    Per-env seeding is handled by the env creator at construction time (trial
+    ``env_seed:`` + worker/vector index); RLlib's own ``config.debugging(seed=...)``
+    stream stays on the learner side. No central RNG service is needed.
     """
     slurm_cpus = os.environ.get("SLURM_CPUS_PER_TASK")
     cpus = int(slurm_cpus) if slurm_cpus and slurm_cpus.isdigit() else 2
@@ -369,8 +369,11 @@ def main():
     os.makedirs(storage_path, exist_ok=True)
 
     env_creator_config = {
-        "seed": trial.seed,
-        # Eval EnvRunners seed from this instead (trial `eval_seed:`, default = `seed:`),
+        # ENV axis (trial `env_seed:`, default = `seed:`): the ONLY seed that reaches an env's
+        # RNG, since AdvBuildingGym._maybe_reseed latches on the first seed and ignores RLlib's
+        # learner-derived reset seeds. Sweeping `seed` (learner) leaves the data traversal fixed.
+        "seed": trial.env_seed,
+        # Eval EnvRunners seed from this instead (trial `eval_seed:`, default = `env_seed:`),
         # so sweeping `seed` keeps the in-training eval episode sequence identical.
         "eval_seed": trial.eval_seed,
         "env_config": trial.env_config,

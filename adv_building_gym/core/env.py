@@ -74,13 +74,16 @@ class AdvBuildingGym(gym.Env, DataVariantConsumer):
         instance_id: str | None = None,
         render_mode=None,
         eval_mode: bool = False,
+        allow_reseed: bool = False,
         **kwargs,
     ):
         """env_config: episode length, control step, action-history window.
         infras / statesources (must include BuildingHeatLoss) / rewards: components.
-        data_combinator: per-episode CSV swapping. 
+        data_combinator: per-episode CSV swapping.
         reward_aggregator: aggregation strategy.
         instance_id: logging id (seeding is via reset(seed=...), not this).
+        allow_reseed: accept a reset seed on EVERY reset instead of only the first
+            (see _maybe_reseed). Only the standalone eval driver needs this.
         """
 
         # Setup warning filters for Ray workers (must be called early)
@@ -100,9 +103,11 @@ class AdvBuildingGym(gym.Env, DataVariantConsumer):
         self._price_tracker = PriceTracker(control_step_s=env_config.CONTROL_STEP)
         self._raw_state_tracker = RawStateTracker()
 
-        # provisional RNG until the first reset(seed=...) (RLlib/SB3 set the real
-        # per-env seed). All in-env randomness flows through self._rng → reproducible per worker.
         self.instance_id: str = instance_id or "AdvBuildingGym"
+        # provisional RNG until the first reset(seed=...) — the env creators seed the env at
+        # construction from the trial's `env_seed` axis (see _maybe_reseed; the framework's own
+        # learner-derived reset seed is ignored afterwards).
+        # All in-env randomness flows through self._rng → reproducible per worker.
         self._rng: np.random.Generator = np.random.default_rng()
 
         # Build obs/action spaces from components. Time-varying signals are normalised;
@@ -151,7 +156,10 @@ class AdvBuildingGym(gym.Env, DataVariantConsumer):
         # coverage, overriding the combinator cadence. Set by the env creators.
         self.eval_mode: bool = eval_mode
 
-        # whether an explicit reset seed was consumed; _maybe_reseed seeds once in eval mode
+        # Opt-in per-episode reseeding (standalone eval driver only); see _maybe_reseed.
+        self.allow_reseed: bool = allow_reseed
+
+        # whether an explicit reset seed was consumed; _maybe_reseed seeds exactly once
         self._has_seeded: bool = False
 
         lines: list = [
@@ -260,18 +268,26 @@ class AdvBuildingGym(gym.Env, DataVariantConsumer):
         return {k: np.array(v, copy=True) for k, v in self.state.items()}, info
 
     def _maybe_reseed(self, seed: int | None) -> None:
-        """Apply Gymnasium's seeding contract: seed only when an explicit seed is given
-        (the first reset per runner); later resets must NOT recreate the RNG.
+        """Seed the env rng from the FIRST seed it is handed, then never again.
 
-        Eval-mode exception: RLlib re-hands the same fixed seed each eval round, which
-        would replay identical (variant, day) sequences. So in eval mode we seed ONCE and
-        ignore later seeds, letting the RNG advance for fresh data (still reproducible across
-        reruns). Training (timestep-sampled) and the standalone eval script are unaffected.
+        That first seed is the env creators' construction-time ``reset(seed=env_seed + ...)``
+        (``ray/env_creator.py`` / ``sb/env_creator.py``), which carries the trial's ``env_seed``
+        axis. Every later reset seed is ignored — this is what keeps env stochasticity
+        (data variant, episode day, per-episode component draws) independent of the learner
+        seed, since both RLlib (``config.debugging(seed=...)`` → ``seed + worker_index``) and
+        SB3 (``set_random_seed`` → ``vec_env.seed``) derive their reset seed from the learner
+        seed and re-hand it on the first sampling reset. RLlib additionally re-hands the same
+        fixed seed at the start of EVERY eval round (``evaluation_duration_unit="episodes"``),
+        which would replay identical (variant, day) sequences; ignoring it lets one stream
+        advance across rounds — still reproducible across reruns.
+
+        ``allow_reseed=True`` opts out of the latch (standalone eval driver, which seeds
+        per episode on purpose).
 
         Global RNGs (``random``/``np.random``) are NOT touched; components draw from the env
         rng via ``info["_rng"]`` (see ``_populate_initial_observations``).
         """
-        apply_seed = seed is not None and not (self.eval_mode and self._has_seeded)
+        apply_seed = seed is not None and (self.allow_reseed or not self._has_seeded)
         super().reset(seed=seed if apply_seed else None)
         if apply_seed:
             self._rng = np.random.default_rng(seed)

@@ -64,10 +64,12 @@ def adv_building_env_creator(config: dict) -> gymnasium.Env:
             - ``eval_mode``: Set by Ray's evaluation env_config override; routes
               the env to ``eval_data_combinator`` and fresh-random per-episode
               sampling.
-            - ``seed``: Base construction seed for training envs (trial ``seed:``).
+            - ``seed``: Base construction seed for training envs — the ENV axis
+              (trial ``env_seed:``, which defaults to ``seed:``), NOT the learner
+              seed passed to ``config.debugging(seed=...)``.
             - ``eval_seed``: Base construction seed used instead of ``seed`` when
               ``eval_mode`` is set (trial ``eval_seed:``, which defaults to
-              ``seed:``). Absent → falls back to ``seed``.
+              ``env_seed:``). Absent → falls back to ``seed``.
 
     Returns:
         Wrapped AdvBuildingGym with flat Box(-1, 1) action space and flat Box obs.
@@ -134,11 +136,12 @@ def adv_building_env_creator(config: dict) -> gymnasium.Env:
         instance_id=instance_id,
         eval_mode=is_eval,
     )
-    # Derive a unique seed per env instance. Eval EnvRunners take ``eval_seed`` (the trial's
-    # `eval_seed:`, defaulting to `seed:`) so a training seed sweep leaves the eval episode
-    # sequence fixed. This reset is the ONLY one that reaches an eval env's RNG: it sets
-    # _has_seeded, after which AdvBuildingGym._maybe_reseed ignores every later reset seed in
-    # eval_mode — including RLlib's own `seed + 1e6` — so RLlib cannot override the value here.
+    # Derive a unique seed per env instance from the ENV axis (trial `env_seed:`, defaulting to
+    # `seed:`); eval EnvRunners take `eval_seed:` instead so a learner-seed sweep leaves the eval
+    # episode sequence fixed. This reset is the ONLY one that reaches the env's RNG: it sets
+    # _has_seeded, after which AdvBuildingGym._maybe_reseed ignores every later reset seed —
+    # including RLlib's own learner-derived `seed + worker_index (+1e6 eval)` — so RLlib cannot
+    # override the value here and env stochasticity stays independent of the learner seed.
     base_seed = config.get("seed", 21)
     if is_eval:
         base_seed = config.get("eval_seed", base_seed)

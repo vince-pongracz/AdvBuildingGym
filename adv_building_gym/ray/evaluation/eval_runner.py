@@ -204,6 +204,9 @@ def evaluate_model(
 
     # built manually (not adv_building_env_creator): eval uses the explicit
     # active_config passed by the caller, not the global singleton
+    # allow_reseed: this driver deliberately seeds per episode with `seed + ep` (see the
+    # reset below), unlike the training/in-training-eval envs, which latch on the single
+    # construction seed so their stochasticity stays off the learner-seed axis.
     base_env = AdvBuildingGym(
         infras=active_config.infras,
         statesources=active_config.statesources,
@@ -211,6 +214,7 @@ def evaluate_model(
         data_combinator=data_combinator,
         reward_aggregator=SumRewardAggregator(),
         env_config=active_config,
+        allow_reseed=True,
     )
 
     if log_trajectories:

@@ -232,11 +232,14 @@ def sb_common_model_setup(
     run_name = f"{trial.algorithm}_seed{trial.seed}_{exec_date_str}"
     paths = make_runtime_paths(trial, run_name)
 
-    # eval is single-process (DummyVecEnv) for clean per-episode accounting
+    # eval is single-process (DummyVecEnv) for clean per-episode accounting.
+    # Envs seed from the ENV axis (trial `env_seed:`, default = `seed:`) at factory time and
+    # latch on it (AdvBuildingGym._maybe_reseed), so SB3's own learner-derived
+    # `set_random_seed → vec_env.seed()` no longer reaches the env RNG.
     train_vec = build_vec_env(
-        trial, num_envs=trial.num_envs, seed=trial.seed, role="train",
+        trial, num_envs=trial.num_envs, seed=trial.env_seed, role="train",
     )
-    # Eval seeds from `eval_seed` (trial `eval_seed:`, default = `seed:`) so a training
+    # Eval seeds from `eval_seed` (trial `eval_seed:`, default = `env_seed:`) so a training
     # seed sweep evaluates every member on the identical episode sequence, mirroring the
     # Ray driver (see adv_building_gym/ray/env_creator.py). The +10_000 offset keeps the
     # eval stream clear of the training envs' `eval_seed + rank` range when both coincide.

@@ -145,6 +145,8 @@ def evaluate_sb_model(
     # passed by the caller, and a single non-vectorised env so the trajectory
     # collector reads one clean per-step info stream.
     logger.info("Creating evaluation environment...")
+    # allow_reseed: this driver seeds per episode with `seed + ep` (see the reset below),
+    # unlike the training envs, which latch on their single construction seed.
     base_env = AdvBuildingGym(
         infras=active_config.infras,
         statesources=active_config.statesources,
@@ -152,6 +154,7 @@ def evaluate_sb_model(
         data_combinator=data_combinator,
         reward_aggregator=SumRewardAggregator(),
         env_config=active_config,
+        allow_reseed=True,
     )
 
     if log_trajectories:

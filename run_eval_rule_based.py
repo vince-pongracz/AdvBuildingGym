@@ -136,6 +136,8 @@ def build_env(env_config, data_combinator) -> AdvBuildingGym:
         rewards=env_config.reward_config.rewards,
         data_combinator=data_combinator,
         reward_aggregator=SumRewardAggregator(),
+        # this driver seeds per episode with `seed + ep`; training envs latch on one seed
+        allow_reseed=True,
     )
     # populate info["state"] so trajectory HDF5 gets the state columns for plotting
     env.log_full_info = True
