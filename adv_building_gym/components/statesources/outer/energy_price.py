@@ -15,6 +15,7 @@ from adv_building_gym.components.registry import ComponentRegistry
 logger = logging.getLogger(__name__)
 
 
+# TODO VP 2026.08.15.: This is completely useless and should be removed.
 class EnergyPriceYearDynDataSource(StateSource, Forecastable, CsvLookahead, CsvReloadable):
     """Energy-price data source with a year-based price divisor.
 
@@ -122,7 +123,6 @@ class EnergyPriceYearDynDataSource(StateSource, Forecastable, CsvLookahead, CsvR
                 above = baseprice[baseprice > med]
                 chosen = float(above.mean()) if not above.empty else med
             case _:
-                # Already validated in __init__; defensive fallback.
                 return 1.0
         return max(abs(chosen), 1e-6)
 

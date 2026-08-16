@@ -49,6 +49,7 @@ class DesiredUserEnergyNeed(StateSource, Forecastable, CsvLookahead, CsvReloadab
         if ds_path is not None:
             logger.info("Use data file: %s", ds_path)
 
+
     def _post_load_data_processing(self) -> None:
         """Normalise the hh_consumption_kW column and cache the raw maximum."""
         if SOURCE_COLUMN not in self.ts.columns:

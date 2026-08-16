@@ -73,6 +73,8 @@ variable:
     - data/inside_temp/inside_temp_0.csv
     - data/inside_temp/inside_temp_1.csv
     - data/inside_temp/inside_temp_2.csv
+  # usable in 2019: SFH3, SFH4, SFH5, SFH7, SFH8, SFH9, SFH10, SFH11, SFH12, SFH14, SFH16, SFH18, SFH19, SFH20, SFH21, SFH22, SFH23, SFH27, SFH28, SFH29, SFH30, SFH32, SFH34, SFH35, SFH36, SFH38, SFH39
+  # usable in 2020: SFH3, SFH4, SFH5, SFH7, SFH9, SFH12, SFH14, SFH16, SFH18, SFH19, SFH20, SFH21, SFH22, SFH27, SFH28, SFH29, SFH30, SFH32, SFH34, SFH36, SFH37, SFH38, SFH39, SFH40
   user_energy_need:
     - data/hh_consumption/wpuq/2020_SFH10.csv
     - data/hh_consumption/wpuq/2020_SFH30.csv

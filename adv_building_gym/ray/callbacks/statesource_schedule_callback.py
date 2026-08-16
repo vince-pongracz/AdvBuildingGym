@@ -56,8 +56,8 @@ def _push_statesources_to_runners(algorithm, sc: StatesourceCombinator) -> None:
         for sub_env in getattr(sync_vec, "envs", []):
             unwrapped = sub_env.unwrapped
             if hasattr(unwrapped, "set_statesources"):
-                new_ss = sc.create_statesources(swap_index)
-                unwrapped.set_statesources(new_ss)
+                new_state_sources = sc.create_statesources(swap_index)
+                unwrapped.set_statesources(new_state_sources)
 
     algorithm.env_runner_group.foreach_env_runner(
         apply, local_env_runner=True, timeout_seconds=None,

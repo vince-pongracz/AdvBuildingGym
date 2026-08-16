@@ -100,3 +100,5 @@ thesis_eval/**/*.png
 thesis_eval/**/*.html
 thesis_eval/**/*.svg
 thesis_eval/**/*.tb_return_cache
+
+perf_test/logs/**

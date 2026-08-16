@@ -70,7 +70,7 @@ class InfraCombinator:
         train_config_paths: list[str],
         eval_config_paths: list[str],
         control_step: int,
-        swap_every_n_episodes: int = 300,
+        swap_every_n_episodes: int = 12,
         mode: Literal["cycle", "off"] = "cycle",
     ) -> None:
         if not train_config_paths:

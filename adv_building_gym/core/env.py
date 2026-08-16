@@ -447,8 +447,8 @@ class AdvBuildingGym(gym.Env, DataVariantConsumer):
         (``None`` when no price source is present → billing no-ops)."""
         # Price to bill is the observed state's (s) realised price, captured before any advance;
         # billing itself runs last (final accounting).
-        price_in_s = self._raw_state_tracker.collect(self.statesources, self.infras).get("raw_E_price")
-        self._price_tracker.add_step_contribution(power_breakdown, price_in_s)
+        price_in_step = self._raw_state_tracker.collect(self.statesources, self.infras).get("raw_E_price")
+        self._price_tracker.add_step_contribution(power_breakdown, price_in_step)
 
     def _publish_step_info(
         self,

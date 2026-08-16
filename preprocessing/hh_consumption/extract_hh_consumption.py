@@ -45,6 +45,7 @@ SOURCE_COLUMN: str = "hh_P_TOT"
 # Output column name (kW)
 OUTPUT_COLUMN: str = "hh_consumption_kW"
 
+# TODO VP 2026.08.08.: This should be specified by the actual env step size, not hardcoded here.
 # Resample from 1-min to 5-min using mean aggregation
 RESAMPLE_RULE: str = "5min"
 

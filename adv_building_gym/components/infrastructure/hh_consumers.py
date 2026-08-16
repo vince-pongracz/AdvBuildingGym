@@ -10,6 +10,7 @@ from adv_building_gym.components.registry import ComponentRegistry
 logger = logging.getLogger(__name__)
 
 
+# TODO VP 2026.08.15.: Remove component entirely; DesiredUserEnergyNeed should handle all of this.
 class HouseholdEnergyConsumers(Infrastructure):
     """Passive household consumer (no policy action).
 

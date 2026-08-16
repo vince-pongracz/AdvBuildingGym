@@ -83,7 +83,7 @@ class TrainingParamConfig(LoggableConfig):
     ppo_minibatch_size: int = 128 # Rllib default
     ppo_num_epochs: int = 10
 
-    sac_replay_batch_size: int = 256 # NOTE VP 2026.05.08.: Rllib default
+    sac_replay_batch_size: int = 256 # Rllib default
     sac_episodes_to_keep_in_replay_buffer: int = 100
     sac_training_intensity: float | None = None
     sac_n_step_return: int = 1
