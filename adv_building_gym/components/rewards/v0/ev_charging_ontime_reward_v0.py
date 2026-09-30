@@ -5,6 +5,7 @@ from typing import Dict
 import numpy as np
 
 from ..base import RewardFunction
+from ..ev_signals import is_ev_connected, session_target_soc
 from adv_building_gym.components.registry import ComponentRegistry
 
 
@@ -16,18 +17,18 @@ class EVChargingOnTimeRewardV0(RewardFunction):
     ``[harsh_penalty, 1]`` (so ``[-1, 1]`` with the default
     ``harsh_penalty = -1.0``):
 
-    - EV not connected (``s_evc_connected < 0.5``), or ``info`` is ``None``
+    - EV not connected (``ctxt_evc_max_charging_kW <= 0``), or ``info`` is ``None``
       → ``0.0`` (returned unscaled by ``weight``).
-    - Target already met (``s_evc_soc >= s_evc_target_soc``) → ``weight * 1.0``.
+    - Target already met (``s_evc_soc >= info["evc_target_soc"]``) → ``weight * 1.0``.
     - No charging headroom left (``energy_achievable <= 0``)
       → ``weight * harsh_penalty``.
     - Otherwise → ``weight * max(0, 1 - energy_needed / energy_achievable)``,
       but only while actively charging (``a_lin_ev_charger > 0``); when not
       charging the reward is ``weight * 0.0``.
 
-    where ``energy_needed = (target_soc - soc) * ctxt_evc_max_cap_kWh`` and
+    where ``energy_needed = (target_soc - soc) * info["evc_max_cap_kWh"]`` and
     ``energy_achievable = ctxt_evc_max_charging_kW *
-    ctxt_evc_charger_efficiency * remaining_hrs``, with
+    info["evc_charger_efficiency"] * remaining_hrs``, with
     ``remaining_hrs = s_evc_charge_to_target_hrs_norm *
     ctxt_evc_max_charge_time_hrs``.
     """
@@ -41,20 +42,18 @@ class EVChargingOnTimeRewardV0(RewardFunction):
         self.harsh_penalty = harsh_penalty
 
     def get_reward(self, actions: Dict, state: Dict, next_state: Dict, info: dict) -> float:
-        ev_connected = next_state["s_evc_connected"][0]
-
-        if ev_connected < 0.5:
+        if not is_ev_connected(next_state):
             return 0.0
 
         current_soc = next_state["s_evc_soc"][0]
-        target_soc = next_state["s_evc_target_soc"][0]
+        target_soc = session_target_soc(info)
 
         if current_soc >= target_soc:
             return self.weight * 1.0
 
         max_charging_kW = float(next_state["ctxt_evc_max_charging_kW"][0])
-        max_cap_kWh = float(next_state["ctxt_evc_max_cap_kWh"][0])
-        charger_efficiency = float(next_state["ctxt_evc_charger_efficiency"][0])
+        max_cap_kWh = float(info.get("evc_max_cap_kWh", 0.0))
+        charger_efficiency = float(info.get("evc_charger_efficiency", 0.0))
         max_charge_time_hrs = float(next_state["ctxt_evc_max_charge_time_hrs"][0])
 
         normalized_time = next_state["s_evc_charge_to_target_hrs_norm"][0]

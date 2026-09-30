@@ -38,6 +38,10 @@ scenario_sources:
   - weather: data/weather/dwd/preprocessed/{year}_merged_04177.csv
     E_price: data/e_price/e_charts/price_data_{year}.csv
     date: data/weather/dwd/preprocessed/{year}_merged_04177.csv
+  # TODO VP: zenodo weather data is not as good as DWD weather data, it would be better to get rid of it...
+  # It just makes training more complicated...
+  # Same applies for energy charts and awattar -- only one should have been used...
+  #
   # WPuQ/Zenodo weather (only 2018–2020 available; missing years are
   # filtered out at load time by data_config.py)
   - weather: data/weather/zenodo/csvs_weather/{year}_weather.csv

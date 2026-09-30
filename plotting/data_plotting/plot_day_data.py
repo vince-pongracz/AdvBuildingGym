@@ -4,8 +4,9 @@ Each day is overlaid as a separate trace in the same figure so that days
 can be compared visually.  For multi-day plots an average curve with a
 +/- 1 std-dev band is added automatically.
 
-Profile data sources (desired_temp_in, ev_schedule, user_energy_need)
-overlay all available profiles in a single figure regardless of CLI dates.
+Profile data sources (desired_temp_in, ev_schedule, operator_signal,
+user_energy_need) overlay all available profiles in a single figure
+regardless of CLI dates.
 
 Usage:
     # Single day
@@ -48,6 +49,7 @@ from .common import (
 from .figure_builders import (
     build_desired_temp_figure,
     build_ev_schedule_figure,
+    build_operator_signal_figure,
     build_price_figure,
     build_user_energy_need_figure,
     build_weather_figures,
@@ -145,7 +147,7 @@ def _load_all_sources(
         dates,
     )
 
-    # Profile sources (desired_temp_in, ev_schedule, user_energy_need)
+    # Profile sources (desired_temp_in, ev_schedule, operator_signal, user_energy_need)
     sources.update(load_profiles_from_cfg(cfg, dates))
 
     return sources
@@ -202,6 +204,12 @@ def _build_figures(
 
     if sources.get("ev_schedule"):
         figures.append(build_ev_schedule_figure(sources["ev_schedule"]))
+
+    if sources.get("operator_signal"):
+        figures.append(build_operator_signal_figure(
+            sources["operator_signal"],
+            cfg["operator_signal"]["value_col"],
+        ))
 
     return figures
 

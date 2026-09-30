@@ -6,6 +6,7 @@ import numpy as np
 from gymnasium.spaces import Box
 
 from ..base import StateSource
+from ..csv_episode_window import CsvEpisodeWindow
 from ..csv_loader import CsvLoader
 from ..forecastable import Forecastable
 from ..csv_lookahead import CsvLookahead
@@ -22,7 +23,8 @@ SOURCE_COLUMN: str = "hh_consumption_kW"
 NORM_COLUMN: str = "desired_energy_need_norm"
 
 
-class DesiredUserEnergyNeed(StateSource, Forecastable, CsvLookahead, CsvReloadable):
+# Forecastable, CsvLookahead
+class DesiredUserEnergyNeed(StateSource, CsvEpisodeWindow, CsvReloadable):
     """Desired user energy need from the ``hh_consumption_kW`` CSV column.
 
     Abs-min-max normalised to [0, 1], exposed as ``s_desired_energy_need``
@@ -34,6 +36,9 @@ class DesiredUserEnergyNeed(StateSource, Forecastable, CsvLookahead, CsvReloadab
 
     # consumption_max is derived from data, don't serialize
     _exclude_params: ClassVar[Set[str]] = {'consumption_max'}
+
+    # Per-step row read (the raw kW peak is cached separately in consumption_max).
+    _window_columns: ClassVar[tuple[str, ...]] = (NORM_COLUMN,)
 
     def __init__(self, name: str, ds_path: str | None = None,
                 normalise: Normalisation | str | None = Normalisation.MAX_ABS_SCALING,
@@ -78,6 +83,10 @@ class DesiredUserEnergyNeed(StateSource, Forecastable, CsvLookahead, CsvReloadab
 
         return state_spaces, action_spaces
 
+    def reset(self, states, info: dict) -> None:
+        self.build_episode_window(info.get("episode_length"))
+        super().reset(states, info)
+
     def update_state(self, states, info: dict) -> None:
         """Update desired energy need state based on current iteration."""
         if self.ts is None:
@@ -85,8 +94,7 @@ class DesiredUserEnergyNeed(StateSource, Forecastable, CsvLookahead, CsvReloadab
                 f"DesiredUserEnergyNeed '{self.name}': no CSV loaded. The DataCombinator "
                 "must push a user_energy_need variant before update_state is called."
             )
-        row = self.ts.iloc[min(self.effective_index, len(self.ts) - 1)]
-        desired_energy = float(row[NORM_COLUMN])
+        desired_energy = self.window_row()[0]
 
         states["s_desired_energy_need"][0] = np.float32(desired_energy)
         # max consumption (kW) — constant per episode. Obs iff listed in ctxt_keys, and
@@ -94,15 +102,15 @@ class DesiredUserEnergyNeed(StateSource, Forecastable, CsvLookahead, CsvReloadab
         self._write_ctxt(states, "ctxt_hh_consumption_max", np.float32(self.consumption_max))
         info["ctxt_hh_consumption_max"] = float(self.consumption_max)
 
-    def forecast_keys(self) -> tuple[str, ...]:
-        return ("s_fc_desired_energy_need",)
+    # def forecast_keys(self) -> tuple[str, ...]:
+    #     return ("s_fc_desired_energy_need",)
 
-    def forecast(self, selected_future_steps: list[int]) -> dict[str, list[float]]:
-        if self.ts is None:
-            return {"s_fc_desired_energy_need": [0.0] * len(selected_future_steps)}
-        return {
-            "s_fc_desired_energy_need": self._csv_forecast(self.ts, self.effective_index, NORM_COLUMN, selected_future_steps),
-        }
+    # def forecast(self, selected_future_steps: list[int]) -> dict[str, list[float]]:
+    #     if self.ts is None:
+    #         return {"s_fc_desired_energy_need": [0.0] * len(selected_future_steps)}
+    #     return {
+    #         "s_fc_desired_energy_need": self._csv_forecast(self.effective_index, NORM_COLUMN, selected_future_steps),
+    #     }
 
     @property
     def consumption_max_raw(self) -> float:

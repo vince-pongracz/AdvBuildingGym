@@ -33,7 +33,7 @@ from adv_building_gym._common.warning_filters import setup_warning_filters
 from adv_building_gym.components.rewards import SumRewardAggregator
 from adv_building_gym.config.trial_config import TrialConfig
 from adv_building_gym.core.env import AdvBuildingGym
-from adv_building_gym.rbc_strats import STRATEGY_REGISTRY
+from adv_building_gym.rbc_strats import STRATEGY_REGISTRY, PriceThresholdAutarky, PriceThresholdStrategy
 from adv_building_gym.rbc_strats.base import RuleBasedStrategy
 
 from adv_building_gym._common.trajectory_collector import TrajectoryCollector
@@ -244,17 +244,13 @@ def evaluate_strategy(strategy: RuleBasedStrategy, env: AdvBuildingGym, args: ar
     if strategy.name == "self_coverage":
         strategy_params["evening_start"] = args.evening_start
         strategy_params["evening_end"] = args.evening_end
-    if strategy.name == "price_median":
-        # median of the LAST episode (per-episode values vary with the data variant)
-        strategy_params["last_episode_median_price_ct_per_kWh"] = strategy.median_price
-    if strategy.name.startswith("price_median_scaled"):
+    if isinstance(strategy, (PriceThresholdStrategy, PriceThresholdAutarky)):
+        # Reference price of the LAST episode (per-episode values vary with the data variant)
+        strategy_params[f"last_episode_{strategy.price_statistic}_price_ct_per_kWh"] = strategy.reference_price
+    if isinstance(strategy, PriceThresholdStrategy):
         strategy_params["charge_fraction"] = strategy.charge_fraction
-        # median of the LAST episode (per-episode values vary with the data variant)
-        strategy_params["last_episode_median_price_ct_per_kWh"] = strategy.median_price
-    if strategy.name == "price_median_autarky":
+    if isinstance(strategy, PriceThresholdAutarky):
         strategy_params["drain_last_steps"] = strategy.drain_last_steps
-        # median of the LAST episode (per-episode values vary with the data variant)
-        strategy_params["last_episode_median_price_ct_per_kWh"] = strategy.median_price
 
     summary = {
         "trial_name": trial_name,

@@ -14,6 +14,7 @@ from datetime import date, timedelta
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
 from plotting.utils import COLORS, apply_day_xaxis, style_figure
 
@@ -29,6 +30,11 @@ _WEATHER_COLS = [
     ("avg_wind_speed", "Wind speed (m/s)", None),
     ("sun_shine", "Global irradiance (W/m\u00b2)", None),
 ]
+
+_MINUTES_PER_DAY: int = 24 * 60
+# Plateaus narrower than this cannot hold a "NN kW" label without overlapping
+# the neighbouring one, so their annotation is dropped.
+_OPERATOR_LABEL_MIN_WIDTH_MIN: int = 40
 
 
 # ---------------------------------------------------------------------------
@@ -508,4 +514,96 @@ def build_ev_schedule_figure(
     lane_px = int(fig_cfg.get("ev_lane_px", 50))
     height = max(min_h, 80 + lane_px * n)
     finalize_figure(fig, title, height=height)
+    return fig
+
+
+def build_operator_signal_figure(
+    profile_frames: dict[str, pd.DataFrame],
+    value_col: str = "max_power_kW",
+    title: str | None = "",
+) -> go.Figure:
+    """Small-multiples step plot of the grid-operator power-limit profiles.
+
+    The CSVs hold sparse step-change events keyed by time of day; the environment
+    holds the last value until the next event and repeats the profile every day
+    (``OperatorEnergyControl.update_state`` in
+    ``adv_building_gym/components/statesources/outer/operator_energy_control.py``).
+    Each profile therefore gets its own piecewise-constant ("hv") panel spanning a
+    full 24 h, with the plateau levels annotated in kW.
+
+    *title* overrides the auto-generated heading.
+    """
+    labels = list(profile_frames.keys())
+    n = len(labels)
+    if n == 0:
+        return go.Figure()
+
+    fig = make_subplots(
+        rows=n, cols=1, shared_xaxes=True,
+        vertical_spacing=min(0.06, 0.5 / n),
+        subplot_titles=labels,
+    )
+
+    # Shared y-range so panel heights are directly comparable across profiles.
+    all_values = [
+        float(v)
+        for df in profile_frames.values()
+        for v in pd.to_numeric(df[value_col], errors="coerce").dropna()
+    ]
+    y_max = max(all_values) * 1.25 if all_values else 1.0
+
+    for idx, (label, df) in enumerate(profile_frames.items()):
+        row = idx + 1
+        color = COLORS[idx % len(COLORS)]
+        rgb = ",".join(str(int(color[i:i + 2], 16)) for i in (1, 3, 5))
+
+        events = df.sort_values("minutes").reset_index(drop=True)
+        starts = [float(m) for m in events["minutes"]]
+        levels = [float(v) for v in events[value_col]]
+        # Close the last plateau at midnight so the step spans the whole day.
+        x_step = starts + [_MINUTES_PER_DAY]
+        y_step = levels + [levels[-1]]
+
+        hhmm = [f"{int(m) // 60:02d}:{int(m) % 60:02d}" for m in x_step]
+        fig.add_trace(go.Scatter(
+            x=x_step, y=y_step,
+            mode="lines",
+            line=dict(color=color, width=2, shape="hv"),
+            fill="tozeroy", fillcolor=f"rgba({rgb},0.12)",
+            name=label,
+            showlegend=False,
+            customdata=np.column_stack([hhmm, [label] * len(x_step)]),
+            hovertemplate=(
+                "<b>%{customdata[1]}</b> %{customdata[0]}<br>"
+                "Limit: %{y:.1f} kW<extra></extra>"
+            ),
+        ), row=row, col=1)
+
+        # Label each plateau at its centre; skip plateaus too narrow to hold text.
+        ends = starts[1:] + [_MINUTES_PER_DAY]
+        for start_min, end_min, level in zip(starts, ends, levels):
+            if end_min - start_min < _OPERATOR_LABEL_MIN_WIDTH_MIN:
+                continue
+            fig.add_annotation(
+                x=(start_min + end_min) / 2.0, y=level,
+                text=f"{level:g} kW",
+                showarrow=False, yshift=10,
+                font=dict(size=10, color=color),
+                row=row, col=1,
+            )
+
+        fig.update_yaxes(range=[0, y_max], title_text="kW", row=row, col=1)
+
+    apply_day_xaxis(fig, n_rows=n)
+
+    if title is None:
+        title = f"Grid-operator power limit — {n} profile{'s' if n != 1 else ''}"
+    fig_cfg = get_data_figure_config()
+    min_h = int(fig_cfg.get("op_min_height", 320))
+    panel_px = int(fig_cfg.get("op_panel_px", 130))
+    height = max(min_h, 120 + panel_px * n)
+    finalize_figure(fig, title, height=height)
+    fig.update_layout(showlegend=False)
+    # Subplot titles default to 16 px, which crowds short panels.
+    fig.update_annotations(selector=dict(yref="paper"), font=dict(size=12))
     return fig

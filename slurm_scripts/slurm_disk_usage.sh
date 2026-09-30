@@ -67,11 +67,11 @@ for target in "${TARGETS[@]}"; do
 
   echo ""
   echo "=== Subdirectories of ${target} by size ==="
-  { du -xh --max-depth=5 "${target}" 2>/dev/null || true; } | sort -rh
+  { du -xh --max-depth=7 "${target}" 2>/dev/null || true; } | sort -rh
 
   echo ""
   echo "=== Subdirectories of ${target} by file count ==="
-  { du -x --inodes --max-depth=5 "${target}" 2>/dev/null || true; } | sort -rn
+  { du -x --inodes --max-depth=7 "${target}" 2>/dev/null || true; } | sort -rn
 done
 
 echo ""

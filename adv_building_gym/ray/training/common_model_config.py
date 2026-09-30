@@ -260,7 +260,9 @@ def common_model_setup(
     )
     config.log_gradients = False # RLlib default: False
     # NOTE VP 2026.01.08. : about ray and rllib concept https://docs.ray.io/en/latest/rllib/key-concepts.html
-    config.training(gamma=training_config.gamma) # RLlib default: 0.99
+    if training_config.gamma is not None:
+        # unset → keep the algorithm's own default (PPO/SAC 0.99, DreamerV3 0.997)
+        config.training(gamma=training_config.gamma)
     # Sampling (env queries, policy, trajectories) — no GPU. Env-runner count and
     # resource shares are set later in resource_setup; here only sampling behaviour.
     config.env_runners(

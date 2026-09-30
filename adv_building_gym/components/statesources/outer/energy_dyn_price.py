@@ -6,6 +6,7 @@ import pandas as pd
 from gymnasium.spaces import Box
 
 from ..base import StateSource
+from ..csv_episode_window import CsvEpisodeWindow
 from ..csv_loader import CsvLoader
 from ..forecastable import Forecastable
 from ..csv_lookahead import CsvLookahead
@@ -16,7 +17,7 @@ from adv_building_gym._common.constants import SECONDS_PER_DAY
 logger = logging.getLogger(__name__)
 
 
-class EnergyPriceDayDynDataSource(StateSource, Forecastable, CsvLookahead, CsvReloadable):
+class EnergyPriceDayDynDataSource(StateSource, CsvEpisodeWindow, Forecastable, CsvLookahead, CsvReloadable):
     """Energy-price data source with a dynamic 1-day (next-24h) price divisor.
 
     The CSV is never rescaled and s_E_price is not clipped. Each step exposes
@@ -37,8 +38,11 @@ class EnergyPriceDayDynDataSource(StateSource, Forecastable, CsvLookahead, CsvRe
     # Lookahead channel -> CSV column (drives Lookahead.lookahead and forecast()).
     _lookahead_columns: ClassVar[dict[str, str]] = {"baseprice": "baseprice"}
 
+    # Per-step row read.
+    _window_columns: ClassVar[tuple[str, ...]] = ("baseprice",)
+
     def __init__(self, name: str, ds_path: str | None = None,
-                ctxt_keys: list[str] | None = ["ctxt_E_price_max"],
+                ctxt_keys: list[str] | None = None,
                 episode_length: int = 288,
                 control_step: float = 300.0) -> None:
         """Args:
@@ -114,8 +118,7 @@ class EnergyPriceDayDynDataSource(StateSource, Forecastable, CsvLookahead, CsvRe
                 f"EnergyPriceDayDynDataSource '{self.name}': no CSV loaded. The DataCombinator "
                 "must push an E_price variant before update_state is called."
             )
-        idx = min(self.effective_index, len(self.ts) - 1)
-        self.baseprice_raw = float(self.ts["baseprice"].iloc[idx])
+        self.baseprice_raw = self.window_row()[0]
 
         states["s_E_price"][0] = np.float32(self._normalise(self.baseprice_raw))
         self._write_ctxt(states, "ctxt_E_price_max", np.float32(self.price_divisor))
@@ -123,11 +126,13 @@ class EnergyPriceDayDynDataSource(StateSource, Forecastable, CsvLookahead, CsvRe
     def reset(self, states, info: dict) -> None:
         if self.ts is not None:
             # Windowed: |baseprice| max over the next 24h, capped at the episode length so we
-            # never normalise against prices outside the episode.
+            # never normalise against prices outside the episode. Must run BEFORE the window
+            # build feeds update_state, which normalises by this divisor.
             start = self.row_offset
             end = min(start + min(self.steps_per_day, self.episode_length), len(self.ts))
             self.price_divisor = self._compute_divisor(self.ts["baseprice"].iloc[start:end])
-        self.update_state(states, info)
+        self.build_episode_window(info.get("episode_length"))
+        super().reset(states, info)
 
     def forecast_keys(self) -> tuple[str, ...]:
         return ("s_fc_E_price",)

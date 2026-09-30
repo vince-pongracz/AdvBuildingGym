@@ -58,7 +58,9 @@ class TrainingParamConfig(LoggableConfig):
     episode_lookback_horizon_steps: int = 120
     seed: int = 42
     max_episodes_to_run:int = 10000
-    gamma: float = 0.99
+    # Discount factor. None → not passed on, so each algorithm keeps its own default
+    # (RLlib 2.52: PPO/SAC 0.99, DreamerV3 0.997; SB3: PPO/SAC 0.99).
+    gamma: float | None = None
     clip_actions_to_env_bounds: bool = True
     # When True, num_learners=0 → Learner runs in the driver (no remote actor),
     # freeing one CPU for an extra EnvRunner.
@@ -82,6 +84,9 @@ class TrainingParamConfig(LoggableConfig):
     ppo_episodes_per_iteration: int = 25
     ppo_minibatch_size: int = 128 # Rllib default
     ppo_num_epochs: int = 10
+    # GAE lambda (0 = one-step TD, 1 = Monte-Carlo return). Not the RLlib default (1.0).
+    # Link: https://arxiv.org/abs/1506.02438
+    ppo_gae_lambda: float = 0.95
 
     sac_replay_batch_size: int = 256 # Rllib default
     sac_episodes_to_keep_in_replay_buffer: int = 100

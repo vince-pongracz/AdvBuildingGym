@@ -5,6 +5,7 @@ import logging
 import numpy as np
 
 from ..base import RewardFunction
+from ..ev_signals import is_ev_connected, session_target_soc
 from adv_building_gym.components.registry import ComponentRegistry
 
 logger = logging.getLogger(__name__)
@@ -58,13 +59,13 @@ class EVChargingRewardV0(RewardFunction):
 
     def get_reward(self, actions, state, next_state, info: dict) -> float:
         # Disconnect this step (connected s → not s'). Charger zeroes s_evc_soc on detach,
-        # so judge the SoC reached before leaving (both from ``state``) vs target.
-        was_connected = float(state["s_evc_connected"][0]) >= 0.5
-        now_connected = float(next_state["s_evc_connected"][0]) >= 0.5
+        # so judge the SoC reached before leaving (from ``state``) vs the latched target.
+        was_connected = is_ev_connected(state)
+        now_connected = is_ev_connected(next_state)
         # disconnect step
         if was_connected and not now_connected:
             achieved_soc = float(state["s_evc_soc"][0])
-            target_soc = float(state["s_evc_target_soc"][0])
+            target_soc = session_target_soc(info)
             success = abs(achieved_soc - target_soc) <= self.disconnect_soc_tolerance
             magnitude = max(self._session_steps, 1)
 
@@ -80,7 +81,7 @@ class EVChargingRewardV0(RewardFunction):
             return 0.0
 
         current_soc = float(next_state["s_evc_soc"][0])
-        target_soc = float(next_state["s_evc_target_soc"][0])
+        target_soc = session_target_soc(info)
 
         if float(next_state["s_evc_session_target_feasible"][0]) > 0.5:
             soc_min = float(next_state["s_evc_soc_min"][0])

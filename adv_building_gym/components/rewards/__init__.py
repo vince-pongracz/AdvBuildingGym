@@ -12,6 +12,7 @@ from .v0.battery_mgmt_reward_v0 import BatteryMgmtRewardV0
 from .v0.battery_range_mgmt_reward_v0 import BatteryRangeMgmtRewardV0
 from .v1.economic_reward import EconomicReward
 from .v0.economic_reward_v0 import EconomicRewardV0
+from .v0.economic_sell_factor_reward_v0 import EconomicSellFactorRewardV0
 from .v1.long_term_economic_reward import LongTermEconomicReward
 from .v0.long_term_economic_reward_v0 import LongTermEconomicRewardV0
 from .v1.energy_consumption_reward import MinimiseEnergyConsumptionReward
@@ -41,6 +42,7 @@ __all__ = [
     "BatteryRangeMgmtRewardV0",
     "EconomicReward",
     "EconomicRewardV0",
+    "EconomicSellFactorRewardV0",
     "LongTermEconomicReward",
     "LongTermEconomicRewardV0",
     "EVChargingOnTimeReward",

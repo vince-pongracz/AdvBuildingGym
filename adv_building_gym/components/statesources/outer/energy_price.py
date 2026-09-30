@@ -6,6 +6,7 @@ import pandas as pd
 from gymnasium.spaces import Box
 
 from ..base import StateSource
+from ..csv_episode_window import CsvEpisodeWindow
 from ..csv_loader import CsvLoader
 from ..forecastable import Forecastable
 from ..csv_lookahead import CsvLookahead
@@ -16,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 # TODO VP 2026.08.15.: This is completely useless and should be removed.
-class EnergyPriceYearDynDataSource(StateSource, Forecastable, CsvLookahead, CsvReloadable):
+class EnergyPriceYearDynDataSource(StateSource, CsvEpisodeWindow, Forecastable, CsvLookahead, CsvReloadable):
     """Energy-price data source with a year-based price divisor.
 
     The CSV is never rescaled and s_E_price is not clipped. Each step exposes
@@ -44,6 +45,9 @@ class EnergyPriceYearDynDataSource(StateSource, Forecastable, CsvLookahead, CsvR
 
     # Lookahead channel -> CSV column (drives Lookahead.lookahead and forecast()).
     _lookahead_columns: ClassVar[dict[str, str]] = {"baseprice": "baseprice"}
+
+    # Per-step row read.
+    _window_columns: ClassVar[tuple[str, ...]] = ("baseprice",)
 
     def __init__(self, name: str, ds_path: str | None = None,
                 max_calc_mode: str = "mean",
@@ -145,8 +149,7 @@ class EnergyPriceYearDynDataSource(StateSource, Forecastable, CsvLookahead, CsvR
                 f"EnergyPriceYearDynDataSource '{self.name}': no CSV loaded. The DataCombinator "
                 "must push an E_price variant before update_state is called."
             )
-        idx = min(self.effective_index, len(self.ts) - 1)
-        self.baseprice_raw = float(self.ts["baseprice"].iloc[idx])
+        self.baseprice_raw = self.window_row()[0]
 
         states["s_E_price"][0] = np.float32(self._normalise(self.baseprice_raw))
         # No-op unless ctxt_E_price_max was published (listed in ctxt_keys).
@@ -163,7 +166,8 @@ class EnergyPriceYearDynDataSource(StateSource, Forecastable, CsvLookahead, CsvR
                 self._SERIES_BLEND_WEIGHT * self.series_divisor + self._EPISODE_BLEND_WEIGHT * episode_divisor,
                 1e-6,
             )
-        self.update_state(states, info)
+        self.build_episode_window(info.get("episode_length"))
+        super().reset(states, info)
 
     def forecast_keys(self) -> tuple[str, ...]:
         return ("s_fc_E_price",)

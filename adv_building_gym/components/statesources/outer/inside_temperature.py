@@ -6,6 +6,7 @@ import numpy as np
 from gymnasium.spaces import Box
 
 from ..base import StateSource
+from ..csv_episode_window import CsvEpisodeWindow
 from ..csv_loader import CsvLoader
 from ..forecastable import Forecastable
 from ..csv_lookahead import CsvLookahead
@@ -15,7 +16,7 @@ from adv_building_gym._common.constants import TEMP_ABS_MAX_CELSIUS
 
 logger = logging.getLogger(__name__)
 
-class InsideTemperature(StateSource, Forecastable, CsvLookahead, CsvReloadable):
+class InsideTemperature(StateSource, CsvEpisodeWindow, Forecastable, CsvLookahead, CsvReloadable):
     """Data source for desired inside temperature setpoint."""
 
     def __init__(self, name: str, ds_path: str | None = None) -> None:
@@ -41,6 +42,16 @@ class InsideTemperature(StateSource, Forecastable, CsvLookahead, CsvReloadable):
         # Normalisation is deferred to update_state / forecast)
         # Drop other CSV columns.
         self._keep_ts_columns({self._raw_column})
+
+    @property
+    def _window_columns(self) -> tuple[str, ...]:
+        """The raw setpoint column, which is only known once the CSV is loaded."""
+        column = getattr(self, "_raw_column", None)
+        return (column,) if column else ()
+
+    def _csv_row(self, step: int) -> int:
+        """Single-day profile: index by time-of-day so it repeats daily (ignores row_offset)."""
+        return step % self.n_rows if self.n_rows else 0
 
     # NOTE VP 2026.03.24. : Choosing the inside_temperature profile should depend on the date -- or on user interaction, but this part comes later, keep it in the TODO comment
     def setup_spaces(self,
@@ -71,13 +82,7 @@ class InsideTemperature(StateSource, Forecastable, CsvLookahead, CsvReloadable):
         temp_abs_max: float = float(info["temp_abs_max"]) if "temp_abs_max" in info else TEMP_ABS_MAX_CELSIUS
         self._last_temp_abs_max = temp_abs_max if temp_abs_max != 0 else TEMP_ABS_MAX_CELSIUS
 
-        # single-day profile: index by time-of-day so it repeats daily (ignores row_offset)
-        arr = self._forecast_array_cache.get(self._raw_column)
-        if arr is None:
-            arr = self.ts[self._raw_column].to_numpy()
-            self._forecast_array_cache[self._raw_column] = arr
-        idx = self.iteration % arr.shape[0]
-        raw_temp = float(arr[idx])
+        raw_temp = self.window_row()[0]
         self.desired_temp_in_raw = raw_temp
         desired_temp_in_norm = raw_temp / temp_abs_max if temp_abs_max != 0 else 0.0
         return float(np.clip(desired_temp_in_norm, -1.0, 1.0))
@@ -95,7 +100,12 @@ class InsideTemperature(StateSource, Forecastable, CsvLookahead, CsvReloadable):
 
     def reset(self, states, info: dict) -> None:
         """Seed the indoor temperature near the setpoint (±2 °C) on the info channel and
-        publish the initial comfort error."""
+        publish the initial comfort error.
+
+        Deliberately does NOT delegate to update_state: the indoor temperature is seeded here
+        rather than read from the info channel.
+        """
+        self.build_episode_window(info.get("episode_length"))
         desired_temp_in_norm = self._desired_temp_in_norm(states, info)
         # ±2 °C in normalised space (2/70 ≈ 0.029 at the fixed 70 °C scale)
         temp_abs_max = self._last_temp_abs_max
@@ -116,10 +126,7 @@ class InsideTemperature(StateSource, Forecastable, CsvLookahead, CsvReloadable):
         # single-day profile: wrap-around index (not zero-fill), so _csv_forecast isn't reused
         if self.ts is None:
             return {"s_fc_desired_temp_in_norm": [0.0] * len(selected_future_steps)}
-        arr = self._forecast_array_cache.get(self._raw_column)
-        if arr is None:
-            arr = self.ts[self._raw_column].to_numpy()
-            self._forecast_array_cache[self._raw_column] = arr
+        arr = self.column_array(self._raw_column)
         scale = self._last_temp_abs_max if self._last_temp_abs_max != 0 else TEMP_ABS_MAX_CELSIUS
         idxs = (np.asarray(selected_future_steps, dtype=np.int64) + self.iteration) % arr.shape[0]
         vals = np.clip(arr[idxs] / scale, -1.0, 1.0)

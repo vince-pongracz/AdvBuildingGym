@@ -31,7 +31,7 @@ Outline:
    - try pre-defined weight combinations
   - curriculum learning:
    - TL: gradual -- 1st temp control, then temp and battery control -- using reward schedules
-   - TL: 5 rewards alltogether, always select 2 or 3 and change 1 between iterations -- using reward scheduling
+   - TL: 5 rewards altogether, always select 2 or 3 and change 1 between iterations -- using reward scheduling
  - MA:
   - vector rewards, standalone Q network for each reward, Pareto front search
   - each actuator is an agent: scalar rewards, curriculum learning: actuator items are selected or deselected per episode -- rewards always there, but action from infrastructure is not always present -- each actuator has its own policy NN.
@@ -195,6 +195,7 @@ sbatch slurm_scripts/slurm_train_ray.sh # start a job
 scancel jobID # cancel a job
 scontrol show job [jobid] # see job state info
 squeue #Displays information about active, eligible, blocked, and/or recently completed jobs
+squeue --start -u dj0397 # Show scheduled nodes and start time estimates
 ```
 
 <div align="center">

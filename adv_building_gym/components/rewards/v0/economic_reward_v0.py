@@ -18,7 +18,6 @@ class EconomicRewardV0(RewardFunction):
     consume at +price → −reward (cost)
     export at −price → −reward (paying to dump)
     consume at −price → +reward (paid to consume)
-    ``op_max_kW`` from ``ctxt_operator_max_power_kW`` if present, else the ctor fallback.
     """
 
     _exclude_params = {"_step"}
@@ -57,6 +56,9 @@ class EconomicRewardV0(RewardFunction):
         else:
             price_signal = current_energy_price_norm
 
+        # buy/sell tariff: 1.0 here (symmetric net metering); subclasses discount exports
+        price_signal *= self._tariff_factor(net_power_kW)
+
         op_max_kW = self.reference_power_kW
 
         # Canonical: net > 0 means export, net < 0 means consumption.
@@ -64,6 +66,11 @@ class EconomicRewardV0(RewardFunction):
         self._step += 1
 
         return float(self.weight * per_step)
+
+    def _tariff_factor(self, net_power_kW: float) -> float:
+        """Multiplier on the price signal for this step's net grid exchange; 1.0 = same
+        price for import and export."""
+        return 1.0
 
 
 ComponentRegistry.register('reward', EconomicRewardV0)

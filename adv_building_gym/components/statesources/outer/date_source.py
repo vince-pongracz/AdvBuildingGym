@@ -9,6 +9,7 @@ import pandas as pd
 from gymnasium.spaces import Box
 
 from ..base import StateSource
+from ..csv_episode_window import CsvEpisodeWindow
 from ..csv_loader import CsvLoader
 from ..reloadable import CsvReloadable
 from adv_building_gym.components.registry import ComponentRegistry
@@ -17,13 +18,16 @@ from adv_building_gym._common.episode_date import date_column
 logger = logging.getLogger(__name__)
 
 
-class DateSource(StateSource, CsvReloadable):
+class DateSource(StateSource, CsvEpisodeWindow, CsvReloadable):
     """Owns ``s_date`` (normalised day-of-year) and answers the day-offset queries the
     ``DataVariantManager`` needs (``available_rows`` / ``start_year`` / ``date_at``) without
     exposing ``ts`` to the core layer.
     """
 
     _exclude_params: ClassVar[Set[str]] = {"s_date_norm"}
+
+    # Per-step row read (the raw date column is only used by start_year / date_at).
+    _window_columns: ClassVar[tuple[str, ...]] = ("s_date",)
 
     def __init__(self, name: str = "date", ds_path: str | None = None) -> None:
         super().__init__(name=name)
@@ -59,9 +63,12 @@ class DateSource(StateSource, CsvReloadable):
                 f"DateSource '{self.name}': no CSV loaded. The DataCombinator must push a "
                 "date variant before update_state is called."
             )
-        idx = min(self.effective_index, len(self.ts) - 1)
-        self.s_date_norm = float(self.ts["s_date"].iloc[idx])
+        self.s_date_norm = self.window_row()[0]
         states["s_date"][0] = np.float32(self.s_date_norm)
+
+    def reset(self, states, info: dict) -> None:
+        self.build_episode_window(info.get("episode_length"))
+        super().reset(states, info)
 
     # ----- day-offset facts for DataVariantManager (no ts leak) -----
     def available_rows(self) -> int:

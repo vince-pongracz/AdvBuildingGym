@@ -23,15 +23,18 @@ states:
     - [s_temp_in_norm, s_desired_temp_in_norm, s_temp_out_norm] # keep for older snapshots
     - [s_pv_power_norm, s_wind_power_norm]
     - [ctxt_ev_schedule_start_soc, ctxt_ev_schedule_target_soc]
-    - [s_evc_soc, s_evc_target_soc]
+    # The charger no longer republishes a target; EVState's schedule view is the target
+    # line (it leads the charger by one step, which is immaterial for plotting).
+    - [s_evc_soc, ctxt_ev_schedule_target_soc]
 
   # Keys masked with NaN when a condition key is below 0.5.
   # Produces non-continuous lines (gaps) when the device is disconnected.
+  # ctxt_evc_max_charging_kW replaces the removed s_evc_connected flag: it is 0 exactly
+  # when no EV is attached, and its connected values are whole kW, so the < 0.5 test holds.
   mask_when_disconnected:
-    condition_key: s_evc_connected
+    condition_key: ctxt_evc_max_charging_kW
     keys:
       - s_evc_soc
-      - s_evc_target_soc
       - hst_s_evc_soc
       - s_evc_charge_to_target_hrs_norm
 

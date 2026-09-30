@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 
 from ..base import StateSource
+from ..csv_episode_window import CsvEpisodeWindow
 from ..csv_loader import CsvLoader
 from ..csv_lookahead import CsvLookahead
 from ..reloadable import CsvReloadable
@@ -15,8 +16,12 @@ from adv_building_gym._common.normalisation import Normalisation, normalise_with
 
 logger = logging.getLogger(__name__)
 
+# CSV sampling period (s) per data-source path. The period is fixed per file, so deriving it
+# once avoids re-parsing every timestamp on each reload (see _update_row_cadence).
+_ROW_SECONDS_CACHE: dict[str, float] = {}
 
-class WeatherDataSource(StateSource, CsvLookahead, CsvReloadable):
+
+class WeatherDataSource(StateSource, CsvEpisodeWindow, CsvLookahead, CsvReloadable):
     """Ambient temperature, wind speed, and solar irradiance from a preprocessed weather CSV.
 
     Units (raw, before runtime normalisation):
@@ -46,6 +51,12 @@ class WeatherDataSource(StateSource, CsvLookahead, CsvReloadable):
         "solar_W_m2": "sun_shine",
         "wind_ms": "avg_wind_speed",
     }
+
+    # Per-step row read, in the order update_state unpacks it. avg_wind_speed / sun_shine are
+    # optional (read 0.0 when the CSV lacks them).
+    _window_columns: ClassVar[tuple[str, ...]] = (
+        "s_temp_out_norm", "temp_amb", "avg_wind_speed", "sun_shine",
+    )
 
     def __init__(self, name: str, ds_path: str | None = None,
                 normalise: Normalisation | str | None = Normalisation.MAX_ABS_SCALING,
@@ -128,14 +139,19 @@ class WeatherDataSource(StateSource, CsvLookahead, CsvReloadable):
         The weather CSVs are written at a fixed period by the preprocessing pipelines (5 min)
         that is independent of the env control step, so the row index must follow elapsed time.
         Falls back to a 1:1 step↔row mapping when the period cannot be determined.
+
+        The median is taken over the WHOLE column (a partial scan could miss an irregular
+        stretch), which costs ~136 ms on a year of 5-min data — so it is memoised per file:
+        the period is a property of the CSV, and the same files recur across episodes.
         """
-        row_seconds = 0.0
-        if "timestamp" in self.ts.columns and len(self.ts) > 1:
+        row_seconds = _ROW_SECONDS_CACHE.get(self.ds_path, 0.0)
+        if row_seconds <= 0.0 and "timestamp" in self.ts.columns and len(self.ts) > 1:
             stamps = pd.to_datetime(self.ts["timestamp"], utc=True, errors="coerce")
             deltas = stamps.diff().dt.total_seconds().dropna()
             deltas = deltas[deltas > 0.0]
             if not deltas.empty:
                 row_seconds = float(deltas.median())
+                _ROW_SECONDS_CACHE[self.ds_path] = row_seconds
 
         if row_seconds <= 0.0:
             if self.is_new_data_source:
@@ -159,6 +175,10 @@ class WeatherDataSource(StateSource, CsvLookahead, CsvReloadable):
         """CSV row for the current step (+ ``step_offset`` control steps), by elapsed time."""
         return int((self.effective_index + step_offset) * self._rows_per_control_step)
 
+    def _csv_row(self, step: int) -> int:
+        """Rows follow elapsed time, so the CSV period need not equal the control step."""
+        return min(int((self.row_offset + step) * self._rows_per_control_step), self.n_rows - 1)
+
     def lookahead(self, steps: list[int]) -> dict[str, list[float]]:
         """Future raw values at ``steps`` control steps ahead, indexed by time like update_state.
 
@@ -168,7 +188,7 @@ class WeatherDataSource(StateSource, CsvLookahead, CsvReloadable):
         base_row = self._row_index()
         row_offsets = [self._row_index(step) - base_row for step in steps]
         return {
-            key: self._csv_forecast(self.ts, base_row, column, row_offsets)
+            key: self._csv_forecast(base_row, column, row_offsets)
             for key, column in self._lookahead_columns.items()
         }
 
@@ -178,17 +198,20 @@ class WeatherDataSource(StateSource, CsvLookahead, CsvReloadable):
     # wind) are not observations either: the policy sees the *effects* (s_temp_error_norm,
     # s_pv_power_norm, s_wind_power_norm).
 
+    def reset(self, states, info: dict) -> None:
+        self.build_episode_window(info.get("episode_length"))
+        super().reset(states, info)
+
     def update_state(self, states, info: dict) -> None:
         if self.ts is None:
             raise RuntimeError(
                 f"WeatherDataSource '{self.name}': no CSV loaded. The DataCombinator "
                 "must push a weather variant before update_state is called."
             )
-        row = self.ts.iloc[min(self._row_index(), len(self.ts) - 1)]
-        temp_out_norm = float(row["s_temp_out_norm"])
-        self.temp_out_raw = float(row["temp_amb"])
-        self.wind_speed_raw = float(row.get("avg_wind_speed", 0.0))
-        self.sun_shine_raw = float(row.get("sun_shine", 0.0))
+        # One indexed row from the episode window, not self.ts.iloc[row]: the pandas row form
+        # rebuilds a Series per call (~43 us here, upcasting because the kept columns mix
+        # float32/float64) against ~0.08 us for this unpack.
+        temp_out_norm, self.temp_out_raw, self.wind_speed_raw, self.sun_shine_raw = self.window_row()
 
         # Hand the weather drivers to consumers via the shared info channel — none are policy
         # observations. Outdoor temp (norm) → BuildingHeatLoss physics; raw irradiance (W/m²)

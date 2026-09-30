@@ -18,7 +18,7 @@
 #   --evening-start H       Evening discharge window start hour (self_coverage) [default: 17.0]
 #   --evening-end H         Evening discharge window end hour (self_coverage) [default: 23.0]
 #   --drain-last-steps N    Number of final episode steps over which the battery is
-#                           force-drained to the SoC floor (price_median_autarky) [default: 24]
+#                           force-drained to the SoC floor (price_{median,mean}_autarky) [default: 24]
 #   --preserve-start-soc    Forbid ending below the start-of-episode battery SoC [default: on]
 #   --plot / --plot-all     Plot trajectory after evaluation
 #

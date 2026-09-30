@@ -11,6 +11,7 @@ are public, so this is not privileged information in the modelled sense.
 """
 
 import logging
+from collections.abc import Callable, Sequence
 from typing import ClassVar
 
 import numpy as np
@@ -30,6 +31,14 @@ BATTERY_CLASSES = (BatteryLinear, BatteryTremblay)
 RENEWABLE_CLASSES = (SolarPanel, WindTurbine)
 # A price source is any Lookahead exposing the "baseprice" channel.
 PRICE_LOOKAHEAD_KEY = "baseprice"
+# Aggregators the price-threshold strategies may use to collapse the episode
+# price window into a single charge/discharge threshold. The median always splits
+# the window into equally many below/above steps; the mean is pulled by outliers,
+# so on a skewed day it shifts the charge/discharge split off the halfway point.
+PRICE_STATISTICS: dict[str, Callable[[Sequence[float]], float]] = {
+    "median": np.median,
+    "mean": np.mean,
+}
 
 
 def in_time_window(hour: float, start: float, end: float) -> bool:
@@ -126,13 +135,19 @@ class RuleBasedStrategy:
         """Realised current price (ct/kWh) of the obs the strategy acts on, via ``get_raw_values``."""
         return self.price_source.get_raw_values().get("raw_E_price")
 
-    def _episode_median_baseprice(self) -> float:
-        """Median raw ``baseprice`` over the episode window, read forward-from-now via ``Lookahead``
+    def _episode_baseprice_window(self) -> list[float]:
+        """Raw ``baseprice`` over the episode window, read forward-from-now via ``Lookahead``
         (at reset ``effective_index == row_offset``, so this is the whole-episode window)."""
         window = self.price_source.lookahead(list(range(self.episode_length)))[PRICE_LOOKAHEAD_KEY]
         if not window:
             raise RuntimeError(f"Strategy '{self.name}': price source has no baseprice data loaded.")
-        return float(np.median(window))
+        return window
+
+    def _episode_reference_baseprice(self, statistic: str) -> float:
+        """Episode-window baseprice collapsed by ``statistic`` (a ``PRICE_STATISTICS`` key)."""
+        if statistic not in PRICE_STATISTICS:
+            raise ValueError(f"Unknown price statistic '{statistic}'; expected one of {sorted(PRICE_STATISTICS)}")
+        return float(PRICE_STATISTICS[statistic](self._episode_baseprice_window()))
 
     # ------------------------------------------------------------------ SoC headrooms
     def _soc_floor(self) -> float:

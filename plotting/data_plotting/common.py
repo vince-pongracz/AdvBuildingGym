@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import calendar
 import logging
+import re
 import zlib
 from datetime import datetime
 from functools import lru_cache
@@ -150,7 +151,7 @@ def load_profiles_from_cfg(
     cfg: dict,
     dates: list[datetime],
 ) -> dict[str, dict[str, object]]:
-    """Load profile sources (desired_temp_in, ev_schedule, user_energy_need).
+    """Load profile sources (desired_temp_in, ev_schedule, operator_signal, user_energy_need).
 
     Returns ``{source_name: {label: DataFrame}}``. With
     ``user_energy_need.include_syn`` set, the synthesised variants join the
@@ -174,6 +175,14 @@ def load_profiles_from_cfg(
             REPO_ROOT / ev_cfg["dir"],
             ev_cfg["files"],
             ev_cfg["timestamp_col"],
+        )
+
+    if "operator_signal" in cfg:
+        op_cfg = cfg["operator_signal"]
+        sources["operator_signal"] = load_profiles(
+            REPO_ROOT / op_cfg["dir"],
+            op_cfg["files"],
+            op_cfg["timestamp_col"],
         )
 
     if "user_energy_need" in cfg:
@@ -235,7 +244,10 @@ def write_output(
                 title_obj = fig.layout.title
                 title = getattr(title_obj, "text", None) or str(title_obj) or f"fig{i}"
 
-                tag = title.lower().replace(" ", "_").replace("(", "").replace(")", "")
+                # Titles carry units ("Wind speed (m/s)"), so strip every
+                # character that is not filename-safe — a bare "/" would
+                # otherwise be read as a directory separator and the write fails.
+                tag = re.sub(r"[^a-z0-9_-]+", "_", title.lower().replace(" ", "_")).strip("_")
                 img_path = out_dir / f"{base_name}_{tag}.{fmt}"
                 fig.write_image(str(img_path))
                 logger.info("Wrote %s", img_path)

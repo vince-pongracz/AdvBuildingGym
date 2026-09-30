@@ -4,13 +4,13 @@ PPO:
 ``n_steps = ppo_episodes_per_iteration × EPISODE_LENGTH / num_envs`` (SB3 n_steps is per-env),
 ``ppo_minibatch_size`` → batch_size, 
 ``ppo_num_epochs`` → n_epochs, 
-GAE λ=0.95.
+``ppo_gae_lambda`` → gae_lambda.
 SAC: 
 ``sac_replay_batch_size`` → batch_size; 
 buffer/learning_starts = episodes × EPISODE_LENGTH;
 ``train_freq=1, gradient_steps=⌈UTD⌉`` (UTD = sac_training_intensity / batch_size, <1 → 1).
-``sac_n_step_return`` is NOT honoured (SB3 default ReplayBuffer); tau=0.005,
-gamma from config.
+``sac_n_step_return`` is NOT honoured (SB3 default ReplayBuffer); tau=0.005.
+gamma from config when set, else the SB3 default.
 """
 
 from __future__ import annotations
@@ -66,6 +66,9 @@ def sb_select_model(
         "tensorboard_log": tensorboard_log,
         "policy_kwargs": dict(_DEFAULT_POLICY_KWARGS),
     }
+    # parity with RLlib: unset gamma keeps the algorithm's own default
+    if training_config.gamma is not None:
+        common_kwargs["gamma"] = training_config.gamma
 
     if algorithm == "ppo":
         # PPO total batch per update; SB3 n_steps is per-env, so divide by num_envs.
@@ -83,8 +86,7 @@ def sb_select_model(
             n_steps=n_steps,
             batch_size=training_config.ppo_minibatch_size,
             n_epochs=training_config.ppo_num_epochs,
-            gae_lambda=0.95,
-            gamma=training_config.gamma,  # parity with RLlib config.training(gamma=...)
+            gae_lambda=training_config.ppo_gae_lambda,
         )
         logger.info(
             "PPO built: n_steps=%d (per env), batch_size=%d, n_epochs=%d",
@@ -124,7 +126,6 @@ def sb_select_model(
             train_freq=1,
             gradient_steps=gradient_steps,
             tau=0.005,
-            gamma=training_config.gamma,  # parity with RLlib config.training(gamma=...)
             ent_coef="auto",
         )
         logger.info(

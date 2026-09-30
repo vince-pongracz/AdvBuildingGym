@@ -242,7 +242,6 @@ class AdvBuildingGym(gym.Env, DataVariantConsumer):
     # ------------------------------------------------------------------
     # reset()
     # ------------------------------------------------------------------
-
     def reset(self, *, seed: int | None = None, options: Dict[str, Any] | None = None):
         self._maybe_reseed(seed)
 
@@ -326,6 +325,9 @@ class AdvBuildingGym(gym.Env, DataVariantConsumer):
         self._info["_rng"] = self._rng
         # relay the episode date so date-aware sources (e.g. the seasonal Fix tariff) read it
         self._info["episode_date"] = self._variant_manager.episode_date
+        # sources sizing a per-episode buffer need the horizon here; step() republishes it
+        # in _publish_step_info, but _reset_internal_state clears the channel before this
+        self._info["episode_length"] = self.env_config.EPISODE_LENGTH
         # When the ForecastWrapper is active, publish the canonical look-ahead step set so
         # Lookahead producers (WeatherDataSource) pre-compute exactly the future raw values the
         # Forecastable consumers (SolarPanel/WindTurbine) need — same count, one source of truth.
@@ -464,7 +466,10 @@ class AdvBuildingGym(gym.Env, DataVariantConsumer):
         # Price to bill is the observed state's (s) realised price, captured before any advance;
         # billing itself runs last (final accounting).
         price_in_step = self._raw_state_tracker.collect(self.statesources, self.infras).get("raw_E_price")
-        self._price_tracker.add_step_contribution(power_breakdown, price_in_step)
+        # Sell-price discount published at reset by the economic reward (EconomicSellFactorRewardV0),
+        # so exports are billed at the price the reward sees; absent → symmetric billing.
+        sell_price_factor = float(self._info.get("sell_price_factor", 1.0))
+        self._price_tracker.add_step_contribution(power_breakdown, price_in_step, sell_price_factor)
 
     def _publish_step_info(
         self,

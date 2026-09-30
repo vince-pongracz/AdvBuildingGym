@@ -5,6 +5,7 @@ import logging
 import numpy as np
 
 from ..base import RewardFunction
+from ..ev_signals import is_ev_connected
 from adv_building_gym.components.registry import ComponentRegistry
 
 logger = logging.getLogger(__name__)
@@ -23,9 +24,10 @@ class EVRegulatorReward(RewardFunction):
       back-calculated to the value that just reaches the bound.
 
     The three are mutually exclusive per step (the disconnected branch returns before the
-    others run), so at most one ``penalty`` is paid. ``next_state["s_evc_connected"]``
-    separates the disconnected case from the connected ones for the diagnostics — it is
-    published in the same step, after ``_check_schedule`` has applied the connect/disconnect.
+    others run), so at most one ``penalty`` is paid. The connection flag (derived from
+    ``next_state["ctxt_evc_max_charging_kW"]``) separates the disconnected case from the
+    connected ones for the diagnostics — it is published in the same step, after
+    ``_check_schedule`` has applied the connect/disconnect.
 
     The requested (pre-override) action comes from ``info["requested_action"]``,
     snapshotted by ``AdvBuildingGym._execute_actions`` before the infras mutate the
@@ -66,9 +68,9 @@ class EVRegulatorReward(RewardFunction):
         realised = float(np.atleast_1d(actions[self.action_key])[0])
         overridden = abs(requested - realised) > self.tolerance
         # s' connection flag: the charger applies the schedule inside exec_action and
-        # republishes s_evc_connected in the same step, so this is the state the override
-        # was decided under.
-        connected = float(next_state["s_evc_connected"][0]) >= 0.5
+        # republishes ctxt_evc_max_charging_kW in the same step, so this is the state the
+        # override was decided under.
+        connected = is_ev_connected(next_state)
 
         self._publish_diagnostics(info, overridden=overridden, connected=connected)
         if not overridden:

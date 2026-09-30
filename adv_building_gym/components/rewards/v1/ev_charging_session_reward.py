@@ -3,6 +3,7 @@
 import logging
 
 from ..base import RewardFunction
+from ..ev_signals import is_ev_connected, session_target_soc
 from adv_building_gym.components.registry import ComponentRegistry
 
 logger = logging.getLogger(__name__)
@@ -72,14 +73,14 @@ class EVChargingSessionReward(RewardFunction):
         self._session_soc_needed = 0.0
 
     def get_reward(self, actions, state, next_state, info: dict) -> float:
-        was_connected = float(state["s_evc_connected"][0]) >= 0.5
-        now_connected = float(next_state["s_evc_connected"][0]) >= 0.5
+        was_connected = is_ev_connected(state)
+        now_connected = is_ev_connected(next_state)
 
-        # Disconnect verdict: the charger zeroes the s_evc_* obs on detach, so the
-        # reached SoC and target are judged from ``state`` (pre-detach values).
+        # Disconnect verdict: the charger zeroes s_evc_soc on detach, so the reached SoC is
+        # judged from ``state`` (pre-detach) and the target from the latched info value.
         if was_connected and not now_connected:
             achieved_soc = float(state["s_evc_soc"][0])
-            target_soc = float(state["s_evc_target_soc"][0])
+            target_soc = session_target_soc(info)
             self._watermark = None
             if achieved_soc >= target_soc - self.disconnect_soc_tolerance:
                 return self.weight * self.success_reward
@@ -91,7 +92,7 @@ class EVChargingSessionReward(RewardFunction):
             return 0.0
 
         current_soc = float(next_state["s_evc_soc"][0])
-        target_soc = float(next_state["s_evc_target_soc"][0])
+        target_soc = session_target_soc(info)
 
         if self._watermark is None:
             # First connected observation anchors the session. s' already includes the

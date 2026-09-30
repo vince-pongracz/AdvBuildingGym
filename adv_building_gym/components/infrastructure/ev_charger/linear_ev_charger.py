@@ -24,6 +24,12 @@ class LinearEVCharger(Infrastructure):
     :meth:`_check_schedule` reads them, rebuilds the EvSpec on a connect, and calls
     :meth:`set_ev_connected`. Connection is signalled by ``ctxt_ev_schedule_max_cap_kWh``
     being > 0 (no real EV has zero capacity), so no separate event channel is needed.
+
+    Spec fields EVState already publishes are not mirrored into the observation space; the
+    rewards read ``target_soc`` / ``max_cap_kWh`` / ``charger_efficiency`` off the info
+    channel and derive the connection flag from ``ctxt_evc_max_charging_kW``, which the
+    charger writes with its own (one step later) timing. See
+    ``components/rewards/ev_signals.py``.
     """
 
     # Runtime v2g_enabled flag still gates export; see max_production_kW override.
@@ -131,14 +137,11 @@ class LinearEVCharger(Infrastructure):
             low: float = -1.0 if self.v2g_enabled else 0.0
             action_spaces["a_lin_ev_charger"] = Box(low=low, high=1, shape=(1,), dtype=np.float32)
 
-        # States
+        # States. No dedicated connection flag: ctxt_evc_max_charging_kW is 0 exactly when
+        # no EV is attached, so it carries the flag with the charger's own timing
+        # (see components/rewards/ev_signals.is_ev_connected).
         if "s_evc_soc" not in state_spaces.keys():
             state_spaces["s_evc_soc"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
-        if "s_evc_target_soc" not in state_spaces.keys():
-            state_spaces["s_evc_target_soc"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
-        if "s_evc_connected" not in state_spaces.keys():
-            # Binary: 0 = not connected, 1 = connected
-            state_spaces["s_evc_connected"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
         if "s_evc_charge_to_target_hrs_norm" not in state_spaces.keys():
             # Normalised: 0 = none/disconnected, 1 = max_charge_time_hrs remaining
             state_spaces["s_evc_charge_to_target_hrs_norm"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
@@ -154,14 +157,10 @@ class LinearEVCharger(Infrastructure):
         self._publish_ctxt(state_spaces, "ctxt_evc_v2g_effective",
                             Box(low=0, high=1, shape=(1,), dtype=np.float32))
 
-        # Charger-owned EV params the EV rewards read from the observation. Published
-        # here (not just the EVState ctxt_ev_schedule_* view) so the reward reads them
-        # with the same timing as s_evc_connected / s_evc_soc — the charger lags EVState's
-        # schedule by one step, so mixing the two views would desync at session edges.
-        if "ctxt_evc_max_cap_kWh" not in state_spaces.keys():
-            state_spaces["ctxt_evc_max_cap_kWh"] = Box(low=0, high=np.inf, shape=(1,), dtype=np.float32)
-        if "ctxt_evc_charger_efficiency" not in state_spaces.keys():
-            state_spaces["ctxt_evc_charger_efficiency"] = Box(low=0, high=1, shape=(1,), dtype=np.float32)
+        # max_cap_kWh / charger_efficiency / target_soc are NOT republished here: EVState
+        # already puts the identical numbers in the observation as ctxt_ev_schedule_*.
+        # The rewards need them at the charger's timing, so they go on the info channel in
+        # update_state instead of costing four more observation dimensions.
         if "ctxt_evc_max_charge_time_hrs" not in state_spaces.keys():
             state_spaces["ctxt_evc_max_charge_time_hrs"] = Box(low=0, high=np.inf, shape=(1,), dtype=np.float32)
 
@@ -336,13 +335,18 @@ class LinearEVCharger(Infrastructure):
         """Update observable state."""
         super().update_state(states, info)
         states["s_evc_soc"][0] = np.float32(self.soc)
-        states["s_evc_target_soc"][0] = np.float32(self.target_soc)
-        states["s_evc_connected"][0] = np.float32(1.0 if self.is_connected else 0.0)
         states["ctxt_evc_max_charging_kW"][0] = np.float32(self.effective_max_charging_kW)
         self._write_ctxt(states, "ctxt_evc_v2g_effective", np.float32(1.0 if self.effective_v2g else 0.0))
-        states["ctxt_evc_max_cap_kWh"][0] = np.float32(self.ev_spec.max_cap_kWh if self.is_connected else 0.0)
-        states["ctxt_evc_charger_efficiency"][0] = np.float32(self.ev_spec.charger_efficiency if self.is_connected else 0.0)
         states["ctxt_evc_max_charge_time_hrs"][0] = np.float32(self.max_charge_time_hrs)
+
+        # EV-spec values the EV rewards consume but the policy already sees via EVState's
+        # ctxt_ev_schedule_* keys — routed to info rather than duplicated in the obs space.
+        # evc_target_soc is the LATCHED session target: _session_target_soc is written at
+        # connect and never cleared on detach, so the disconnect verdict can still judge
+        # the achieved SoC against it on the step the charger releases the EV.
+        info["evc_target_soc"] = float(self._session_target_soc)
+        info["evc_max_cap_kWh"] = float(self.ev_spec.max_cap_kWh) if self.ev_spec is not None else 0.0
+        info["evc_charger_efficiency"] = float(self.ev_spec.charger_efficiency) if self.ev_spec is not None else 0.0
 
         # Corridor envelopes and the remaining-time obs share one step budget
         # (_session_step / _session_total_steps) so the deadline has a single source of
@@ -373,7 +377,7 @@ class LinearEVCharger(Infrastructure):
 
         # Session target feasibility (held from the connect snapshot): 1.0 reachable,
         # 0.0 unreachable, 0.5 neutral when no EV. EVChargingReward gates the min-curve on
-        # this being 1.0. The charger now publishes no info — every EV signal is an obs key.
+        # this being 1.0.
         feasible = (1.0 if self._session_active else 0.0) if self.is_connected else 0.5
         states["s_evc_session_target_feasible"][0] = np.float32(feasible)
 

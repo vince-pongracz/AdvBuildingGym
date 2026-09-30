@@ -5,20 +5,21 @@ from typing import Dict
 import numpy as np
 
 from ..base import RewardFunction
+from ..ev_signals import is_ev_connected, session_target_soc
 from adv_building_gym.components.registry import ComponentRegistry
 
 
 class EVChargingOnTimeReward(RewardFunction):
     """Reward for EV charging progress vs time remaining to target SoC.
 
-    Charger params (max_charging_kW, max_cap_kWh, charger_efficiency,
-    max_charge_time_hrs) come from ``info`` (published by LinearEVCharger).
+    Charger params come from two channels, both written by LinearEVCharger in the same
+    ``update_state``: ``max_charging_kW`` / ``max_charge_time_hrs`` are observation keys,
+    ``max_cap_kWh`` / ``charger_efficiency`` / the session target are on ``info`` (the
+    policy already sees the same numbers via EVState's ``ctxt_ev_schedule_*`` keys).
 
     Not connected → 0 (max 0); soc ≥ target → 1; else max(0, 1 - energy_needed/energy_achievable),
     with energy_needed = (target - soc)*max_cap_kWh, energy_achievable = max_charging_kW*efficiency*remaining_hrs.
     """
-    # TODO VP 2026.06.10.: Charger params (max_charging_kW, max_cap_kWh, charger_efficiency 
-    # should come from ctxt variables published by the charger component.
 
     def __init__(self,
                 weight: float,
@@ -34,22 +35,21 @@ class EVChargingOnTimeReward(RewardFunction):
     def get_reward(self, actions: Dict, state: Dict, next_state: Dict, info: dict) -> float:
         """EV charging progress reward. EV signals (SoC, target, remaining time) from
         ``next_state``; charger params from ``info``. Returns 0 if unplugged."""
-        ev_connected = next_state["s_evc_connected"][0]
-
-        if ev_connected < 0.5:
+        if not is_ev_connected(next_state):
             return 0.0
 
         current_soc = next_state["s_evc_soc"][0]
-        target_soc = next_state["s_evc_target_soc"][0]
+        target_soc = session_target_soc(info)
 
         # Max reward if target already achieved
         if current_soc >= target_soc:
             return self.weight * 1.0
 
-        # all charger-owned EV params are observation keys (same timing as s_evc_*)
+        # Charger params: the rate limit stays an observation, the EV-spec values come off
+        # the info channel (both written by LinearEVCharger in the same update_state).
         max_charging_kW = float(next_state["ctxt_evc_max_charging_kW"][0])
-        max_cap_kWh = float(next_state["ctxt_evc_max_cap_kWh"][0])
-        charger_efficiency = float(next_state["ctxt_evc_charger_efficiency"][0])
+        max_cap_kWh = float(info.get("evc_max_cap_kWh", 0.0))
+        charger_efficiency = float(info.get("evc_charger_efficiency", 0.0))
         max_charge_time_hrs = float(next_state["ctxt_evc_max_charge_time_hrs"][0])
 
         # remaining time [0,1] → hours
