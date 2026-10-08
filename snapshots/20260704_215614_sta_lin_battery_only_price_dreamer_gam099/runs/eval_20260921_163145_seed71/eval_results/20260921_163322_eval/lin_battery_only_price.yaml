@@ -1,0 +1,142 @@
+trial_name: sta_lin_battery_only_price
+algorithm: dreamerv3
+seed: 71
+metric: episode_return_mean
+log_trajectories: false
+num_envs: 1
+grad_train: false
+
+env_meta:
+  EPISODE_LENGTH: 288
+  control_step: 300
+  allow_early_termination: false
+  hst_env_wrapper:
+    enabled: true
+    tracked_keys:
+    - s_battery_soc
+    - s_evc_soc
+    - s_temp_error_norm
+    - s_pv_power_norm
+    - s_wind_power_norm
+    offsets:
+    - -1
+    - -2
+    - -3
+    - -4
+
+  forecast_env_wrapper:
+    enabled: true
+    forecast_steps: [1, 2, 3, 4, 5, 6, 12, 24, 36, 48]
+
+training_params:
+  common:
+    episode_lookback_horizon_steps: 6
+    clip_actions_to_env_bounds: true
+    gamma: 0.99
+    evaluation:
+      interval: 10
+      duration: 10
+    max_episodes_to_run: 7000
+    # Early stopping on the held-out eval return, in episode units; disabled if
+    # patience_episodes <= 0. Keeps a running (EMA) average of eval scores and stops when no
+    # fresh eval beats that average for patience_episodes episodes. Patience spans several rounds.
+    early_stop:
+      patience_episodes: 1500   # stop if no eval beats the running avg for this many episodes
+      smoothing_window: 5       # EMA span in eval rounds (alpha = 2/(span+1))
+      min_delta: 0.0            # margin a new eval must clear the running avg by to "improve"
+      grace_episodes: 1000       # never stop before this many episodes (warmup guard)
+  ppo:
+    episodes_per_iteration: 10
+    minibatch_size: 64
+    num_epochs: 10
+  sac:
+    episodes_to_keep_in_replay_buffer: 500
+    n_step_return: 3
+    training_intensity: 32
+    learning_starts_after_n_episodes: 50
+  dreamerv3:
+    model_size: "XS"
+    batch_size_B: 16
+    batch_length_T: 64
+    training_ratio: 128.0
+    horizon_H: 15
+    episodes_to_keep_in_replay_buffer: 500
+    world_model_lr: 1.0e-4
+    actor_lr: 3.0e-5
+    critic_lr: 3.0e-5
+
+statesources:
+- class: DateSource
+  name: date
+# - class: EnergyPriceFixDataSource
+#   name: E_price
+#   # Synthetic multi-level time-of-use tariff (no CSV), selected by the episode's season.
+#   #   schedules       - maps a season (winter/spring/summer/autumn) or the catch-all "all" to a
+#   #                     {default_price, bands} block. bands is a list of {start, end, price}
+#   #                     entries (start/end are "HH:MM" times in 00:00-24:00, may wrap midnight);
+#   #                     the first band covering the time-of-day wins, else default_price.
+#   #   default_season  - fallback season when the episode's season has no schedule.
+#   #   emit_ctxt       - also publish ctxt_E_price_max (the divisor) for policy conditioning.
+#   # s_E_price = baseprice / divisor, divisor = largest level magnitude across all schedules.
+#   default_season: summer
+#   emit_ctxt: false
+#   # Explicit form of the built-in default tariff (under "all" -> used every season).
+#   schedules:
+#     all:
+#       default_price: 28.0                                # 28 ct/kWh outside every band
+#       bands:
+#         - {start: "17:00", end: "21:00", price: 40.0}    # evening peak (listed first -> wins on overlap)
+#         - {start: "00:00", end: "06:00", price: 18.0}    # overnight off-peak
+- class: EnergyPriceDayDynDataSource     # alternative: real market price (CSV) with 1-day windowed norm
+  name: E_price
+  # Dynamic 1-day price normalisation: s_E_price = raw_baseprice / divisor, where the divisor is
+  # |baseprice| max over the next-24h window (capped at the episode length), recomputed each reset.
+  # ds_path is pushed per-episode by the DataCombinator (keyed by name "E_price"); episode_length
+  # and timestep are context-injected from env_meta. ctxt_E_price_max is always published.
+- class: WeatherDataSource
+  name: weather
+- class: InsideTemperature
+  name: desired_temp_in
+- class: DesiredUserEnergyNeed
+  name: user_energy_need
+- class: OperatorEnergyControl
+  name: operator_energy_control
+  max_power_kW: 20.0
+
+infras:
+- class: BatteryLinear
+  name: battery
+  max_power_kW: 10.0
+  max_cap_kWh: 15.0
+  start_soc_percentage: 0.3
+  start_soc_jitter: 0.1
+  soc_min: 0.1
+  soc_max: 0.95
+- class: SolarPanel
+  name: solar
+  max_power_kW: 5.0
+  pv_efficiency: 0.22
+  panel_area_m2: 50
+- class: WindTurbine
+  name: wind_turbine
+  max_power_kW: 5.0
+  cut_in_speed_ms: 3.0
+  rated_speed_ms: 12.0
+  cut_out_speed_ms: 25.0
+- class: HouseholdEnergyConsumers
+  name: hh_consumers
+  peak_consumption_kW: 8.0
+
+rewards:
+- class_name: EconomicRewardV0
+  weight: 1.0
+
+infra_schedule: null
+
+statesource_schedule: null
+
+reward_schedule: null
+
+data_schedule:
+  train: configs/schedules/data/train.yaml
+  eval: configs/schedules/data/eval.yaml

@@ -86,9 +86,121 @@ note.txt
 
 # Snapshot bundles produced by tools/snapshot/. Each snapshot dir contains
 # the immutable snapshot.zip + manifest.json plus its per-run outputs.
-# The README at the root of snapshots/ is the only tracked file in there.
+# Ignored except the README and the thesis results re-included below.
 snapshots/**
 !snapshots/snapshots.md
+
+# Thesis results: the snapshots whose files the thesis_eval/ notebooks read. Only the
+# directory chain down to the results is re-included, so git never descends into the
+# other snapshots, code/ (except configs/), runs/train_*/models/ or the eval plots/ and
+# rl_module/ copies. TensorBoard event files, progress.csv, result.json and slurm logs
+# stay ignored: several exceed GitHub's 100 MB file limit.
+!snapshots/20260703_004926_sta_lin_battery_only_price_sac/
+!snapshots/20260704_144904_sta_lin_battery_only_price_ppo/
+!snapshots/20260704_183007_sta_lin_battery_only_price_dreamerv3/
+!snapshots/20260704_183007_sta_lin_battery_only_price_dreamerv3_default/
+!snapshots/20260704_183007_sta_lin_battery_only_price_dreamerv3_lo_tr/
+!snapshots/20260704_183007_sta_lin_battery_only_price_dreamerv3_v2/
+!snapshots/20260704_183007_sta_lin_battery_only_price_dreamerv3_v3/
+!snapshots/20260704_183007_sta_lin_battery_only_price_dreamerv3_v3_la_ti/
+!snapshots/20260704_183007_sta_lin_battery_only_price_dreamerv3_v4/
+!snapshots/20260704_183007_sta_lin_battery_only_price_dreamerv3_v5/
+!snapshots/20260704_183007_sta_lin_battery_only_price_dreamerv3_v6/
+!snapshots/20260704_183007_sta_lin_battery_only_price_dreamerv3_v6_lti/
+!snapshots/20260704_183007_sta_lin_battery_only_price_dreamerv3_v7/
+!snapshots/20260704_183007_sta_lin_battery_only_price_dreamerv3_v7_lti/
+!snapshots/20260704_183007_sta_lin_battery_only_price_dreamerv3_v8/
+!snapshots/20260704_183007_sta_lin_battery_only_price_dreamerv3_v8_lti/
+!snapshots/20260704_215559_sta_lin_battery_only_price_sac_gam099/
+!snapshots/20260704_215614_sta_lin_battery_only_price_dreamer_gam099/
+!snapshots/20260704_215614_sta_lin_battery_only_price_ppo_gam099/
+!snapshots/20260705_234931_sta_lin_battery_only_price_rbc_base/
+!snapshots/20260714_161830_gen_battery_lin_so_only_17kW_sac_cp/
+!snapshots/20260714_162614_gen_battery_lin_so_all_sac_v2/
+!snapshots/20260714_165943_gen_battery_lin_capacity_sampled_sac/
+!snapshots/20260714_225342_gen_battery_lin_so_only_15kW_dreamer/
+!snapshots/20260714_225444_gen_battery_lin_so_only_17kW_dreamer/
+!snapshots/20260714_225542_gen_battery_lin_so_all_dreamer/
+!snapshots/20260714_225542_gen_battery_lin_so_all_dreamer_v2/
+!snapshots/20260714_225647_gen_battery_lin_capacity_sampled_dreamer/
+!snapshots/20260714_235241_gen_battery_lin_so_only_15kW_sac/
+!snapshots/20260714_235241_gen_battery_lin_so_only_15kW_sac_cp/
+!snapshots/20260714_235342_gen_battery_lin_so_only_15kW_ppo/
+!snapshots/20260714_235342_gen_battery_lin_so_only_15kW_ppo_cp/
+!snapshots/20260714_235444_gen_battery_lin_so_only_17kW_ppo/
+!snapshots/20260714_235444_gen_battery_lin_so_only_17kW_ppo_cp/
+!snapshots/20260714_235542_gen_battery_lin_so_all_ppo/
+!snapshots/20260714_235542_gen_battery_lin_so_all_ppo_v2_cp/
+!snapshots/20260714_235647_gen_battery_lin_capacity_sampled_ppo/
+!snapshots/20260714_235647_gen_battery_lin_capacity_sampled_ppo_cp/
+!snapshots/20260716_175201_gen_battery_lin_capacity_sampled_dreamerv3/
+!snapshots/20260718_140503_gen_battery_lin_so_all_dreamerv3/
+!snapshots/20260718_141113_gen_battery_lin_so_only_17kW_dreamerv3/
+!snapshots/20260718_141218_gen_battery_lin_so_only_15kW_dreamerv3/
+!snapshots/20260718_143903_gen_battery_lin_so_all_sac/
+!snapshots/20260718_143913_gen_battery_lin_so_only_17kW_sac/
+!snapshots/20260718_144018_gen_battery_lin_so_only_15kW_sac/
+!snapshots/20260718_173801_gen_battery_lin_capacity_sampled_sac/
+!snapshots/20260718_183801_gen_battery_lin_capacity_sampled_ppo/
+!snapshots/20260718_183903_gen_battery_lin_so_all_ppo/
+!snapshots/20260718_183913_gen_battery_lin_so_only_17kW_ppo/
+!snapshots/20260718_184018_gen_battery_lin_so_only_15kW_ppo/
+!snapshots/20260719_171314_gen_lin_bat_pv_all_sac/
+!snapshots/20260719_171327_gen_lin_bat_pv_spec_sac/
+!snapshots/20260719_171333_gen_lin_bat_pv_sampled_sac/
+!snapshots/20260719_171650_gen_lin_bat_pv_all_ppo/
+!snapshots/20260719_171656_gen_lin_bat_pv_spec_ppo/
+!snapshots/20260719_171702_gen_lin_bat_pv_sampled_ppo/
+!snapshots/20260720_171650_gen_lin_bat_pv_all_dreamer/
+!snapshots/20260720_171656_gen_lin_bat_pv_spec_dreamer/
+!snapshots/20260720_171702_gen_lin_bat_pv_sampled_dreamer/
+!snapshots/20260721_093047_sta_lin_battery_EV_ppo/
+!snapshots/20260721_101901_sta_lin_battery_EV_ppo_v2/
+!snapshots/20260721_102122_sta_lin_battery_EV_mo_ppo_old/
+!snapshots/20260721_102226_sta_lin_battery_EV_ppo/
+!snapshots/20260721_103047_sta_lin_battery_EV_sac/
+!snapshots/20260721_111901_sta_lin_battery_EV_sac_v2/
+!snapshots/20260722_123922_sta_lin_battery_EV_mo_sac_old/
+!snapshots/20260722_134026_sta_lin_battery_EV_sac/
+!snapshots/20260723_120021_gen_lin_bat_power_all_ppo/
+!snapshots/20260723_120027_gen_lin_bat_power_spec_ppo/
+!snapshots/20260723_120035_gen_lin_bat_power_sampled_ppo/
+!snapshots/20260723_120857_gen_lin_bat_power_all_sac/
+!snapshots/20260723_120904_gen_lin_bat_power_spec_sac/
+!snapshots/20260723_120911_gen_lin_bat_power_sampled_sac/
+!snapshots/20260724_120857_gen_lin_bat_power_all_dreamer/
+!snapshots/20260724_120904_gen_lin_bat_power_spec_dreamer/
+!snapshots/20260724_120911_gen_lin_bat_power_sampled_dreamer/
+!snapshots/20260830_234409_sta_lin_battery_only_price_ppo/
+!snapshots/20260830_234433_sta_lin_battery_only_price_sac/
+!snapshots/20260830_234457_sta_lin_battery_only_price_dreamer/
+!snapshots/20260928_001132_gen_lin_bat_power_pv_all_ppo/
+!snapshots/20260928_001142_gen_lin_bat_power_pv_sampled_ppo/
+!snapshots/20260928_001151_gen_lin_bat_power_pv_spec_ppo/
+!snapshots/20260928_001235_gen_lin_bat_power_pv_all_sac/
+!snapshots/20260928_001243_gen_lin_bat_power_pv_sampled_sac/
+!snapshots/20260928_001255_gen_lin_bat_power_pv_spec_sac/
+!snapshots/20260928_001328_gen_lin_bat_power_pv_sampled_dreamerv3/
+!snapshots/20260928_001354_gen_lin_bat_power_pv_spec_dreamerv3/
+!snapshots/20260928_001505_gen_lin_bat_power_pv_all_dreamerv3/
+!snapshots/*/code/
+!snapshots/*/code/configs/
+!snapshots/*/code/configs/**
+!snapshots/*/runs/
+!snapshots/*/runs/train_*/
+!snapshots/*/runs/train_*/param_space.json
+!snapshots/*/runs/train_*/result_0.json
+!snapshots/*/runs/eval_*/
+!snapshots/*/runs/eval_*/eval_results/
+!snapshots/*/runs/eval_*/eval_results/**
+snapshots/*/runs/eval_*/eval_results/**/plots/
+snapshots/*/runs/eval_*/eval_results/**/rl_module/
+
+# Provenance files -- not really needed
+**provenance.yaml
+
+# Add csv for the jupyter notebook.
+!**/Elektroautos_im_PKW_Bestand.csv
 
 tests/**
 
