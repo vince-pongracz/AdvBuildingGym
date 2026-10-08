@@ -39,7 +39,26 @@ preprocessing/
 seed: 42                             # base seed; per-(cfg, file) seeds are derived
 syn_cfg_dir: preprocessing/syn_cfgs  # where syn_cfg_*.yaml-s live
 active_configs: [syn_cfg_1_neg, syn_cfg_1_pos, syn_cfg_2_neg, syn_cfg_2_pos, syn_cfg_3_neg, syn_cfg_3_pos]
+
+solar_location:                      # daylight mask for synthetic irradiance
+  latitude: 49.0069                  # DWD station 04177 (Karlsruhe, Rheinstetten)
+  longitude: 8.4037
+  elevation_threshold_deg: 0.0       # 0° = horizon; -0.833° = civil sunrise
+  fallback_tz: Europe/Berlin         # only used for tz-naive timestamps (Zenodo)
 ```
+
+### Daylight mask
+
+After per-column transforms run on a `weather` CSV, `sun_shine` and
+`diff_sun_shine` are forced to `0.0` whenever the sun is below
+`elevation_threshold_deg` for that row's date and location. Sunrise / sunset
+crossings are looked up per unique date via `astral.sun.time_at_elevation`,
+so noise + `constant_shift` cannot leak positive irradiance into the night.
+Timestamp timezone is auto-detected: tz-aware columns (DWD `+00:00`) go
+straight to UTC, tz-naive columns (Zenodo) are localised with `fallback_tz`
+first. Change `latitude`/`longitude` if you synthesise data from another
+station; raise `elevation_threshold_deg` to shrink the daylight window
+(e.g. drop low-sun twilight irradiance).
 
 ## Per-level config (`syn_cfg_*.yaml`)
 
@@ -157,14 +176,14 @@ difference between presets is the `constant_shift` offsets:
 | `baseprice`         | 0.3    | ct/kWh — tick-size jitter on hourly day-ahead prices     |
 | `temp_amb`          | 0.5    | °C — DWD air-temperature sensor accuracy                 |
 | `avg_wind_speed`    | 0.3    | m/s — DWD anemometer accuracy                            |
-| `direct_sun_shine`  | 3.0    | J/cm² — pyranometer direct-component noise floor         |
-| `diff_sun_shine`    | 2.0    | J/cm² — diffuse-component noise floor                    |
+| `sun_shine`         | 50.0   | W/m² — global pyranometer noise floor                    |
+| `diff_sun_shine`    | 33.0   | W/m² — diffuse-component noise floor (DWD only)          |
 | `hh_consumption_kW` | 0.05   | kW — baseload jitter for a single SFH (typical 0.1-3 kW) |
 
-`sun_shine` is *not* noised directly: `synthesize.py` reconstructs it after the
-column-wise transforms so the additive identity stays true in the output CSV
-(DWD: `sun_shine = direct_sun_shine + diff_sun_shine`; Zenodo: alias of
-`direct_sun_shine`).
+`sun_shine` (global, W/m²) is the canonical irradiance column consumed by the
+environment. It is noised directly by its own syn_cfg block — no reconstruction
+step. `diff_sun_shine` is a diagnostic-only column from DWD's `DS_10` (diffuse
+radiation alone); it is noised independently and is absent from Zenodo CSVs.
 
 ## Constant shift ladder
 
@@ -178,8 +197,8 @@ ladder (roughly ½× / 1× / 3× the medium tier) and are mirror-symmetric acros
 | `baseprice` (ct/kWh)         | ±1.0             | ±2.0               | ±3.0               |
 | `temp_amb` (°C)              | ±0.5             | ±1.0               | ±1.5               |
 | `avg_wind_speed` (m/s)       | ±0.5             | ±1.0               | ±1.5               |
-| `direct_sun_shine` (J/cm²)   | ±0.5             | ±1.0               | ±3.0               |
-| `diff_sun_shine` (J/cm²)     | ±0.3             | ±0.5               | ±1.0               |
+| `sun_shine` (W/m²)           | ±8.0             | ±17.0              | ±50.0              |
+| `diff_sun_shine` (W/m²)      | ±5.0             | ±8.0               | ±17.0              |
 | `hh_consumption_kW` (kW)     | ±0.075           | ±0.125             | ±0.25              |
 
 `syn_cfg_0` carries no shifts — it is the noise-only baseline and always uses

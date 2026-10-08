@@ -46,6 +46,8 @@ Merged output columns:
 
 About the irradiance types: https://www.dwd.de/DE/leistungen/solarenergie/globalstrahlung.html?nn=446142&lsbId=416798#:~:text=Die%20Globalstrahlung%20ist%20die%20am%20Boden%20von,Sonnenh%C3%B6hen%20von%20mehr%20als%2050%C2%B0%20und%20wolkenlosem
 
+--> Only Globalstrahlung matters
+
 ### Wind
 
 | Spaltename | Beschreibung                                              | Fehlwert | Einheit | Typ    | Format |

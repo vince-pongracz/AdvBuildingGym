@@ -149,12 +149,12 @@ def _build_combined_weather_figures(
     datasets: dict[str, dict[str, object]],
     month_label: str,
     y_ranges: dict[str, tuple[float, float]] | None = None,
+    height: int | None = None,
 ) -> list[go.Figure]:
     """Build one figure per weather variable with stat bands from each dataset.
 
-    Resolves columns per-dataset so that equivalent variables with different
-    column names (e.g. DWD ``sun_shine`` vs Zenodo ``direct_sun_shine``) are
-    grouped under the same y-axis label.
+    Resolves columns per-dataset and groups equivalent variables under the
+    same y-axis label across DWD and Zenodo inputs.
     """
     # Resolve columns per dataset: {ds_name: [(col, label), ...]}
     ds_cols: dict[str, list[tuple[str, str]]] = {}
@@ -206,7 +206,7 @@ def _build_combined_weather_figures(
         else:
             fig.update_yaxes(title_text=label)
         title = f"{label} \u2014 {month_label} (all datasets)"
-        finalize_figure(fig, title)
+        finalize_figure(fig, title, height=height)
         figures.append(fig)
 
     return figures
@@ -216,6 +216,7 @@ def _build_combined_price_figure(
     datasets: dict[str, dict[str, object]],
     month_label: str,
     y_range: tuple[float, float] | None = None,
+    height: int | None = None,
 ) -> go.Figure | None:
     """Build one price figure with stat bands from each price dataset."""
     fig = go.Figure()
@@ -237,7 +238,7 @@ def _build_combined_price_figure(
     else:
         fig.update_yaxes(title_text="Energy price (ct/kWh)")
     title = f"Energy price \u2014 {month_label} (all datasets)"
-    finalize_figure(fig, title)
+    finalize_figure(fig, title, height=height)
     return fig
 
 
@@ -280,23 +281,36 @@ def _load_multi_datasets(
 # ---------------------------------------------------------------------------
 
 def _aggregate_y_ranges(datasets: dict[str, dict[str, object]]) -> dict[str, tuple[float, float]]:
-    """Compute global (min, max) per numeric column across all loaded datasets."""
+    """Compute global (min, max) per numeric column across all loaded datasets.
+
+    Numeric columns are resolved once per dataset and ``np.isfinite`` is
+    deferred to the per-column concatenated array, avoiding the per-frame
+    Python overhead that dominated the original per-day loop.
+    """
     per_col: dict[str, list[np.ndarray]] = {}
     for frames in datasets.values():
-        for df in frames.values():
-            for col in df.columns:
-                if col == "minutes" or not pd.api.types.is_numeric_dtype(df[col]):
-                    continue
+        if not frames:
+            continue
+        sample = next(iter(frames.values()))
+        cols = [
+            c for c in sample.columns
+            if c != "minutes" and pd.api.types.is_numeric_dtype(sample[c])
+        ]
+        for col in cols:
+            arrs = [
+                df[col].to_numpy(dtype=float, copy=False)
+                for df in frames.values() if col in df.columns
+            ]
+            if arrs:
+                per_col.setdefault(col, []).extend(arrs)
 
-                arr = df[col].to_numpy(dtype=float)
-                arr = arr[np.isfinite(arr)] # Removes nan and similars
-                if arr.size:
-                    per_col.setdefault(col, []).append(arr)
-    # TODO VP 2026.05.03. : This could be performance critical...
-    return {
-        col: (float(np.concatenate(arrs).min()), float(np.concatenate(arrs).max()))
-        for col, arrs in per_col.items()
-    }
+    ranges: dict[str, tuple[float, float]] = {}
+    for col, arrs in per_col.items():
+        all_vals = np.concatenate(arrs)
+        all_vals = all_vals[np.isfinite(all_vals)]
+        if all_vals.size:
+            ranges[col] = (float(all_vals.min()), float(all_vals.max()))
+    return ranges
 
 
 def run_combined(
@@ -358,11 +372,16 @@ def run_combined(
         figures: list[go.Figure] = []
         month_label = f"{month_name} ({start_year}\u2013{end_year})"
 
+        height = cfg.get("figure", {}).get("overview_height")
         if weather_data:
-            figures.extend(_build_combined_weather_figures(weather_data, month_label, y_ranges=weather_y_ranges))
+            figures.extend(_build_combined_weather_figures(
+                weather_data, month_label, y_ranges=weather_y_ranges, height=height,
+            ))
 
         if price_data:
-            price_fig = _build_combined_price_figure(price_data, month_label, y_range=price_range)
+            price_fig = _build_combined_price_figure(
+                price_data, month_label, y_range=price_range, height=height,
+            )
             if price_fig is not None:
                 figures.append(price_fig)
 

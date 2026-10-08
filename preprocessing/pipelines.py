@@ -14,7 +14,7 @@ from preprocessing.e_price.energy_charts_fetch import (
 )
 from preprocessing.synthesize import run_synthesis
 from preprocessing.data_quality_report import run_data_quality_report
-from preprocessing.utils import parse_year_from_filename, resolve_path
+from preprocessing.utils import filter_paths_by_years, parse_year_from_filename, resolve_path
 from preprocessing.weather.dwd.dwd_fetch import fetch_all as dwd_fetch_all
 from preprocessing.weather.dwd.dwd_preprocess import preprocess as dwd_preprocess
 from preprocessing.hh_consumption.extract_hh_consumption import extract_hh_consumption
@@ -178,14 +178,27 @@ def run_price_pipeline(args: argparse.Namespace) -> dict[str, int]:
     return {"raw": raw_count, "preprocessed": preprocessed_count}
 
 
-def _discover_hdf5(zenodo_dir: Path, pattern: str, explicit: list[str] | None) -> list[Path]:
-    """Return HDF5 files: explicit list if given, otherwise glob from zenodo_dir."""
+def _discover_hdf5(
+    zenodo_dir: Path,
+    pattern: str,
+    explicit: list[str] | None,
+    years: list[int] | None,
+) -> list[Path]:
+    """Return HDF5 files: explicit list if given (bypasses the year filter),
+    otherwise glob from zenodo_dir restricted to the selected years."""
     if explicit:
         return sorted(resolve_setup_path(p) for p in explicit)
     found = sorted(zenodo_dir.glob(pattern))
     if not found:
         logger.warning("No files matching %s found in %s", pattern, zenodo_dir)
-    return found
+        return found
+    selected = filter_paths_by_years(found, years)
+    if len(selected) < len(found):
+        logger.info(
+            "Year filter %s: keeping %d of %d file(s) matching %s",
+            sorted(set(years)), len(selected), len(found), pattern,
+        )
+    return selected
 
 
 def run_weather_pipeline(args: argparse.Namespace) -> dict[str, int]:
@@ -209,20 +222,22 @@ def run_weather_pipeline(args: argparse.Namespace) -> dict[str, int]:
     if "zenodo-download" not in active_steps:
         logger.info("Skipping Zenodo downloads (zenodo-download not in --steps).")
     else:
-        downloaded = download_links(links_file, zenodo_dir, overwrite=args.overwrite_downloads)
+        downloaded = download_links(
+            links_file, zenodo_dir, overwrite=args.overwrite_downloads, years=args.years,
+        )
         download_count = len(downloaded)
 
     if "zenodo-extract" not in active_steps:
         logger.info("Skipping archive extraction (zenodo-extract not in --steps).")
     else:
-        extracted = extract_zip_files(zenodo_dir, overwrite=args.overwrite_downloads)
+        extracted = extract_zip_files(zenodo_dir, overwrite=args.overwrite_downloads, years=args.years)
         extract_count = len(extracted)
 
     if "weather-csv" not in active_steps:
         logger.info("Skipping weather CSV extraction (weather-csv not in --steps).")
     else:
         weather_csv_dir = resolve_setup_path(args.weather_csv_dir)
-        weather_files = _discover_hdf5(zenodo_dir, "*_weather.hdf5", args.weather_hdf5)
+        weather_files = _discover_hdf5(zenodo_dir, "*_weather.hdf5", args.weather_hdf5, args.years)
         logger.info("Weather HDF5 files to process: %d", len(weather_files))
         for hdf5_path in weather_files:
             logger.info("Extracting weather CSV from %s", hdf5_path.name)
@@ -239,7 +254,7 @@ def run_weather_pipeline(args: argparse.Namespace) -> dict[str, int]:
     if "sfh-csv" not in active_steps:
         logger.info("Skipping SFH CSV extraction (sfh-csv not in --steps).")
     else:
-        sfh_files = _discover_hdf5(zenodo_dir, "*_data_1min.hdf5", args.sfh_hdf5)
+        sfh_files = _discover_hdf5(zenodo_dir, "*_data_1min.hdf5", args.sfh_hdf5, args.years)
         logger.info("SFH HDF5 files to process: %d", len(sfh_files))
         for hdf5_path in sfh_files:
             if args.sfh_csv_dir is not None:
@@ -298,7 +313,7 @@ def run_dwd_pipeline(args: argparse.Namespace) -> dict[str, int]:
         download_dir.mkdir(parents=True, exist_ok=True)
         logger.info("Fetching DWD data for station %s → %s", station_id, download_dir)
         try:
-            dataframes = dwd_fetch_all(station_id=station_id, output_dir=download_dir)
+            dataframes = dwd_fetch_all(station_id=station_id, output_dir=download_dir, years=args.years)
         except Exception as exc:
             logger.error("DWD fetch failed: %s", exc)
             return stats
@@ -319,7 +334,7 @@ def run_dwd_pipeline(args: argparse.Namespace) -> dict[str, int]:
         download_dir = dwd_output_dir / "downloaded"
         logger.info("Running DWD fetch (needed for preprocessing) for station %s", station_id)
         try:
-            dataframes = dwd_fetch_all(station_id=station_id, output_dir=download_dir)
+            dataframes = dwd_fetch_all(station_id=station_id, output_dir=download_dir, years=args.years)
         except Exception as exc:
             logger.error("DWD fetch failed: %s", exc)
             return stats
@@ -335,6 +350,7 @@ def run_dwd_pipeline(args: argparse.Namespace) -> dict[str, int]:
         output_dir=preprocess_dir,
         station_id=station_id,
         upsample_method=args.dwd_upsample_method,
+        years=args.years,
     )
     if merged is not None:
         stats["merged_rows"] = len(merged)
@@ -351,34 +367,35 @@ def _discover_synthesis_inputs(args: argparse.Namespace) -> tuple[list[Path], li
 
     Globs the price (awattar/e_charts), weather (DWD/Zenodo), and
     hh_consumption output directories for per-year CSVs, excluding any
-    pre-existing synthesised siblings (``*_syn_cfg_*.csv``) and aggregated
-    consumption files.
+    pre-existing synthesised siblings (``*_syn_cfg_*.csv``), aggregated
+    consumption files, and files outside the selected years.
     """
     price_dir = resolve_setup_path(args.price_output_dir)
     dwd_dir = resolve_setup_path(args.dwd_output_dir) / "preprocessed"
     zenodo_csv_dir = resolve_setup_path(args.weather_csv_dir)
     hh_dir_path = resolve_setup_path(args.hh_consumption_output_dir)
+    years = getattr(args, "years", None)
 
-    def _no_syn(paths) -> list[Path]:
-        return sorted(p for p in paths if "_syn_cfg_" not in p.name)
+    def _eligible(paths) -> list[Path]:
+        return filter_paths_by_years(sorted(p for p in paths if "_syn_cfg_" not in p.name), years)
 
     price_files: list[Path] = []
     if price_dir.is_dir():
         for subdir in SOURCE_SUBDIRS.values():
             sub = price_dir / subdir
             if sub.is_dir():
-                price_files.extend(_no_syn(sub.glob("price_data_*.csv")))
+                price_files.extend(_eligible(sub.glob("price_data_*.csv")))
 
     weather_files: list[Path] = []
     if dwd_dir.is_dir():
-        weather_files.extend(_no_syn(dwd_dir.glob("*_merged_*.csv")))
+        weather_files.extend(_eligible(dwd_dir.glob("*_merged_*.csv")))
     if zenodo_csv_dir.is_dir():
-        weather_files.extend(_no_syn(zenodo_csv_dir.glob("*_weather.csv")))
+        weather_files.extend(_eligible(zenodo_csv_dir.glob("*_weather.csv")))
 
     hh_files: list[Path] = []
     if hh_dir_path.is_dir():
         # Per-building only; aggregated CSV is a sum and doesn't need its own noise stream.
-        hh_files.extend(_no_syn(p for p in hh_dir_path.glob("*_SFH*.csv")))
+        hh_files.extend(_eligible(p for p in hh_dir_path.glob("*_SFH*.csv")))
 
     return price_files, weather_files, hh_files
 
@@ -437,10 +454,20 @@ def run_hh_consumption_pipeline(args: argparse.Namespace) -> dict[str, int]:
     zenodo_dir = resolve_setup_path(args.zenodo_dir)
     output_dir = resolve_setup_path(args.hh_consumption_output_dir)
 
-    # Discover all csvs_<year>_data_1min directories
-    sfh_dirs = sorted(zenodo_dir.glob("csvs_*_data_1min"))
-    if not sfh_dirs:
+    # Discover all csvs_<year>_data_1min directories for the selected years
+    all_sfh_dirs = sorted(zenodo_dir.glob("csvs_*_data_1min"))
+    if not all_sfh_dirs:
         logger.warning("No csvs_*_data_1min directories found in %s", zenodo_dir)
+        return stats
+
+    sfh_dirs = filter_paths_by_years(all_sfh_dirs, getattr(args, "years", None))
+    if len(sfh_dirs) < len(all_sfh_dirs):
+        logger.info(
+            "Year filter %s: keeping %d of %d SFH data directories",
+            sorted(set(args.years)), len(sfh_dirs), len(all_sfh_dirs),
+        )
+    if not sfh_dirs:
+        logger.warning("No SFH data directories left for selected years %s", sorted(set(args.years)))
         return stats
 
     logger.info("Found %d SFH data directories to process", len(sfh_dirs))
@@ -479,6 +506,7 @@ def run_quality_report(args: argparse.Namespace) -> dict[str, int]:
         getattr(args, "quality_report_dir", "data/quality_reports")
     )
 
+    # Deliberately NOT year-filtered: the report covers the full data inventory.
     reports = run_data_quality_report(
         dwd_dir=dwd_dir,
         zenodo_weather_dir=zenodo_dir,

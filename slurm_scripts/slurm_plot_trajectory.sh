@@ -15,7 +15,7 @@
 #   --output-dir PATH       Output directory (default: plotting/out/<episode_id>/)
 #   --format FMT [FMT ...]  Output format(s): html, png, svg, pdf (default: html svg)
 #   --control-step N        Control timestep in seconds (default: 300)
-#   --select-by METRIC      Metric for best-episode selection: reward_rate, achieved_reward, cum_E_kWh
+#   --select-by METRIC      Metric for best-episode selection: achieved_reward, cum_E_kWh
 #
 # Examples:
 #   sbatch slurm_scripts/slurm_plot_trajectory.sh

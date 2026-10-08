@@ -1,0 +1,131 @@
+trial_name: sta_lin_battery_only_lb
+algorithm: sac
+seed: 42
+metric: episode_return_mean
+log_trajectories: false
+num_envs: 1
+grad_train: false
+
+env_meta:
+  EPISODE_LENGTH: 288
+  control_step: 300
+  allow_early_termination: false
+  hst_env_wrapper:
+    enabled: true
+    tracked_keys:
+    - s_battery_soc
+    - s_evc_soc
+    - s_temp_error_norm
+    - s_pv_power_norm
+    - s_wind_power_norm
+    offsets:
+    - -1
+    - -2
+    - -3
+    - -4
+
+  forecast_env_wrapper:
+    enabled: true
+    forecast_steps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+
+training_params:
+  common:
+    evaluation:
+      interval: 10
+      duration: 10
+    episode_lookback_horizon_steps: 120
+    max_episodes_to_run: 7000
+    clip_actions_to_env_bounds: true
+    gamma: 0.99
+  ppo:
+    episodes_per_iteration: 10
+    minibatch_size: 64
+    num_epochs: 20
+  sac:
+    rollout_length: 144  # override: keep SAC at legacy half-episode fragment
+    replay_batch_size: 1024
+    episodes_to_keep_in_replay_buffer: 500
+    training_intensity: 10
+    n_step_return: 3
+    learning_starts_after_n_episodes: 50
+
+statesources:
+- class: DateSource
+  name: date
+- class: EnergyPriceDayDynDataSource
+  name: E_price
+- class: WeatherDataSource
+  name: weather
+- class: InsideTemperature
+  name: desired_temp_in
+- class: DesiredUserEnergyNeed
+  name: user_energy_need
+  ctxt_keys: [ctxt_hh_consumption_max]
+- class: BuildingHeatLoss
+  name: building_heat_loss
+  K: 20
+  mC: 300
+- class: EVState
+  name: ev_schedule
+- class: OperatorEnergyControl
+  name: operator_energy_control
+  max_power_kW: 20.0
+
+infras:
+- class: BatteryLinear
+  name: battery
+  max_power_kW: 10.0
+  max_cap_kWh: 15.0
+  start_soc_percentage: 0.3
+  start_soc_jitter: 0.1
+  soc_min: 0.1
+  soc_max: 0.95
+- class: SolarPanel
+  name: solar
+  max_power_kW: 5.0
+  pv_efficiency: 0.22
+  panel_area_m2: 50
+- class: WindTurbine
+  name: wind_turbine
+  max_power_kW: 5.0
+  cut_in_speed_ms: 3.0
+  rated_speed_ms: 12.0
+  cut_out_speed_ms: 25.0
+- class: HouseholdEnergyConsumers
+  name: hh_consumers
+  peak_consumption_kW: 8.0
+
+rewards:
+- class_name: BatteryTargetReward
+  weight: 1.0
+  params:
+    min_pct: 0.15
+    max_pct: 0.85
+- class_name: BatteryMgmtReward
+  weight: 1.0
+  params:
+    scale: 0.5
+- class_name: LongTermEconomicReward
+  weight: 1.0
+  params: {}
+- class_name: ActionSmoothnessReward
+  weight: 1.0
+  params:
+    n_steps: 16
+    mode: weighted
+    freq_exponent: 1.0
+
+infra_schedule: null
+
+statesource_schedule: null
+
+reward_schedule: null
+
+data_schedule:
+  train: configs/schedules/data/train.yaml
+  eval: configs/schedules/data/eval.yaml
+
+exploration_reset:
+  enabled: false
+  trigger: on_reward_swap
+  sac_alpha: 0.5

@@ -1,0 +1,124 @@
+trial_name: gen_lin_bat_power_pv_spec_sac
+algorithm: sac
+seed: 42
+metric: episode_return_mean
+log_trajectories: false
+num_envs: 1
+grad_train: false
+
+env_meta:
+  EPISODE_LENGTH: 288
+  control_step: 300
+  allow_early_termination: false
+  hst_env_wrapper:
+    enabled: true
+    tracked_keys:
+    - s_battery_soc
+    - s_evc_soc
+    - s_temp_error_norm
+    - s_pv_power_norm
+    - s_wind_power_norm
+    - ar_hp
+    - ar_evcs
+    offsets:
+    - -1
+    - -2
+    - -3
+    - -4
+
+  forecast_env_wrapper:
+    enabled: true
+    forecast_steps: [1, 2, 3, 4, 5, 6, 12, 24, 36, 48]
+
+training_params:
+  common:
+    evaluation:
+      interval: 10
+      duration: 10
+    episode_lookback_horizon_steps: 6
+    max_episodes_to_run: 28000
+    clip_actions_to_env_bounds: true
+    # gamma omitted on purpose: each algorithm keeps its own default (RLlib PPO/SAC: 0.99, DreamerV3: 0.997).
+  # PPO / SAC / DreamerV3 hyperparameters = RLlib 2.52.1 defaults (PPOConfig() / SACConfig() /
+  # DreamerV3Config()), converted to the episode units of this schema (EPISODE_LENGTH = 288).
+  # The one deliberate deviation is rollout_length: full-episode fragments instead of RLlib's
+  # "auto" (PPO/SAC) / 1 (DreamerV3).
+  ppo:
+    rollout_length: 288                      # deviation from RLlib default "auto"
+    episodes_per_iteration: 12               # 14 x 288 = 4032 ~ RLlib train_batch_size 4000 --> a bit less
+    minibatch_size: 128                      # RLlib default
+    num_epochs: 30                           # RLlib default
+    gae_lambda: 1.0                          # RLlib default (lambda_)
+  sac:
+    rollout_length: 288                      # deviation from RLlib default "auto"
+    replay_batch_size: 256                   # RLlib default train_batch_size
+    episodes_to_keep_in_replay_buffer: 3500  # 3473 x 288 = 1,000,224 ~ RLlib capacity 1e6
+    n_step_return: 1                         # RLlib default
+    training_intensity: null                 # RLlib default (None)
+    learning_starts_after_n_episodes: 5      # 5 x 288 = 1440 ~ RLlib num_steps_sampled_before_learning_starts 1500
+  dreamerv3:
+    rollout_length: 288                      # deviation from RLlib default 1
+    model_size: "XS"                         # RLlib default
+    training_ratio: 1024.0                   # RLlib default: replayed / sampled env steps; B x T = 1024 -> ~1 update per env step
+    batch_size_B: 16                         # RLlib default
+    batch_length_T: 64                       # RLlib default
+    horizon_H: 15                            # RLlib default
+    episodes_to_keep_in_replay_buffer: 3500  # 3473 x 288 = 1,000,224 ~ RLlib capacity 1e6
+    world_model_lr: 0.0001                   # RLlib default
+    actor_lr: 0.00003                        # RLlib default
+    critic_lr: 0.00003                       # RLlib default
+
+statesources:
+- class: DateSource
+  name: date
+- class: EnergyPriceDayDynDataSource
+  name: E_price
+- class: WeatherDataSource
+  name: weather
+- class: InsideTemperature
+  name: desired_temp_in
+- class: DesiredUserEnergyNeed
+  name: user_energy_need
+  ctxt_keys: [ctxt_hh_consumption_max]
+# 1R1C thermal model driven by the rule-based HP (HPRbc in the infra YAMLs)
+- class: BuildingHeatLoss
+  name: building_heat_loss
+  K: 20
+  mC: 300
+# EV connect/disconnect schedule for the rule-based charger (EvcsRbc in the infra YAMLs)
+- class: EVState
+  name: ev_schedule
+- class: OperatorEnergyControl
+  name: operator_energy_control
+  max_power_kW: 20.0
+
+infras: null
+
+rewards:
+- class_name: EconomicSellFactorRewardV0
+  weight: 1.0
+  params:
+    sell_price_factor: 0.7   # exports earn 0.7 x price; PriceTracker bills cum_price_EUR alike
+
+# Specialist: single mid-grid config cfg_5 (battery 9 kW, PV 10 kW), same eval set as the grid trial.
+infra_schedule:
+  mode: "cycle"
+  swap_every_n_episodes: 4
+  configs:
+    train:
+    - configs/infra_cfgs/GEN/battery_lin_power_pv/cfg_5.yaml
+    eval:
+    - configs/infra_cfgs/GEN/battery_lin_power_pv/cfg_eval_0.yaml
+    - configs/infra_cfgs/GEN/battery_lin_power_pv/cfg_eval_1.yaml
+    - configs/infra_cfgs/GEN/battery_lin_power_pv/cfg_eval_2.yaml
+    - configs/infra_cfgs/GEN/battery_lin_power_pv/cfg_eval_3.yaml
+    - configs/infra_cfgs/GEN/battery_lin_power_pv/cfg_eval_4.yaml
+    - configs/infra_cfgs/GEN/battery_lin_power_pv/cfg_eval_5.yaml
+
+statesource_schedule: null
+
+reward_schedule: null
+
+data_schedule:
+  train: configs/schedules/data/train.yaml
+  eval: configs/schedules/data/eval.yaml

@@ -9,12 +9,19 @@ All scripts activate the Python virtualenv at `../adv_env` relative to the proje
 
 | Script | Purpose | GPU | CPUs | Default time |
 |--------|---------|-----|------|--------------|
-| `slurm_train_ray.sh` | Ray/RLlib training | 1x full | 4 | 10 min |
+| `slurm_train_ray.sh` | Ray/RLlib training (SAC / PPO) | 1x 4g.20gb | 5 | 30 min |
+| `slurm_train_ray_dreamerv3.sh` | Ray/RLlib training (DreamerV3; samples in-process, no remote env runners) | 1x 4g.20gb | 3 | 30 min |
 | `slurm_eval_ray.sh` | Ray/RLlib evaluation | No | 2 | 10 min |
+| `slurm_train_ma.sh` | Multi-agent Ray/RLlib training | 1x full | 5 | 30 min |
 | `slurm_train_sb.sh` | Stable Baselines3 training | 1x full | 4 | 15 min |
 | `slurm_data_setup.sh` | Data fetching and preprocessing | No | 2 | 10 min |
 | `slurm_plot_trajectory.sh` | Trajectory plotting from HDF5 | No | 1 | 10 min |
 | `slurm_check_gpu_info.sh` | GPU diagnostics | 1x 4g.20gb | - | 5 min |
+
+All training and evaluation wrappers are snapshot-aware: when invoked through
+`tools/snapshot/submit_snapshot.py` they run the snapshotted entry script and
+write outputs into the snapshot dir instead of the live repo. See
+"Snapshot workflow" at the bottom of this file.
 
 ## Log directories
 
@@ -23,6 +30,7 @@ Each script writes logs to a dedicated subdirectory under `slurm_logs/`:
 | Script | Log directory |
 |--------|--------------|
 | `slurm_train_ray.sh` | `slurm_logs/train/` |
+| `slurm_train_ray_dreamerv3.sh` | `slurm_logs/train/` |
 | `slurm_eval_ray.sh` | `slurm_logs/eval/` |
 | `slurm_train_sb.sh` | `slurm_logs/train/` |
 | `slurm_data_setup.sh` | `slurm_logs/data_setup/` |
@@ -83,7 +91,7 @@ Key `run_train_ray.py` options:
 | `--episodes N` | Total training episodes | 3500 |
 | `--load-config PATH` | Load env config from YAML (**required**) | - |
 | `--seed N` | Random seed | 42 |
-| `--metric METRIC` | Optimisation target (`reward_rate`, `achieved_reward`, `episode_return_mean`) | `reward_rate` |
+| `--metric METRIC` | Optimisation target (`achieved_reward`, `episode_return_mean`) | `episode_return_mean` |
 | `--checkpoint-frequency-episodes N` | Checkpoint every N episodes | 20 |
 | `--log-trajectories` | Save per-step trajectory JSON during eval | off |
 
@@ -173,7 +181,7 @@ Key options:
 | `--hdf5 PATH` | Path to trajectories.hdf5 | auto-discover latest |
 | `--episode ID` | Episode ID to plot | best by `--select-by` |
 | `--format FMT [...]` | Output formats: `html`, `png`, `svg`, `pdf` | `html svg` |
-| `--select-by METRIC` | Metric for best-episode selection | `reward_rate` |
+| `--select-by METRIC` | Metric for best-episode selection | `achieved_reward` |
 
 ## GPU diagnostics (slurm_check_gpu_info.sh)
 
@@ -188,3 +196,52 @@ sbatch slurm_scripts/slurm_check_gpu_info.sh
 `slurm_scripts/util/print_env_info.py` prints Python, PyTorch, and CUDA
 environment info. Called automatically by the training and evaluation scripts
 for consistent diagnostics in job logs.
+
+`slurm_scripts/util/snapshot_mode.sh` is sourced by every training/eval
+wrapper. When `SNAPSHOT_DIR` is set in the environment (by
+`tools/snapshot/submit_snapshot.py`) it extracts the snapshot zip on demand,
+cd's into the per-run output dir, points `ENTRY_SCRIPT` at the snapshotted
+python file, and prepends `LIVE_REPO_ROOT` to `PYTHONPATH` so non-snapshotted
+packages like `plotting/` still resolve. When `SNAPSHOT_DIR` is unset the
+helper falls back to legacy live-repo behaviour — no change for old workflows.
+
+## Snapshot workflow
+
+Use `tools/snapshot/submit_snapshot.py` when you want a training run (and any
+later eval re-runs) to execute against a frozen copy of the code + configs,
+regardless of subsequent edits to the live repo. All outputs (Ray
+checkpoints, `ep_metrics/`, `eval_results/`, SLURM `.out`/`.err`) land inside
+the snapshot directory.
+
+```bash
+# Create a new snapshot and submit training
+python -m tools.snapshot.submit_snapshot \
+    --trial configs/trial_cfgs/trial_cfg_1_sac.yaml \
+    --kind train \
+    --sbatch="--time=02:00:00"
+
+# Eval re-run against an existing snapshot (auto-finds the train checkpoint
+# inside the same snapshot; pass --checkpoint to override)
+python -m tools.snapshot.submit_snapshot \
+    --snapshot snapshots/<existing_snapshot>/ \
+    --kind eval -- --episodes 20 --plot-all
+
+# Dry-run: print the sbatch command without creating a snapshot or job
+python -m tools.snapshot.submit_snapshot \
+    --trial configs/trial_cfgs/trial_cfg_1_sac.yaml --kind train --dry-run
+```
+
+`--kind` ∈ `{train, eval, train-ma, train-sb}` selects which SLURM wrapper to
+invoke. For `--kind train` the wrapper is additionally picked from the trial
+YAML's top-level `algorithm:` key: `dreamerv3` submits the low-resource
+`slurm_train_ray_dreamerv3.sh` (DreamerV3 samples in-process — no remote env
+runners), while `sac` / `ppo` submit the default `slurm_train_ray.sh`.
+Any argument after `--` is forwarded verbatim to the wrapper (and onward
+to the entry script).
+
+Snapshot layout: `snapshots/<YYYYMMDD_HHMMSS>_<trial_name>/` contains
+`snapshot.zip` (the immutable artifact, ~270 KB for a typical trial),
+`manifest.json` (git SHA, dirty flag, sha256, file list), `code/` (extracted
+lazily on first run), and `runs/<kind>_<timestamp>/` for each submission.
+Data CSVs and `plotting/` are deliberately not snapshotted — see
+`tools/snapshot/make_snapshot.py` for the exact whitelist.

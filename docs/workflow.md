@@ -154,7 +154,7 @@ env_meta: configs/env_meta/default.yaml        # EPISODE_LENGTH, control_step
 |---|---|---|
 | `configs/env_meta/*.yaml` | `EPISODE_LENGTH`, `control_step` | Steps per episode (`288` = 24 h) and seconds per step (`300`) |
 | `configs/infras/*.yaml` | `infras: [...]` | Controllable devices: HP, BatteryTremblay/Linear, LinearEVCharger, SolarPanel, WindTurbine, HouseholdEnergyConsumers — each entry is `{class, name, ...params}` |
-| `configs/statesources/*.yaml` | `statesources: [...]` | Observation providers: WeatherDataSource, EnergyPriceDataSource, InsideTemperature, DesiredUserEnergyNeed, BuildingHeatLoss (carries the 1R1C envelope params `K`, `mC`), EVState, OperatorEnergyControl |
+| `configs/statesources/*.yaml` | `statesources: [...]` | Observation providers: WeatherDataSource, EnergyPriceYearDynDataSource, InsideTemperature, DesiredUserEnergyNeed, BuildingHeatLoss (carries the 1R1C envelope params `K`, `mC`), EVState, OperatorEnergyControl |
 
 **What is NOT in the env config:**
 - **Rewards** — composed separately via `configs/reward_cfg/reward_schedule_*.yaml`
@@ -183,7 +183,6 @@ automatically by `run_train_ray.py`.
 
 ```yaml
 common:
-  learning_rate: 3.0e-4
   seed: 42
   episode_lookback_horizon_steps: 120   # 10-hour temporal window; auto-raised to max(|hst.offsets|) if smaller
   max_episodes_to_run: 7000
@@ -238,7 +237,7 @@ Total variant pool = (2 sources x 7 years) x 6 EV profiles = 84 combinations.
 SLURM resources: 4 CPUs, 1 GPU, 10 min (increase `--time` for real runs).
 
 ```bash
-# Default: PPO, 7000 episodes (from config), seed 42, optimise reward_rate
+# Default: PPO, 7000 episodes (from config), seed 42, optimise episode_return_mean
 sbatch slurm_scripts/slurm_train_ray.sh --algorithm ppo
 
 # PPO with fewer episodes (CLI override)
@@ -261,7 +260,7 @@ sbatch slurm_scripts/slurm_train_ray.sh --algorithm ppo --episodes 3500 --log-tr
 | `--algorithm {ppo,sac}` | `ppo` | RL algorithm |
 | `--episodes N` | from config (`7000`) | Total training episodes (primary stop criterion) |
 | `--seed N` | `42` (from YAML) | Random seed |
-| `--metric {reward_rate,achieved_reward,episode_return_mean}` | `reward_rate` | Optimisation metric |
+| `--metric {achieved_reward,episode_return_mean}` | `episode_return_mean` | Optimisation metric |
 | `--checkpoint-frequency-episodes N` | `20` | Save checkpoint every N episodes |
 | `--load-config PATH` | — (**required**) | Environment YAML to load; `env_config_name` inside sets the checkpoint dir name |
 | `--data-config PATH` | `configs/train_data_combinator_config.yaml` | Data combinator YAML |
@@ -346,7 +345,7 @@ sbatch slurm_scripts/slurm_eval_ray.sh --algorithm ppo --episodes 20 --data-conf
 2. Resolves checkpoint path (auto-discovers best if not provided)
 3. Initialises Ray (CPU-only), loads RLModule from checkpoint
 4. Runs episodes: reset → infer → step → collect trajectories
-5. Aggregates metrics: `achieved_reward`, `reward_rate`, `cum_E_kWh`
+5. Aggregates metrics: `achieved_reward`, `cum_E_kWh`
 6. Saves results JSON + trajectory HDF5
 7. Optionally generates plots
 
@@ -398,17 +397,17 @@ python -m plotting.traj_plotting --output-dir my_plots/
 |------|---------|---------|
 | `--hdf5 PATH` | auto-discover latest | Path to `trajectories.hdf5` |
 | `--episode ID` | best by `--select-by` | Episode ID to plot |
-| `--select-by METRIC` | `reward_rate` | Metric for best-episode selection |
+| `--select-by METRIC` | `achieved_reward` | Metric for best-episode selection |
 | `--format FMT [...]` | `html svg` | Output formats: `html`, `png`, `svg`, `pdf` |
 | `--output-dir PATH` | `plotting/out/<episode_id>/` | Output directory |
-| `--control-step N` | `300` | Timestep in seconds (for x-axis) |
+| `--control-step N` | `300` | Control step duration in seconds (for x-axis) |
 
 **Configuration:** `plotting/config/traj_plot_config.yaml` — domain-specific rendering
 settings. Edit this (not Python code) when adding new statesources or infrastructure.
 
 ```yaml
 states:
-  skip_keys: [E_price_max, sim_hour, _temp_abs_max]   # omit from plots
+  skip_keys: [E_price_max, sim_time, _temp_abs_max]   # omit from plots
   grouped_keys:                                         # share a subplot
     - [battery_pct, ]
     - [temp_in_norm, desired_temp_in_norm, temp_out_norm]
@@ -509,7 +508,7 @@ in each section.
 
 | Figure | Content |
 |--------|---------|
-| Weather panels | One figure per variable: temperature (°C), humidity (%), wind speed (m/s), irradiance (J/cm²) |
+| Weather panels | One figure per variable: temperature (°C), humidity (%), wind speed (m/s), irradiance (W/m²) |
 | Energy price | Price traces (ct/kWh) with area fill (single day) or overlay (multi-day) |
 
 **Output:** `plotting/out/data_plots/`.
@@ -529,7 +528,7 @@ sbatch slurm_scripts/slurm_train_ray.sh --algorithm ppo --episodes 3500 --seed 4
 sbatch slurm_scripts/slurm_eval_ray.sh --algorithm ppo --episodes 20 --data-config
 
 # 4. Plot
-sbatch slurm_scripts/slurm_plot_trajectory.sh --select-by reward_rate --format html svg
+sbatch slurm_scripts/slurm_plot_trajectory.sh --select-by achieved_reward --format html svg
 ```
 
 **Local (no SLURM):** replace `sbatch slurm_scripts/slurm_*.sh` with the Python

@@ -39,9 +39,8 @@ in `on_reset` so each episode starts fresh.
    across all action keys. With each per-key term in `[0, 1]`, the total
    `osc ∈ [0, n_keys]`, and the raw reward `−osc ∈ [−n_keys, 0]`.
 
-`self.max_reward_in_step` is set to `n_keys` on the first call so
-`max_step = weight · n_keys` is correctly proportioned to the penalty
-range. The reward is a pure penalty — no positive shift.
+The reward is a pure penalty — no positive shift; the weighted reward
+`weight · (−osc)` lies in `[−weight · n_keys, 0]`.
 
 ## Modes
 
@@ -140,7 +139,6 @@ Parameters:
 | `mode` | `weighted` | both | `'weighted'` or `'highband'`. |
 | `freq_exponent` | 1.0 | `weighted` | Exponent `p` in `w[k] = (k/K)^p`. |
 | `cutoff_fraction` | 0.5 | `highband` | Fraction of Nyquist above which bins are summed. |
-| `max_reward_override` | `None` | both | If set, fixes `max_reward_in_step`; otherwise auto = `n_keys`. |
 
 ## Implementation pointers
 

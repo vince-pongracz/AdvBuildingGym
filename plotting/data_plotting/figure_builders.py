@@ -14,6 +14,7 @@ from datetime import date, timedelta
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
 from plotting.utils import COLORS, apply_day_xaxis, style_figure
 
@@ -27,8 +28,13 @@ _WEATHER_COLS = [
     ("temp_amb", "Temperature (\u00b0C)", None),
     ("rel_humidity", "Relative humidity (%)", None),
     ("avg_wind_speed", "Wind speed (m/s)", None),
-    ("sun_shine", "Global irradiance (J/cm\u00b2)", "direct_sun_shine"),
+    ("sun_shine", "Global irradiance (W/m\u00b2)", None),
 ]
+
+_MINUTES_PER_DAY: int = 24 * 60
+# Plateaus narrower than this cannot hold a "NN kW" label without overlapping
+# the neighbouring one, so their annotation is dropped.
+_OPERATOR_LABEL_MIN_WIDTH_MIN: int = 40
 
 
 # ---------------------------------------------------------------------------
@@ -192,6 +198,7 @@ def build_overlay_figure(
     stat_only: bool = False,
     y_range: tuple[float, float] | None = None,
     syn_frames: dict[str, dict[str, pd.DataFrame]] | None = None,
+    height: int | None = None,
 ) -> go.Figure:
     """Build a single figure with one line trace per entry, plus stat bands.
 
@@ -226,7 +233,7 @@ def build_overlay_figure(
     if is_multi and stat_only:
         title += _days_subtitle(list(day_frames.keys()))
 
-    finalize_figure(fig, title)
+    finalize_figure(fig, title, height=height)
     return fig
 
 
@@ -239,6 +246,7 @@ def build_weather_figures(
     stat_only: bool = False,
     y_ranges: dict[str, tuple[float, float]] | None = None,
     syn_frames: dict[str, dict[str, pd.DataFrame]] | None = None,
+    height: int | None = None,
 ) -> list[go.Figure]:
     """Create one standalone figure per weather variable, each with all days overlaid.
 
@@ -262,6 +270,7 @@ def build_weather_figures(
             stat_only=stat_only,
             y_range=(y_ranges or {}).get(col),
             syn_frames=syn_frames,
+            height=height,
         )
         for col, label in available
     ]
@@ -272,6 +281,7 @@ def build_price_figure(
     stat_only: bool = False,
     y_range: tuple[float, float] | None = None,
     syn_frames: dict[str, dict[str, pd.DataFrame]] | None = None,
+    height: int | None = None,
 ) -> go.Figure:
     """Create a single-panel figure with one price trace per day.
 
@@ -330,7 +340,7 @@ def build_price_figure(
     if is_multi and stat_only:
         title += _days_subtitle(day_labels)
 
-    finalize_figure(fig, title)
+    finalize_figure(fig, title, height=height)
     return fig
 
 
@@ -357,7 +367,11 @@ def build_user_energy_need_figure(
     value_col: str,
     stat_only: bool = False,
 ) -> go.Figure:
-    """Create a figure overlaying all household consumption profiles."""
+    """Create a figure overlaying all household consumption profiles.
+
+    Synthesised ``*_syn_cfg_*`` variants (when enabled in the config) arrive
+    in *profile_frames* as ordinary per-day traces, not as a syn overlay.
+    """
     n = len(profile_frames)
     return build_overlay_figure(
         profile_frames,
@@ -372,8 +386,13 @@ def build_user_energy_need_figure(
 
 def build_ev_schedule_figure(
     profile_frames: dict[str, pd.DataFrame],
+    title: str | None = None,
 ) -> go.Figure:
-    """Create a timeline bar chart showing EV plug-in windows with SOC annotations."""
+    """Create a timeline bar chart showing EV plug-in windows with SOC annotations.
+
+    *title* overrides the auto-generated "EV charging schedule — N profiles"
+    heading (used to label split train/eval figures).
+    """
     fig = go.Figure()
 
     for idx, (label, df) in enumerate(profile_frames.items()):
@@ -414,6 +433,22 @@ def build_ev_schedule_figure(
             if pd.notna(start_soc) and pd.notna(target_soc):
                 soc_text = f"SOC {start_soc:.0%}\u2192{target_soc:.0%}"
 
+            # On-bar annotation: SOC transition plus the EV's headline specs
+            # (max charging power and battery capacity).
+            annot_parts = []
+            if soc_text:
+                annot_parts.append(soc_text)
+            spec_bits = []
+            if pd.notna(charge_kw):
+                spec_bits.append(f"{charge_kw:.1f} kW")
+            if pd.notna(cap_kwh):
+                spec_bits.append(f"{cap_kwh:.0f} kWh")
+            if spec_bits:
+                annot_parts.append(" \u00b7 ".join(spec_bits))
+            # Wrap onto two lines (SOC / specs) so the label fits inside the
+            # bar instead of overflowing short windows onto the white canvas.
+            annot_text = "<br>".join(annot_parts)
+
             hover_parts = [
                 f"<b>{label}</b>",
                 f"Plug-in: {hhmm_in}  Departure: {hhmm_out}",
@@ -431,7 +466,7 @@ def build_ev_schedule_figure(
                 x=[plug_in_min, depart_min],
                 y=[y_pos, y_pos],
                 mode="lines",
-                line=dict(color=color, width=16),
+                line=dict(color=color, width=30),
                 name=label,
                 legendgroup=label,
                 showlegend=first_bar,
@@ -439,10 +474,10 @@ def build_ev_schedule_figure(
             ))
             first_bar = False
 
-            if soc_text:
+            if annot_text:
                 fig.add_annotation(
                     x=mid_min, y=y_pos,
-                    text=soc_text,
+                    text=annot_text,
                     showarrow=False,
                     font=dict(size=10, color="white"),
                     yshift=0,
@@ -450,19 +485,125 @@ def build_ev_schedule_figure(
 
             i += 1
 
+        if first_bar:
+            # No plug-in sessions in this profile — label the empty lane so an
+            # idle EV reads as intentional rather than a rendering gap.
+            fig.add_annotation(
+                x=720, y=y_pos,
+                text="— no charging sessions —",
+                showarrow=False,
+                font=dict(size=10, color="rgba(120,120,120,0.75)"),
+            )
+
     ev_labels = list(profile_frames.keys())
     apply_day_xaxis(fig)
     fig.update_yaxes(
         tickvals=list(range(len(ev_labels))),
         ticktext=ev_labels,
         title_text="EV profile",
+        # Pin the range so every lane is framed — autorange would otherwise
+        # trim a bottom/top lane that has no bars (e.g. an always-idle profile).
+        range=[-0.5, len(ev_labels) - 0.5] if ev_labels else None,
     )
 
     n = len(ev_labels)
-    title = f"EV charging schedule \u2014 {n} profile{'s' if n != 1 else ''}"
+    if title is None:
+        title = f"EV charging schedule \u2014 {n} profile{'s' if n != 1 else ''}"
     fig_cfg = get_data_figure_config()
     min_h = int(fig_cfg.get("ev_min_height", 250))
     lane_px = int(fig_cfg.get("ev_lane_px", 50))
     height = max(min_h, 80 + lane_px * n)
     finalize_figure(fig, title, height=height)
+    return fig
+
+
+def build_operator_signal_figure(
+    profile_frames: dict[str, pd.DataFrame],
+    value_col: str = "max_power_kW",
+    title: str | None = "",
+) -> go.Figure:
+    """Small-multiples step plot of the grid-operator power-limit profiles.
+
+    The CSVs hold sparse step-change events keyed by time of day; the environment
+    holds the last value until the next event and repeats the profile every day
+    (``OperatorEnergyControl.update_state`` in
+    ``adv_building_gym/components/statesources/outer/operator_energy_control.py``).
+    Each profile therefore gets its own piecewise-constant ("hv") panel spanning a
+    full 24 h, with the plateau levels annotated in kW.
+
+    *title* overrides the auto-generated heading.
+    """
+    labels = list(profile_frames.keys())
+    n = len(labels)
+    if n == 0:
+        return go.Figure()
+
+    fig = make_subplots(
+        rows=n, cols=1, shared_xaxes=True,
+        vertical_spacing=min(0.06, 0.5 / n),
+        subplot_titles=labels,
+    )
+
+    # Shared y-range so panel heights are directly comparable across profiles.
+    all_values = [
+        float(v)
+        for df in profile_frames.values()
+        for v in pd.to_numeric(df[value_col], errors="coerce").dropna()
+    ]
+    y_max = max(all_values) * 1.25 if all_values else 1.0
+
+    for idx, (label, df) in enumerate(profile_frames.items()):
+        row = idx + 1
+        color = COLORS[idx % len(COLORS)]
+        rgb = ",".join(str(int(color[i:i + 2], 16)) for i in (1, 3, 5))
+
+        events = df.sort_values("minutes").reset_index(drop=True)
+        starts = [float(m) for m in events["minutes"]]
+        levels = [float(v) for v in events[value_col]]
+        # Close the last plateau at midnight so the step spans the whole day.
+        x_step = starts + [_MINUTES_PER_DAY]
+        y_step = levels + [levels[-1]]
+
+        hhmm = [f"{int(m) // 60:02d}:{int(m) % 60:02d}" for m in x_step]
+        fig.add_trace(go.Scatter(
+            x=x_step, y=y_step,
+            mode="lines",
+            line=dict(color=color, width=2, shape="hv"),
+            fill="tozeroy", fillcolor=f"rgba({rgb},0.12)",
+            name=label,
+            showlegend=False,
+            customdata=np.column_stack([hhmm, [label] * len(x_step)]),
+            hovertemplate=(
+                "<b>%{customdata[1]}</b> %{customdata[0]}<br>"
+                "Limit: %{y:.1f} kW<extra></extra>"
+            ),
+        ), row=row, col=1)
+
+        # Label each plateau at its centre; skip plateaus too narrow to hold text.
+        ends = starts[1:] + [_MINUTES_PER_DAY]
+        for start_min, end_min, level in zip(starts, ends, levels):
+            if end_min - start_min < _OPERATOR_LABEL_MIN_WIDTH_MIN:
+                continue
+            fig.add_annotation(
+                x=(start_min + end_min) / 2.0, y=level,
+                text=f"{level:g} kW",
+                showarrow=False, yshift=10,
+                font=dict(size=10, color=color),
+                row=row, col=1,
+            )
+
+        fig.update_yaxes(range=[0, y_max], title_text="kW", row=row, col=1)
+
+    apply_day_xaxis(fig, n_rows=n)
+
+    if title is None:
+        title = f"Grid-operator power limit — {n} profile{'s' if n != 1 else ''}"
+    fig_cfg = get_data_figure_config()
+    min_h = int(fig_cfg.get("op_min_height", 320))
+    panel_px = int(fig_cfg.get("op_panel_px", 130))
+    height = max(min_h, 120 + panel_px * n)
+    finalize_figure(fig, title, height=height)
+    fig.update_layout(showlegend=False)
+    # Subplot titles default to 16 px, which crowds short panels.
+    fig.update_annotations(selector=dict(yref="paper"), font=dict(size=12))
     return fig

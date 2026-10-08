@@ -1,27 +1,15 @@
+"""AdvBuildingGym — Gymnasium-compatible building energy control environment.
 
-from .envs import AdvBuildingGym
-from .controllers import FuzzyController, MPCController, PIController, PIDController
-from .config import EnvConfig, EnvConfigManager, TrialConfig
-from .data_combinator import DataCombinator
-from .callbacks import (
-    make_episode_metrics_cb_class,
-    make_trajectory_logging_cb_class,
-)
-from .evaluation import evaluate_model, EvalResults
+Top-level package marker; subpackages are imported explicitly (no re-exports).
 
-# Exported components of the adv_building_gym package
-__all__ = [
-    "AdvBuildingGym",
-    "EnvConfig",
-    "EnvConfigManager",
-    "TrialConfig",
-    "FuzzyController",
-    "MPCController",
-    "PIController",
-    "PIDController",
-    "make_episode_metrics_cb_class",
-    "make_trajectory_logging_cb_class",
-    "DataCombinator",
-    "evaluate_model",
-    "EvalResults",
-]
+Layering: 
+- ``core/`` (env, wrappers)
+- ``components/`` (infra/statesources/rewards + registry)
+- ``config/`` (YAML loaders + dataclasses)
+- ``ray/`` (RLlib adapter)
+- ``sb/`` (Stable-Baselines3)
+- ``controllers/`` (Pyomo/scipy baselines)
+- ``_common/`` (cross-layer utils)
+"""
+
+__version__ = "0.1.0"

@@ -3,6 +3,21 @@
 Takes per-type DataFrames (from dwd_fetch), selects relevant columns,
 merges on MESS_DATUM, renames columns, and drops all-missing rows.
 Can be run standalone or imported.
+
+Units / columns (irradiance): DWD ``GS_10`` / ``DS_10`` are documented as
+10-minute sums of *global* / *diffuse* shortwave radiation in J/cm² (see DWD
+BESCHREIBUNG_obsgermany_climate_10min_solar_*.pdf). They are converted here
+to mean W/m² over the 10-min interval (factor 10000/600 ≈ 16.6667) before
+the 10→5-min upsampling. Column mapping:
+
+    GS_10 → ``sun_shine``       — global horizontal irradiance, W/m²
+    DS_10 → ``diff_sun_shine``  — diffuse-only diagnostic, W/m²
+
+``sun_shine`` is the canonical global irradiance column used downstream
+(``WeatherDataSource``, plotting, training); it matches the Zenodo/WPuQ
+``solar_irradiance`` column. ``diff_sun_shine`` is kept for diagnostics only
+— *do not* sum it with ``sun_shine``: that double-counts the diffuse
+component (a bug that lived in earlier revisions of this script).
 """
 
 import logging
@@ -23,8 +38,8 @@ RENAME_COLUMNS: dict[str, str] = {
     "MESS_DATUM": "timestamp",
     "FF_10": "avg_wind_speed",
     "DD_10": "wind_dir",
-    "GS_10": "direct_sun_shine",
-    "DS_10": "diff_sun_shine",
+    "GS_10": "sun_shine",        # global horizontal irradiance (not direct!)
+    "DS_10": "diff_sun_shine",    # diffuse-only diagnostic
     "TT_10": "temp_amb",
     "RF_10": "rel_humidity",
 }
@@ -71,14 +86,15 @@ def merge_dataframes(dataframes: dict[str, pd.DataFrame]) -> pd.DataFrame | None
         merged = merged[~all_missing].reset_index(drop=True)
         logger.info("Dropped %d rows where all measurements were NaN", n_dropped)
 
-    # Sum direct and diffuse solar irradiance into a combined column.
-    # Treat NaN as 0 so a partial sum is still usable (only NaN if both are NaN).
-    merged["sun_shine"] = (
-        merged["direct_sun_shine"].fillna(0) + merged["diff_sun_shine"].fillna(0)
-    )
-    # If both components are NaN, set the sum to NaN too
-    both_nan = merged["direct_sun_shine"].isna() & merged["diff_sun_shine"].isna()
-    merged.loc[both_nan, "sun_shine"] = np.nan
+    # Convert irradiance from J/cm² per 10 min (DWD archival unit) to mean W/m²
+    # over the 10-min interval: (x J/cm²) * (10000 cm²/m²) / (600 s) = x * 50/3 W/m².
+    # Done before upsampling so all downstream values share a single unit (W/m²)
+    # and linear interpolation between samples is meaningful (mean irradiance at
+    # the 5-min midpoint).
+    J_PER_CM2_PER_10MIN_TO_W_PER_M2 = 10000.0 / 600.0
+    for col in ("sun_shine", "diff_sun_shine"):
+        if col in merged.columns:
+            merged[col] = merged[col] * J_PER_CM2_PER_10MIN_TO_W_PER_M2
 
     return merged
 
@@ -164,21 +180,57 @@ def split_by_year(
         logger.info("Written %s (%d rows)", year_csv.name, len(year_df))
 
 
+def upsert_full_merged_csv(merged: pd.DataFrame, full_path: Path) -> pd.DataFrame:
+    """Update the all-years full merged CSV with newly fetched rows.
+
+    Rows already on disk for other years are kept; overlapping timestamps are
+    refreshed with the newly fetched values. This keeps the file all-years even
+    when the fetch was restricted to a subset of years.
+    """
+    full = merged
+    if full_path.exists():
+        try:
+            existing = pd.read_csv(full_path)
+            existing["timestamp"] = pd.to_datetime(existing["timestamp"], utc=True)
+            full = (
+                pd.concat([existing, merged], ignore_index=True)
+                .drop_duplicates(subset="timestamp", keep="last")
+                .sort_values("timestamp")
+                .reset_index(drop=True)
+            )
+        except Exception as exc:
+            logger.warning(
+                "Could not merge existing %s (%s) — rewriting it from fetched data only",
+                full_path.name, exc,
+            )
+    full.to_csv(full_path, index=False)
+    logger.info(
+        "Merged CSV written to %s (%d rows, %d columns)",
+        full_path, len(full), len(full.columns),
+    )
+    return full
+
+
 def preprocess(
     dataframes: dict[str, pd.DataFrame],
     output_dir: Path,
     station_id: str,
     upsample_method: str = "average",
+    years: list[int] | None = None,
 ) -> pd.DataFrame | None:
     """Run the full preprocessing pipeline.
 
     Steps:
       1. Merge data types on MESS_DATUM, rename columns, drop all-missing rows
-      2. Write full merged CSV (10-min resolution)
-      3. Per year: missing report -> upsample to 5-min -> write CSV
+      2. Update the full merged CSV (10-min resolution) — kept all-years by
+         merging with rows already on disk
+      3. Keep only rows within the selected years (if given)
+      4. Per year: missing report -> upsample to 5-min -> write CSV
 
     Args:
         upsample_method: 'average' (linear interpolation) or 'duplicate' (forward-fill).
+        years: Restrict per-year outputs to these years. Needed even when the fetch
+            already filtered archives, because historical zips span multiple years.
     """
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -187,13 +239,17 @@ def preprocess(
         logger.error("Merge produced no data.")
         return None
 
-    # Write the full merged CSV (10-min resolution)
-    full_path = output_dir / f"merged_{station_id}.csv"
-    merged.to_csv(full_path, index=False)
-    logger.info(
-        "Merged CSV written to %s (%d rows, %d columns)",
-        full_path, len(merged), len(merged.columns),
-    )
+    upsert_full_merged_csv(merged, output_dir / f"merged_{station_id}.csv")
+
+    if years:
+        keep_mask = merged["timestamp"].dt.year.isin(list(years))
+        n_dropped = int((~keep_mask).sum())
+        if n_dropped > 0:
+            merged = merged.loc[keep_mask].reset_index(drop=True)
+            logger.info("Dropped %d rows outside selected years %s", n_dropped, sorted(set(years)))
+        if merged.empty:
+            logger.error("No DWD rows left for selected years %s.", sorted(set(years)))
+            return None
 
     split_by_year(merged, output_dir, station_id, upsample_method)
 

@@ -12,11 +12,9 @@ import sys
 import time
 import datetime
 import logging
-from argparse import Namespace
 from pathlib import Path
 
 import json
-import argparse
 import torch
 
 import ray
@@ -25,17 +23,18 @@ from ray import tune
 from ray.tune import CLIReporter
 from ray.tune.registry import register_env
 
-from adv_building_gym.utils import setup_warning_filters
-from adv_building_gym import TrialConfig
-from adv_building_gym.envs import adv_building_env_creator
-from adv_building_gym.ray_training import common_model_setup, select_model
-from adv_building_gym.utils import (
-    CustomJSONEncoder,
-    RngService,
-    SlurmResources,
-    trial_dirname_creator,
-)
-from adv_building_gym.utils.startup_log import log_startup_banner
+from adv_building_gym.ray.utils.warning_filters import setup_warning_filters
+from adv_building_gym.config.trial_config import TrialConfig
+from adv_building_gym.ray.env_creator import adv_building_env_creator, merge_env_context
+from adv_building_gym.ray.training import common_model_setup, select_model, resource_setup
+from adv_building_gym.ray.callbacks import EVAL_SCORE_KEY, CHECKPOINT_NUM_TO_KEEP
+from adv_building_gym._common.json_encoder import CustomJSONEncoder
+from adv_building_gym._common.resource_check_util import SlurmResources
+from adv_building_gym.ray.utils.ray_utils import make_trial_dirname_creator
+from adv_building_gym.ray.utils.early_stopping import build_stop_criteria
+from adv_building_gym._common.startup_log import log_startup_banner
+
+from run_train_util import parse_cli_args, trial_to_args_namespace
 
 logging.basicConfig(
     level=logging.INFO,
@@ -70,89 +69,58 @@ logger.info("Runtime environment variables for Ray workers: %s", RUNTIME_ENV_VAR
 
 
 # ---------------------------------------------------------------------------
-# CLI parsing
-# ---------------------------------------------------------------------------
-
-def _parse_cli_args() -> argparse.Namespace:
-    """The trial config is the only input — every run parameter lives in it."""
-    parser = argparse.ArgumentParser(
-        description=(
-            "Train an RL agent on AdvBuildingGym. The trial YAML "
-            "bundles algorithm, env topology, hyperparameters, and schedules."
-        ),
-    )
-    parser.add_argument(
-        "--trial", type=str, required=True,
-        help="Path to trial config YAML (e.g. configs/trial_cfgs/trial_cfg_1.yaml)",
-    )
-    return parser.parse_args()
-
-
-def _trial_to_args_namespace(trial: TrialConfig) -> Namespace:
-    """Build a Namespace mirroring the legacy CLI args.
-
-    The startup banner and helpers were authored against an argparse
-    Namespace; this preserves that interface without re-plumbing every
-    helper.
-    """
-    return Namespace(
-        algorithm=trial.algorithm,
-        episodes=trial.training_param_config.max_episodes_to_run,
-        seed=trial.seed,
-        metric=trial.metric,
-        checkpoint_frequency_episodes=trial.checkpoint_frequency_episodes,
-        log_trajectories=trial.log_trajectories,
-        num_envs=trial.num_envs,
-        grad_train=trial.grad_train,
-        trial_name=trial.trial_name,
-        trial_path=str(trial.source_path) if trial.source_path else None,
-    )
-
-
-# ---------------------------------------------------------------------------
 # Ray initialisation
 # ---------------------------------------------------------------------------
 
-def _init_ray(seed: int) -> SlurmResources:
-    """Resolve SLURM resources, init Ray, and bring up the RngService actor."""
+def _init_ray(cpu_only: bool = False) -> SlurmResources:
+    """Resolve SLURM resources and init Ray.
+
+    Per-env seeding is handled by the env creator at construction time (trial
+    ``env_seed:`` + worker/vector index); RLlib's own ``config.debugging(seed=...)``
+    stream stays on the learner side. No central RNG service is needed.
+    """
     slurm_cpus = os.environ.get("SLURM_CPUS_PER_TASK")
     cpus = int(slurm_cpus) if slurm_cpus and slurm_cpus.isdigit() else 2
 
-    cuda_visible = os.environ.get("CUDA_VISIBLE_DEVICES")
-    if cuda_visible:
-        gpus = len([x for x in cuda_visible.split(",") if x.strip() != ""])
-        if not torch.cuda.is_available():
+    if cpu_only:
+        gpus = 0
+        logger.warning("CPU-only smoke-test mode: running learner on CPU (--cpu).")
+    else:
+        cuda_visible = os.environ.get("CUDA_VISIBLE_DEVICES")
+        if cuda_visible:
+            gpus = len([x for x in cuda_visible.split(",") if x.strip() != ""])
+            if not torch.cuda.is_available():
+                logger.error(
+                    "SLURM allocated GPUs (CUDA_VISIBLE_DEVICES=%s) but PyTorch "
+                    "cannot access CUDA. Check driver/CUDA toolkit setup.",
+                    cuda_visible,
+                )
+                sys.exit(1)
+        else:
             logger.error(
-                "SLURM allocated GPUs (CUDA_VISIBLE_DEVICES=%s) but PyTorch "
-                "cannot access CUDA. Check driver/CUDA toolkit setup.",
-                cuda_visible,
+                "No GPU allocated (CUDA_VISIBLE_DEVICES is not set). "
+                "Training requires a GPU — submit with --gres=gpu:1, "
+                "or pass --cpu for a CPU-only smoke test.",
             )
             sys.exit(1)
-    else:
-        logger.error(
-            "No GPU allocated (CUDA_VISIBLE_DEVICES is not set). "
-            "Training requires a GPU — submit with --gres=gpu:1.",
-        )
-        sys.exit(1)
 
     slurm_resources = SlurmResources(num_cpus=cpus, num_gpus=gpus)
-    logger.info("Training on device: cuda (%d GPU(s) from SLURM)", slurm_resources.num_gpus)
+    logger.info(
+        "Training on device: %s (%d GPU(s))",
+        "cpu" if gpus == 0 else "cuda", slurm_resources.num_gpus,
+    )
 
     logger.info(
         "Initializing Ray with cpus=%s gpus=%s (from SLURM/CUDA env)",
         slurm_resources.num_cpus, slurm_resources.num_gpus,
     )
-    ray.init(
+    out = ray.init(
         num_cpus=slurm_resources.num_cpus,
         num_gpus=slurm_resources.num_gpus,
         ignore_reinit_error=True,
         runtime_env={"env_vars": RUNTIME_ENV_VARS},
         logging_level=logging.INFO,
     )
-
-    # Centralised RNG service as a Ray Named Actor. Must be initialised
-    # AFTER ray.init() so the actor can be deployed.
-    RngService.initialize(seed)
 
     return slurm_resources
 
@@ -163,24 +131,37 @@ def _init_ray(seed: int) -> SlurmResources:
 
 def _build_algo_config(args, trial: TrialConfig, slurm_resources, exec_date_dt):
     """Assemble the RLlib algorithm config and return ``(algo_config, param_space)``."""
+    # 1. Algorithm-specific config (hyperparameters + RLModule).
     algo_config = select_model(
         algorithm=trial.algorithm,
-        episode_length=trial.env_config.EPISODE_LENGTH,
+        env_config=trial.env_config,
         training_config=trial.training_param_config,
     )
+    # 2. Resource-dependent config (learner/env-runner resources + count, validation).
+    algo_config = resource_setup(
+        config=algo_config,
+        slurm_resources=slurm_resources,
+        training_config=trial.training_param_config,
+        env_config=trial.env_config,
+    )
+    # 3. Common, algorithm-independent config (env, connectors, eval, logger, callbacks).
+    #    Callbacks read the env-runner count set by resource_setup above.
     algo_config = common_model_setup(
         config=algo_config,
         training_config=trial.training_param_config,
-        slurm_resources=slurm_resources,
         env_config=trial.env_config,
         metrics_base_dir="ep_metrics",
-        data_combinator=trial.data_combinator,
         log_trajectories=trial.log_trajectories,
         reward_schedule_manager=trial.reward_manager,
         infra_combinator=trial.infra_combinator,
         statesource_combinator=trial.statesource_combinator,
         exploration_reset=trial.exploration_reset,
         exec_date=exec_date_dt,
+        trial_name=trial.trial_name,
+        # adv_building_env_creator always flattens obs env-side (outermost
+        # FlattenObservation), so the connector-side flatteners are skipped.
+        # TODO noprio VP 2026.07.05.: Only kept for the MA driver
+        flatten_observations_env_side=True,
     )
     param_space = algo_config.to_dict()
 
@@ -188,37 +169,6 @@ def _build_algo_config(args, trial: TrialConfig, slurm_resources, exec_date_dt):
         json.dump(param_space, f, cls=CustomJSONEncoder, indent=4)
 
     return algo_config, param_space
-
-
-def _checkpoint_iterations(trial: TrialConfig) -> int:
-    """Translate ``checkpoint_frequency_episodes`` into RLlib training iterations.
-
-    train_batch_size_per_learner drives the timesteps RLlib processes per
-    iteration but means different things per algorithm:
-      PPO — ppo_episodes_per_iteration * EPISODE_LENGTH (on-policy batch)
-      SAC — sac_replay_batch_size (off-policy replay sample)
-    """
-    timesteps_per_episode = trial.env_config.EPISODE_LENGTH
-    timesteps_per_iteration = 0.0
-
-    if trial.algorithm == "ppo":
-        timesteps_per_iteration = trial.training_param_config.ppo_episodes_per_iteration * trial.env_config.EPISODE_LENGTH
-    if trial.algorithm == "sac":
-        timesteps_per_iteration = trial.training_param_config.sac_replay_batch_size
-
-    if timesteps_per_iteration != 0.0:
-        iters = max(1, int(
-            (trial.checkpoint_frequency_episodes * timesteps_per_episode) / timesteps_per_iteration
-        ))
-    else:
-        iters = 10
-    
-    logger.info(
-        "Checkpoint configuration: every %d iterations (~%d episodes), metric=%s",
-        iters, trial.checkpoint_frequency_episodes, trial.metric,
-    )
-
-    return iters
 
 
 # ---------------------------------------------------------------------------
@@ -245,6 +195,16 @@ def _build_progress_reporter(algorithm: str) -> CLIReporter:
             "learners/default_policy/alpha_value": "Alpha",
             "learners/default_policy/td_error_mean": "TDErr",
         }
+    elif algorithm == "dreamerv3":
+        # TODO VP: Verify these metric paths against an actual DreamerV3
+        # result.json (per memory feedback_rllib_new_api_stack.md). DreamerV3
+        # learner logs world-model / actor / critic losses with names that
+        # depend on the installed Ray version.
+        algo_cols = {
+            "learners/default_policy/WORLD_MODEL_total_loss": "WMLoss",
+            "learners/default_policy/ACTOR_loss": "PiLoss",
+            "learners/default_policy/CRITIC_L_total": "VfLoss",
+        }
     else:
         algo_cols = {}
 
@@ -254,7 +214,6 @@ def _build_progress_reporter(algorithm: str) -> CLIReporter:
             "env_runners/num_episodes_lifetime": "Episodes",
             "time_total_s": "Time",
             "evaluation/env_runners/episode_return_mean": "EpReturnMean",
-            "evaluation/env_runners/reward_rate": "RewardRate",
             "evaluation/env_runners/achieved_reward": "AchievedReward",
             **algo_cols,
         },
@@ -263,16 +222,24 @@ def _build_progress_reporter(algorithm: str) -> CLIReporter:
     )
 
 
-def _build_tuner(trial: TrialConfig, metric: str, param_space, run_name, storage_path, checkpoint_freq_iterations):
+# Ray's algorithm registry is case-sensitive: "PPO"/"SAC" are all-caps,
+# but DreamerV3 is mixed-case — see ray.rllib.algorithms.registry.
+TRAINABLE_NAMES = {"ppo": "PPO", "sac": "SAC", "dreamerv3": "DreamerV3"}
+
+
+def _build_tuner(trial: TrialConfig, metric: str, param_space, run_name, storage_path,
+                checkpoint_freq_iterations, trial_name: str | None = None):
     """Build the ``tune.Tuner`` for the chosen algorithm."""
-    stop_criteria = {
-        # New API stack: lifetime episodes (1 episode = 1 day at 5-min control step).
-        "env_runners/num_episodes_lifetime": trial.training_param_config.max_episodes_to_run,
-    }
+    # Hard episode cap (1 episode = 1 day at 5-min control step) plus optional
+    # episode-unit early stopping on the held-out eval metric. When early stopping is
+    # disabled this is the legacy single-key dict; enabled → a CombinedStopper.
+    stop_criteria = build_stop_criteria(trial.training_param_config, metric, mode="max")
     progress_reporter = _build_progress_reporter(trial.algorithm)
 
+    trainable_name = TRAINABLE_NAMES[trial.algorithm]
+
     return tune.Tuner(
-        trial.algorithm.upper(),
+        trainable_name,
         param_space=param_space,
         tune_config=tune.TuneConfig(
             reuse_actors=True,
@@ -280,10 +247,9 @@ def _build_tuner(trial: TrialConfig, metric: str, param_space, run_name, storage
             # Metrics (auto-prefixed with env_runners/):
             #   - "episode_return_mean"  (default RLlib metric)
             #   - "achieved_reward" (custom: sum of rewards per episode)
-            #   - "reward_rate"     (custom: achieved/max possible reward)
             metric=metric,
             mode="max",
-            trial_dirname_creator=trial_dirname_creator,
+            trial_dirname_creator=make_trial_dirname_creator(trial_name),
         ),
         run_config=tune.RunConfig(
             name=run_name,
@@ -292,8 +258,13 @@ def _build_tuner(trial: TrialConfig, metric: str, param_space, run_name, storage
             checkpoint_config=tune.CheckpointConfig(
                 checkpoint_at_end=True,
                 checkpoint_frequency=checkpoint_freq_iterations,
-                num_to_keep=3,
-                checkpoint_score_attribute=metric,
+                num_to_keep=CHECKPOINT_NUM_TO_KEEP,
+                # NOTE: a slashed key (e.g. "evaluation/env_runners/episode_return_mean")
+                # is silently ignored by Tune's CheckpointManager (its insertion gate
+                # tests membership against the un-flattened result dict) → retention
+                # degrades to keep-most-recent. EVAL_SCORE_KEY is a flat top-level key
+                # published every iteration by the eval-score promote callback.
+                checkpoint_score_attribute=EVAL_SCORE_KEY,
                 checkpoint_score_order="max",
             ),
             progress_reporter=progress_reporter,
@@ -326,7 +297,6 @@ def _log_best_result(results, metric: str, storage_path: str) -> None:
             metrics_to_log = {
                 "episode_return_mean": env_runners_metrics.get("episode_return_mean"),
                 "achieved_reward": env_runners_metrics.get("achieved_reward"),
-                "reward_rate": env_runners_metrics.get("reward_rate"),
             }
             metric_key = metric.split("/")[-1]
             opt_value = metrics_to_log.get(metric_key)
@@ -369,11 +339,14 @@ def _dump_all_results(results) -> None:
 
 def main():
     """Parse the trial path, load all configs upfront, and run training."""
-    cli_args = _parse_cli_args()
-    trial = TrialConfig.load(cli_args.trial)
-    logger.info(
-        "Trial '%s' loaded from %s", trial.trial_name, trial.source_path,
+    cli_args = parse_cli_args(
+        description=(
+            "Train an RL agent on AdvBuildingGym. The trial YAML "
+            "bundles algorithm, env topology, hyperparameters, and schedules."
+        ),
     )
+    trial = TrialConfig.load(cli_args.trial)
+    logger.info("Trial '%s' loaded from %s", trial.trial_name, trial.source_path)
 
     # Initialise singleton component instances exactly once (driver only).
     # Triggers CSV parsing here; Ray workers go through factory methods.
@@ -384,10 +357,10 @@ def main():
     if not metric.startswith("evaluation/"):
         metric = f"evaluation/env_runners/{metric}"
 
-    args = _trial_to_args_namespace(trial)
+    args = trial_to_args_namespace(trial)
     args.metric = metric  # banner uses the resolved metric
 
-    slurm_resources = _init_ray(trial.seed)
+    slurm_resources = _init_ray(cpu_only=cli_args.cpu)
 
     exec_date_dt = datetime.datetime.now()
     exec_date = exec_date_dt.strftime("%Y%m%d_%H%M%S")
@@ -396,22 +369,34 @@ def main():
     os.makedirs(storage_path, exist_ok=True)
 
     env_creator_config = {
+        # ENV axis (trial `env_seed:`, default = `seed:`): the ONLY seed that reaches an env's
+        # RNG, since AdvBuildingGym._maybe_reseed latches on the first seed and ignores RLlib's
+        # learner-derived reset seeds. Sweeping `seed` (learner) leaves the data traversal fixed.
+        "seed": trial.env_seed,
+        # Eval EnvRunners seed from this instead (trial `eval_seed:`, default = `env_seed:`),
+        # so sweeping `seed` keeps the in-training eval episode sequence identical.
+        "eval_seed": trial.eval_seed,
         "env_config": trial.env_config,
         "data_combinator": trial.data_combinator,
+        # Eval EnvRunners (eval_mode=True via the evaluation_config override) pick this
+        # held-out combinator instead, so in-training eval rounds runs on the eval dataset.
+        "eval_data_combinator": trial.eval_data_combinator,
         "reward_schedule_manager": trial.reward_manager,
     }
     register_env(
         "AdvBuilding",
-        lambda cfg: adv_building_env_creator({**env_creator_config, **cfg}),
+        lambda cfg: adv_building_env_creator(merge_env_context(env_creator_config, cfg)),
     )
 
     _, algo_cfg_param_space = _build_algo_config(args, trial, slurm_resources, exec_date_dt)
-    checkpoint_freq_iterations = _checkpoint_iterations(trial)
+    # Tie checkpoint cadence to the eval cadence so every checkpoint lands on a
+    # fresh-eval iteration and can be ranked by eval return (best-N retention).
     tuner = _build_tuner(
-        trial, metric, algo_cfg_param_space, run_name, storage_path, checkpoint_freq_iterations,
+        trial, metric, algo_cfg_param_space, run_name, storage_path,
+        trial.training_param_config.evaluation.interval,
+        trial_name=trial.trial_name,
     )
 
-    experiment_path = os.path.join(storage_path, run_name)
     log_startup_banner(
         args=args,
         env_config=trial.env_config,
@@ -421,10 +406,11 @@ def main():
         infra_combinator=trial.infra_combinator,
         slurm_resources=slurm_resources,
         run_name=run_name,
-        experiment_path=experiment_path,
+        experiment_path=os.path.join(storage_path, run_name),
         storage_path=storage_path,
         seed=trial.seed,
         exec_date=exec_date_dt,
+        eval_trajectories_path=os.path.abspath("ep_metrics/eval_trajectories"),
     )
 
     logger.info("Starting tuner.fit() for: %s", run_name)

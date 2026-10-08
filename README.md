@@ -2,886 +2,458 @@
     <img src="data/img/icon_kit.png" width="10%" hspace="20"/>
 </p>
 
-[![Python](https://img.shields.io/badge/Python-3.12.1-blue?logo=python)](https://www.python.org/downloads/release/python-3121/)
+[![Python](https://img.shields.io/badge/Python-3.12-blue?logo=python)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/License-MIT-green?logo=opensource)](./LICENSE)
-[![Code Style](https://img.shields.io/badge/Code%20Style-black-000000.svg?logo=python)](https://github.com/psf/black)
+
+<h1 align="center">AdvBuildingGym</h1>
+
+<p align="center"><em>Repository to inspect deep reinforcement learning methods for generic/varying home energy management environments. 
+A modular Gymnasium environment with training and evaluation pipelines. Thesis title: Generalization in Model-Free and Model-Based Reinforcement Learning for Home Energy Management Systems</em></p>
 
 
-<h1 align="center">Deep Reinforcement Learning for Smart Energy Management in Residential Buildings -- Framework</h1>
-
-### Goals
-
-Main objectives: Energy efficiency (kWh), costs (EUR)
-Subobjectives: temp, battery SOC, EV SOC, grid limits
-
-Outline:
-- base: deterministic controllers, no optimisation for cost, for energy efficiency, no joint optimisation -- optimising only a single var, check on Energy efficiency and costs.
- - Energy efficiency and cost optimisation is not feasible, as we do not know which cost trajectory to follow (okay, system could be forced towards zero, however it's not optimal for sure and it's not feasible) can't really feasible as these controllers are for trajectory tracking, not really for optimisation.
- - a couple plots about control results, how well are trajectory or range tracking
-- case1: deterministic controllers on the different actuators, working together, no joint optimisation
-- case1.1: how to jointly optimise with deterministic controllers?
-  - cascade controllers ???
-  - 
-- case2: RL-based controllers for the standalone actuators -- compare performance with deterministic controllers
-- case3: RL-based controllers, SA, joint optimisation --> not optimal at all
-- case4: Directions of improvement -- SA / MA:
- - SA:
-  - non stationary reward weighting, weights change per episode -- reward weights are part of the observation space
-   - sample weights based on some distribution
-   - try pre-defined weight combinations
-  - curriculum learning:
-   - TL: gradual -- 1st temp control, then temp and battery control -- using reward schedules
-   - TL: 5 rewards alltogether, always select 2 or 3 and change 1 between iterations -- using reward scheduling
- - MA:
-  - vector rewards, standalone Q network for each reward, Pareto front search
-  - each actuator is an agent: scalar rewards, curriculum learning: actuator items are selected or deselected per episode -- rewards always there, but action from infrastructure is not always present -- each actuator has its own policy NN.
-- What about generalisation? How will any of these methods work on an unseen infrastructure?
-
-- Real time eval, Monte Carlo simulations of ANY above mentioned solution -- eval scripts
-- Question of reward formulation: everything depends on that...
-
-NOTE VP: is there such a scenario, where during training env is allowed not to terminate, but in the eval env it must terminate?
---> yes, during eval termination is not allowed at all, so it's maybe worth switching off the termination during eval. 
-Maybe termination is not a good idea at all... -- however it reduces wrong states in the trajectory buffer.
+AdvBuildingGym is a framework for reinforcement learning (RL) in home energy management systems (HEMS). 
+It simulates a residential building with a battery (BES), PV, a wind turbine, household load and dynamic electricity prices and optionally a heat pump, the thermal model of the building and an EV charger. 
+Training and evaluation can run on Ray RLlib or Stable-Baselines3, however RLlib is used and tested.
 
 
-- Try to eliminate most of the bad states... -- we want to optimise
-
-TODO VP: setting the gamma (discount factor) to 1.0 -- all reward from all future timesteps would have the same effect as only the next timestep... So it would not matter when the reward is received -- does this help?
-
-TODO VP: Multi phase rewards -- reward can't decrease between phases... how to ensure this one?
-Agents can't learn the phase change only on their own -- reward signal must be maintained, so if a goal is reached and the objective is shifting, the reward must keep up so the agent can still believe that it's on a good track and concentrate on the next goal, on the next objective... -- this one is important for curriculum learning and switching rewards on the fly
-In the case of multi phase RL (non stationary rewards): encode the phase into the observation space -- so agent can observe it
-Terminate in case of goal reached -- for single objective tasks that works, but how can I apply this to my task?
-
-Difficulty: how to avoid reward tuning/reward engineering but make it work?
-
-CES/CEM -- TODO VP read about them, how to apply them in training?
-CEM for reward weight sampling distributions? -- but eval of the params/reward weights should happen on the same s,a pairs... -- a lot of computational effort.
-
-Idea: 2 stage learning -- CEM: 
-- 1st: Base Trajectories using human expert trajectories -- joint human optimisation --> learns reward function, but needs trajectory "drawer" for easy catch of expert trajectories
-- 2nd: Run the RL with this reward functions -- try to find even more optimal solutions? If better trajectories found, add them to the expert trajectories
-- iteration: find new reward functions based on the new expert trajectories
+The research question is **generalisation**: 
+can one policy, trained across many building configurations and data scenarios, control buildings and days it has never seen? 
+The main tool is **context variables**: static building parameters, such as battery power or PV rating, that the environment adds to the observation so the policy can condition on them.
 
 
-My problem -- energy management: Control problem, almost infinite horizon
-
-- Framework for Residual building energy management, flexible environment: flexibility about rewards, infrastructure elements (actuators -- their physics) and state sources.
-
-- Generalisation: train a single PPO/SAC on a set of slightly different building configs, evaluate how it performs generally on unseen, but similar buildings.
- - context aware observation space, context aware policies
- - During eval: unseen building, unseen time series data
- - threats: 
-  - not enough building configurations seen during training
-  - problem is too complex for policy NN
-  - 
-
-- Transfer learning (TL): curriculum learning, change the reward setup -- the goals -- of the optimisation slowly under the RL algorithm and inspect the performance of this approach against the straight away difficult scenario, where all the rewards are present.
- - Random selection: select always a subset of rewards, replace a subsubset of those, but always maintain a fix ratio, which does not change between 2 consecutive selections.
-
-- Compare energy usage, energy efficiency and temperature comfort of rule based controllers (Fuzzy, PI, PID) to the trained TL solution.
-  - comparison should happen on unseen and seen building configurations (building data hasn't seen, building data already seen -- variable during eval are the price, weather and other user behaviour)
-
-- For each trained RL agent, RL policy -- Monte Carlo rollouts, this should be quite the same as the eval script.
-
-- Multiple agents, cooperation, Mixture of Experts
- - env, shared state space -- multiple policies running on the same env, each of them with a different (partially overlapping, non-overlapping) set of rewards -- weighting of policies and their actions: can be user preference during eval -- but during training as well
- - extension opportunity: network to decide about the weighting.
-
-- Extension idea: use expert action trajectories to train policies -- at the SAC it's straightforward (push episodes into the replay buffer, they will be sampled), but at the PPO it shouldn't be too complicated as well
-
-- MORL, achieve Pareto front: reward functions have dynamic weighthing, which is always sampled and added to the state space. During training, the rewards are weighted with these weights. During eval, they are random from the same distribution. During user eval, user gives these weights and eval is based on this -- policy weighting is part of the state space.
-
-### Issues
-
-- Dynamic env assumed -- during development the env changes, the rewards change, their weights change
-
-## References, data sources
-
-### Data about residental homes and their heat pump energy need (WPuQ dataset)
-
-Paper: Dataset on electrical single-family house and heat pump load profiles in Germany
-
-Paper link: https://www.nature.com/articles/s41597-022-01156-1
-
-Data link: https://zenodo.org/records/5642902
+> **Status:** volatile / active. 
+Research code, configurations and interfaces can still change. 
 
 
+## Contents
 
-About reward shaping: https://link.springer.com/rwe/10.1007/978-0-387-30164-8_731
+- [Research focus](#research-focus)
+- [Environment](#environment)
+- [Prepared extensions](#prepared-extensions)
+- [Repository layout](#repository-layout)
+- [Installation](#installation)
+- [Data](#data)
+- [Running experiments](#running-experiments)
+- [Trial configuration](#trial-configuration)
+- [Outputs](#outputs)
+- [Tests](#tests)
+- [Origin and citation](#origin-and-citation)
+- [License](#license)
+<!-- - [Further documentation](#further-documentation) -->
 
-- Potential based shaping --> add per state key potential rewards -- good for target following rewards, not so good for range controller states.
-- Realisation idea: automatic wrapper on the reward functions, which has the same api as reward functors, but store the previous value and acts as a proxy on reward functors -- substracts potential based reward based on prev state and adds potential based reward for the current state. (TODO VP: potential based reward shaping). Uses a standalone config yaml.
+## Research focus
 
-An old paper about reward shaping and construction: https://link.springer.com/article/10.1023/A:1018068507504
+### Generalisation across buildings and data
+
+A policy is trained on a set or a range of building configurations and evaluated on configurations held out from training. 
+The generalisation trials live in [configs/trial_cfgs/v0/GEN/](configs/trial_cfgs/v0/GEN/). 
+The groups `gs_lin_bat_power`, `gs_lin_bat_pv` and `gs_lin_bat_power_pv` each compare three training regimes on the same held-out evaluation configurations (`infra_schedule.configs.eval`).
+ `gs_lin_bat_power_pv` runs every regime with PPO, SAC and DreamerV3.
 
 
-<!-- TODO VP: add it to the repo setup description... -->
+| Regime | Configurations seen in training | Example from `gs_lin_bat_power_pv/` (battery power × PV rating -- generic environment) |
+|---|---|---|
+| Specialist | one fixed configuration | `lin_bat_power_pv_spec_ppo.yaml`: 9 kW × 10 kW |
+| Grid | a discrete set, cycled every few episodes (`infra_schedule.mode: cycle`) | `lin_bat_power_pv_ppo.yaml`: {3, 9, 15} kW × {5, 10, 15} kW |
+| Sampled | sizes redrawn every episode from a range, with the evaluation sizes excluded (`BatteryLinearWrapper`, `SolarPanelWrapper`) | `lin_bat_power_pv_sampled_ppo.yaml`: 3–15 kW × 5–15 kW |
 
-TODO VP: Show expert trajectories to the policies, which work fine -- Programming using expert knowledge -- difficulty -- multi dim trajectories, hard to really give expert trajectories.
 
-TODO VP: Idea 2. The "Mixture of Experts" or Hierarchical Approach
-You can have a single agent that switches between different policies based on the state.
+All three are evaluated on held-out sizes in between: {3.7, 8.0, 11.0} kW × {6, 12} kW. 
+Battery capacity is fixed at 10 kWh in this group.
 
-Define a multi-agent setup where one "Manager" policy selects which "Worker" policy to use. Even though it's technically a single entity in the game, RLlib treats it as a coordination task between multiple policies.
+Training and evaluation also use different data. 
+The default data schedules ([configs/schedules/data/](configs/schedules/data/)) train on 2024 weather and prices and evaluate on 2025–2026, with separate EV schedules, indoor set-point profiles and household load profiles.
 
-Diff between local and district heating networks: https://www.npro.energy/main/en/district-heating-cooling/local-district-heating
 
-District heating grid ^^
+### Context variables for policy conditioning
 
-### Power measure explanations
+Components can publish `ctxt_*` observation keys: these are parameters that remain constant within an episode. 
+A key enters the observation space only if it is listed in that component's `ctxt_keys` in the YAML. 
+An unknown key name fails at start-up. ([adv_building_gym/components/context_emitter.py](adv_building_gym/components/context_emitter.py))
 
-Active, reactive, apparent power
-
-Link: https://eshop.se.com/in/blog/post/difference-between-active-power-reactive-power-and-apparent-power.html?srsltid=AfmBOoo_z3uMQTGngU470DqVz29bTNpcSOKL1ch39emWHsMA7PthqQVC
-
-https://en.wikipedia.org/wiki/AC_power
-
-### Data setup
-
-All data fetching and preprocessing is handled by a single entry point:
-
-```bash
-python preprocessing/data_setup.py
-sbatch slurm_scripts/slurm_data_setup.sh
-sbatch slurm_scripts/slurm_data_setup.sh --synthesize --quality-report-dir
+```yaml
+infras:
+- class: BatteryLinearWrapper
+  name: battery
+  ctxt_keys: [ctxt_battery_power_kW]   # the policy observes this episode's max power
+  max_power_range_kW: [3.0, 15.0]      # redrawn at every reset
+  max_cap_range_kWh: [10.0, 10.0]
+  exc_max_power_kW: [3.7, 8.0, 11.0]   # never drawn in training; used for evaluation
+  start_soc_percentage: 0.3
+  soc_min: 0.1
+  soc_max: 0.95
 ```
 
-Runs three pipelines:
+| Component | Opt-in context keys |
+|---|---|
+| `BatteryLinear`, `BatteryLinearWrapper` | `ctxt_battery_capacity_kWh`, `ctxt_battery_power_kW` |
+| `SolarPanel`, `SolarPanelWrapper` | `ctxt_solar_max_power_kW`, `ctxt_pv_area_m2` |
+| `WindTurbine` | `ctxt_wind_rated_power_kW` |
+| `HP`, `HPRbc` | `ctxt_hp_max_power_kW` |
+| `LinearEVCharger` | `ctxt_evc_v2g_effective` |
+| `BuildingHeatLoss` | `ctxt_building_K`, `ctxt_building_mC` |
+| `DesiredUserEnergyNeed` | `ctxt_hh_consumption_max` |
+| Energy price sources | `ctxt_E_price_max` |
+| `BatteryTremblay` | `ctxt_battery_capacity_kWh`, `ctxt_battery_max_power_kW` |
 
-1. **Electricity prices** — fetch day-ahead EPEX Spot prices from aWATTar and Energy Charts APIs, converts units (Eur/MWh → ct/kWh), and resample to 5-minute resolution
-2. **Zenodo weather** — download WPuQ dataset (residential heat pump load profiles), extract HDF5 archives, and produce per-house weather CSVs.
-3. **DWD weather** — download 10-minute station data from the DWD Climate Data Center, merge parameters, and upsample to 5 minutes
 
-Preprocessed files are written to `data/e_price/` and `data/weather/`.
+A few context keys that rewards depend on are always published, for example the EV charger's `ctxt_evc_max_charging_kW` and the grid operator's `ctxt_operator_max_power_kW`.
 
-**Common flags:**
 
-```bash
-# Run only the price pipeline for specific years
-python preprocessing/data_setup.py --skip-weather --years 2024 2025
+### Generalisation experiments
 
-# Run only the DWD weather pipeline
-python preprocessing/data_setup.py --skip-prices --skip-wpuq --dwd-station-id 04177
+Three experiments vary one or two building parameters each, their evaluation notebooks are in [thesis_eval/](thesis_eval/). 
+Each one compares the specialist, grid and sampled regimes on the same held-out sizes and runs them with PPO, SAC and DreamerV3.
 
-# Run only the WPuQ/Zenodo weather pipeline
-python preprocessing/data_setup.py --skip-prices --skip-dwd
+| Experiment (`thesis_eval/`) | Trials ([configs/trial_cfgs/v0/GEN/](configs/trial_cfgs/v0/GEN/)) | Varied in training | Held-out evaluation | Fixed |
+|---|---|---|---|---|
+| `3_gen_bat_cap_v1`: battery capacity | `gs_test_scenario_so/`, `battery_lin_capacity_sampled.yaml` | specialist 15 kWh or 17 kWh; grid {10, 13, 17, 20, 25} kWh; sampled 10–25 kWh | 12, 16, 22 kWh | 10 kW battery power, 5 kW PV |
+| `5_gen_bat_power`: battery power | `gs_lin_bat_power/` | specialist 9 kW; grid {3, 6, 9, 12, 15} kW; sampled 3–15 kW | 3.7, 8.0, 11.0 kW | 10 kWh capacity, 5 kW PV |
+| `6_gen_bat_cap_pv_power`: battery capacity × PV rating | `gs_lin_bat_pv/` | specialist 15 kWh × 10 kW; grid {10, 15, 20} kWh × {5, 10, 15} kW; sampled 10–20 kWh × 5–15 kW | {12, 16} kWh × {6, 12} kW | 10 kW battery power |
 
-# Generate synthetic (noised + shifted) dataset variants after all pipelines
-python preprocessing/data_setup.py --synthesize
+In all three the battery is the only controlled device, the reward is `EconomicRewardV0` alone, and training runs for 7000 episodes. 
+The grid regime swaps the configuration every 12 episodes (every 4 in `5_gen_bat_power`). 
+The sampled regime never draws the evaluation sizes.
 
-# Preprocess existing raw price files without re-fetching
-python preprocessing/data_setup.py --skip-weather --skip-price-fetch --raw-price-files data/e_price/2025_prices.csv
+The sizes above are the ones in the snapshots used by the notebooks. 
+For `3_gen_bat_cap_v1`, the grid files in [configs/infra_cfgs/GEN/battery_lin_capacity_so_v2/](configs/infra_cfgs/GEN/battery_lin_capacity_so_v2/) have changed since then, so reproduce it from its snapshots.
+
+`9_cmpl_gen` evaluates `gs_lin_bat_power_pv`, the combined setting described in [Generalisation across buildings and data](#generalisation-across-buildings-and-data). 
+It varies battery power × PV rating, includes a rule-based heat pump and EV charger, pays exports at 0.7 × price (`EconomicSellFactorRewardV0`), and trains for 28000 episodes.
+
+
+### Battery control with model-free and model-based RL
+
+In the generalisation trials the battery (`a_battery`) is the only device the policy controls. 
+PV, wind and household load are not controllable. 
+Where a heat pump and an EV charger are present (`gs_lin_bat_power_pv`), they are rule-based (`HPRbc`, `EvcsRbc`): they draw power but take no policy action, and their rule-based actions (`ar_hp`, `ar_evcs`) are part of the observation. 
+The battery-and-EV trial below is the exception: there the policy also controls the EV charger.
+
+
+| Algorithm | Type | Ray RLlib | Stable-Baselines3 |
+|---|---|---|---|
+| PPO | model-free, on-policy | ✓ | ✓ |
+| SAC | model-free, off-policy | ✓ | ✓ |
+| DreamerV3 | model-based (learned world model) | ✓ | — |
+
+
+Rule-based battery strategies in [adv_building_gym/rbc_strats/](adv_building_gym/rbc_strats/) serve as baselines: `do_nothing`, `pv_surplus_charge`, `self_coverage`, `deficit_discharge`, and price-threshold variants (`price_median`, `price_mean`, scaled and `*_autarky` versions).
+
+### Joint battery and EV charger control
+
+One trial controls two devices at the same time: [configs/trial_cfgs/v0/STA/battery_lin_EV.yaml](configs/trial_cfgs/v0/STA/battery_lin_EV.yaml) (`sta_lin_battery_EV`). 
+The policy outputs `a_battery` (`BatteryLinear`, 10 kW, 16 kWh) and `a_lin_ev_charger` (`LinearEVCharger`, 11 kW, with V2G) for one fixed building with PV, wind and household load. 
+EV charging sessions come from the usage profiles in [data/ev_usage_profiles/](data/ev_usage_profiles/): arrival time, vehicle, start and target state of charge, and the time allowed to reach the target. 
+The reward is multi-objective: energy cost (`EconomicRewardV0`), a 20 kW grid-operator limit (`OperatorEnergyControlRewardV0`) and EV charging sessions (`EVChargingSessionReward`). 
+A configuration also adds `BESRegulatorReward` and `EVRegulatorReward`, which pay a flat penalty whenever the battery or the charger has to override the requested action, but their effect does not match their intentions completely.
+It is only trained with PPO and SAC.
+
+
+## Environment
+
+`AdvBuildingGym` ([adv_building_gym/core/env.py](adv_building_gym/core/env.py)) is a Gymnasium environment with Dict observations and Dict actions. 
+By default one step is 5 minutes (`control_step: 300` s) and one episode is one day long (`EPISODE_LENGTH: 288`).
+The final environment is assembled from three types of components.
+
+
+**Infrastructures**: devices that consume or generate power, some of which take an action.
+
+
+| Class | Description | Action |
+|---|---|---|
+| `BatteryLinear` / `BatteryLinearWrapper` | linear battery model; the wrapper redraws power and capacity every episode | `a_battery` |
+| `BatteryTremblay` | Tremblay battery model with a series-parallel cell pack | `a_battery` |
+| `SolarPanel` / `SolarPanelWrapper` | PV output from irradiance; the wrapper redraws the rating every episode | — |
+| `WindTurbine` | power curve with cut-in, rated and cut-out wind speeds | — |
+| `HouseholdEnergyConsumers` | household load driven by the load profile | — |
+| `HP` | heat pump for heating and cooling | `a_hp` |
+| `HPRbc` | rule-based heat pump (deadband around the set-point) | — |
+| `LinearEVCharger` | EV charger, optionally with vehicle-to-grid (V2G) | `a_lin_ev_charger` |
+| `EvcsRbc` | rule-based EV charger (charges to the target state of charge by the deadline) | — |
+
+
+**State sources**: time series and physics that drive the observation.
+
+| Class | Description |
+|---|---|
+| `WeatherDataSource` | outdoor temperature, solar irradiance, wind speed (DWD or WPuQ CSVs) |
+| `EnergyPriceDayDynDataSource`, `EnergyPriceYearDynDataSource` | day-ahead spot prices; they differ in how the price is normalised (max over the next 24 h, or a blend of year and episode statistics) |
+| `EnergyPriceFixDataSource` | fixed or time-of-use tariff defined by price bands |
+| `DesiredUserEnergyNeed` | household load profile |
+| `EVState` | EV arrival and departure schedule with per-session targets |
+| `OperatorEnergyControl` | grid-operator power limit, constant or from a CSV |
+| `DateSource` | day of the year |
+| `InsideTemperature` | indoor set-point profile; publishes the temperature error |
+| `BuildingHeatLoss` | 1R1C thermal model of the building (`K`, `mC`) |
+
+
+**Rewards** are summed into one scalar. 
+They exist in two families, [rewards/v0/](adv_building_gym/components/rewards/v0/) and [rewards/v1/](adv_building_gym/components/rewards/v1/), used by the `configs/trial_cfgs/v0/` and `v1/` trials respectively. 
+They cover economic cost (per step, long-term, asymmetric sell price), energy use, thermal comfort, battery targets and management, EV charging, grid-operator limits and action smoothness.
+
+**Step order.** Actions are applied, then devices and the building physics update, then the power balance and cost are computed. 
+Time then advances, the time series move to the next row, and termination and rewards are evaluated over the full (s, a, s′) transition ([`AdvBuildingGym.step`](adv_building_gym/core/env.py)).
+
+
+**Wrappers.** The Ray environment creator ([ray/env_creator.py](adv_building_gym/ray/env_creator.py)) applies these in order:
+
+1. `HistoryWrapper` (optional): past values of selected keys.
+2. `ForecastWrapper` (optional): `s_fc_*` look-ahead values from forecastable sources.
+3. `FlattenAction` + `RescaleAction`: the policy acts in `Box(-1, 1)`.
+4. `FlattenObservation`: flat observation vector.
+
+The Stable-Baselines3 adapter keeps the Dict observation and uses `MultiInputPolicy`.
+
+
+## Prepared extensions
+
+The environment supports more than the current experiments use:
+
+- **Fixed and time-of-use tariffs** through `EnergyPriceFixDataSource`.
+- **Asymmetric buy and sell prices.** `EconomicSellFactorRewardV0` pays exports at `sell_price_factor` × price, and the env's cost tracker bills `cum_price_EUR` with the same factor.
+- **Grid-operator power limits** (`OperatorEnergyControl` + `OperatorEnergyControlReward`).
+- **Non-controllable devices.** `HPRbc` and `EvcsRbc` replace `HP` and `LinearEVCharger` with the same observation keys and no action. 
+Configure one or the other, never both.
+- **Heat pump control on the 1R1C building model**, plus building envelope variants in [configs/statesource_cfgs/GEN/building/](configs/statesource_cfgs/GEN/building/).
+- **Curricula.** Reward schedules (modes `off`, `fix`, `gradual_add`, `random`, `dirichlet`), infrastructure and state-source schedules that hot-swap components during training, and an exploration reset on swaps.
+Only infrastructure schedules are used currently in the experiments.
+- **[BETA] Multi-agent training** with one agent per actuator ([rl_ma_train.py](rl_ma_train.py), [ray/ma_env.py](adv_building_gym/ray/ma_env.py)). Experimental and not used in the current experiments.
+
+<!-- - **Classic controllers** carried over from LLECBuildingGym (PI, PID, fuzzy, MPC with Pyomo) in [adv_building_gym/controllers/](adv_building_gym/controllers/). No current training or evaluation script uses them. -->
+
+
+## Repository layout
+
+```text
+AdvBuildingGym/
+├── adv_building_gym/
+│   ├── core/             # AdvBuildingGym env + wrappers (history, forecast, action flattening)
+│   ├── components/       # infrastructure/, statesources/, rewards/, registry, context emitter
+│   ├── config/           # trial YAML loading: env/, data/, rewards/, training/
+│   ├── ray/              # Ray RLlib adapter: training, callbacks, evaluation
+│   ├── sb/               # Stable-Baselines3 adapter: training, callbacks, evaluation
+│   ├── rbc_strats/       # rule-based battery strategies (baselines)
+│   ├── controllers/      # PI / PID / fuzzy / MPC (legacy, not wired in)
+│   └── _common/          # shared utilities (normalisation, eval results, early stopping, ...)
+├── configs/
+│   ├── trial_cfgs/       # trial YAMLs: v0/, v1/ → GEN/ (generalisation), STA/ (fixed setups), TL/ (reward curricula, v0 only)
+│   ├── infra_cfgs/       # infrastructure sets referenced by infra schedules
+│   ├── statesource_cfgs/ # building variants referenced by state-source schedules
+│   ├── schedules/        # data and reward schedules
+│   └── eval_sweeps/      # seed sweeps for snapshot evaluation
+├── preprocessing/        # data download, preprocessing and synthesis pipelines
+├── data/                 # raw and preprocessed CSVs; EV, set-point and operator profiles
+├── plotting/             # trajectory plots, dataset plots, evaluation dashboard
+├── tools/snapshot/       # immutable code + config snapshots and SLURM submission
+├── slurm_scripts/        # sbatch wrappers
+├── thesis_eval/          # notebooks, figures and tables for the thesis experiments
+├── tests/                # pytest suite
+├── docs/                 # design notes, analyses
+├── run_train_ray.py      # training (Ray RLlib: PPO, SAC, DreamerV3)
+├── run_train_sb.py       # training (Stable-Baselines3: PPO, SAC)
+├── run_eval_ray.py       # evaluation of Ray checkpoints
+├── run_eval_sb.py        # evaluation of SB3 models
+├── run_eval_rule_based.py# evaluation of rule-based strategies
+└── rl_ma_train.py        # multi-agent training ([BETA] experimental)
 ```
 
-EV usage profiles (`data/ev_usage_profiles/ev_*.csv`) are manually authored and do not require fetching.
+## Installation
 
-<!-- Add NOTEs:
-TODO VP: SAC and PPO notes
-SAC: https://spinningup.openai.com/en/latest/algorithms/sac.html
-- test alpha param, controlling exploitation, exploration tradeoff
+Requires Python 3.12.
 
-PPO: https://spinningup.openai.com/en/latest/algorithms/ppo.html
-
--->
-
-### Slurm
-
-A bit more detailed help here: https://www.nhr.kit.edu/userdocs/haicore/batch/
-
-```bash
-sbatch slurm_scripts/slurm_train_ray.sh # start a job
-scancel jobID # cancel a job
-scontrol show job [jobid] # see job state info
-squeue #Displays information about active, eligible, blocked, and/or recently completed jobs
-```
-
-<div align="center">
-    <img src="data/img/HeatPumpEnvironment.gif" style="width:44%;">
-</div>
-
-
-**⚠️ Note**: _Last update on 28.01.2026_
-
-<div align="left"> 
-This repository contains the official code of our paper <strong>"Advanced Deep Reinforcement Learning for Heat Pump Control in Residential Buildings"</strong>.
-It features a custom <a href="https://github.com/Farama-Foundation/Gymnasium" target="_blank"><strong>Gymnasium</strong></a> environment for smart heat pump control in residential buildings, inspired by the Heat Pump House at the  
-<a href="https://www.iai.kit.edu/english/RPE-LLEC.php" target="_blank"><strong>Living Lab Energy Campus (LLEC)</strong></a>, KIT.
-</div>
-
-## 1. Introduction LLECBuildingGym
-
-<details>
-  <summary>Click to expand/collapse</summary>
-
-### 1.1 Description
-
-The **[adv_building_gym.py](adv_building_gym/envs/adv_building_gym.py)** simulates thermal building dynamics with heat pump control in 5-minute intervals.
-This framework leverages the **[Gymnasium](https://github.com/Farama-Foundation/Gymnasium)** and **[Pyomo](https://github.com/Pyomo/pyomo)** libraries, making it suitable for both reinforcement learning agents and advanced control strategies.
-
-### Papers -- literature research
-
-#### Learning to Optimize Multi-Objective Alignment Through Dynamic Reward Weighting
-
-Link: https://arxiv.org/abs/2509.11452v1
-
-About LLMs and multi objective RL setup, how to align LLMs to multiple goals -- topic: dynamic reward weighting
-
-Dynamic reward weight generator -- based on Dirichlet distribution
-lists rewards --> knows how many weights and for which rewards should it schedule. There is already a markdown about this. It's already implemented as a reward schdedule mode.
-
-Hypervolume guided weight adaptation: by default fix weights, but somehow if hypervolume could be enlarged then the weighting is updated. The original, user-set weights are not overwritten, the original reward is multiplied with a meta-reward.
-
-Gradient-based weight optimization: no pre-defined reward weights, but compute learning of how each objective contributes to the overall performance -- based on gradients and reallocates weights based on this. 
-
-Defines Pareto front, Hypervolume indicator
-
-TODO VP: "To the best of our knowledge" -- important phrase to use in thesis work
-
-#### Comprehensive Overview of Reward Engineering and Shaping in Advancing Reinforcement Learning Applications
-
-Link: https://ieeexplore.ieee.org/abstract/document/10763475
-
-Reward engineering:
-- R(s, a, s')
-- guidance towards desired states and actions
-- informative for learning, sparse to prevent trivial solutions
-- How to design such rewards, which find the desired behaviour and not the unintended shortcuts.
-
-Reward shaping:
-- about fine-tuning the reward function
-- improve to learning process without altering the policy -- only about faster learning
-- Potential-based reward shaping -- reward based only on s, s' -- R'(s,a,s') = R(s,a,s') + γ R_p(s') − R_p(s)
-
-2 approaches:
-- "Reward is Enough" -- single scalar reward meaning progress, environment complexity not considered -- SO
-- "Reward is Not Enough" -- can't rely on a single scalar value, vector rewards -- MO
-
-Reward design pitfalls:
-- Reward Sparsity
-- Deceptive Rewards
-- Reward Hacking
-- Unintended Consequences
-- Misaligned Reward with True Objective
-- Reward Function Complexity
-- Difficulty in Evaluating Reward Design
-
-
-
-#### Reinforcement Learning-Based Energy Management of Smart Home with Rooftop Solar Photovoltaic System, Energy Storage System, and Home Appliances. 
-Link: https://www.mdpi.com/1424-8220/19/18/3937
-Uses RL, tabular Q learning (tables, discrete state-action pairs), PV, ESS, AC and washing machine.
-Cost and comfort optimisation. Seems like each infrastructure has its own agent -- or at least own head in the policy network
-Restricted weather data (only temp)
-
-Previous works: almost everything done... multi agent, Q learning, manage HVAC, manage ESS
-This paper: 
-- ESS + consumer comfort -- but with TOU tariff, not with variable, real day ahead data
-- only optimises for energy cost and thermal comfort -- 2 optimisation goals
-- shiftable and non shiftable energy consumption -- washing machine can't be stopped at any time, charging can
-- shiftable interruptable/non-interruptable, non shiftable interruptable/non-interruptable
-- only PV, ESS, HVAC -- no EV and Wind turbine
-- only binary (on/off) ESS control?
-- schedule of the energy usage is learnt, not the actual energy allocation -- energy allocation is discrete in this paper
-- scheduling resolution is 1h, not 5min -- update in each hour, not in every 5 mins.
-- for indoor temp: they predict it with an NN -- no physical model, just NN behind actual temp prediction -- T_act in the current step is predicted by an NN -- I have physics here instead
-- user desired temp is a range, not an exact value -- in my project it's a fix value with a threshold up and down
-- they compare MILP and RL control of the same setup -- RL is better
-
-New stuff can be in my thesis: 
-- based on data and actions, forecast the passive states as well -- try to learn the passive states -- model based RL (?)
-- resolution is more fine grained, I use wholesale price data
-- Flexibility: not only PV, HVAC and ESS -- wind turbine, etc, config and flexibility
-- more rewards, more reward aspects, flexible to config how many rewards. Optimise on achieved reward or to reward rate
-
-TODO VP: How to solve that the same model used for different infra/state configs?
---> if it's multi agent, then it's easy -- each agent outputs an action, number of agents change, but not really their state
-- What if the state sources config changes as well? -- I guess no need to overcome this
-
-TODO noprio VP: tune discount factor of the Q values -- long term or short term optimisation
-
-TODO VP: take out big oscillations from the battery charge discharge actions -- or at least inspect whether it happens or not -- refactor the ActionSmoothReward that it catches automatically the last 10 actions and computes the FT and detects high frequency oscillations -- if detected, punishes, if not detected, zero reward.
---> Check this out, it's implemented, but the effect has to be proved
-
-TODO VP: at ESS -- add lifetime decay/degradation in capacity or in discharge rate
-TODO VP: use the WPuQ PV production data (actions..?) along with its weather data?
-
-#### Enhanced Robust Index Model for Load Scheduling of a Home Energy Local Network With a Load Shifting Strategy
-
-Link: https://ieeexplore.ieee.org/document/8600304
-
-Paper:
-- load scheduling
-- robust index model: to opt home energy local network (HELN)
-- rather deals with how to optimise so, that in the case of max uncertainty (worst case scenario) the system is still functional and does not violate hard constraints.
-- no RL, it's not a really relevant paper
-
-
-New idea for my thesis:
-- predict actions and states for N steps (model based RL) -- MPC and Monte Carlo sims would be something like this
-See into the future for statesources where it's possible.
-
-TODO VP 2026.01.20. : Add forecasting window (and thus MPC) for the states and the
-actions as well in the config, generally window size is 0.
-Allow it only for the forecasted desired states -- not for the actual system states
-Handle if no more forecasting is available (csv ended and similar scenarios)
-Add this as a Wrapper on the env...
-So the wrapper extends the observations with the forecasting data
-
-#### Real building implementation of a deep reinforcement learning controller to enhance energy efficiency and indoor temperature control
-
-Link: https://www.sciencedirect.com/science/article/pii/S0306261924008304?via%3Dihub
-
-SAC on building, thermal and economic goals
-Goal was: beat the RBCs -- rule based controllers
-2 objectives: maintain temperature and optimise energy consumption
-"Resistance-Capacitance (RC) model calibrated with real building data" -- exactly what Gökhan's paper was about.
-In the papaer: comparison of RBCs, PI, MPC and DRL controllers
-
-
-
-#### State of the Art of Machine Learning Models in Energy Systems, a Systematic Review
-
-Link: https://www.mdpi.com/1996-1073/12/7/1301
-
-Paper:
-- Comprehensive review of ML and energy systems, 2019, ANN, but no RL
-- single domain systems (only PV, only HP, etc..)
-- likely not really relevant, as it is an older survey paper, a SOTA overview from 2019
-- does not mention RL --> drop this
-
-#### Optimal Energy System Scheduling Using A Constraint-Aware Reinforcement Learning Algorithm
-
-Link: https://www.sciencedirect.com/science/article/pii/S0142061523002879
-
-GitHub: https://github.com/EnergyQuantResearch/Optimal-Energy-System-Scheduling-Combining-Mixed-Integer-Programming-and-Deep-Reinforcement-Learning
-
-Summary:
-- goes with RL and MIP (mixed integer programming) -- MIP-DQP
-- model free RL
-- constraints are important, they consider them better (...)
-- They deal with: "enforcing operational constraints during the online scheduling stage is a critical challenge for DRL algorithms and it must be addressed in order to enable their wide adoption in real system"
- - operational constraints of RL algorithms
-- a lot of implementations are not freely accessible...
-- strict enforcement of each operational condition in the action space (e.g. power balance constraint), even in
-unseen test data
-- uses day ahead wholesale prices
-- needs full future information (consumption, dynamic prices, weather) -- to keep/ensure all the constraints
-
-Conclusion:
-- no generalisation for multiple env setups
-- constrainsts: Env and the infra elements enforce them...
-- quite similar to my project...
-- they do not handle varying infrastructure or other user interventions -- like EV connect/disconnect
-- they only deal with energy, only optimise for energetic balance -- no other rewards regarding temperature, EV, etc...
-
-
-TODO VP: look up KIT EnergyLab 2.0 data sources for weather data -- is it existing, can I use it?
-
-#### Reinforcement Learning-based Home Energy Management with Heterogeneous Batteries and Stochastic EV Behaviour
-
-Link: https://www.researchgate.net/publication/400459460_Reinforcement_Learning-based_Home_Energy_Management_with_Heterogeneous_Batteries_and_Stochastic_EV_Behaviour
-
-Arxiv: https://arxiv.org/abs/2602.04578
-
-Summary:
-- EV, battery, PV -- focus on the exact battery degradation and on its simulation
-- DRL, constrained Markov decision process (CMDP) and Lagrangian SAC
-- HVAC included
-- has different battery degradation dynamics
-- primary and secondary constraints... -- ESS, cost opt and comfort, EV constraints
-- benchmarks against 2 rule based controllers...
-- nice, but no code available publically
-
-Conclusion:
-- in my framework battery deg can be built in (however it's not) -- only using a different battery class is needed
-- they covered almost everything...
-- no wind energy
-- no TL, no generalisation -- only a single building
---> My project: TL and generalisation across configurations -- can we find such representation of the states, which is infrastructure independent and general for a lot of building charachteristics?
-Finding the: "General controller" -- is it possble?
-
-#### A comparative analysis of PPO and SAC algorithms for energy optimization with country-level energy consumption insights
-
-Paper: https://www.sciencedirect.com/science/article/pii/S2468601825000501
-
-Summary:
-- rather larger scale: national-scale energy optimization
-- PPO vs. SAC evaluation
-- multi-phase evaluation strategy -- TODO VP: what do they mean by that?
-
-Conclusion:
-- not really relevant
-- controlled thing is not clear (share of renewables and fossiles in the energy mix -- renewables are not controllable for the most of the time...)
-
-#### A deep reinforcement learning approach based energy management strategy for home energy system considering the time-of-use price and real-time control of energy storage system
-
-Link: https://www.sciencedirect.com/science/article/pii/S2352484724001501
-
-Summary:
-- 
-
-Conclusion:
-
-#### A multi-objective optimisation approach applied to offshore wind farm location selection
-
-Link: https://link.springer.com/article/10.1007/s40722-017-0092-8
-
-
-
-
-#### Deep reinforcement learning for energy management in a microgrid with flexible demand
-
-Link: https://www.sciencedirect.com/science/article/pii/S2352467720303441
-
-Source code: https://zenodo.org/records/3598386
-
-Summary:
-- Energy management of a microgrid -- wind turbine, ESS, HVAC, grid
-- flexible resources, schedule them (e.g.: directly controllable loads, thermostatically controlled loads, price responsive loads, EVs)
-- Electricity prices considered
-- "increase the flexibility in demand by combining groups of TCLs and price-responsive loads participating in a demand response (DR) program, alongside a shared ESS, a wind power resource"
-- writes about model based and model free methods, MPC and RL
-- 7 SOTA RL algo, like A3C, PPO -- they improve these 2 algorihtms as well
-- E_price and renewable production data from Finland
-- optimisation on "gross energy profit from operations, and optimal use of local resources and flexibility components"
-- they use real multi agent setup (with 3 layer architecture: control, information and physical layers)
-- They use a clean MDP -- means no history states or history tracking.
-- They only use ON/OFF at the HP, no exact energy control -- RL only controls if T_in is in a range, otherwise deterministic safety controller against too extreme temperatures. 
---> TODO VP: build in this safety control mechanism to the HP -- add a positive and negative bound to the desired temp datasource, read them as well as observations and in the case of violation, do max heating/max cooling regardless of rewards to maintain temperature. Maybe a similar mechanism is useful for EV charger -- plan a trajectory in the 1st place, if it's not followed with a margin, charge and do not care about other reward violations.
-- They use discrete observation and discrete action space, e.g. discrete price levels, discrete, level-based actions -- smaller state and action spaces 
-- they can shift consumptions and power grid loads to a certain extent. In each timestep, they choose a set of shifted loads to actually enable/disable -- formula for the choice, at high prices less likely execution, at low prices more likely exec -- Model for price responsive loads.
-- they use single agent setup
-- simple MDP: how is the dependency on the actual state understood? What the environment exposes? Basically yes
-- Rewards only the energy aspects, uses hard constraints -- backup manual control if e.g. it would underheat the building, etc.. 
---> comfort aspects are not enforced by rewards.
-- They use DQN, SARSA, Double DQN, PPO, SAC, A3C, DDPG
-
-- TODO VP: pre heating/pre-cooling reward/behaviour when energy is cheap -- how to motivate this with reward? PreTempMaintain. 
-
-
-- TODO VP: Add FutureObservationCollectorConnector -- to see static future states, like weather, prices, etc... -- add it as optional connector or EnvWrapper.
-- TODO VP: Prediction model about the future state -- model based RL
-
-##### MLFlow and Tensorboard
-
-TODO VP: maybe integrate it -- for model, experiment and state-observation space management
-
-MLFlow:
-- Lifecycle management
-- Tracking: log parameter, code versions, metrics, and output files, hyperparameters
-- Model Registry: model versioning, version mangement and collaboration tool
-- Deployment: model packaging -- how to deploy model to real application
-- Agnostic: works with many language and frameworks
---> it's for reproducibility -- that's needed for me, to have a registry about models and their env -- as during the development both can change (mostly state and action spaces change of course -- the env, not really the model)
-- MLflowLoggerCallback in ray tune, can store the final model checkpoint -- however this one is solved by the current setup as well.
---> MLFlow does not seem to good to track Env changes, behavioural changes...
-
-Tensorboard:
-- For metrics -- during training and across training runs, track achieved_reward, reward_rate and episode_reward_mean
-- track policy_entropy, episode_reward_mean
-
-
-TODO VP: This is implemented already: no need for real reward scheduling, because it's enough to have a fix set of rewards and it's enough to schedule the weighting of the rewards -- switched off rewards get 0.0 as weight.
-The open question is the scheduling -- how are then the reward weights scheduled among all the rewards? --> e.g. Dirichlet (more or less)
-
-Conclusion:
-- Idea: use trajectory tracking for the hard constraints -- for temperature, EV charging, etc.., and use RL based controllers for th ESS -- which can react to the changes, it can plan and follow strategy.
-- Idea: create a plan for EV charge, then track the planned trajectory -- planning can be RL based, trajectory tracking can be rule based.
-- Idea: buying and selling energy prices can differ -- data difference causes then different strategies -- one could show this as well
-- Important finding: semi deterministic training of A3C -- Eps greedy action selection: for X % select action based on policy, for the remaining select action completely random -- keeps up the exploration in later phases as well.
-- Important finding: experience replay -- replay buffer, off policy algorithms, prioritise newer trajectories from the replay buffer.
-
-TODO VP: https://www.clear.kit.edu/sparkassenpreis.php -- Thesis einreichen.
-
-#### SACn: Soft Actor-Critic with n-step Returns
-
-Link: https://www.researchgate.net/publication/398720775_SACn_Soft_Actor-Critic_with_n-step_Returns
-
-N step returns: convergence speedup
-Some improvements with the basic n step returns... -- because the original N step return with SAC introduces a bias, because of the changes in action distribution...
-
-Not an important paper !!!
-
-#### Continual Multi-Objective Reinforcement Learning via Reward Model Rehearsal
-
-Link ACM: https://dl.acm.org/doi/10.24963/ijcai.2024/490
-Link paper: https://www.ijcai.org/proceedings/2024/0490.pdf
-
-About MORL
-user weights the preferences -- which reward signal will be stronger, which objective is prioritised
-"evolution of objectives throughout the learning process" -- multi phase, multi objective RL setup
-
-TODO VP: How to mitigate the issue, that the EV controller does not always need a control signal -- but if actions are supressed, the exploration in that dimension dies, so when an EV is connected, the SA policy does not do anything because it has not discovered anything yet -- it was supressed.
---> this one yields for a standalone policy NN and standalone action selection for the EV controller as it's a shorter term problem...
-
-"agent encounters a sequence of MORL tasks with objectives altering continually" -- it's like my constrained random reward selection idea/solution
-
-some technique to update the policy with outdated rewards to not forget the older learnt behaviour... -- prevent catastrophic forgetting
-
-TODO VP: continue a bit before the "4 Method" section
-
-TODO VP: Hypervolume metric -- famous MORL metric
-
-#### A fast and elitist multiobjective genetic algorithm: NSGA-II
-
-Link: https://ieeexplore.ieee.org/document/996017
-
-
-
-#### A practical guide to multi-objective reinforcement learning and planning
-
-Link: https://link.springer.com/article/10.1007/s10458-022-09552-y
-
-TODO VP: read this
-
-#### Meta-Learning for Multi-objective Reinforcement Learning
-
-Link: https://kth.diva-portal.org/smash/record.jsf?pid=diva2%3A1445556&dswid=-9547 / https://arxiv.org/abs/1811.03376
-
-#### Dynamic weights in multi-objective deep reinforcement learning
-
-Link: https://biblio.vub.ac.be/vubirfiles/76358018/abels19a.pdf
-
-#### Prediction-Guided Multi-Objective Reinforcement Learning for Continuous Robot Control
-
-Link: https://people.csail.mit.edu/jiex/papers/PGMORL/paper.pdf
-
-"updates a policy population using an evolutionary algorithm to approximate the Pareto front"
-
-
-
-#### Deep Reinforcement Learning for Real-Time Energy Management in Smart Home
-
-Link: https://ieeexplore.ieee.org/document/10066193
-
-
-
-
-- TODO VP: Idea: potential based reward shaping -- to the actual reward: add estimation about next state, substract estimation about the actual state.
-- TODO VP: How to use expert trajectories for reward shaping -- distill reward function from expert trajectories -- inverse reinforcement learning, etc...
-- TODO VP: 4. Preference-Based Construction: Sometimes you don't have full trajectories, or the trajectories are "noisy." You can construct a reward function by having a human (expert) compare two trajectory segments and say which is better. Collect pairs of short clips of the agent's behavior.Expert Labels: The expert identifies which clip is "better."Reward Modeling: A neural network $r_\psi(s, a)$ is trained via cross-entropy loss to predict the expert's preference.RL Training: Use the learned $r_\psi$ as the reward signal for standard RL.
-
-#### Sample-Efficient Multi-Objective Learning via Generalized Policy Improvement Prioritization
-
-Link: https://arxiv.org/pdf/2301.07784
-
-MORL: set of policies with different preferences over the reward functions
-
-
-
-
-### Frameworks
-
-#### CityLearn
-
-Link: https://www.citylearn.net/
-GitHub: https://github.com/citylearn-project/CityLearn
-
-Summary:
-- MARL for energy coordination among multiple buildings
-- flatten the energy need of a neighbourhood -- control multiple households with cooperating agents
-- several controller types: Rule based control (RBC), MPC, RL
-- PV, EV with V2G
-- multiple buildings controlled together, to simulate a district -- possible to simulate a single building as well
-- a simulation environment -- maybe a decent starting point
-
-My project:
-- single household -- no grid, no cooperation with other buildings
-- intervention at eval, not only static behaviour (still a TODO)
-- more options to eval: generalisation and transfer -- feasible with this one as well, just the data and config management is missing I guess
-- Monte Carlo rollouts
-
-#### SinerGym
-
-Link: https://www.sciencedirect.com/science/article/pii/S0378778824011915
-GitHub: https://github.com/ugr-sail/sinergym
-Docs: https://ugr-sail.github.io/sinergym/compilation/main/index.html
-
-Summary:
-- seems really similar to my Gym and repo...
-- Building energy optimisation (BEO)
-- 3 other frameworks: RL Testbed for EnergyPlus, BOPTEST-Gym, Energym -- they are still active
-- not maintained anymore: Gym-Eplus [10], ModelicaGym, [41], Tropical Precooling Environment [42], COmprehensive Building, Simulator (COBS) [43], and RL-EmsPy
-- GridLearn [45] and Grid2Op [46] -- rahter grid management and not BEO
-- it seems like they do not use price/energy cost data
-- it seems like they only use TMY (typical meterological year -- median weather data over multiyear period), not daily weather data
-- RL: they trained 40 years simulation -- 365 * 40 = 14600 episodes in my framework...
-- fixed reward: in my repo, it's easily replaceable, flexible
-- for them PPO was strong -- but only temp control and min. energy usage were the objectives.
-- has W&B integration, configurable -- maybe a TODO VP: W&B and tensorboard fire up
-- hyperparameter optimization of a DRL algorithm... -- that's what I would do as well...
-
-Conclusion:
-- in framework, it's similar, in goals it's not -- SinerGym paper is only about the framework and it's basic usage.
-- I need a bit more advanced data and env config management
-- in my work it's RLLib
-- the paper shows some good figures about the training process, worth using them for ideas
-
-TODO VP: Idea -- maybe it is easier to have MA setup with distinct state spaces -- then each agent NN has its own input heads (general input heads and specific input heads)
-The problem is the state space inputs -- that can't be changed easily.
-What if each state source / input has a pre-net, which translates the actual state to an intermediate N long vector -- each state variable/state source (history with K steps) would be mapped to an N long vector (only an N long vector, so it's an encoder...) -- state-source encoder? Trained to have an intermediate representation about the specific statesource.
-
-TODO VP: Google DeepMind -- they reduced their energy usage as well, take a look onto that
-
-##### EnergyPlus -- simulator:
-
-Link: https://energyplus.readthedocs.io/en/latest/api.html
-
-GitHub: https://github.com/NatLabRockies/EnergyPlus
-
-Summary:
-- What is it? An energy analysis and thermal load simulation program for buildings
-- a mighty simulator/simulation engine
-- Deals with building geometry, materials, HVAC systems, thermal calculations and energy usage
-- OpenSource
-- processes building config and weather time series
-
-Conclusion:
-- just simulator, no RL, no config management
-- no building wide generalisation targeted -- EnergyPlus simulates buildings, nothing more
-
-#### NatLabRockies/dss-cosim
-
-GitHub: https://github.com/NatLabRockies/dss-cosim
-
-Summary:
-- Simulation framework
-- interaction between power distribution and distr. energy resource controllers
-- bridge between control logic and OpenDSS power distr. system simulator
-
-Conclusion:
-- not really relevant, it's rather large scale and more physical
-- it's a simulator bridge, no control defined -- that's another module
-- it's for testing controllers
-
-
-#### Curriculum learning
-
-Link: https://docs.ray.io/en/latest/rllib/rllib-examples.html#curriculum-learning
-
-Useful docs, link: https://docs.ray.io/en/latest/rllib/rllib-advanced-api.html#curriculum-learning
-
-
-#### Explicable Reward Design for Reinforcement Learning Agents
-
-Link to paper: https://machineteaching.mpi-sws.org/files/papers/explicable_reward_design.pdf
-
-Summary:
-- it's about reward design, how to design explainable rewards -- what are the mathematical criteria
-- explainable: informativeness and spareseness -- tradeoff
-
-
-#### Key Features
-
-- Single-zone indoor thermal model with electric heat pump control and heat loss dynamics
-- Dynamic energy pricing and weather inputs
-- Configurable heat pump control every 5 minutes
-- Exogenous variables outdoor temperature and dynamic energy prices
-- Modular design supporting custom reward modes and controllers (RL, PI, PID, Fuzzy, MPC)
-
-### 1.2 Project Structure
-
-```bash
-LLECBuildingGym/                              # Root directory of the project
-├── data/                                     # Input data (e.g., weather, pricing)
-├── adv_building_gym/                         # Main Python package: Gym environment and controllers
-│   ├── controllers/                          # Other controllers; Fuzzy, MPC, PI, PID
-│   │   ├── __init__.py                       # Exports controller classes
-│   │   ├── fuzzy_controller.py               # Fuzzy controller
-│   │   ├── mpc_controller.py                 # MPC controller
-│   │   ├── pi_controller.py                  # PI controller
-│   │   ├── pid_controller.py                 # PID controller
-│   │   └── README_MPC.md                     # MPC documentation and usage instructions
-│   ├── envs/                                 # Submodule with environment definitions
-│   │   ├── __init__.py                       # Exports environments for external use
-│   │   └── base_building_gym.py              # Main environment logic and control integration
-│   └── __init__.py                           # Registers environments
-├── models/                                   # Saved trained models (PPO, SAC, DDPG,TD3, A2C)
-├── plot-paper/                               # Notebooks to generate figures and tables
-│   ├── check_envs_registration.ipynb         # Verifies registered Gymnasium environments
-│   ├── generate_table03_summary_stats.ipynb  # Generate Table 03
-│   ├── plot_fig03_temperature_data.ipynb     # Plots indoor/outdoor temperature data for Figure 03
-│   ├── plot_fig04_price_data.ipynb           # Plots dynamic energy prices for Figure 04
-│   ├── plot_fig05_indoor_temp_setpoint.ipynb # Plots dynamic indoor temp setpoints for Figure 05
-│   └── preprocess_outdoor_temperature.ipynb  # Prepares outdoor temperature time series
-├── slurm_logs/
-│   ├── eval/                                 # SLURM logs from evaluation jobs
-│   └── train/                                # SLURM logs from training jobs
-│   └── data_setup/                           # SLURM logs from data setup jobs
-├── slurm_script/                             # SLURM job submission scripts
-├── results/                                  # Evaluation logs and result CSVs
-├── .gitignore                                # Ignore in version control
-├── LICENSE                                   # Licensing
-├── README.md                                 # Repo documentation and usage instructions
-├── pyproject.toml                            # Build system configuration
-├── requirements.txt                          # Python dependencies
-├── run_train_ray.py                          # Train RL models on the Ray RLlib new API stack
-├── run_eval_ray.py                           # Evaluate Ray-trained models
-└── run_train_sb.py                           # (Secondary) Stable-Baselines3 training
-```
-
-</details>
-
-## 2. Installation and Environment Setup
-
-<details>
-  <summary>Click to expand/collapse</summary>
-
-### 2.1a Haicore (Linux):
-
-Install / make sure you have Python 3.12.1 (`python --version` or `python3.12 --version`)
-
-Install link: https://www.python.org/downloads/release/python-3121/
-
-Clone the repository:
 ```bash
 git clone https://github.com/vince-pongracz/AdvBuildingGym
 python3.12 -m venv adv_env
 source adv_env/bin/activate
 cd AdvBuildingGym
 
-alias pip='python -m pip'
-
-pip install --upgrade pip
-pip install -r requirements.txt
-pip install -e .
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+python -m pip install -e .
 ```
 
-The virtual environment and project directory should be organized as shown below:
-```bash
-adv_env/        # Python virtual environment
-AdvBuildingGym/ # Root directory of the project
-```
 
-### 2.1b Local (Windows):
-
-Install Python 3.12.1 from https://www.python.org/downloads/release/python-3918 (newer Python versions may work but are not tested).
+**Evaluation dashboard assets.** Trajectory plots and the evaluation dashboard inline two JavaScript libraries, managed with npm. Install them once (Node.js and npm required):
 
 ```bash
-git clone https://github.com/KIT-IAI/LLECBuildingGym
-py -3.12 -m venv llec_env
-.\llec_env\Scripts\activate
-cd LLECBuildingGym
-
-python -m pip install --upgrade --force-reinstall pip
-pip install -r requirements_windows.txt
-pip install -e .
+npm install --prefix plotting/dashboard
 ```
 
+The libraries are only needed to *build* dashboards, not to view them. Versions are pinned in [plotting/dashboard/package.json](plotting/dashboard/package.json).
 
-### 2.2 Reinstallation (after code changes):
+
+**Jupyter kernel** (for the notebooks in `thesis_eval/`):
 
 ```bash
-pip uninstall adv_building_gym -y
-pip install -e .
+python -m ipykernel install --user --name=adv_env --display-name "Python (adv_env)"
 ```
 
-### 2.3 Environment Check (verify that the environment is registered correctly):
+
+## Data
+
+All data download and preprocessing runs from one entry point, it is worth running preprocessing using the SLURM script as it fetches a lot of data:
 
 ```bash
-python check_envs_registration.ipynb
+python preprocessing/data_setup.py                         # all pipelines
+python preprocessing/data_setup.py --years 2024 2025 2026  # restrict to some years
+python preprocessing/data_setup.py --skip-weather          # prices only
+python preprocessing/data_setup.py --synthesize            # also generate synthetic variants
+sbatch slurm_scripts/slurm_data_setup.sh                   # on SLURM
 ```
 
-### 2.4 For using Jupyter notebooks:
+
+| Data | Source | Output |
+|---|---|---|
+| Day-ahead electricity prices | [aWATTar](https://www.awattar.de/) and [Energy-Charts](https://www.energy-charts.info/) APIs | `data/e_price/` |
+| Weather | [DWD Climate Data Center](https://opendata.dwd.de/climate_environment/CDC/), station 04177 (Rheinstetten) by default | `data/weather/dwd/` |
+| Weather, household load | WPuQ dataset ([paper](https://www.nature.com/articles/s41597-022-01156-1), [Zenodo](https://zenodo.org/records/5642902)) | `data/weather/zenodo/`, `data/hh_consumption/wpuq/` |
+| EV usage, indoor set-points, grid-operator signals | CSV profiles in the repository | `data/ev_usage_profiles/`, `data/inside_temp/`, `data/operator_signals/` |
+
+Preprocessed CSVs keep physical units; the state sources normalise at runtime. Details: [data/DATA_README.md](data/DATA_README.md), [preprocessing/SYNTHESIZE_README.md](preprocessing/SYNTHESIZE_README.md).
+
+## Running experiments
+
+Every driver takes a single trial YAML (`--trial`). The trial bundles the algorithm, environment, rewards, schedules and hyperparameters.
+
+### Training
+
+The followings are just example scripts, it is not recommended to run them without SLURM and HPC.
 
 ```bash
-source llec_env/bin/activate
-pip install ipykernel
-python -m ipykernel install --user --name=llec_env --display-name "Python (llec_env)"
-jupyter kernelspec list
+python run_train_ray.py --trial configs/trial_cfgs/v0/GEN/gs_lin_bat_power_pv/lin_bat_power_pv_sampled_ppo.yaml
+python run_train_sb.py  --trial <trial.yaml>          # PPO or SAC only
+python run_train_ray.py --trial <trial.yaml> --cpu    # CPU-only smoke test
 ```
 
-Always activate the virtual environment (`source llec_env/bin/activate`) before starting Jupyter to ensure correct dependencies.
-After registering the kernel, restart Jupyter so the `Python (llec_env)` kernel becomes available.
+Training expects a GPU allocated by SLURM (`CUDA_VISIBLE_DEVICES`) and exits without one; `--cpu` bypasses that check. The algorithm comes from the trial's `algorithm:` key.
 
-</details>
-
-## Data Preprocessing
-
-Before training, set up data with the unified setup script.
-By default it runs **both** pipelines: electricity prices and weather/Zenodo.
+### Evaluation
 
 ```bash
-# Recommended: full setup (price + weather)
-python preprocessing/data_setup.py
-
-# Price-focused run only (disable weather pipeline)
-python preprocessing/data_setup.py --skip-weather --years 2023 2024 2025 2026
-
-# If raw prices already exist locally, skip API calls
-python preprocessing/data_setup.py --skip-weather --years 2025 --skip-price-fetch --raw-price-files data/e_price/2025_prices.csv
-
-# Weather-focused run only (disable price pipeline)
-python preprocessing/data_setup.py --skip-prices --skip-zenodo-download
+python run_eval_ray.py --trial <trial.yaml> --checkpoint <path> --episodes 10
+python run_eval_sb.py  --trial <trial.yaml> --checkpoint <path> --episodes 10
+python run_eval_rule_based.py --trial <trial.yaml> --strategy all --episodes 10
 ```
 
-See [data/DATA_README.md](data/DATA_README.md) for all options and manual fallback commands.
+- Without `--checkpoint`, `run_eval_ray.py` uses the latest checkpoint under `models/<trial_name>/ray/<algorithm>/`.
+- If the trial lists several evaluation configurations (`infra_schedule.configs.eval` or `statesource_schedule.configs.eval`), each one is evaluated separately.
+- `--data-mode` and `--data-day` override the data selection.
+- Trajectory dashboards are written by default.
 
-## 3. Training and Evaluation
 
-The current training stack is **Ray RLlib (new API stack)**. RL training and
-evaluation each have their own driver scripts; baseline controllers (PI, PID,
-Fuzzy, MPC) live in `adv_building_gym/controllers/` and are reachable from the
-evaluation flow.
+### Reproducible runs: snapshots
 
-### 3.1 RL Training (Ray RLlib)
-
-Driver: [run_train_ray.py](run_train_ray.py). Requires an env-topology YAML
-via `--load-config`; SLURM-allocated GPU is required.
+The snapshot tool freezes code and configs into `snapshots/<id>/` and submits a SLURM job against that copy:
 
 ```bash
-# PPO on the small env, 3500 episodes
-python run_train_ray.py --algorithm ppo --load-config configs/env/env_test1_small.yaml --episodes 3500
-
-# SAC, custom seed and best-checkpoint metric
-python run_train_ray.py --algorithm sac --load-config configs/env/env_test1_mid.yaml --seed 18 --episodes 5000 --metric achieved_reward
+python -m tools.snapshot.submit_snapshot --trial <trial.yaml> --kind train --sbatch="--time=24:00:00"
+python -m tools.snapshot.submit_snapshot --snapshot snapshots/<id> --kind eval -- --episodes 20
 ```
 
-Common flags: `--algorithm {ppo,sac}`, `--episodes`, `--seed`,
-`--metric {reward_rate,achieved_reward,episode_return_mean}`,
-`--checkpoint-frequency-episodes`, `--data-config`, `--reward-schedule`,
-`--infra-schedule`, `--grad-train`, `--log-trajectories`.
+Kinds are `train`, `train-cpu`, `train-sb`, `train-sb-cpu`, `train-ma`, `eval`, `eval-sb` and `eval-rbc`. 
+For `train`, the SLURM wrapper is chosen from the trial's algorithm; DreamerV3 gets a wrapper with fewer CPUs. 
+NOTE: this should be changed, as the framework updates, later RLlib versions can handle multiple EnvRunners for DreamerV3.
+Outputs land in `snapshots/<id>/runs/<kind>_<timestamp>/`. To evaluate many snapshots across many seeds, use [submit_snapshot_eval_seeds.sh](submit_snapshot_eval_seeds.sh) with a sweep file from [configs/eval_sweeps/](configs/eval_sweeps/).
 
-Hyperparameters (algorithm-agnostic + per-algorithm) live in
-[configs/training_param_config.yaml](configs/training_param_config.yaml). See
-[docs/workflow.md](docs/workflow.md) for the end-to-end flow.
 
-### 3.2 Evaluation (Ray RLlib)
-
-Driver: [run_eval_ray.py](run_eval_ray.py). Runs CPU-only, loads an `RLModule`
-checkpoint, and replays episodes through the same connector pipeline used at
-training time.
+### SLURM
 
 ```bash
-python run_eval_ray.py --algorithm ppo --load-config configs/env/env_test1_small.yaml --checkpoint <path> --episodes 10
-python run_eval_ray.py --algorithm sac --load-config configs/env/env_test1_mid.yaml --plot
+sbatch slurm_scripts/slurm_train_ray.sh --trial <trial.yaml>   # submit directly, without a snapshot
+squeue -u $USER                                                # your jobs
+squeue --start -u $USER                                        # estimated start times
+scontrol show job <job_id>                                     # job details
+scancel <job_id>                                               # cancel a job
 ```
 
-Outputs (mean / std / min / max per metric, per-episode trajectory JSON, and
-`trajectories.hdf5`) land in `eval_results/<YYYYmmdd_HHMM>_eval/`.
 
-### 3.3 Baselines
+Logs go to `slurm_logs/<task>/`; the `.err` file is the main debugging source. See [slurm_scripts/SLURM_README.md](slurm_scripts/SLURM_README.md) and the [HAICORE batch documentation](https://www.nhr.kit.edu/userdocs/haicore/batch/).
 
-`adv_building_gym/controllers/` contains PI, PID, Fuzzy and MPC (Pyomo)
-implementations that share the env's Dict action space — useful as
-non-learning baselines for evaluation comparisons.
 
-### 3.4 Stable-Baselines3 (secondary)
+### Plots and monitoring
 
-[run_train_sb.py](run_train_sb.py) provides a Stable-Baselines3 path for the
-same env. It is kept around for cross-checking but is not the primary
-training stack.
+```bash
+# Plot trajectories
+python -m plotting.traj_plotting --hdf5 eval_results/<run>/trajectories.hdf5 --all-episodes
 
-TODO VP: Rework this part
+# See and inspect tensorboard logs of a training (return, in-training evaluation curves, exploration, etc...)
+./start_tensorboard.sh models/<trial_name>/ray/<algorithm>/
+```
 
-<h2>4. Citation &#128221;</h2>
-<p>
-If you use this framework in your research, please consider citing our paper &#128221; and giving the repository a star &#11088;:
-</p>
+Dataset-level plots: `sbatch slurm_scripts/slurm_data_vis.sh`. See [plotting/PLOTTING_README.md](plotting/PLOTTING_README.md).
 
-```bibTeX
+
+## Trial configuration
+
+A trial YAML has these top-level sections:
+
+| Key | Purpose |
+|---|---|
+| `trial_name` | run name; also the output folder under `models/` |
+| `algorithm` | `ppo`, `sac` or `dreamerv3` |
+| `metric` | metric Ray Tune ranks results by (for example `episode_return_mean`) |
+| `num_envs` | number of parallel environments for the Stable-Baselines3 driver, default is 1. |
+| `seed`, `env_seed`, `eval_seed` | learner seed; environment seed (defaults to `seed`); in-training eval env seed (defaults to `env_seed`) |
+| `env_meta` | episode length, control step, `hst_env_wrapper`, `forecast_env_wrapper` configurations |
+| `training_params` | `common` (evaluation interval, early stopping, episode budget) plus `ppo` / `sac` / `dreamerv3` hyperparameters |
+| `infras`, `statesources` | inline component lists (or `null` when a schedule provides them) |
+| `rewards` | reward classes, weights and parameters |
+| `infra_schedule`, `statesource_schedule` | train and eval component sets, swap mode and cadence |
+| `reward_schedule`, `grad_train` | [BETA] reward curriculum (off unless `grad_train: true`) |
+| `data_schedule` | train and eval data schedule YAMLs |
+<!-- | `exploration_reset` | raise exploration again after schedule swaps | -->
+
+
+`seed` drives network initialisation and exploration. 
+`env_seed` drives everything random inside the environment: data variant, episode day and per-episode size draws. 
+Sweeping `seed` with `env_seed` fixed varies only the learner over an identical data sequence.
+
+
+## Outputs
+
+| Path | Content |
+|---|---|
+| `models/<trial_name>/ray/<algorithm>/` | Ray checkpoints and Tune results |
+| `models/<trial_name>/sb3/<algorithm>/` | SB3 models |
+| `ep_metrics/` | training-time episode metrics and eval trajectories (TensorBoard) |
+| `eval_results/<YYYYmmdd_HHMMSS>_eval/` | evaluation summary (JSON/CSV), `trajectories.hdf5`, plots |
+| `snapshots/<id>/runs/` | outputs of snapshot runs |
+| `slurm_logs/` | SLURM logs by task |
+
+These also apply under/within a snapshot directory.
+
+In evaluation results, `cum_price_EUR` is the net electricity cost of an episode: lower is better, and negative values mean net earnings.
+
+## Tests
+
+```bash
+python -m pip install pytest
+python -m pytest tests
+```
+
+<!-- 
+## Further documentation
+
+- [docs/workflow.md](docs/workflow.md): end-to-end flow (data → train → evaluate → plot)
+- [configs/trial_cfgs/TRIAL_HELP.md](configs/trial_cfgs/TRIAL_HELP.md): notes on individual trials
+- [configs/schedules/reward/README.md](configs/schedules/reward/README.md): reward schedules
+- [docs/about_generalisation_for_rl.md](docs/about_generalisation_for_rl.md): generalisation in RL, reading notes
+- [docs/hst_mgmt.md](docs/hst_mgmt.md): observation history design
+- [docs/eval_data_combinator.md](docs/eval_data_combinator.md): data variants in evaluation
+- [docs/README_archive.md](docs/README_archive.md): earlier goals, research ideas, literature notes and superseded README sections 
+
+-->
+
+
+## Origin and citation
+
+AdvBuildingGym has been inspired by the [LLECBuildingGym](https://github.com/KIT-IAI/LLECBuildingGym), a heat-pump control environment, related to the Heat Pump House at the [Living Lab Energy Campus (LLEC)](https://www.iai.kit.edu/english/RPE-LLEC.php), KIT. 
+This repository has been evolved further away from that.
+
+
+Reference to the LLECBuildingGym:
+
+```bibtex
 @inproceedings{demirel2025_LLECBuildingGym,
       title={Advanced Deep Reinforcement Learning for Heat Pump Control in Residential Buildings},
       author={Gökhan Demirel and Ömer Ekin and Jianlei Liu and Luigi Spatafora and Kevin Förderer and Veit Hagenmeyer},
@@ -895,5 +467,5 @@ If you use this framework in your research, please consider citing our paper &#1
 
 ## License
 
-This code is licensed under the **[MIT License](LICENSE)**.
-For any issues or any intention of cooperation, please feel free to contact me at **[pongrvin@gmail.com](pongrvin@gmail.com)**.
+This code is licensed under the [MIT License](LICENSE).
+For questions, contact the owner of the repository.

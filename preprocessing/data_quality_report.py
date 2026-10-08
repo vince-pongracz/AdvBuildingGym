@@ -181,6 +181,9 @@ def discover_csvs(
 ) -> list[tuple[Path, str, bool]]:
     """Discover CSV files to analyse.
 
+    The report deliberately covers ALL years present on disk (no --years
+    filter) so it always reflects the complete data inventory.
+
     Returns:
         List of (path, source_name, check_sentinel) tuples.
     """
@@ -409,7 +412,8 @@ def run_data_quality_report(
 ) -> list[DatasetReport]:
     """Run the full data quality report pipeline.
 
-    Called standalone or as a step from data_setup.py.
+    Always covers all years present on disk. Called standalone or as a step
+    from data_setup.py.
     """
     reports = generate_reports(dwd_dir, zenodo_weather_dir, price_dir)
     if not reports:

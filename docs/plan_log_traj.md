@@ -18,7 +18,7 @@
 
 Before this work, evaluation-time data collection was limited:
 - **`episode_callbacks.py`** (training): Saved flat observations, clipped actions, and raw policy actions per episode as JSON. However, observations were opaque flat arrays — no mapping back to named state variables (e.g., `temp_in_norm`, `E_price`, `solar_irradiance`).
-- **`run_eval_ray.py`** (evaluation): Collected only per-episode aggregates (total reward, reward rate, length). Step-level trajectories were discarded.
+- **`run_eval_ray.py`** (evaluation): Collected only per-episode aggregates (total reward, length). Step-level trajectories were discarded.
 
 **What was needed:** A structured, per-step trajectory log during evaluation that tracks every state variable by name, every action component by name, per-reward-function breakdowns, and energy metrics — all in a format ready for analysis and plotting. The data variant is stored along the trajectory log as well.
 
@@ -130,7 +130,7 @@ def on_episode_end(self, *, episode, env_runner, metrics_logger, env, **kwargs):
         self._save_trajectory(episode, env)
     else:
         # Training episode — log only scalar aggregates
-        metrics_logger.log_value("reward_rate", reward_rate, reduce="mean")
+        metrics_logger.log_value("achieved_reward", achieved_reward, reduce="mean")
 ```
 
 **`in_evaluation` is reliable:** It is a config property set at EnvRunner construction time (not a transient flag). On the new API stack, `env_runner` is always passed as `self` from the EnvRunner — it is never `None` in practice (despite the `Optional` type hint). A defensive `if env_runner is not None and env_runner.config.in_evaluation` guard is safe but technically unnecessary.
@@ -165,7 +165,7 @@ RLlib has a built-in offline data recording system (`config.offline_data(output=
 4. `state["prev_action"]` updated
 5. Energy accumulated: `cum_E_kWh`
 6. Reward computed: sum over `reward_funcs`
-7. `info` dict returned with: `action` (dict format), `reward`, `reward_breakdown`, `max_reward_step`, `cum_E_kWh`, `step_power_kW`, `power_breakdown`, `raw`, and conditionally `state` (deep copy, only when `log_full_info=True`)
+7. `info` dict returned with: `action` (dict format), `reward`, `reward_breakdown`, `cum_E_kWh`, `step_power_kW`, `power_breakdown`, `raw`, and conditionally `state` (deep copy, only when `log_full_info=True`)
 
 ### Key observation
 The `info["state"]` contains a full deep copy of all named state variables at each step — but only when `log_full_info=True` (evaluation mode). During training, this deep copy is skipped to save memory. For trajectory logging, the flag must be enabled on evaluation EnvRunners.
@@ -249,7 +249,6 @@ def extract_trajectory_from_infos(
 | **Actions (raw policy)** | Flat raw action from policy output | `episode.get_actions()` or eval loop. Added by caller, not by `extract_trajectory_from_infos()`. |
 | **Reward** | Total reward | `info["reward"]` |
 | **Per-reward breakdown** | Nested under `"reward_breakdown"` dict, one entry per reward function (e.g., `reward_breakdown.temp_reward`) | `info["reward_breakdown"]` |
-| **Max reward per step** | `max_reward_step` | `info["max_reward_step"]` |
 | **Energy** | `cum_E_kWh`, `step_power_kW` | `info["cum_E_kWh"]` (raw cumulative values stored as-is). `step_power_kW` from `info["step_power_kW"]`. |
 | **Power breakdown** | Nested under `"power_breakdown"` dict, one entry per infrastructure | `info["power_breakdown"]` |
 | **Raw values** | Nested under `"raw"` dict, unnormalised physical values (e.g., temperatures in Celsius) | `info["raw"]` |
@@ -404,7 +403,6 @@ info = {
     "action": action,
     "reward": reward,
     "reward_breakdown": reward_breakdown,
-    "max_reward_step": max_reward_step,
     "cum_E_kWh": self.cum_E_kWh,
     "step_power_kW": step_power_kW,
     "power_breakdown": power_breakdown,
@@ -425,7 +423,7 @@ The flag is set to `True` by `eval_runner.py` (before the eval loop) and by the 
 - **What was done:**
   1. `step()` computes rewards individually into `reward_breakdown` dict and includes it in `info["reward_breakdown"]`. The old `info["clipped_action"]` was removed (redundant with `info["action"]` in dict format).
   2. `reset()` includes `info["state"]` (conditional on `log_full_info`), plus `episode_date`, `episode_day_mode`, `data_variant`, and `raw` values.
-  3. `self.log_full_info: bool = False` gates the expensive deep copy of state into info. Additional info keys beyond the original plan: `max_reward_step`, `step_power_kW`, `power_breakdown` (per-infrastructure), `raw` (unnormalised physical values).
+  3. `self.log_full_info: bool = False` gates the expensive deep copy of state into info. Additional info keys beyond the original plan: `step_power_kW`, `power_breakdown` (per-infrastructure), `raw` (unnormalised physical values).
 
 ### Step 2: Create trajectory extraction utility — Done
 - **File:** `adv_building_gym/utils/trajectory_utils.py`
@@ -489,8 +487,6 @@ ep_metrics/
   },
   "summary": {
     "achieved_reward": 245.6,
-    "max_achievable_reward": 288.0,
-    "reward_rate": 0.8528,
     "cum_E_kWh": 12.34
   },
   "trajectory": {
@@ -509,7 +505,6 @@ ep_metrics/
     "raw_policy_action_0": [0.32, 0.41, 0.53, ...],
     "raw_policy_action_1": [0.68, 0.79, 0.88, ...],
     "reward": [0.9, 0.85, 0.88, ...],
-    "max_reward_step": [1.0, 1.0, 1.0, ...],
     "reward_breakdown": {
       "temp_reward": [0.8, 0.75, 0.78, ...],
       "economic_reward": [0.1, 0.1, 0.1, ...]

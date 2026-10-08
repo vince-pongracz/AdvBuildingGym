@@ -4,8 +4,9 @@ Each day is overlaid as a separate trace in the same figure so that days
 can be compared visually.  For multi-day plots an average curve with a
 +/- 1 std-dev band is added automatically.
 
-Profile data sources (desired_temp_in, ev_schedule, user_energy_need)
-overlay all available profiles in a single figure regardless of CLI dates.
+Profile data sources (desired_temp_in, ev_schedule, operator_signal,
+user_energy_need) overlay all available profiles in a single figure
+regardless of CLI dates.
 
 Usage:
     # Single day
@@ -48,6 +49,7 @@ from .common import (
 from .figure_builders import (
     build_desired_temp_figure,
     build_ev_schedule_figure,
+    build_operator_signal_figure,
     build_price_figure,
     build_user_energy_need_figure,
     build_weather_figures,
@@ -145,7 +147,7 @@ def _load_all_sources(
         dates,
     )
 
-    # Profile sources (desired_temp_in, ev_schedule, user_energy_need)
+    # Profile sources (desired_temp_in, ev_schedule, operator_signal, user_energy_need)
     sources.update(load_profiles_from_cfg(cfg, dates))
 
     return sources
@@ -160,6 +162,7 @@ def _build_figures(
     sources: dict[str, dict],
     stat_only: bool,
     y_ranges: dict[str, tuple[float, float]] | None = None,
+    height: int | None = None,
 ) -> list[go.Figure]:
     """Build all figures from loaded source data.
 
@@ -175,12 +178,14 @@ def _build_figures(
         figures.extend(build_weather_figures(
             sources["weather"], stat_only=stat_only, y_ranges=y_ranges,
             syn_frames=sources.get("weather_syn") or None,
+            height=height,
         ))
 
     if sources.get("price"):
         figures.append(build_price_figure(
             sources["price"], stat_only=stat_only, y_range=y_ranges.get("baseprice"),
             syn_frames=sources.get("price_syn") or None,
+            height=height,
         ))
 
     if sources.get("desired_temp_in"):
@@ -199,6 +204,12 @@ def _build_figures(
 
     if sources.get("ev_schedule"):
         figures.append(build_ev_schedule_figure(sources["ev_schedule"]))
+
+    if sources.get("operator_signal"):
+        figures.append(build_operator_signal_figure(
+            sources["operator_signal"],
+            cfg["operator_signal"]["value_col"],
+        ))
 
     return figures
 

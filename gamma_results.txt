@@ -1,0 +1,119 @@
+# Effective discount factor per snapshot (refreshed 2026-09-30).
+# Source: gamma recorded by Ray Tune in runs/train_*/models/**/params.json; matches runs/train_*/param_space.json
+# and the snapshot's trial YAML in every train run. "yaml omits gamma" = RLlib default (PPO/SAC 0.99, DreamerV3 0.997).
+
+g0.99: 20260608_194330_sta_lin_battery_only
+g0.99: 20260608_194341_sta_lin_battery_only
+g0.99: 20260611_222129_sta_lin_battery_only
+g0.99: 20260615_144442_sta_lin_battery_only
+g0.997: 20260625_014921_sta_lin_battery_only_price
+g0.997: 20260627_235149_sta_lin_battery_only_price
+g0.99: 20260628_000202_gen_battery_lin_capacity
+g0.99: 20260628_000439_gen_battery_lin_capacity
+g0.997: 20260703_002646_sta_lin_battery_only_price
+g0.997: 20260703_004926_sta_lin_battery_only_price_sac
+g0.997: 20260703_004926_sta_lin_battery_only_price_sac_v2
+g0.997: 20260703_004926_sta_lin_battery_only_price_sac_v3
+g0.997: 20260704_144904_sta_lin_battery_only_price_ppo
+g0.997: 20260704_144904_sta_lin_battery_only_price_ppo_epi4
+g0.997: 20260704_183007_sta_lin_battery_only_price_dreamerv3
+g0.997: 20260704_183007_sta_lin_battery_only_price_dreamerv3_default
+g0.997: 20260704_183007_sta_lin_battery_only_price_dreamerv3_lo_tr
+g0.997: 20260704_183007_sta_lin_battery_only_price_dreamerv3_v2
+g0.997: 20260704_183007_sta_lin_battery_only_price_dreamerv3_v2_long_H
+g0.997: 20260704_183007_sta_lin_battery_only_price_dreamerv3_v3
+g0.997: 20260704_183007_sta_lin_battery_only_price_dreamerv3_v3_la_ti
+g0.997: 20260704_183007_sta_lin_battery_only_price_dreamerv3_v4
+g0.997: 20260704_183007_sta_lin_battery_only_price_dreamerv3_v5
+g0.997: 20260704_183007_sta_lin_battery_only_price_dreamerv3_v6
+g0.997: 20260704_183007_sta_lin_battery_only_price_dreamerv3_v6_lti
+g0.997: 20260704_183007_sta_lin_battery_only_price_dreamerv3_v7
+g0.997: 20260704_183007_sta_lin_battery_only_price_dreamerv3_v7_lti
+g0.997: 20260704_183007_sta_lin_battery_only_price_dreamerv3_v8
+g0.997: 20260704_183007_sta_lin_battery_only_price_dreamerv3_v8_lti
+g0.99: 20260704_215559_sta_lin_battery_only_price_sac_gam099
+g0.99: 20260704_215614_sta_lin_battery_only_price_dreamer_gam099
+g0.99: 20260704_215614_sta_lin_battery_only_price_ppo_gam099
+g0.997: 20260705_234931_sta_lin_battery_only_price_rbc_base  # trial YAML only; no train run (rule-based eval, gamma unused)
+g0.997: 20260705_234931_sta_lin_battery_only_price_rbc_base_v2  # trial YAML only; no train run (rule-based eval, gamma unused)
+g0.997: 20260706_164503_sta_lin_battery_only_price
+g0.99: 20260714_161830_gen_battery_lin_so_only_17kW_sac_cp
+g0.99: 20260714_162614_gen_battery_lin_so_all_sac_v2
+g0.99: 20260714_165943_gen_battery_lin_capacity_sampled_sac
+g0.99: 20260714_225342_gen_battery_lin_so_only_15kW_dreamer
+g0.99: 20260714_225444_gen_battery_lin_so_only_17kW_dreamer
+g0.99: 20260714_225542_gen_battery_lin_so_all_dreamer
+g0.99: 20260714_225542_gen_battery_lin_so_all_dreamer_v2
+g0.99: 20260714_225647_gen_battery_lin_capacity_sampled_dreamer
+g0.99: 20260714_235241_gen_battery_lin_so_only_15kW_sac
+g0.99: 20260714_235241_gen_battery_lin_so_only_15kW_sac_cp
+g0.99: 20260714_235342_gen_battery_lin_so_only_15kW_ppo
+g0.99: 20260714_235342_gen_battery_lin_so_only_15kW_ppo_cp
+g0.99: 20260714_235444_gen_battery_lin_so_only_17kW_ppo
+g0.99: 20260714_235444_gen_battery_lin_so_only_17kW_ppo_cp
+g0.99: 20260714_235542_gen_battery_lin_so_all_ppo
+g0.99: 20260714_235542_gen_battery_lin_so_all_ppo_cp
+g0.99: 20260714_235542_gen_battery_lin_so_all_ppo_v2
+g0.99: 20260714_235542_gen_battery_lin_so_all_ppo_v2_cp
+g0.99: 20260714_235647_gen_battery_lin_capacity_sampled_ppo
+g0.99: 20260714_235647_gen_battery_lin_capacity_sampled_ppo_cp
+g?: 20260715_220233_gen_battery_lin_capacity_sampled_ppo_ctxt_fix  # empty snapshot dir: no manifest/code/runs, gamma unverifiable (previous file: g0.99)
+g0.99: 20260715_225505_gen_battery_lin_capacity_sampled_ppo_ctxt_div_fix
+g0.99: 20260716_175201_gen_battery_lin_capacity_sampled_dreamerv3
+g0.99: 20260718_140021_gen_battery_lin_capacity_sampled_dreamerv3_long
+g0.99: 20260718_140503_gen_battery_lin_so_all_dreamerv3
+g0.99: 20260718_141113_gen_battery_lin_so_only_17kW_dreamerv3
+g0.99: 20260718_141218_gen_battery_lin_so_only_15kW_dreamerv3
+g0.99: 20260718_143903_gen_battery_lin_so_all_sac
+g0.99: 20260718_143913_gen_battery_lin_so_only_17kW_sac
+g0.99: 20260718_143913_gen_battery_lin_so_only_17kW_sac_cp
+g0.99: 20260718_144018_gen_battery_lin_so_only_15kW_sac
+g0.99: 20260718_144018_gen_battery_lin_so_only_15kW_sac_cp
+g0.99: 20260718_173801_gen_battery_lin_capacity_sampled_sac
+g0.99: 20260718_183801_gen_battery_lin_capacity_sampled_ppo
+g0.99: 20260718_183801_gen_battery_lin_capacity_sampled_ppo_cp
+g0.99: 20260718_183903_gen_battery_lin_so_all_ppo
+g0.99: 20260718_183913_gen_battery_lin_so_only_17kW_ppo
+g0.99: 20260718_184018_gen_battery_lin_so_only_15kW_ppo
+g0.99: 20260719_171314_gen_lin_bat_pv_all_sac
+g0.99: 20260719_171327_gen_lin_bat_pv_spec_sac
+g0.99: 20260719_171333_gen_lin_bat_pv_sampled_sac
+g0.99: 20260719_171650_gen_lin_bat_pv_all_ppo
+g0.99: 20260719_171656_gen_lin_bat_pv_spec_ppo
+g0.99: 20260719_171702_gen_lin_bat_pv_sampled_ppo
+g0.99: 20260720_171650_gen_lin_bat_pv_all_dreamer
+g0.99: 20260720_171656_gen_lin_bat_pv_spec_dreamer
+g0.99: 20260720_171702_gen_lin_bat_pv_sampled_dreamer
+g0.99: 20260721_093047_sta_lin_battery_EV_ppo
+g0.99: 20260721_093047_sta_lin_battery_EV_ppo_eval_ch
+g0.99: 20260721_101901_sta_lin_battery_EV_ppo_v2
+g0.99: 20260721_101901_sta_lin_battery_EV_ppo_v2_eval_ch
+g0.99: 20260721_102122_sta_lin_battery_EV_mo_ppo_old
+g0.99: 20260721_102226_sta_lin_battery_EV_ppo
+g0.99: 20260721_103047_sta_lin_battery_EV_sac
+g0.99: 20260721_103047_sta_lin_battery_EV_sac_eval_ch
+g0.99: 20260721_111901_sta_lin_battery_EV_sac_v2
+g0.99: 20260721_111901_sta_lin_battery_EV_sac_v2_eval_ch
+g0.99: 20260722_123922_sta_lin_battery_EV_mo_sac_old
+g0.99: 20260722_134026_sta_lin_battery_EV_sac
+g0.99: 20260723_120021_gen_lin_bat_power_all_ppo
+g0.99: 20260723_120027_gen_lin_bat_power_spec_ppo
+g0.99: 20260723_120035_gen_lin_bat_power_sampled_ppo
+g0.99: 20260723_120857_gen_lin_bat_power_all_sac
+g0.99: 20260723_120904_gen_lin_bat_power_spec_sac
+g0.99: 20260723_120911_gen_lin_bat_power_sampled_sac
+g0.99: 20260724_120857_gen_lin_bat_power_all_dreamer
+g0.99: 20260724_120904_gen_lin_bat_power_spec_dreamer
+g0.99: 20260724_120911_gen_lin_bat_power_sampled_dreamer
+g0.99: 20260830_234409_sta_lin_battery_only_price_ppo
+g0.99: 20260830_234433_sta_lin_battery_only_price_sac
+g0.99: 20260830_234457_sta_lin_battery_only_price_dreamer
+g0.99: 20260928_001132_gen_lin_bat_power_pv_all_ppo  # yaml omits gamma -> RLlib ppo default
+g0.99: 20260928_001142_gen_lin_bat_power_pv_sampled_ppo  # yaml omits gamma -> RLlib ppo default
+g0.99: 20260928_001151_gen_lin_bat_power_pv_spec_ppo  # yaml omits gamma -> RLlib ppo default
+g0.99: 20260928_001235_gen_lin_bat_power_pv_all_sac  # yaml omits gamma -> RLlib sac default
+g0.99: 20260928_001243_gen_lin_bat_power_pv_sampled_sac  # yaml omits gamma -> RLlib sac default
+g0.99: 20260928_001255_gen_lin_bat_power_pv_spec_sac  # yaml omits gamma -> RLlib sac default
+g0.997: 20260928_001328_gen_lin_bat_power_pv_sampled_dreamerv3  # yaml omits gamma -> RLlib dreamerv3 default
+g0.997: 20260928_001354_gen_lin_bat_power_pv_spec_dreamerv3  # yaml omits gamma -> RLlib dreamerv3 default
+g0.997: 20260928_001505_gen_lin_bat_power_pv_all_dreamerv3  # yaml omits gamma -> RLlib dreamerv3 default

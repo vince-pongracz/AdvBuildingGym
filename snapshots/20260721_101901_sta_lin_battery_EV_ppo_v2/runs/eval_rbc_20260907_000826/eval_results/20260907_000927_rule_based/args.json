@@ -1,0 +1,16 @@
+{
+    "trial": "/hkfs/home/haicore/iai/dj0397/AdvBuildingGym/snapshots/20260721_101901_sta_lin_battery_EV_ppo_v2/code/configs/trial_cfgs/v0/STA/battery_lin_EV.yaml",
+    "strategy": "all",
+    "episodes": 10,
+    "seed": null,
+    "output_dir": "eval_results",
+    "no_save": false,
+    "data_mode": null,
+    "data_day": null,
+    "evening_start": 17.0,
+    "evening_end": 23.0,
+    "preserve_start_soc": true,
+    "plot": false,
+    "plot_all": true,
+    "resolved_seed": 42
+}

@@ -31,7 +31,7 @@ Statesource schedule config holds standalone infra schedule yaml files as a list
 and vica versa.
 Training params are inlined and use yaml tag: training_params
 Base config, which is currently already in the trial yamls remain there, these are like the trial_name, algorithm, 
-episodes, seed, metric, checkpoint_frequency_episodes, log_trajectories, num_envs, grad_train.
+episodes, seed, metric, checkpoint_frequency_iterations, log_trajectories, num_envs, grad_train.
 Reward functors are inlined under the yaml tag: rewards
 Rewards schedule is under the yaml tag reward_schedule. At the reward schedule, take the current dirchlet_example.yaml, 
 fix_example.yaml, grad_add_example.yaml and random_example.yaml files -- the describe how each reward schedule mode configurations

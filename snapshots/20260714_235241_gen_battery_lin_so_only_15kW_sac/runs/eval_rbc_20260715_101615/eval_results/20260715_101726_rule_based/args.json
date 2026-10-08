@@ -1,0 +1,16 @@
+{
+    "trial": "/hkfs/home/haicore/iai/dj0397/AdvBuildingGym/snapshots/20260714_235241_gen_battery_lin_so_only_15kW/code/configs/trial_cfgs/v0/GEN/gs_test_scenario_so/battery_lin_capacity_v2_only_15kW.yaml",
+    "strategy": "all",
+    "episodes": 10,
+    "seed": null,
+    "output_dir": "eval_results",
+    "no_save": false,
+    "data_mode": null,
+    "data_day": null,
+    "evening_start": 17.0,
+    "evening_end": 23.0,
+    "preserve_start_soc": true,
+    "plot": false,
+    "plot_all": true,
+    "resolved_seed": 42
+}

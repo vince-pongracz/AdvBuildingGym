@@ -1,0 +1,131 @@
+trial_name: gen_battery_lin_capacity
+algorithm: sac
+seed: 42
+metric: episode_return_mean
+log_trajectories: false
+num_envs: 1
+grad_train: false
+
+env_meta:
+  EPISODE_LENGTH: 288
+  control_step: 300
+  allow_early_termination: false
+  hst_env_wrapper:
+    enabled: true
+    tracked_keys:
+    - s_battery_soc
+    - s_evc_soc
+    - s_temp_error_norm
+    - s_pv_power_norm
+    - s_wind_power_norm
+    offsets:
+    - -1
+    - -2
+    - -3
+    - -4
+
+  forecast_env_wrapper:
+    enabled: true
+    forecast_steps: [1, 2, 3, 4, 5, 6, 12, 24, 36, 48]
+
+training_params:
+  common:
+    evaluation:
+      interval: 10
+      duration: 10
+    episode_lookback_horizon_steps: 120
+    max_episodes_to_run: 7000
+    clip_actions_to_env_bounds: true
+    gamma: 0.997
+  ppo:
+    episodes_per_iteration: 10
+    minibatch_size: 64
+    num_epochs: 10
+  sac:
+    rollout_length: 144  # override: keep SAC at legacy half-episode fragment
+    replay_batch_size: 256
+    training_intensity: 10
+    episodes_to_keep_in_replay_buffer: 500
+    n_step_return: 3
+    learning_starts_after_n_episodes: 50
+
+statesources:
+- class: DateSource
+  name: date
+- class: EnergyPriceDayDynDataSource
+  name: E_price
+  # Dynamic 1-day price divisor: s_E_price = raw_baseprice / divisor, where divisor is the
+  # |raw baseprice| max over the NEXT 24h window (one day = SECONDS_PER_DAY / control_step steps,
+  # capped at the episode length), recomputed each reset() (per episode / per day). Always publishes
+  # ctxt_E_price_max (the per-episode divisor) so the policy can condition on the scale
+  # (raw = s_E_price * ctxt_E_price_max). episode_length / control_step are context-injected; there are
+  # no max_calc_mode / percentile params.
+  # For the whole-series blended normalisation use class EnergyPriceYearDynDataSource.
+# - class: EnergyPriceFixDataSource
+#   name: E_price
+#   # Synthetic multi-level time-of-use tariff (no CSV), selected by the episode's season.
+#   #   schedules       - maps a season (winter/spring/summer/autumn) or the catch-all "all" to a
+#   #                     {default_price, bands} block. bands is a list of {start, end, price}
+#   #                     entries (start/end are "HH:MM" times in 00:00-24:00, may wrap midnight);
+#   #                     the first band covering the time-of-day wins, else default_price. Omitted
+#   #                     here -> built-in default: peak 40 (17:00-21:00), off-peak 18 (00:00-06:00),
+#   #                     default 28 ct/kWh.
+#   #   default_season  - fallback season when the episode's season has no schedule.
+#   #   ctxt_keys       - list ctxt_E_price_max to publish the divisor (price scale) for policy conditioning.
+#   # s_E_price = baseprice / divisor, divisor = largest level magnitude across all schedules.
+#   default_season: summer
+#   ctxt_keys: [ctxt_E_price_max]
+- class: WeatherDataSource
+  name: weather
+- class: InsideTemperature
+  name: desired_temp_in
+- class: DesiredUserEnergyNeed
+  name: user_energy_need
+  ctxt_keys: [ctxt_hh_consumption_max]
+- class: BuildingHeatLoss
+  name: building_heat_loss
+  K: 20
+  mC: 300
+- class: OperatorEnergyControl
+  name: operator_energy_control
+  max_power_kW: 20.0
+
+infras: null
+
+rewards:
+- class_name: OperatorEnergyControlRewardV0
+  weight: 1.0
+  params:
+    harsh_penalty: -4.0
+    soft_threshold_pct: 0.9
+    recovery_steps: 3
+- class_name: EconomicRewardV0
+  weight: 1.0
+
+infra_schedule:
+  mode: "cycle"
+  swap_every_n_episodes: 12
+  configs:
+    train:
+    - configs/infra_cfgs/GEN/battery_lin_capacity_so/battery_lin_cap_1.yaml
+    - configs/infra_cfgs/GEN/battery_lin_capacity_so/battery_lin_cap_2.yaml
+    - configs/infra_cfgs/GEN/battery_lin_capacity_so/battery_lin_cap_3.yaml
+    - configs/infra_cfgs/GEN/battery_lin_capacity_so/battery_lin_cap_4.yaml
+    - configs/infra_cfgs/GEN/battery_lin_capacity_so/battery_lin_cap_5.yaml
+    eval:
+    - configs/infra_cfgs/GEN/battery_lin_capacity_so/battery_lin_cap_eval_1.yaml
+    - configs/infra_cfgs/GEN/battery_lin_capacity_so/battery_lin_cap_eval_2.yaml
+    - configs/infra_cfgs/GEN/battery_lin_capacity_so/battery_lin_cap_eval_3.yaml
+
+statesource_schedule: null
+
+reward_schedule: null
+
+data_schedule:
+  train: configs/schedules/data/train.yaml
+  eval: configs/schedules/data/eval.yaml
+
+exploration_reset:
+  enabled: false
+  trigger: on_infra_swap
+  sac_alpha: 0.5

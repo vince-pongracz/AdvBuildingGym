@@ -1,0 +1,11 @@
+{
+  "name": "advbuildinggym-dashboard",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Third-party browser libraries inlined into the self-contained AdvBuildingGym evaluation dashboard. Run `npm install`; the Python build (build_dashboard.py) reads the pinned files from node_modules/ and embeds them into each dashboard HTML, so the generated file stays fully offline-portable.",
+  "license": "MIT",
+  "dependencies": {
+    "prismjs": "1.29.0",
+    "sortablejs": "1.15.6"
+  }
+}

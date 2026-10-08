@@ -1,0 +1,18 @@
+seeds: [42, 43, 44, 45, 46, 70, 71, 91, 97, 140, 141]
+snapshots:
+  # - snapshots/20260714_235444_gen_battery_lin_so_only_17kW_ppo
+  # - snapshots/20260714_235342_gen_battery_lin_so_only_15kW_ppo
+  # - snapshots/20260714_235542_gen_battery_lin_so_all_ppo
+  # - snapshots/20260714_235647_gen_battery_lin_capacity_sampled_ppo
+  # # ----
+  - snapshots/20260714_225444_gen_battery_lin_so_only_17kW_dreamer
+  - snapshots/20260714_225342_gen_battery_lin_so_only_15kW_dreamer
+  - snapshots/20260714_225542_gen_battery_lin_so_all_dreamer
+  - snapshots/20260714_225647_gen_battery_lin_capacity_sampled_dreamer
+  # ----
+  # - snapshots/20260714_161830_gen_battery_lin_so_only_17kW
+  # - snapshots/20260714_235241_gen_battery_lin_so_only_15kW_sac
+  # - snapshots/20260714_162614_gen_battery_lin_so_all
+  # - snapshots/20260714_165943_gen_battery_lin_capacity_sampled
+kind: eval
+episodes: 10

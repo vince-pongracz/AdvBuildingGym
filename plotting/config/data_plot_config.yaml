@@ -9,8 +9,8 @@ weather:
 
   dwd:
     # DWD preprocessed weather data (5-min resolution, per-year files).
-    # Columns: timestamp, avg_wind_speed, wind_dir, direct_sun_shine,
-    #          diff_sun_shine, temp_amb, rel_humidity, sun_shine
+    # Columns: timestamp, avg_wind_speed, wind_dir, sun_shine,
+    #          diff_sun_shine, temp_amb, rel_humidity
     dir: data/weather/dwd/preprocessed
     file_pattern: "{year}_merged_04177.csv"
     timestamp_col: timestamp
@@ -18,7 +18,7 @@ weather:
   zenodo:
     # Zenodo weather dataset (Braunschweig district heating study).
     # Outdoor weather data extracted from HDF5, per-year files.
-    # Columns: timestamp, rel_humidity, direct_sun_shine, temp_amb,
+    # Columns: timestamp, rel_humidity, sun_shine, temp_amb,
     #          wind_dir, avg_wind_speed
     dir: data/weather/zenodo/csvs_weather
     file_pattern: "{year}_weather.csv"
@@ -54,14 +54,14 @@ price:
 desired_temp_in:
   # Desired indoor temperature profiles (single-day templates, 5-min resolution).
   # Each file is one occupancy/comfort profile.  All are overlaid in a single plot.
-  # Columns: timestamp, desired_temp_in [°C]
+  # Columns: timestamp, desired_temp_in
   dir: data/inside_temp
   files:
     - inside_temp_0.csv
     - inside_temp_1.csv
     - inside_temp_2.csv
   timestamp_col: timestamp
-  value_col: "desired_temp_in [°C]"
+  value_col: "desired_temp_in"
 
 user_energy_need:
   # Household electricity consumption profiles (per-year files, 5-min resolution).
@@ -72,6 +72,12 @@ user_energy_need:
   profiles:
     - SFH10
     - SFH30
+  # Overlay the synthesised siblings "<year>_<profile>_syn_cfg_*.csv"
+  # (produced by preprocessing/synthesize.py), same as weather/price do.
+  # Off by default: every cfg adds a trace group per profile and date.
+  include_syn: true
+  # Restrict which discovered cfg names are drawn. Empty list = all of them.
+  syn_cfgs: []
   timestamp_col: timestamp
   value_col: hh_consumption_kW
 
@@ -92,14 +98,39 @@ ev_schedule:
     - ev_5.csv
   timestamp_col: start
 
+# TODO VP: clear this out, not needed
+operator_signal:
+  # Grid-operator power-limit profiles (sparse step-change events, single-day
+  # templates keyed by time of day; the env holds the last value until the next
+  # event and repeats the profile daily).
+  # Columns: start, max_power_kW
+  dir: data/operator_signals
+  files:
+    - op_constant_20kW.csv
+    - op_daytime_boost.csv
+    - op_evening_peak_relief.csv
+    - op_eval_night_charge.csv
+    - op_eval_two_dip.csv
+  timestamp_col: start
+  value_col: max_power_kW
+
 figure:
   # Default per-chart height in pixels (applies to every weather / price /
   # profile figure). Increase for taller y-axes.
   height: 450
+  # Per-chart height used by overview plots (monthly_overview, cross_year,
+  # dwd_awattar combos) where many syn_cfg overlays inflate the legend and
+  # squeeze the plot area. Increase for taller y-axes.
+  overview_height: 750
+  # Operator-signal small multiples: one step panel per profile. Floor height
+  # plus the extra pixels each panel adds on top of it.
+  op_min_height: 320
+  op_panel_px: 130
   # EV schedule height grows with the number of lanes; this is the floor.
-  ev_min_height: 250
-  # Extra pixels added per EV profile lane on top of the base height.
-  ev_lane_px: 50
+  ev_min_height: 300
+  # Extra pixels added per EV profile lane on top of the base height. Sized so
+  # each lane is tall enough for the two-line on-bar label to stay readable.
+  ev_lane_px: 75
 
 output:
   dir: plotting/out/data_plots

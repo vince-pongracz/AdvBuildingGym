@@ -1,0 +1,16 @@
+{
+    "trial": "/hkfs/home/haicore/iai/dj0397/AdvBuildingGym/snapshots/20260705_234931_sta_lin_battery_only_price_rbc_base/runs/eval_rbc_20260706_133843_seed71/configs/trial_cfgs/v0/STA/lin_battery_only_price.yaml",
+    "strategy": "all",
+    "episodes": 10,
+    "seed": null,
+    "output_dir": "eval_results",
+    "no_save": false,
+    "data_mode": null,
+    "data_day": null,
+    "evening_start": 17.0,
+    "evening_end": 23.0,
+    "preserve_start_soc": true,
+    "plot": false,
+    "plot_all": true,
+    "resolved_seed": 71
+}

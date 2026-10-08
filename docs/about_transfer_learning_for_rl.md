@@ -68,7 +68,7 @@ Task similarity --> greater chance of success
     - R1 continues to learn
     - R2 learns on the full setup (not on the restricted anymore)
     - both algos learning the same amount of iters (predefined)
-    - Eval: run both on the same 10 episodes (on the same full setup), check reward rates or other metric -- which one is better
+    - Eval: run both on the same 10 episodes (on the same full setup), check achieved reward or other metric -- which one is better
 
 ### If TL in RL needed / desired:
 

@@ -35,7 +35,7 @@
 #SBATCH --tasks-per-node=1
 # NOTE VP: parallelisation options...
 #SBATCH --cpus-per-task=1
-#SBATCH --time=01:00:00
+#SBATCH --time=02:00:00
 #SBATCH --output=slurm_logs/data_setup/slurm-data-setup-%j.out
 #SBATCH --error=slurm_logs/data_setup/slurm-data-setup-%j.err
 #SBATCH --job-name=data-setup-%j

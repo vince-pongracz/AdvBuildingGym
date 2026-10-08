@@ -56,8 +56,7 @@ class MPCController:
             self.building_params = building_params
 
     def predict(self, obs, deterministic=True, **kwargs):
-        """
-        Builds a Pyomo optimization model, solves it, and returns the first optimal action.
+        """Build/solve a Pyomo model and return the first optimal action.
 
         Args:
             obs (np.array): Observations from the environment.
@@ -158,10 +157,7 @@ class MPCController:
 
         # 4) Define objective function
         def objective_rule(m):
-            """
-            Objective function that can be temperature-only or combined with
-            an economic term, depending on self.reward_mode.
-            """
+            """Temperature-only or combined (with economic) objective, per ``reward_mode``."""
             temp_penalty = sum((m.T_in[i] - T_set_list[i]) ** 2 for i in m.t)
             smooth_penalty = sum(
                 0.05 * (m.action[i] - m.action[i - 1]) ** 2 for i in range(1, H)

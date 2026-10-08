@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import html
 import logging
 import math
 import os
@@ -68,7 +69,7 @@ class EpisodeData:
     length: int
     episode_date: str | None = None
 
-    # Summary scalars (reward_rate, achieved_reward, cum_E_kWh, …)
+    # Summary scalars (achieved_reward, cum_E_kWh, …)
     summary: dict[str, float] = field(default_factory=dict)
 
     # Time axis in minutes (float32)
@@ -92,6 +93,9 @@ class EpisodeData:
     # Cumulative energy per timestep (kWh)
     cum_E_kWh: np.ndarray = field(default_factory=lambda: np.empty(0, dtype=np.float32))
 
+    # Cumulative electricity cost per timestep (EUR, positive = spent)
+    cum_price_EUR: np.ndarray = field(default_factory=lambda: np.empty(0, dtype=np.float32))
+
     # Per-infrastructure power breakdown  {infra_name: 1-D ndarray (kW)}
     power_breakdown: dict[str, np.ndarray] = field(default_factory=dict)
 
@@ -114,7 +118,7 @@ class EpisodeData:
     def title_suffix(self) -> str:
         """Short suffix with episode metadata for figure titles.
 
-        Format: ``ep {id}, date: {YYYY.MM.DD} | reward_rate {x} ; achieved_reward {y}``.
+        Format: ``ep {id}, date: {YYYY.MM.DD} | achieved_reward {y}``.
         Falls back gracefully when the date is missing.
         """
         date_str = self.episode_date or ""
@@ -126,7 +130,6 @@ class EpisodeData:
             ep_part = f"ep {self.episode_id}"
         return (
             f"{ep_part}  |  "
-            f"reward_rate {self.summary.get('reward_rate', 0):.3f} ; "
             f"achieved_reward {self.summary.get('achieved_reward', 0):.2f}"
         )
 
@@ -174,8 +177,8 @@ def find_latest_hdf5(metrics_root: Path | None = None) -> str:
 def load_episode(
     hdf5_path: str,
     episode_id: str | None = None,
-    control_step_seconds: int = 300,
-    select_by: str = "reward_rate",
+    control_step_s: int = 300,
+    select_by: str = "achieved_reward",
 ) -> EpisodeData:
     """Load one episode from an HDF5 trajectory file.
 
@@ -183,10 +186,10 @@ def load_episode(
         hdf5_path: Path to trajectories.hdf5.
         episode_id: Episode group name. If None, selects the best episode
             according to ``select_by``.
-        control_step_seconds: Control timestep in seconds (default 300 = 5 min).
+        control_step_s: Control step duration in seconds (default 300 = 5 min).
         select_by: Summary metric used to pick the best episode when
-            ``episode_id`` is None. One of "reward_rate", "achieved_reward",
-            "cum_E_kWh". Default: "reward_rate".
+            ``episode_id`` is None. One of "achieved_reward",
+            "cum_E_kWh". Default: "achieved_reward".
 
     Returns:
         An ``EpisodeData`` instance.
@@ -225,7 +228,7 @@ def load_episode(
 
         traj = ep["trajectory"]
         steps = traj["step"][:].astype(np.float32)
-        time_minutes = steps * (control_step_seconds / 60.0)
+        time_minutes = steps * (control_step_s / 60.0)
 
         # States
         states: dict[str, np.ndarray] = {}
@@ -250,6 +253,9 @@ def load_episode(
 
         # Energy
         cum_e = traj["cum_E_kWh"][:] if "cum_E_kWh" in traj else np.zeros_like(steps)
+        cum_price = (
+            traj["cum_price_EUR"][:] if "cum_price_EUR" in traj else np.zeros_like(steps)
+        )
         # ``net_power_kW`` is the current key; older HDF5 files used
         # ``step_power_kW`` for the same quantity.
         if "net_power_kW" in traj:
@@ -292,6 +298,7 @@ def load_episode(
         reward_breakdown=reward_breakdown,
         net_power_kW=power,
         cum_E_kWh=cum_e,
+        cum_price_EUR=cum_price,
         power_breakdown=power_breakdown,
         raw=raw,
         raw_policy_actions=raw_policy_actions,
@@ -435,23 +442,108 @@ def get_width_multiplier(group: str) -> float:
         return 1.0
 
 
+# ---------------------------------------------------------------------------
+# Shared dashboard / card-layout assets
+# ---------------------------------------------------------------------------
+
+_DASHBOARD_DIR = _REPO_ROOT / "plotting" / "dashboard"
+
+
+def read_dashboard_asset(*parts: str) -> str:
+    """Read a text asset bundled under ``plotting/dashboard/`` (vendored libs, templates)."""
+    return (_DASHBOARD_DIR.joinpath(*parts)).read_text(encoding="utf-8")
+
+
+def short_label_from_fig(fig: go.Figure) -> str:
+    """Return the key/name part of a figure title, stripped of the decorated suffix.
+
+    Figure titles follow ``"<keys> — ep <id>, date: … | achieved_reward …"``; the
+    ticker labels and card headers only want the ``<keys>`` prefix before the em dash.
+    """
+    title = ""
+    try:
+        title = fig.layout.title.text or ""
+    except AttributeError:
+        title = ""
+    # The em dash (U+2014) separates the key/name from the episode suffix; the
+    # suffix never contains one, so splitting on the first dash is safe.
+    label = title.split("—", 1)[0].strip() if title else ""
+    return label or "plot"
+
+
+# Card layout/behaviour live in standalone asset files so they can be edited as
+# CSS/JS (with editor tooling) rather than as opaque Python strings. Both are
+# shared by the per-group HTML files and the aggregated dashboard.
+#   - plot_card.css : reorderable flex-card layout (cards carry their own
+#       resize handle + a header bar that doubles as the SortableJS drag handle).
+#   - card_resize.js: ResizeObserver re-flowing each Plotly graph on card resize;
+#       the ``__IDS__`` placeholder is filled with the graph div ids at embed time.
+PLOT_CARD_CSS = read_dashboard_asset("assets", "plot_card.css")
+_CARD_RESIZE_JS = read_dashboard_asset("assets", "card_resize.js")
+
+
 def write_figure_list_html(
     figures: list[go.Figure],
     filepath: str,
     footnote: str = "",
 ) -> None:
-    """Write a list of independent figures into a single HTML file."""
+    """Write a list of independent figures into a single HTML file.
+
+    Each figure becomes a reorderable card in a flexbox row (``flex-wrap: wrap``):
+    drag a card's header bar to change its order; drag a card's bottom-right corner
+    to resize it live (a ResizeObserver re-triggers ``Plotly.Plots.resize`` so axis
+    ranges and tick density update). Reordering uses SortableJS with the header as
+    the drag handle, so dragging *inside* a plot still zooms/pans normally.
+    """
+    import json as _json
+
     parts: list[str] = [
-        "<html><head><meta charset='utf-8'/>"
+        "<html><head><meta charset='utf-8'/>",
+        "<style>" + PLOT_CARD_CSS + "body{margin:12px;}</style>",
         "</head><body>",
+        "<div class='plot-flex' id='plotFlex'>",
     ]
+    div_ids: list[str] = []
     # First figure embeds the bundled Plotly.js so the version always matches
     # the binary-encoded arrays that Plotly Python generates.
     for i, fig in enumerate(figures):
         include_js = True if i == 0 else False
-        parts.append(fig.to_html(full_html=False, include_plotlyjs=include_js))
+        initial_h = int(fig.layout.height) if fig.layout.height else 450
+        label = short_label_from_fig(fig)
+        # Make the figure fill its card body; the card drives sizing.
+        fig.update_layout(autosize=True, width=None, height=None)
+        div_id = f"adv_plot_{i}"
+        div_ids.append(div_id)
+        # +34 px reserves room for the header bar so the plot keeps its height.
+        parts.append(f'<div class="plot-card" style="height:{initial_h + 34}px;">')
+        parts.append(
+            f'<div class="plot-card-header"><span class="grip">&#x283F;</span>'
+            f'<span class="plot-card-title" title="{html.escape(label)}">{html.escape(label)}</span></div>'
+        )
+        parts.append('<div class="plot-body">')
+        parts.append(fig.to_html(
+            full_html=False,
+            include_plotlyjs=include_js,
+            div_id=div_id,
+            default_width="100%",
+            default_height="100%",
+            config={"responsive": True},
+        ))
+        parts.append("</div></div>")
+    parts.append("</div>")  # .plot-flex
     if footnote:
         parts.append(footnote)
+    parts.append("<script>" + _CARD_RESIZE_JS.replace("__IDS__", _json.dumps(div_ids)) + "</script>")
+    # SortableJS is an npm dependency read from node_modules and inlined here (see
+    # README, 'Dashboard assets'). Imported lazily to avoid an import-time cycle
+    # (plotting.dashboard imports utils). require() only checks — it never installs.
+    from plotting.dashboard import vendor_assets
+    vendor_assets.require(vendor_assets.SORTABLE)
+    parts.append("<script>" + vendor_assets.read("sortable.js") + "</script>")
+    parts.append(
+        "<script>new Sortable(document.getElementById('plotFlex'),"
+        "{handle:'.plot-card-header',animation:150,ghostClass:'sortable-ghost'});</script>"
+    )
     parts.append("</body></html>")
     with open(filepath, "w", encoding="utf-8") as f:
         f.write("\n".join(parts))

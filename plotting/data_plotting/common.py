@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import calendar
 import logging
+import re
 import zlib
 from datetime import datetime
 from functools import lru_cache
@@ -150,11 +151,13 @@ def load_profiles_from_cfg(
     cfg: dict,
     dates: list[datetime],
 ) -> dict[str, dict[str, object]]:
-    """Load profile sources (desired_temp_in, ev_schedule, user_energy_need).
+    """Load profile sources (desired_temp_in, ev_schedule, operator_signal, user_energy_need).
 
-    Returns ``{source_name: {label: DataFrame}}``.
+    Returns ``{source_name: {label: DataFrame}}``. With
+    ``user_energy_need.include_syn`` set, the synthesised variants join the
+    same flat bundle as ordinary per-day profile traces.
     """
-    from .loaders import load_days, load_profiles
+    from .loaders import load_days, load_profiles, load_syn_cfg_days
 
     sources: dict[str, dict[str, object]] = {}
 
@@ -174,16 +177,42 @@ def load_profiles_from_cfg(
             ev_cfg["timestamp_col"],
         )
 
+    if "operator_signal" in cfg:
+        op_cfg = cfg["operator_signal"]
+        sources["operator_signal"] = load_profiles(
+            REPO_ROOT / op_cfg["dir"],
+            op_cfg["files"],
+            op_cfg["timestamp_col"],
+        )
+
     if "user_energy_need" in cfg:
         ue_cfg = cfg["user_energy_need"]
         ue_dir = REPO_ROOT / ue_cfg["dir"]
         pattern = ue_cfg["file_pattern"]
+        include_syn = bool(ue_cfg.get("include_syn", False))
+        # Empty / missing list = draw every discovered cfg.
+        allowed_cfgs = set(ue_cfg.get("syn_cfgs") or ())
         frames: dict[str, object] = {}
         for profile in ue_cfg["profiles"]:
             profile_pattern = pattern.replace("{profile}", profile)
             day_frames = load_days(ue_dir, profile_pattern, ue_cfg["timestamp_col"], dates)
             for date_label, df in day_frames.items():
                 frames[f"{profile} ({date_label})"] = df
+
+            if not include_syn:
+                continue
+            # Synthesised variants are just more per-day profile traces: they
+            # join the same flat bundle so they render like the originals and
+            # feed the shared mean / std band.
+            profile_syn = load_syn_cfg_days(
+                ue_dir, profile_pattern, ue_cfg["timestamp_col"], dates,
+            )
+            for cfg_name, cfg_frames in sorted(profile_syn.items()):
+                if allowed_cfgs and cfg_name not in allowed_cfgs:
+                    continue
+                for date_label, df in cfg_frames.items():
+                    frames[f"{profile} {cfg_name} ({date_label})"] = df
+
         sources["user_energy_need"] = frames
 
     return sources
@@ -215,7 +244,10 @@ def write_output(
                 title_obj = fig.layout.title
                 title = getattr(title_obj, "text", None) or str(title_obj) or f"fig{i}"
 
-                tag = title.lower().replace(" ", "_").replace("(", "").replace(")", "")
+                # Titles carry units ("Wind speed (m/s)"), so strip every
+                # character that is not filename-safe — a bare "/" would
+                # otherwise be read as a directory separator and the write fails.
+                tag = re.sub(r"[^a-z0-9_-]+", "_", title.lower().replace(" ", "_")).strip("_")
                 img_path = out_dir / f"{base_name}_{tag}.{fmt}"
                 fig.write_image(str(img_path))
                 logger.info("Wrote %s", img_path)

@@ -1,0 +1,184 @@
+{
+    "checkpoint_path": "/hkfs/home/haicore/iai/dj0397/AdvBuildingGym/snapshots/20260714_235647_gen_battery_lin_capacity_sampled_ppo/runs/train_20260714_235647/models/gen_battery_lin_capacity_sampled_ppo/ray/ppo/ppo_seed42_20260715_025129/50ee6_gen_battery_lin_capacity_sampled_ppo/checkpoint_000058",
+    "trial_name": "gen_battery_lin_capacity_sampled_ppo",
+    "algorithm": "ppo",
+    "num_episodes": 10,
+    "seed": 45,
+    "eval_time_seconds": 5.4939186573028564,
+    "mean_reward": 17.297401578285413,
+    "std_reward": 3.101523054476319,
+    "min_reward": 11.141521066138372,
+    "max_reward": 21.61351622011938,
+    "episodes": [
+        {
+            "episode": 1,
+            "length": 288,
+            "total_reward": 21.61351622011938,
+            "achieved_reward": 21.613516220119386,
+            "cum_E_kWh": 56.355101061006835,
+            "cum_price_EUR": -7.557673409034703,
+            "seed": 45,
+            "data_variant": {
+                "weather": "data/weather/dwd/preprocessed/2026_merged_04177.csv",
+                "E_price": "data/e_price/e_charts/price_data_2026.csv",
+                "date": "data/weather/dwd/preprocessed/2026_merged_04177.csv",
+                "operator_energy_control": "data/operator_signals/op_eval_night_charge.csv",
+                "user_energy_need": "data/hh_consumption/wpuq/2019_SFH10_syn_cfg_3_neg.csv"
+            },
+            "episode_date": "2026-06-19"
+        },
+        {
+            "episode": 2,
+            "length": 288,
+            "total_reward": 11.141521066138372,
+            "achieved_reward": 11.141521066138367,
+            "cum_E_kWh": 28.25712148715162,
+            "cum_price_EUR": -2.2964531707871667,
+            "seed": 46,
+            "data_variant": {
+                "weather": "data/weather/dwd/preprocessed/2025_merged_04177.csv",
+                "E_price": "data/e_price/e_charts/price_data_2025.csv",
+                "date": "data/weather/dwd/preprocessed/2025_merged_04177.csv",
+                "operator_energy_control": "data/operator_signals/op_constant_20kW.csv",
+                "user_energy_need": "data/hh_consumption/wpuq/2019_SFH10.csv"
+            },
+            "episode_date": "2025-08-23"
+        },
+        {
+            "episode": 3,
+            "length": 288,
+            "total_reward": 17.444880525294796,
+            "achieved_reward": 17.44488052529479,
+            "cum_E_kWh": 47.1877688916517,
+            "cum_price_EUR": -4.4235349490386655,
+            "seed": 47,
+            "data_variant": {
+                "weather": "data/weather/dwd/preprocessed/2025_merged_04177.csv",
+                "E_price": "data/e_price/awattar/price_data_2025.csv",
+                "date": "data/weather/dwd/preprocessed/2025_merged_04177.csv",
+                "operator_energy_control": "data/operator_signals/op_daytime_boost.csv",
+                "user_energy_need": "data/hh_consumption/wpuq/2019_SFH30_syn_cfg_3_pos.csv"
+            },
+            "episode_date": "2025-08-08"
+        },
+        {
+            "episode": 4,
+            "length": 288,
+            "total_reward": 20.834420194097028,
+            "achieved_reward": 20.83442019409704,
+            "cum_E_kWh": 39.946074671390676,
+            "cum_price_EUR": -3.990733147000639,
+            "seed": 48,
+            "data_variant": {
+                "weather": "data/weather/dwd/preprocessed/2025_merged_04177.csv",
+                "E_price": "data/e_price/awattar/price_data_2025.csv",
+                "date": "data/weather/dwd/preprocessed/2025_merged_04177.csv",
+                "operator_energy_control": "data/operator_signals/op_evening_peak_relief.csv",
+                "user_energy_need": "data/hh_consumption/wpuq/2019_SFH30_syn_cfg_1_neg.csv"
+            },
+            "episode_date": "2025-07-06"
+        },
+        {
+            "episode": 5,
+            "length": 288,
+            "total_reward": 20.94085590098518,
+            "achieved_reward": 20.940855900985188,
+            "cum_E_kWh": 57.96289024448905,
+            "cum_price_EUR": -5.238704175575171,
+            "seed": 49,
+            "data_variant": {
+                "weather": "data/weather/dwd/preprocessed/2025_merged_04177.csv",
+                "E_price": "data/e_price/awattar/price_data_2025.csv",
+                "date": "data/weather/dwd/preprocessed/2025_merged_04177.csv",
+                "operator_energy_control": "data/operator_signals/op_constant_20kW.csv",
+                "user_energy_need": "data/hh_consumption/wpuq/2019_SFH30_syn_cfg_2_pos.csv"
+            },
+            "episode_date": "2025-07-04"
+        },
+        {
+            "episode": 6,
+            "length": 288,
+            "total_reward": 17.006417884439333,
+            "achieved_reward": 17.006417884439337,
+            "cum_E_kWh": 62.40534298604388,
+            "cum_price_EUR": -11.512494532260915,
+            "seed": 50,
+            "data_variant": {
+                "weather": "data/weather/dwd/preprocessed/2026_merged_04177.csv",
+                "E_price": "data/e_price/e_charts/price_data_2026.csv",
+                "date": "data/weather/dwd/preprocessed/2026_merged_04177.csv",
+                "operator_energy_control": "data/operator_signals/op_constant_20kW.csv",
+                "user_energy_need": "data/hh_consumption/wpuq/2019_SFH30_syn_cfg_1_neg.csv"
+            },
+            "episode_date": "2026-06-26"
+        },
+        {
+            "episode": 7,
+            "length": 288,
+            "total_reward": 17.693190379345786,
+            "achieved_reward": 17.69319037934579,
+            "cum_E_kWh": 59.583358561226746,
+            "cum_price_EUR": -3.529077662333599,
+            "seed": 51,
+            "data_variant": {
+                "weather": "data/weather/dwd/preprocessed/2026_merged_04177.csv",
+                "E_price": "data/e_price/awattar/price_data_2026.csv",
+                "date": "data/weather/dwd/preprocessed/2026_merged_04177.csv",
+                "operator_energy_control": "data/operator_signals/op_evening_peak_relief.csv",
+                "user_energy_need": "data/hh_consumption/wpuq/2019_SFH30_syn_cfg_1_pos.csv"
+            },
+            "episode_date": "2026-07-02"
+        },
+        {
+            "episode": 8,
+            "length": 288,
+            "total_reward": 14.312986122126024,
+            "achieved_reward": 14.312986122126015,
+            "cum_E_kWh": 44.044929779243546,
+            "cum_price_EUR": -3.6756186049949444,
+            "seed": 52,
+            "data_variant": {
+                "weather": "data/weather/dwd/preprocessed/2026_merged_04177.csv",
+                "E_price": "data/e_price/e_charts/price_data_2026.csv",
+                "date": "data/weather/dwd/preprocessed/2026_merged_04177.csv",
+                "operator_energy_control": "data/operator_signals/op_eval_two_dip.csv",
+                "user_energy_need": "data/hh_consumption/wpuq/2019_SFH10_syn_cfg_2_neg.csv"
+            },
+            "episode_date": "2026-06-21"
+        },
+        {
+            "episode": 9,
+            "length": 288,
+            "total_reward": 16.80346631033375,
+            "achieved_reward": 16.803466310333746,
+            "cum_E_kWh": 58.02544581848628,
+            "cum_price_EUR": -11.826279622922259,
+            "seed": 53,
+            "data_variant": {
+                "weather": "data/weather/dwd/preprocessed/2026_merged_04177.csv",
+                "E_price": "data/e_price/e_charts/price_data_2026.csv",
+                "date": "data/weather/dwd/preprocessed/2026_merged_04177.csv",
+                "operator_energy_control": "data/operator_signals/op_constant_20kW.csv",
+                "user_energy_need": "data/hh_consumption/wpuq/2019_SFH30.csv"
+            },
+            "episode_date": "2026-06-01"
+        },
+        {
+            "episode": 10,
+            "length": 288,
+            "total_reward": 15.182761179974465,
+            "achieved_reward": 15.182761179974483,
+            "cum_E_kWh": 33.24370390055675,
+            "cum_price_EUR": -5.151778482554197,
+            "seed": 54,
+            "data_variant": {
+                "weather": "data/weather/dwd/preprocessed/2026_merged_04177.csv",
+                "E_price": "data/e_price/awattar/price_data_2026.csv",
+                "date": "data/weather/dwd/preprocessed/2026_merged_04177.csv",
+                "operator_energy_control": "data/operator_signals/op_daytime_boost.csv",
+                "user_energy_need": "data/hh_consumption/wpuq/2019_SFH10_syn_cfg_1_neg.csv"
+            },
+            "episode_date": "2026-06-08"
+        }
+    ]
+}

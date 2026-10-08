@@ -21,7 +21,7 @@
 #SBATCH --nodes=1
 #SBATCH --tasks-per-node=1
 #SBATCH --cpus-per-task=2
-#SBATCH --time=04:00:00
+#SBATCH --time=01:20:00
 #SBATCH --output=slurm_logs/data_vis/slurm-data-vis-%j.out
 #SBATCH --job-name=data-vis-%j
 

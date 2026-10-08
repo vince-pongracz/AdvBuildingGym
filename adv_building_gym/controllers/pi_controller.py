@@ -4,8 +4,7 @@ import numpy as np
 
 # PIController
 class PIController:
-    """
-    Proportional-Integral (PI) Controller for a dual-mode heat pump.
+    """PI controller for a dual-mode heat pump.
 
     Control Law:
     ------------

@@ -1,0 +1,61 @@
+/* Reorderable flex-card layout, shared by the per-group trajectory HTML files
+   (plotting.utils.write_figure_list_html) and the aggregated dashboard so both
+   look identical. Each card carries its own resize handle (bottom-right corner)
+   and a header bar that doubles as the SortableJS drag handle, keeping Plotly's
+   in-plot drag (zoom/pan) intact.
+
+   --card-basis is supplied by the dashboard (density config); the per-group
+   files fall back to two cards per row. */
+
+.plot-flex {
+  display: flex;
+  flex-wrap: wrap;
+  flex-direction: row;
+  justify-content: flex-start;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.plot-card {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+  width: var(--card-basis, calc(50% - 7px));
+  min-width: 340px;
+  min-height: 240px;
+  resize: both;
+  overflow: hidden;
+  border: 1px solid #e0e0e0;
+  background: #fff;
+}
+.plot-card.wide { width: 100%; }
+
+.plot-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  background: #f5f5f7;
+  border-bottom: 1px solid #e0e0e0;
+  cursor: grab;
+  user-select: none;
+  font: 13px/1.4 system-ui, "Segoe UI", Arial, sans-serif;
+  color: #333;
+}
+.plot-card-header:active { cursor: grabbing; }
+.plot-card-header .grip { color: #aaa; letter-spacing: -2px; }
+.plot-card-title {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.plot-body { flex: 1; min-height: 0; position: relative; width: 100%; }
+.plot-body > .js-plotly-plot,
+.plot-body > .js-plotly-plot > .plot-container,
+.plot-body > .js-plotly-plot > .plot-container > .svg-container {
+  width: 100% !important;
+  height: 100% !important;
+}

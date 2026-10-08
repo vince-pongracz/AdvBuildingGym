@@ -21,6 +21,7 @@ import os
 import h5py
 import plotly.graph_objects as go
 
+from plotting.dashboard.build_dashboard import write_episode_dashboard_html
 from plotting.utils import (
     ensure_chrome_for_kaleido,
     find_latest_hdf5,
@@ -32,6 +33,7 @@ from .plot_states import plot_states
 from .plot_actions import plot_actions
 from .plot_rewards import plot_rewards
 from .plot_energy import ENERGY_SIGN_CONVENTION_HTML, plot_energy
+from .plot_price import PRICE_SIGN_CONVENTION_HTML, plot_price
 from .plot_raw import plot_raw
 from .plot_raw_policy_actions import plot_raw_policy_actions
 
@@ -46,32 +48,48 @@ def generate_all_plots(
     hdf5_path: str,
     episode_id: str | None = None,
     output_dir: str | None = None,
-    control_step_seconds: int = 300,
+    control_step_s: int = 300,
     formats: list[str] = ["html"],
-    select_by: str = "reward_rate",
+    select_by: str = "achieved_reward",
     file_prefix: str | None = None,
+    manifest_path: str | None = None,
+    config_path: str | None = None,
+    dashboard_dir: str | None = None,
+    episode_plots: bool = True,
 ) -> list[str]:
-    """Load an episode, generate all four figures, save to output_dir.
+    """Load an episode, generate all figure groups, save to output_dir.
 
     Args:
         hdf5_path: Path to trajectories.hdf5.
         episode_id: Episode to plot. None = best by ``select_by`` metric.
         output_dir: Output directory. Default: plotting/out/{episode_id}/.
-        control_step_seconds: Timestep in seconds (default 300).
+        control_step_s: Control step duration in seconds (default 300).
         formats: Output formats to produce. Default: ["html"].
         select_by: Summary metric for auto-selecting the best episode.
         file_prefix: Prefix for output filenames. Default: episode_id.
+        manifest_path: Snapshot manifest.json for the dashboard's right panel.
+            None = auto-discover by walking up from ``output_dir``.
+        config_path: Trial-config YAML for the dashboard's right panel.
+            None = auto-discover from the eval-results dir.
+        dashboard_dir: Directory for the aggregated dashboard HTML. None = write
+            it inside ``output_dir`` (default). Multi-episode callers point this
+            at a shared ``dashboards/`` dir sitting beside the ``ep_*`` dirs.
+        episode_plots: Whether to also write the per-group figure files (states,
+            actions, rewards, ...) into output_dir. The dashboard already embeds
+            every figure, so callers that only need the dashboard can pass False
+            to skip these redundant per-episode files entirely.
 
     Returns:
         List of saved file paths.
     """
 
-    episode = load_episode(hdf5_path, episode_id, control_step_seconds, select_by)
+    episode = load_episode(hdf5_path, episode_id, control_step_s, select_by)
     ep_id = file_prefix if file_prefix is not None else f"ep_{episode.episode_id}"
 
     if output_dir is None:
         output_dir = str(get_output_root() / ep_id)
-    os.makedirs(output_dir, exist_ok=True)
+    if episode_plots:
+        os.makedirs(output_dir, exist_ok=True)
 
     all_figures: dict[str, list[go.Figure]] = {
         "states": plot_states(episode),
@@ -79,15 +97,35 @@ def generate_all_plots(
         "raw_policy_actions": plot_raw_policy_actions(episode),
         "rewards": plot_rewards(episode),
         "energy": plot_energy(episode),
+        "price": plot_price(episode),
         "raw": plot_raw(episode),
     }
 
     # Per-figure-group footnotes rendered as separate HTML divs below the plots
     html_footnotes: dict[str, str] = {
         "energy": ENERGY_SIGN_CONVENTION_HTML,
+        "price": PRICE_SIGN_CONVENTION_HTML,
     }
 
     saved: list[str] = []
+
+    # Aggregated self-contained dashboard (HTML only). Built BEFORE the per-group
+    # writers run because write_figure_list_html mutates each figure's layout
+    # size in place — serialising here captures the figures with their heights.
+    if "html" in formats:
+        dashboard_out = dashboard_dir if dashboard_dir is not None else output_dir
+        os.makedirs(dashboard_out, exist_ok=True)
+        dashboard_path = os.path.join(dashboard_out, f"{ep_id}_dashboard.html")
+        write_episode_dashboard_html(
+            all_figures, html_footnotes, episode, dashboard_path,
+            output_dir=output_dir,
+            manifest_path=manifest_path,
+            config_path=config_path,
+        )
+        saved.append(dashboard_path)
+
+    if not episode_plots:
+        return saved
 
     # Ensure Chrome/Chromium is available for static image export (svg/png/pdf).
     # Kaleido v1+ requires Chrome; this downloads it once to ~/.cache if missing.
@@ -163,12 +201,12 @@ def main() -> None:
         help="Output format(s). Default: html svg.",
     )
     parser.add_argument(
-        "--control-step", type=int, default=300,
-        help="Control timestep in seconds. Default: 300 (5 min).",
+        "--control-step", dest="control_step_s", type=int, default=300,
+        help="Control step duration in seconds. Default: 300 (5 min).",
     )
     parser.add_argument(
         "--select-by", type=str, default="achieved_reward",
-        choices=["reward_rate", "achieved_reward", "cum_E_kWh"],
+        choices=["achieved_reward", "cum_E_kWh"],
         help="Summary metric for selecting the best episode. Default: achieved_reward.",
     )
     args = parser.parse_args()
@@ -182,6 +220,7 @@ def main() -> None:
         with h5py.File(hdf5_path, "r") as hf:
             episode_ids = list(hf.keys())
         base_output_dir = args.output_dir or str(get_output_root())
+        dashboard_dir = os.path.join(base_output_dir, "dashboards")
         paths: list[str] = []
         for ep_id in episode_ids:
             ep_label = f"ep_{ep_id}"
@@ -190,10 +229,11 @@ def main() -> None:
                 hdf5_path=hdf5_path,
                 episode_id=ep_id,
                 output_dir=ep_output_dir,
-                control_step_seconds=args.control_step,
+                control_step_s=args.control_step_s,
                 formats=args.format,
                 select_by=args.select_by,
                 file_prefix=ep_label,
+                dashboard_dir=dashboard_dir,
             ))
         logger.info(
             "Generated %d plot files for %d episodes under %s",
@@ -204,7 +244,7 @@ def main() -> None:
             hdf5_path=hdf5_path,
             episode_id=args.episode,
             output_dir=args.output_dir,
-            control_step_seconds=args.control_step,
+            control_step_s=args.control_step_s,
             formats=args.format,
             select_by=args.select_by,
         )

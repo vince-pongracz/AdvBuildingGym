@@ -4,9 +4,7 @@ import numpy as np
 
 # PIDController
 class PIDController:
-    """
-    Proportional-Integral-Derivative (PID) Controller for a dual-mode
-    heat pump.
+    """PID controller for a dual-mode heat pump.
 
     Control Law:
     ------------

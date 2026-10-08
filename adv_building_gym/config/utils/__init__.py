@@ -1,7 +1,5 @@
-"""Discovery utilities for configuration components."""
+"""Config-axis cross-cutting utilities (LoggableConfig mixin).
 
-from .discover_scenarios import discover_synthetic_scenarios
-
-__all__ = [
-    "discover_synthetic_scenarios",
-]
+Note: ``discover_synthetic_scenarios`` moved to ``adv_building_gym.config.data``
+since it is a data-axis-only utility.
+"""

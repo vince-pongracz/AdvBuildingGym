@@ -12,6 +12,7 @@ import logging
 import re
 import sys
 import zipfile
+from datetime import date, timedelta
 from pathlib import Path
 
 _PROJECT_ROOT_STR = str(Path(__file__).resolve().parents[3])
@@ -35,6 +36,32 @@ PERIODS: list[str] = ["historical", "recent"]
 PROJECT_ROOT: Path = Path(__file__).resolve().parents[3]
 DWD_DIR: Path = PROJECT_ROOT / "data" / "weather" / "dwd"
 DOWNLOAD_DIR: Path = DWD_DIR / "downloaded"
+
+# Historical archives encode their coverage as _YYYYMMDD_YYYYMMDD_hist.zip
+HISTORICAL_RANGE_PATTERN: re.Pattern[str] = re.compile(r"_(\d{8})_(\d{8})_hist\.zip$", re.IGNORECASE)
+# DWD CDC "recent" folders hold roughly the last 500 days of measurements
+# Link: https://opendata.dwd.de/climate_environment/CDC/observations_germany/climate/10_minutes/
+RECENT_PERIOD_DAYS: int = 500
+
+
+def zip_covers_selected_years(filename: str, years: list[int] | None) -> bool:
+    """True if the archive's coverage window overlaps any selected year.
+
+    Historical archives are matched on the date range in their filename;
+    recent (_akt.zip) archives on the rolling ~500-day window they hold.
+    Unrecognised filenames are kept so new DWD naming schemes are not dropped silently.
+    """
+    if not years:
+        return True
+    match = HISTORICAL_RANGE_PATTERN.search(filename)
+    if match:
+        start_year = int(match.group(1)[:4])
+        end_year = int(match.group(2)[:4])
+        return any(start_year <= year <= end_year for year in years)
+    if filename.lower().endswith("_akt.zip"):
+        recent_start_year = (date.today() - timedelta(days=RECENT_PERIOD_DAYS)).year
+        return any(year >= recent_start_year for year in years)
+    return True
 
 
 def get_zip_urls_for_station(base_url: str, station_id: str) -> list[str]:
@@ -96,18 +123,30 @@ def load_and_concat_csvs(csv_paths: list[Path]) -> pd.DataFrame:
     return df
 
 
-def fetch_data_type(data_type: str, station_id: str, output_dir: Path) -> pd.DataFrame | None:
-    """Download, extract, convert all zips for one data type (historical + recent)."""
+def fetch_data_type(
+    data_type: str,
+    station_id: str,
+    output_dir: Path,
+    years: list[int] | None = None,
+) -> pd.DataFrame | None:
+    """Download, extract, convert station zips for one data type, limited to selected years."""
     zip_urls: list[str] = []
     for period in PERIODS:
         base_url = URL_BASE_TEMPLATE.format(data_type=data_type, period=period)
         zip_urls.extend(get_zip_urls_for_station(base_url, station_id))
 
-    if not zip_urls:
+    selected_urls = [url for url in zip_urls if zip_covers_selected_years(url.rsplit("/", 1)[-1], years)]
+    if len(selected_urls) < len(zip_urls):
+        logger.info(
+            "Year filter %s: keeping %d of %d zip(s) for %s",
+            sorted(set(years)), len(selected_urls), len(zip_urls), data_type,
+        )
+
+    if not selected_urls:
         return None
 
     all_data_txt_paths: list[Path] = []
-    for url in zip_urls:
+    for url in selected_urls:
         extracted = download_and_extract(url, output_dir)
         # Keep only the produkt_*.txt files (actual measurement data)
         data_files = [p for p in extracted if p.name.lower().startswith("produkt") and p.suffix.lower() == ".txt"]
@@ -123,14 +162,18 @@ def fetch_data_type(data_type: str, station_id: str, output_dir: Path) -> pd.Dat
     return df
 
 
-def fetch_all(station_id: str = STATION_ID, output_dir: Path = DOWNLOAD_DIR) -> dict[str, pd.DataFrame]:
-    """Download all data types for a station. Return dict of DataFrames keyed by type."""
+def fetch_all(
+    station_id: str = STATION_ID,
+    output_dir: Path = DOWNLOAD_DIR,
+    years: list[int] | None = None,
+) -> dict[str, pd.DataFrame]:
+    """Download all data types for a station (optionally limited to selected years)."""
     output_dir.mkdir(parents=True, exist_ok=True)
 
     dataframes: dict[str, pd.DataFrame] = {}
     for data_type in DATA_TYPES:
         logger.info("=== Fetching %s data for station %s ===", data_type, station_id)
-        df = fetch_data_type(data_type, station_id, output_dir)
+        df = fetch_data_type(data_type, station_id, output_dir, years=years)
         if df is not None:
             dataframes[data_type] = df
         else:

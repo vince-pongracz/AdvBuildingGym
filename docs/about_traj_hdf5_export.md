@@ -36,8 +36,6 @@ trajectories.hdf5
 |   |
 |   +-- summary/                           GROUP
 |   |       attrs:  achieved_reward         (float)  total reward collected
-|   |               max_achievable_reward   (float)  theoretical max reward
-|   |               reward_rate             (float)  achieved / max, in [0, 1]
 |   |               cum_E_kWh              (float)  cumulative energy consumption
 |   |
 |   +-- trajectory/                        GROUP
@@ -79,7 +77,7 @@ N = episode length (including the prepended initial/reset step).
 | JSON type                     | HDF5 representation          | Example                         |
 |-------------------------------|------------------------------|---------------------------------|
 | Scalar metadata               | Group attribute              | `version`, `seed`, `length`     |
-| Summary scalar                | `summary/` group attribute   | `achieved_reward`, `reward_rate`|
+| Summary scalar                | `summary/` group attribute   | `achieved_reward`  |
 | Flat list of numbers          | 1-D dataset `(N,)`           | `step`, `reward`, `cum_E_kWh`  |
 | Dict of lists (state, action) | Subgroup with datasets       | `state/temp_in_norm`            |
 | List of lists (history)       | 2-D dataset `(N, M)`         | `state/battery_pct_hist`        |
@@ -98,7 +96,7 @@ with h5py.File("ep_metrics/20260224_143000/trajectories.hdf5", "r") as f:
     # Read one episode
     ep = f["abc123"]
     print("Seed:", ep.attrs["seed"])
-    print("Reward rate:", ep["summary"].attrs["reward_rate"])
+    print("Achieved reward:", ep["summary"].attrs["achieved_reward"])
 
     # Load trajectory arrays
     rewards = ep["trajectory/reward"][:]          # shape (N,)
@@ -109,7 +107,7 @@ with h5py.File("ep_metrics/20260224_143000/trajectories.hdf5", "r") as f:
     data = {}
     for eid in f:
         data[eid] = {
-            "reward_rate": f[eid]["summary"].attrs["reward_rate"],
+            "achieved_reward": f[eid]["summary"].attrs["achieved_reward"],
             "rewards": f[f"{eid}/trajectory/reward"][:],
         }
 ```
