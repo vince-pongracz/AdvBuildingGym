@@ -53,8 +53,6 @@ data/hh_consumption/**
 # Energy price data -- ignore all, scripts are there for fetching and preprocessing the data.
 data/e_price/**
 
-**rapidapi_key.yaml**
-
 # Data eval dir
 data/eval1/**
 
@@ -76,6 +74,7 @@ eval_results/**
 
 # Preprocessing, data quality summary -- only the figure needed
 data/quality_reports/data_quality_summary.csv
+quality_reports/*.png
 
 **/meeting_notes.md
 **/models/**
