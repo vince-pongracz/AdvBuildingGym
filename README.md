@@ -145,8 +145,8 @@ One trial controls two devices at the same time: [configs/trial_cfgs/v0/STA/batt
 The policy outputs `a_battery` (`BatteryLinear`, 10 kW, 16 kWh) and `a_lin_ev_charger` (`LinearEVCharger`, 11 kW, with V2G) for one fixed building with PV, wind and household load. 
 EV charging sessions come from the usage profiles in [data/ev_usage_profiles/](data/ev_usage_profiles/): arrival time, vehicle, start and target state of charge, and the time allowed to reach the target. 
 The reward is multi-objective: energy cost (`EconomicRewardV0`), a 20 kW grid-operator limit (`OperatorEnergyControlRewardV0`) and EV charging sessions (`EVChargingSessionReward`). 
-A configuration also adds `BESRegulatorReward` and `EVRegulatorReward`, which pay a flat penalty whenever the battery or the charger has to override the requested action, but their effect does not match their intentions completely.
-It is only trained with PPO and SAC.
+A configuration also adds `BESRegulatorReward` and `EVRegulatorReward`, which pay a flat penalty whenever the battery or the charger has to override the requested action. 
+Of the runs evaluated in [thesis_eval/7_mo_bat_ev/](thesis_eval/7_mo_bat_ev/), only one PPO and one SAC run used them, and their effect does not match their intentions completely.
 
 
 ## Environment
@@ -249,6 +249,8 @@ AdvBuildingGym/
 ├── thesis_eval/          # notebooks, figures and tables for the thesis experiments
 ├── tests/                # pytest suite
 ├── docs/                 # design notes, analyses
+├── requirements.txt      # pinned direct dependencies
+├── requirements-lock.txt # exact lock of the environment the experiments ran in
 ├── run_train_ray.py      # training (Ray RLlib: PPO, SAC, DreamerV3)
 ├── run_train_sb.py       # training (Stable-Baselines3: PPO, SAC)
 ├── run_eval_ray.py       # evaluation of Ray checkpoints
@@ -263,7 +265,7 @@ Requires Python 3.12.
 
 ```bash
 git clone https://github.com/vince-pongracz/AdvBuildingGym
-python3.12 -m venv adv_env
+python3.12 -m venv adv_env              # next to the repo: the SLURM scripts activate ../adv_env
 source adv_env/bin/activate
 cd AdvBuildingGym
 
@@ -271,6 +273,23 @@ python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 python -m pip install -e .
 ```
+
+[requirements.txt](requirements.txt) pins the packages the code uses (torch is the CUDA 12.6 build).
+To reproduce the exact environment the experiments ran in, including every indirect dependency, install [requirements-lock.txt](requirements-lock.txt) instead.
+
+**Chrome for static plots.** Plotly needs Chrome to export SVG, PNG and PDF figures (`python -m plotting.traj_plotting` writes SVG by default). Download it once (about 700 MB):
+
+```bash
+plotly_get_chrome -y
+```
+
+**Data.** A fresh clone contains no weather, price or household load data. Generate it before the first training run (see [Data](#data); this downloads tens of GB, so prefer the SLURM job):
+
+```bash
+sbatch slurm_scripts/slurm_data_setup.sh --synthesize
+```
+
+`--synthesize` is needed because the default data schedules use the synthetic household load profiles (`*_syn_cfg_*`).
 
 
 **Evaluation dashboard assets.** Trajectory plots and the evaluation dashboard inline two JavaScript libraries, managed with npm. Install them once (Node.js and npm required):
